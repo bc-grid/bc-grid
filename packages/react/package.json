@@ -3,9 +3,38 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
+    "dev": "tsup src/index.ts --format esm --dts --sourcemap --watch",
+    "type-check": "tsc -b"
+  },
+  "dependencies": {
+    "@bc-grid/core": "workspace:*",
+    "@bc-grid/virtualizer": "workspace:*",
+    "@bc-grid/animations": "workspace:*",
+    "@bc-grid/theming": "workspace:*",
+    "@bc-grid/aggregations": "workspace:*",
+    "@bc-grid/filters": "workspace:*",
+    "@bc-grid/export": "workspace:*",
+    "@bc-grid/server-row-model": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@tanstack/react-table": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
   }
 }

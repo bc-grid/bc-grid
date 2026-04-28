@@ -25,14 +25,25 @@ Most React data grids are either capable but visually disconnected from modern d
 
 ## Architecture (high-level)
 
-- `core` — framework-agnostic state + types
-- `virtualizer` — high-performance row + column virtualization renderer
-- `animations` — FLIP/transform animation primitives
-- `theming` — CSS architecture (variables, design tokens)
-- `react` — public React component layer (the surface developers consume)
-- `editors`, `filters`, `aggregations`, `export`, `server-row-model`, `enterprise` — feature packages, each independently ownable
+Two layers: **engine** (framework-agnostic, depends on `core`) and **React** (the consumer surface).
 
-See `docs/design-v1.md` for the architecture in depth.
+**Engine packages** (no React, no DOM in most cases):
+- `@bc-grid/core` — types + state contracts
+- `@bc-grid/virtualizer` — high-performance row + column virtualisation
+- `@bc-grid/animations` — FLIP / Web Animations primitives
+- `@bc-grid/theming` — CSS architecture (variables, tokens, density modes)
+- `@bc-grid/aggregations` — pure aggregation functions (sum, avg, count, min, max, custom)
+- `@bc-grid/filters` — predicates + serialisation for every filter type
+- `@bc-grid/export` — pure CSV / Excel / PDF serialisers
+- `@bc-grid/server-row-model` — state machine for paged / infinite / tree modes
+
+**React packages** (the consumer surface):
+- `@bc-grid/react` — public components (`<BcGrid>`, `<BcEditGrid>`, `<BcServerGrid>`) + hooks
+- `@bc-grid/editors` — built-in cell editors (text, number, date, select, ...)
+
+Consumers import from `@bc-grid/react` and types from `@bc-grid/core`. Engine packages are workspace internals reused by the React layer.
+
+See `docs/design.md` for the architecture in depth.
 
 ## Roadmap
 

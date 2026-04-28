@@ -30,5 +30,4 @@ bun-debug.log*
 tests/perf/results/
 tests/visual/__snapshots__/diff/
 
-# bun
-bun.lock
+# Note: bun.lock IS committed (project state, not artifact).

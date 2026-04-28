@@ -12,8 +12,17 @@
   "scripts": {
     "build": "bun run --filter '*' build",
     "test": "bun test",
-    "type-check": "tsc -b --noEmit",
+    "type-check": "tsc -b",
+    "type-check:watch": "tsc -b --watch",
+    "lint": "biome check .",
+    "format": "biome format --write .",
     "bench": "bun run --filter './apps/benchmarks' bench"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@biomejs/biome": "^1.9.4",
+    "tsup": "^8.3.5",
+    "@types/node": "^22.0.0"
   },
   "engines": {
     "bun": ">=1.3"

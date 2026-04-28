@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: smoke (type-check, lint, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type-check (project references across all packages)
+        run: bun run type-check
+
+      - name: Lint
+        run: bun run lint
+        continue-on-error: false
+
+      - name: Build all packages
+        run: bun run build
+
+      - name: Test
+        run: bun test
+        continue-on-error: false
+
+  # Future: api-surface diff, perf smoke, bundle-size gates.
+  # Added by repo-foundation task.

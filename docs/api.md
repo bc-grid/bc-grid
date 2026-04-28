@@ -2,7 +2,7 @@
 
 **Status:** Pre-Q1. Sketch only. Real spec written end of Q1, frozen at v0.1.
 
-For the API sketch see `design-v1.md §9`. This file becomes the binding contract end of Q1.
+For the API sketch see `design.md §9`. This file becomes the binding contract end of Q1.
 
 After freeze:
 - Every PR runs `tools/api-surface-diff` in CI. Non-empty diff → architect review.

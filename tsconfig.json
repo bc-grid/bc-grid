@@ -1,0 +1,16 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/virtualizer" },
+    { "path": "./packages/animations" },
+    { "path": "./packages/theming" },
+    { "path": "./packages/aggregations" },
+    { "path": "./packages/filters" },
+    { "path": "./packages/export" },
+    { "path": "./packages/server-row-model" },
+    { "path": "./packages/react" },
+    { "path": "./packages/editors" },
+    { "path": "./packages/enterprise" }
+  ]
+}

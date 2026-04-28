@@ -44,18 +44,33 @@ The 2-year target is **not** 100% AG Grid feature parity. It is a focused produc
 
 ### 3.2 Performance bars (CI-enforced)
 
-These are the bars; CI fails if a regression breaches them.
+These are the bars. Two tiers: **smoke** runs on every PR (must pass to merge); **nightly** runs heavier benchmarks against `main` (regressions block the next release).
+
+#### Smoke (every PR)
 
 | Metric | Target | Measured against |
 |---|---|---|
 | Cold mount (1k rows × 10 cols) | < 200ms | first contentful paint |
-| Sort (100k rows) | < 100ms | end-to-end (click to next paint) |
-| Scroll FPS (100k rows × 30 cols) | ≥ 58 (target 60) | sustained over 2s scroll |
-| Memory (100k rows of typical width) | < 100MB | heap snapshot |
+| Sort (10k rows) | < 50ms | end-to-end (click to next paint) |
+| Scroll FPS (10k rows × 20 cols) | ≥ 58 | sustained over 1s scroll |
 | Bundle size — `core` + `virtualizer` + `animations` + `react` | < 60KB gzipped | rollup output |
 | Edit-cell paint (commit → next paint) | < 16ms | RAF cycle |
 
-Benchmark harness in `apps/benchmarks/`. Runs in CI on every PR. Numbers logged to `tests/perf/results/` (gitignored locally; published to a perf-tracker service in Y1).
+#### Nightly (against `main`)
+
+| Metric | Target | Measured against |
+|---|---|---|
+| Sort (100k rows) | < 100ms | end-to-end |
+| Scroll FPS (100k rows × 30 cols) | ≥ 58 (target 60) | sustained over 2s scroll |
+| Filter (100k rows) | < 100ms | end-to-end |
+| **Grid overhead memory** (100k rows × 30 cols of typical width) | **< 30MB above raw dataset size** | heap snapshot diff (with grid mounted vs same data without) |
+| **Animation visible+retained budget** | ≤ 200 rows in flight at once | viewport rows + animation handoff queue |
+
+The memory metric measures grid *overhead* — the cost of having a bc-grid in your app vs the raw data sitting in JS. Total heap minus baseline-without-grid. This is what users actually experience.
+
+The animation budget caps the number of rows we ever animate concurrently. We never animate 100k rows; we animate the rows in the viewport plus those still in transit (off-screen but holding their DOM node until the animation completes). 200 is a hard ceiling.
+
+Benchmark harness in `apps/benchmarks/`. Smoke results logged to PR comments. Nightly results published to a perf-tracker service (Y1).
 
 ### 3.3 Dependency policy
 
@@ -75,25 +90,53 @@ Benchmark harness in `apps/benchmarks/`. Runs in CI on every PR. Numbers logged 
 
 **TanStack policy:** Use as peer dep, never expose its types in our public API. Adapter layer in `core/columns.ts` translates `BcGridColumn → TanStack ColumnDef`. If we ever want to swap the state engine, only the adapter changes; consumers see no diff.
 
+### 3.4 Accessibility constraints (Q1 RFC required)
+
+Accessibility informs architecture. The DOM-structure decisions made by the virtualizer determine what's possible for screen readers; adding ARIA after the fact means rebuilding the engine. So the WCAG 2.1 AA target shapes Q1 design choices, not Q7 polish.
+
+Key constraints that need a Q1 RFC (`docs/design/accessibility-rfc.md`) before virtualizer implementation:
+
+- **Role choice**: `role="grid"` vs `role="treegrid"` for grouped/tree data. Affects how AT announces row hierarchy.
+- **`aria-rowcount` semantics**: total dataset (including unloaded server rows) vs rendered rows. AG Grid uses total. We need to declare.
+- **`aria-rowindex` on partial sets**: the virtualizer renders ~50 of 100k rows; how does the screen reader know "row 47 of 100,000"?
+- **Focus retention across virtualization**: when a focused row scrolls out of viewport, does focus stay on the row (and the row stays in DOM) or hand off to a placeholder?
+- **Pinned rows/columns + ARIA**: order of announcement when pinned-left + center + pinned-right are visually adjacent but DOM-separate.
+- **Keyboard navigation**: full grid-pattern keyboard model from WAI-ARIA Authoring Practices.
+
+The accessibility RFC blocks `virtualizer-impl` and `react-impl-v0`. Land it in Q1 weeks 1-3.
+
 ## 4. Package architecture
 
 ### 4.1 Package boundaries (binding — enforced by CI)
 
+Two layers: **engine** (framework-agnostic, depends only on `core`) and **React** (the consumer surface, brings everything together).
+
 ```
-core ─┬─> virtualizer ─┬─> react ─> editors/*
-      ├─> animations ──┘          └─> filters/*
-      └─> theming ─────┘          └─> aggregations/*
-                                  └─> export
-                                  └─> server-row-model
-                                  └─> enterprise (pivots, master-detail)
+ENGINE LAYER (no React)
+core ─┬─> virtualizer
+      ├─> animations
+      ├─> theming
+      ├─> aggregations          (pure functions: sum/avg/count/min/max + custom)
+      ├─> filters               (predicates, parsers, serializers)
+      ├─> export                (CSV/Excel/PDF serializers, no DOM)
+      └─> server-row-model      (state machine, fetcher contracts, cache, LRU)
+
+REACT LAYER (consumes engines)
+react (depends on every engine package + TanStack)
+  └─ editors                    (React components: cell editors)
+  └─ enterprise                 (pivots, master-detail — split engine vs React TBD)
 ```
 
 Rules:
-- `core` depends on **nothing** internal. Pure types + state contracts. No React.
-- `virtualizer`, `animations`, `theming` depend on `core` only. No React in `core`/`virtualizer`/`animations` themselves; they're framework-agnostic primitives the React layer consumes.
-- `react` depends on `core` + `virtualizer` + `animations` + `theming` + TanStack. Public API surface lives here.
-- Feature packages (`editors/*`, `filters/*`, `aggregations/*`, `export`, `server-row-model`, `enterprise`) depend on `react` and never on each other.
-- CI lint enforces this with `dependency-cruiser` or equivalent. PR fails on boundary violation.
+- `core` depends on **nothing** internal. Pure types + state contracts. No React, no DOM.
+- **Engine packages** (`virtualizer`, `animations`, `theming`, `aggregations`, `filters`, `export`, `server-row-model`) depend on `core` only. No React. No DOM in `core`/`aggregations`/`filters`/`export`/`server-row-model`. The `virtualizer` and `animations` packages touch DOM but only via raw APIs (no React).
+- `react` depends on `core` + every engine package + TanStack. Public API surface lives here.
+- `editors` is React-only (cell editors are React components by definition); depends on `react`.
+- `enterprise` is split: pivots + master-detail will have engine + React layers (Q5+ work).
+- Feature packages **never depend on sibling feature packages**.
+- CI lint enforces these boundaries with `dependency-cruiser` (or equivalent). PR fails on boundary violation.
+
+**Why engine vs React adapter split:** every engine package is unit-testable without a DOM (Vitest in Node). React adapters have integration tests. Splitting the layers doubles parallelism on the heavy packages — one agent on the engine, one on the React adapter, no merge conflicts. It also means the engine surface stays useful if we ever ship Vue/Solid bindings.
 
 ### 4.2 What each package owns
 
@@ -114,7 +157,7 @@ Rules:
   - Variable row heights with pinned rows in the same viewport
   - Coordination with the animation system (a row animating out of viewport needs handoff)
   - Sub-pixel scroll precision for smooth animations
-- Two main exports: a `Virtualizer` class and a React hook `useVirtualizer()`. The class is framework-agnostic.
+- **Single export**: a `Virtualizer` class. Framework-agnostic. The React hook (`useVirtualizer`) lives in `@bc-grid/react` and consumes this class — keeps `virtualizer` framework-free.
 
 #### `animations`
 - FLIP utility built on Web Animations API (`element.animate()`)
@@ -136,15 +179,23 @@ Rules:
 - Public API frozen after Q1 (semver-stable from v0.1)
 - Renders the chrome (header, footer, toolbar) with shadcn primitives
 
-#### Feature packages (parallel-ownable)
-- `editors/text`, `editors/number`, `editors/date`, `editors/select`, `editors/autocomplete`, `editors/custom`
-- `filters/set`, `filters/multi`, `filters/date-range`, `filters/number-range`, `filters/text`
-- `aggregations/sum`, `aggregations/avg`, `aggregations/count`, `aggregations/min`, `aggregations/max`, `aggregations/custom`
-- `export/csv`, `export/excel`, `export/pdf`
-- `server-row-model` (single package, complex internal split)
-- `enterprise/pivots`, `enterprise/master-detail`
+#### Engine packages (no React, depend on `core`)
 
-Each feature package is independently ownable by an agent. Strict interface to `react`; never depends on a sibling.
+- `aggregations` — pure functions for sum, avg, count, min, max + custom-aggregation contract. Returns `BcAggregationResult`. No DOM.
+- `filters` — predicates + parsers + serializers (URL state, localStorage). For each filter type: a predicate (`(value, criteria) => boolean`) + a serialize/parse pair. UI components live in `@bc-grid/react`.
+- `export` — pure serializers: `toCsv(rows, columns)`, `toExcel(rows, columns)` (via ExcelJS), `toPdf(rows, columns)` (via jsPDF or react-pdf). No React.
+- `server-row-model` — state machine for paged / infinite / tree modes. Block cache + LRU eviction. Server fetcher contracts (`ServerQuery`, `ServerBlockResult`, `ServerTreeQuery`). No React. React adapters in `@bc-grid/react`.
+
+#### React-only packages
+
+- `editors` — built-in cell editor components: text, number, date, datetime, select, multi-select, autocomplete, custom. Depend on `react`. Each editor is a folder.
+
+#### Future split (Y2)
+
+- `enterprise/pivots` — engine layer (pivot computation) + React layer (drag-to-pivot UI). Split TBD when work starts (Q5).
+- `enterprise/master-detail` — mostly React; engine surface is small.
+
+Each engine package is independently ownable by an agent. Strict interface to `core`; never depends on a sibling.
 
 ## 5. State management split
 
@@ -306,8 +357,8 @@ Reasoning: every JS-driven style insertion costs us frame time. With CSS variabl
 ## 9. Public API surface (sketched — to be locked in `docs/api.md` end of Q1)
 
 ```tsx
-import { BcGrid, BcEditGrid, BcServerGrid } from "bc-grid/react"
-import type { BcGridColumn, BcGridApi } from "bc-grid"
+import { BcGrid, BcEditGrid, BcServerGrid } from "@bc-grid/react"
+import type { BcGridColumn, BcGridApi } from "@bc-grid/core"
 
 const columns: BcGridColumn<Customer>[] = [
   { field: "code", header: "Code", width: 80, sortable: true, pin: "left" },
@@ -465,7 +516,15 @@ Any architectural change to this document must:
 
 | Date | Decision | Rationale | Who |
 |---|---|---|---|
-| 2026-04-29 | Initial design v1 | Foundation laid for 2-year build | JohnC + Claude |
+| 2026-04-29 | Initial design | Foundation laid for 2-year build | JohnC + Claude |
+| 2026-04-29 | **Engine vs React adapter split**: `aggregations`, `filters`, `export`, `server-row-model` move from "feature packages depending on react" to engine packages depending on `core` only. React adapters live in `@bc-grid/react`. | Engine packages are unit-testable without DOM (Vitest in Node); doubles parallelism on heavy packages; preserves engine surface for non-React bindings later. | Codex review |
+| 2026-04-29 | **`useVirtualizer` hook moves to `@bc-grid/react`**, `virtualizer` package keeps only the framework-agnostic `Virtualizer` class. | The original §4.2 was self-contradictory: virtualizer claimed no React but exported a hook. Resolution keeps the package framework-free. | Codex review |
+| 2026-04-29 | **Naming standardised on `@bc-grid/*`**: every package is `@bc-grid/<name>`. Consumer-facing import is `@bc-grid/react`. README/api docs aligned. | Earlier doc mixed `bc-grid/react` and `@bc-grid/*` — inconsistent. | Codex review |
+| 2026-04-29 | **Performance bars split into smoke (every PR) + nightly**. Memory metric becomes "grid overhead above raw dataset" not total heap. Animation budget capped at ≤200 rows in flight. | Original bars were directionally right but underspecified. Smoke vs nightly keeps PR latency low; overhead-vs-heap is what users actually experience; explicit animation cap prevents pathological case of "animate 100k rows." | Codex review |
+| 2026-04-29 | **Accessibility moves to Q1 RFC**, not Q7 audit. | Virtualization + pinned panes are architectural; aria-rowindex / focus retention / treegrid role choices can't be retrofit. | Codex review |
+| 2026-04-29 | **Server-row-model RFC happens in Q1**, implementation still Q4. | The server query contract is the hardest API surface for ERP and informs row identity, edits, selection, export — Q4 is too late to design. | Codex review |
+| 2026-04-29 | **Q1 scope reduced**: from "feature-complete read-only grid" to a hardened vertical slice (typed columns + row identity + virtualized body + pinned columns + keyboard focus + basic sort + theming + CI/perf gates). Filter, search, group-by, server-paged grid, full column-state move to Q2. | Original Q1 was too broad to deliver in 12 weeks at quality. Vertical slice proves architecture on one real bc-next screen. | Codex review |
+| 2026-04-29 | **Real `api.md` spec written in Q1, not deferred to Q1 end.** New task `api-rfc-v0` ready to claim. | Spec defines BcGridColumn shape, row ID rules, controlled/uncontrolled state, event names, query objects, value getter/formatter/parser contracts, editor protocol, public exports. Agents need this stable before building. | Codex review |
 
 ## 14. Quality bars (full list)
 

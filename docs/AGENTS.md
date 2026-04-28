@@ -6,12 +6,12 @@ This is the binding process for all agents (Claude Max, Codex Max, or any other)
 
 ## 1. The mission
 
-Build a high-performance shadcn-native data grid that competes with AG Grid Enterprise. See `design-v1.md` for the architecture, `roadmap.md` for the 2-year plan, `queue.md` for the current task list.
+Build a high-performance shadcn-native data grid that competes with AG Grid Enterprise. See `design.md` for the architecture, `roadmap.md` for the 2-year plan, `queue.md` for the current task list.
 
 ## 2. Reading order on first session
 
 1. `README.md` — project mission and non-goals
-2. `docs/design-v1.md` — architecture in depth (~30 min read; binding)
+2. `docs/design.md` — architecture in depth (~30 min read; binding)
 3. `docs/roadmap.md` — phase plan (~5 min)
 4. `docs/AGENTS.md` (this file) — process (~5 min)
 5. `docs/PARALLEL_WORK.md` — worktree scheme (~5 min)
@@ -27,7 +27,7 @@ After Q1, every session: re-read `queue.md` + the design doc for the package you
 3. **Public API is sacred.** After Q1 freeze, public API changes go through the architect. Every PR runs an API-surface diff in CI; non-empty diff requires architect sign-off.
 4. **Performance is non-negotiable.** Every PR runs the perf benchmark suite. Regressions fail the build. No "we'll fix it later" — perf debt compounds.
 5. **TypeScript strict, no `any`.** The TanStack adapter is the only place `any` is permitted. Outside that, fully typed.
-6. **Tests required.** Coverage gates per package in `design-v1.md` §14.1. PRs that drop coverage are rejected.
+6. **Tests required.** Coverage gates per package in `design.md` §14.1. PRs that drop coverage are rejected.
 7. **No autonomous merges to `main`.** Even with architect sign-off, the merge action is human (or owner-agent). PRs accumulate; integrator runs the merge train.
 8. **Single ownership.** Each task has one owner. If two agents claim the same task in `queue.md`, the second backs off.
 
@@ -64,7 +64,7 @@ Before requesting review:
 ## 7. PR review
 
 - **Reviewer is never the author.** Always a fresh agent or human. The reviewer reads the PR cold; they should have to ask zero questions to understand intent.
-- **Reviewer's job:** verify against `design-v1.md` invariants. Block if:
+- **Reviewer's job:** verify against `design.md` invariants. Block if:
   - Public API changed without sign-off
   - Perf budgets breached
   - Test coverage dropped below the gate
