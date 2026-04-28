@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bc-grid · benchmarks</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="bench-header">
+      <h1>bc-grid virtualizer spike</h1>
+      <div class="bench-controls">
+        <label>
+          rows
+          <input id="rowCount" type="number" value="100000" min="100" max="1000000" step="1000" />
+        </label>
+        <label>
+          cols
+          <input id="colCount" type="number" value="30" min="1" max="200" />
+        </label>
+        <button id="apply" type="button">Apply</button>
+        <button id="scrollToEnd" type="button">Scroll to end</button>
+        <button id="scrollToMiddle" type="button">Scroll to middle</button>
+        <button id="autoScroll" type="button">Auto-scroll (FPS test)</button>
+      </div>
+      <div class="bench-metrics">
+        <span>FPS: <strong id="fps">--</strong></span>
+        <span>Cells in DOM: <strong id="cellCount">--</strong></span>
+        <span>Last render: <strong id="renderMs">--</strong></span>
+      </div>
+    </header>
+    <main id="grid" aria-label="Spike grid"></main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

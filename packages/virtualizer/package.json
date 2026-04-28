@@ -14,8 +14,8 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
-    "dev": "tsup src/index.ts --format esm --dts --sourcemap --watch",
+    "build": "tsup --config tsup.config.ts",
+    "dev": "tsup --config tsup.config.ts --watch",
     "type-check": "tsc -b"
   },
   "dependencies": {
