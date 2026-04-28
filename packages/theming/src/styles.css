@@ -1,0 +1,123 @@
+.bc-grid {
+  --bc-grid-bg: hsl(var(--background, 0 0% 100%));
+  --bc-grid-fg: hsl(var(--foreground, 222 47% 11%));
+  --bc-grid-border: hsl(var(--border, 214 32% 91%));
+  --bc-grid-muted: hsl(var(--muted, 210 40% 96%));
+  --bc-grid-muted-fg: hsl(var(--muted-foreground, 215 16% 47%));
+  --bc-grid-row-hover: hsl(var(--accent, 210 40% 96%) / 0.7);
+  --bc-grid-row-selected: hsl(var(--accent, 210 40% 96%));
+  --bc-grid-header-bg: hsl(var(--muted, 210 40% 96%));
+  --bc-grid-header-fg: hsl(var(--muted-foreground, 215 16% 47%));
+  --bc-grid-status-open-bg: hsl(153 56% 92%);
+  --bc-grid-status-open-fg: hsl(153 74% 28%);
+  --bc-grid-status-posted-bg: hsl(221 83% 94%);
+  --bc-grid-status-posted-fg: hsl(221 65% 36%);
+  --bc-grid-status-held-bg: hsl(37 92% 91%);
+  --bc-grid-status-held-fg: hsl(32 80% 32%);
+  --bc-grid-row-height: 36px;
+  --bc-grid-header-height: 40px;
+  --bc-grid-cell-padding-x: 12px;
+  --bc-grid-radius: 6px;
+  --bc-grid-font-size: 0.875rem;
+  --bc-grid-header-font-size: 0.75rem;
+  --bc-grid-columns: minmax(7rem, 0.8fr) minmax(12rem, 1.4fr) minmax(6rem, 0.75fr)
+    minmax(7rem, 0.75fr) minmax(7rem, 0.8fr);
+
+  overflow: hidden;
+  border: 1px solid var(--bc-grid-border);
+  border-radius: var(--bc-grid-radius);
+  background: var(--bc-grid-bg);
+  color: var(--bc-grid-fg);
+  font-size: var(--bc-grid-font-size);
+}
+
+.bc-grid--compact,
+.bc-grid[data-density="compact"] {
+  --bc-grid-row-height: 28px;
+  --bc-grid-header-height: 34px;
+  --bc-grid-cell-padding-x: 8px;
+  --bc-grid-font-size: 0.8125rem;
+}
+
+.bc-grid--normal,
+.bc-grid[data-density="normal"] {
+  --bc-grid-row-height: 36px;
+  --bc-grid-header-height: 40px;
+  --bc-grid-cell-padding-x: 12px;
+}
+
+.bc-grid--comfortable,
+.bc-grid[data-density="comfortable"] {
+  --bc-grid-row-height: 44px;
+  --bc-grid-header-height: 48px;
+  --bc-grid-cell-padding-x: 16px;
+}
+
+.bc-grid__header,
+.bc-grid__row {
+  display: grid;
+  grid-template-columns: var(--bc-grid-columns);
+  min-width: 45rem;
+}
+
+.bc-grid__header {
+  min-height: var(--bc-grid-header-height);
+  border-bottom: 1px solid var(--bc-grid-border);
+  background: var(--bc-grid-header-bg);
+  color: var(--bc-grid-header-fg);
+  font-size: var(--bc-grid-header-font-size);
+  font-weight: 700;
+}
+
+.bc-grid__row {
+  min-height: var(--bc-grid-row-height);
+  border-bottom: 1px solid var(--bc-grid-border);
+}
+
+.bc-grid__row:last-child {
+  border-bottom: 0;
+}
+
+.bc-grid__row:hover {
+  background: var(--bc-grid-row-hover);
+}
+
+.bc-grid__cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  overflow: hidden;
+  padding-inline: var(--bc-grid-cell-padding-x);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bc-grid__cell--right {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.bc-grid__status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.bc-grid__status--open {
+  background: var(--bc-grid-status-open-bg);
+  color: var(--bc-grid-status-open-fg);
+}
+
+.bc-grid__status--posted {
+  background: var(--bc-grid-status-posted-bg);
+  color: var(--bc-grid-status-posted-fg);
+}
+
+.bc-grid__status--held {
+  background: var(--bc-grid-status-held-bg);
+  color: var(--bc-grid-status-held-fg);
+}
