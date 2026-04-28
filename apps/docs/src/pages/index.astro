@@ -1,0 +1,77 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const columnSnippet = `import type { BcGridColumn } from "@bc-grid/core"
+import { BcGrid } from "@bc-grid/react"
+
+type Customer = {
+  id: string
+  code: string
+  name: string
+  balance: number
+}
+
+const columns: BcGridColumn<Customer>[] = [
+  { field: "code", header: "Code", width: 120, pinned: "left" },
+  { field: "name", header: "Customer", minWidth: 240, flex: 1 },
+  {
+    field: "balance",
+    header: "Balance",
+    align: "right",
+    valueFormatter: ({ value }) => currency.format(value),
+  },
+]
+
+<BcGrid data={customers} columns={columns} rowId={(row) => row.id} />`
+---
+
+<DocsLayout
+  title="Overview"
+  description="bc-grid is a React data grid for ERP workloads: virtualized, keyboard-first, accessible, and native to shadcn-style applications."
+  active="overview"
+>
+  <section class="section">
+    <div class="status-strip">
+      <span>Pre-alpha</span>
+      <span>Q1 vertical slice</span>
+      <span>React first</span>
+      <span>Clean-room implementation</span>
+    </div>
+    <p class="lead">
+      The docs app starts as a lightweight shell. As Q1 implementation lands, each page gets
+      generated API references, live examples, performance notes, and migration guidance.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>Primary Surfaces</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>Application API</h3>
+        <p>
+          Consumers import public components from <code>@bc-grid/react</code> and stable types
+          from <code>@bc-grid/core</code>.
+        </p>
+      </article>
+      <article class="panel">
+        <h3>Engine Packages</h3>
+        <p>
+          Virtualization, animation, theming, filters, exports, aggregation, and server row models
+          stay behind package boundaries.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>API Shape</h2>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>read-only-grid.tsx</span>
+        <span>Q1 target</span>
+      </div>
+      <Code code={columnSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+</DocsLayout>

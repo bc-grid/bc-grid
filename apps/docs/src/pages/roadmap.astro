@@ -1,0 +1,60 @@
+---
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const q1Rows = [
+  ["M1.2", "Repo foundation: dependencies, build, type-check, CI", "foundation"],
+  ["M1.3", "RFCs: API, accessibility, server query, AG Grid POC audit", "design"],
+  ["M1.4", "Spikes: virtualizer, animation, theme", "spike"],
+  ["M1.5", "Core types from frozen API", "implementation"],
+  ["M1.6", "Foundation implementations", "implementation"],
+  ["M1.9", "One real bc-next screen rebuilt on bc-grid", "gate"],
+]
+---
+
+<DocsLayout
+  title="Roadmap"
+  description="The Q1 plan is a vertical slice: prove one real bc-next screen on bc-grid, then expand through editing, range selection, and server-side row models."
+  active="roadmap"
+>
+  <section class="section">
+    <h2>Q1 Milestones</h2>
+    <div class="roadmap-table">
+      <div class="table-row table-row-header">
+        <span>Milestone</span>
+        <span>Scope</span>
+        <span>Type</span>
+      </div>
+      {
+        q1Rows.map(([milestone, scope, type]) => (
+          <div class="table-row">
+            <code>{milestone}</code>
+            <span>{scope}</span>
+            <strong class="badge">{type}</strong>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Later Phases</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>Q2-Q4</h3>
+        <ul>
+          <li>Editing and read-only catch-up</li>
+          <li>Range selection and master-detail</li>
+          <li>Server-side row model and tree loading</li>
+        </ul>
+      </article>
+      <article class="panel">
+        <h3>Year 2</h3>
+        <ul>
+          <li>Aggregations, pivots, filters, exports</li>
+          <li>Animation and accessibility deep-pass</li>
+          <li>Beta, migration guides, and 1.0 launch</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+</DocsLayout>
