@@ -11,6 +11,7 @@
     { "path": "./packages/server-row-model" },
     { "path": "./packages/react" },
     { "path": "./packages/editors" },
-    { "path": "./packages/enterprise" }
+    { "path": "./packages/enterprise" },
+    { "path": "./apps/examples" }
   ]
 }

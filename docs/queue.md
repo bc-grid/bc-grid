@@ -51,7 +51,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 ### Documentation & examples (parallel throughout Q1)
 
 - `[ready]` **docs-app-skeleton** — `apps/docs/` Astro or Next.js site. Just the shell, navigation, syntax highlighting. **Effort**: 2-3 days.
-- `[ready]` **examples-app-skeleton** — `apps/examples/` Vite app. Renders example components live. **Effort**: 2 days.
+- `[in-flight: x1]` **examples-app-skeleton** — `apps/examples/` Vite app. Renders example components live. **Branch**: `agent/x1/examples-app-skeleton`. **Effort**: 2 days.
 - `[blocked: depends on react-impl-v0]` **docs-q1-content** — write API reference for v0.1: every public type, every prop, every event. **Effort**: 1 week.
 
 ---
