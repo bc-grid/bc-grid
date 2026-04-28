@@ -1,0 +1,55 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const stateSnippet = `type ControlledState<TValue> = {
+  value?: TValue
+  defaultValue?: TValue
+  onChange?: (next: TValue) => void
+}
+
+type BcGridProps<TRow> = {
+  data: TRow[]
+  columns: BcGridColumn<TRow>[]
+  rowId: (row: TRow) => string
+  sort?: ControlledState<BcSortState>
+  selection?: ControlledState<BcSelectionState>
+}`
+---
+
+<DocsLayout
+  title="API"
+  description="The public API is still pre-freeze. This page is the scaffold for the v0.1 API reference that will be generated from the Q1 API RFC."
+  active="api"
+>
+  <section class="section">
+    <h2>Freeze Status</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>Current State</h3>
+        <p>
+          <code>docs/api.md</code> is a placeholder until <code>api-rfc-v0</code> lands and
+          the Q1 public surface is reviewed.
+        </p>
+      </article>
+      <article class="panel">
+        <h3>Target</h3>
+        <p>
+          Every public prop, event, type, controlled state pair, value pipeline hook, and package
+          export appears here before v0.1 freezes.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Controlled State Pattern</h2>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>controlled-state.ts</span>
+        <span>draft</span>
+      </div>
+      <Code code={stateSnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+</DocsLayout>

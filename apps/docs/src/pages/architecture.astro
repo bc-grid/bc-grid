@@ -1,0 +1,66 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const boundarySnippet = `core -> virtualizer
+core -> animations
+core -> theming
+core -> filters
+core -> aggregations
+core -> export
+core -> server-row-model
+
+react -> core
+react -> virtualizer
+react -> animations
+react -> theming
+react -> filters
+react -> server-row-model`
+
+const packages = [
+  ["@bc-grid/core", "Public types and state contracts", "Q1"],
+  ["@bc-grid/virtualizer", "Rows, columns, pinned regions, focus retention", "Q1"],
+  ["@bc-grid/animations", "FLIP and Web Animations primitives", "Q1"],
+  ["@bc-grid/theming", "CSS variables, density, Tailwind preset", "Q1"],
+  ["@bc-grid/react", "Components and hooks for React consumers", "Q1"],
+  ["@bc-grid/editors", "Cell editor framework and built-ins", "Q2"],
+  ["@bc-grid/server-row-model", "Paged, infinite, and tree server modes", "Q4"],
+]
+---
+
+<DocsLayout
+  title="Architecture"
+  description="Package boundaries are part of the contract: engine packages stay framework-agnostic, while the React package owns the user-facing component layer."
+  active="architecture"
+>
+  <section class="section">
+    <h2>Package Map</h2>
+    <div class="package-table">
+      <div class="table-row table-row-header">
+        <span>Package</span>
+        <span>Responsibility</span>
+        <span>Phase</span>
+      </div>
+      {
+        packages.map(([name, role, phase]) => (
+          <div class="table-row">
+            <code>{name}</code>
+            <span>{role}</span>
+            <strong class="badge">{phase}</strong>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Allowed Direction</h2>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>package-boundaries.txt</span>
+        <span>binding</span>
+      </div>
+      <Code code={boundarySnippet} lang="text" theme="github-dark" />
+    </div>
+  </section>
+</DocsLayout>

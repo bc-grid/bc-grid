@@ -1,0 +1,294 @@
+:root {
+  color: #172026;
+  background: #f7f8fa;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --border: #d8dee7;
+  --muted: #667586;
+  --panel: #ffffff;
+  --accent: #2f6f73;
+  --accent-soft: #e7f3f2;
+  --ink: #172026;
+  --code-bg: #101820;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.docs-shell {
+  display: grid;
+  grid-template-columns: minmax(14rem, 17rem) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  padding: 1.25rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 0.375rem;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.brand strong,
+.brand-subtitle,
+.page-header h1,
+.page-header p,
+.section h2,
+.section h3 {
+  margin: 0;
+}
+
+.brand-subtitle {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.nav-group {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.nav-label {
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.nav-link {
+  border-radius: 0.375rem;
+  color: #27333d;
+  padding: 0.55rem 0.65rem;
+  text-decoration: none;
+}
+
+.nav-link:hover,
+.nav-link-active {
+  background: var(--accent-soft);
+  color: #174f52;
+}
+
+.content {
+  min-width: 0;
+  padding: 1.5rem;
+}
+
+.content-inner {
+  max-width: 68rem;
+}
+
+.page-header {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.page-header h1 {
+  color: var(--ink);
+  font-size: 2rem;
+  line-height: 1.15;
+}
+
+.page-header p {
+  max-width: 52rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.section {
+  display: grid;
+  gap: 0.875rem;
+  border-top: 1px solid var(--border);
+  padding: 1.25rem 0;
+}
+
+.section h2 {
+  font-size: 1.2rem;
+}
+
+.section h3 {
+  font-size: 1rem;
+}
+
+.lead {
+  max-width: 58rem;
+  color: #3e4b58;
+  line-height: 1.6;
+}
+
+.grid-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  padding: 1rem;
+}
+
+.panel p,
+.panel ul {
+  color: #465565;
+  line-height: 1.55;
+}
+
+.panel p {
+  margin: 0.5rem 0 0;
+}
+
+.panel ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.package-table,
+.roadmap-table {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--panel);
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr) 7rem;
+  gap: 1rem;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding: 0.7rem 0.85rem;
+}
+
+.table-row:last-child {
+  border-bottom: 0;
+}
+
+.table-row-header {
+  background: #eef2f6;
+  color: #536170;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.table-row code {
+  color: #236569;
+}
+
+.table-row span {
+  color: #465565;
+}
+
+.badge {
+  justify-self: start;
+  border-radius: 999px;
+  background: #e9edf3;
+  color: #405062;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.code-shell {
+  overflow: hidden;
+  border: 1px solid #24313d;
+  border-radius: 0.5rem;
+  background: var(--code-bg);
+}
+
+.code-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #263642;
+  color: #b6c5d2;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.code-shell pre {
+  margin: 0;
+  padding: 1rem;
+}
+
+.status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.status-strip span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: #465565;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 780px) {
+  .docs-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .content {
+    padding: 1rem;
+  }
+
+  .grid-two {
+    grid-template-columns: 1fr;
+  }
+
+  .table-row {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+}

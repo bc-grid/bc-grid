@@ -1,0 +1,65 @@
+---
+import "../styles/global.css"
+
+interface Props {
+  title: string
+  description: string
+  active: "overview" | "architecture" | "api" | "roadmap"
+}
+
+const { title, description, active } = Astro.props
+
+const navItems = [
+  { href: "/", id: "overview", label: "Overview" },
+  { href: "/architecture/", id: "architecture", label: "Architecture" },
+  { href: "/api/", id: "api", label: "API" },
+  { href: "/roadmap/", id: "roadmap", label: "Roadmap" },
+]
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title} | bc-grid docs</title>
+  </head>
+  <body>
+    <div class="docs-shell">
+      <aside class="sidebar">
+        <a class="brand" href="/">
+          <span class="brand-mark">bc</span>
+          <div>
+            <strong>bc-grid</strong>
+            <span class="brand-subtitle">Documentation</span>
+          </div>
+        </a>
+
+        <nav class="nav-group" aria-label="Documentation">
+          <span class="nav-label">Q1 Docs</span>
+          {
+            navItems.map((item) => (
+              <a
+                href={item.href}
+                class:list={["nav-link", active === item.id && "nav-link-active"]}
+              >
+                {item.label}
+              </a>
+            ))
+          }
+        </nav>
+      </aside>
+
+      <main class="content">
+        <div class="content-inner">
+          <header class="page-header">
+            <h1>{title}</h1>
+            <p>{description}</p>
+          </header>
+          <slot />
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
