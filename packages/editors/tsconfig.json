@@ -11,8 +11,5 @@
   },
   "include": ["src/**/*"],
   "exclude": ["dist", "node_modules", "tests"],
-  "references": [
-    { "path": "../core" },
-    { "path": "../react" }
-  ]
+  "references": [{ "path": "../core" }, { "path": "../react" }]
 }
