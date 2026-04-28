@@ -1,0 +1,21 @@
+{
+  "name": "bc-grid-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "bc-grid — a high-performance shadcn-native data grid built to compete with AG Grid.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "test": "bun test",
+    "type-check": "tsc -b --noEmit",
+    "bench": "bun run --filter './apps/benchmarks' bench"
+  },
+  "engines": {
+    "bun": ">=1.3"
+  }
+}

@@ -1,0 +1,34 @@
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+.cache/
+*.tsbuildinfo
+.DS_Store
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+bun-debug.log*
+
+# editor
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+
+# env
+.env
+.env.local
+.env.*.local
+
+# benchmarks
+tests/perf/results/
+tests/visual/__snapshots__/diff/
+
+# bun
+bun.lock
