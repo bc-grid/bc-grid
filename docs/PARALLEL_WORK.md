@@ -17,33 +17,58 @@ Layout on disk:
 
 ```
 ~/work/
-├── bc-grid/                       # main worktree, used by integrator + architect
-├── bc-grid-c1/                    # agent C1's worktree (Claude session 1)
-├── bc-grid-c2/                    # agent C2's worktree (Claude session 2)
-├── bc-grid-x1/                    # agent X1's worktree (Codex session 1)
-├── bc-grid-x2/                    # agent X2's worktree (Codex session 2)
-└── bc-grid-x3/                    # agent X3's worktree (Codex session 3)
+├── bc-grid/                       # main worktree (architect / integrator) — branch: main
+├── bcg-worker1/                   # parking branch: worker1
+├── bcg-worker2/                   # parking branch: worker2
+├── bcg-worker3/                   # parking branch: worker3
+└── bcg-worker4/                   # parking branch: worker4
 ```
 
-Naming: `c#` for Claude, `x#` for Codex (X for c-odeX). Numbers are stable within a session lifecycle.
+**Naming convention:** worktrees are agent-agnostic (`bcg-worker1`–`bcg-worker4`). Any agent — Claude or Codex — can work in any worktree. The agent's identity goes in the **branch name** (`agent/c1/<task-slug>` for Claude session 1, `agent/x1/<task-slug>` for Codex session 1) so logs and PRs make it clear who did what.
 
-## 2. Setting up a new agent worktree
+**Parking branches:** each worktree starts on a `worker1`/`worker2`/etc. branch. These are stable parking spots — agents switch off them when claiming a task and switch back when finished. Don't commit work directly to a parking branch.
 
-From the main worktree (`~/work/bc-grid`):
+## 2. Agent workflow inside a worktree
+
+When you sit down at a worktree:
 
 ```bash
-# Create the new worktree on a fresh feature branch
-git -C ~/work/bc-grid worktree add -b agent/c2/<task-slug> ~/work/bc-grid-c2 main
+cd ~/work/bcg-worker1
+git fetch origin
+git checkout worker1                 # the parking branch
+git reset --hard origin/main         # sync to latest main
+bun install                          # if deps changed since last session
 
-# Agent then operates in their worktree
-cd ~/work/bc-grid-c2
-bun install              # one-time per worktree (each has its own node_modules)
+# Now claim a task from docs/queue.md and create a feature branch:
+git checkout -b agent/c1/virtualizer-perf-spike   # `c1` for Claude #1, etc.
+
+# Work, commit, push, open PR
+git push -u origin agent/c1/virtualizer-perf-spike
+
+# After PR merges, return to parking branch
+git checkout worker1
+git reset --hard origin/main
+# Ready for the next task
 ```
 
-When the task is done and merged, retire the worktree:
+## 3. Setting up additional worktrees (beyond the initial 4)
+
+If a 5th worker is needed:
 
 ```bash
-git -C ~/work/bc-grid worktree remove ~/work/bc-grid-c2
+# Create the new worktree on a fresh parking branch
+git -C ~/work/bc-grid worktree add -b worker5 ~/work/bcg-worker5 main
+
+# Agent then operates in their worktree (see workflow above)
+cd ~/work/bcg-worker5
+bun install
+```
+
+When a worker is no longer needed, retire it:
+
+```bash
+git -C ~/work/bc-grid worktree remove ~/work/bcg-worker5
+git -C ~/work/bc-grid branch -d worker5
 git -C ~/work/bc-grid branch -d agent/c2/<task-slug>   # local cleanup
 ```
 
@@ -190,9 +215,11 @@ If any of these emerge, pause; root-cause; adjust this document.
 
 | Action | Command |
 |---|---|
-| Create new worktree | `git -C ~/work/bc-grid worktree add -b agent/<id>/<task> ~/work/bc-grid-<id> main` |
+| Create new worker worktree | `git -C ~/work/bc-grid worktree add -b worker5 ~/work/bcg-worker5 main` |
 | List worktrees | `git -C ~/work/bc-grid worktree list` |
-| Remove worktree | `git -C ~/work/bc-grid worktree remove ~/work/bc-grid-<id>` |
+| Remove worker worktree | `git -C ~/work/bc-grid worktree remove ~/work/bcg-worker5 && git -C ~/work/bc-grid branch -d worker5` |
 | List branches | `git -C ~/work/bc-grid branch -a` |
-| Sync agent branch with main | `cd ~/work/bc-grid-<id> && git fetch origin && git merge origin/main` |
-| Push agent branch | `git push -u origin agent/<id>/<task>` |
+| Claim a task (in a worker) | `git checkout -b agent/<id>/<task-slug>` |
+| Sync agent branch with main | `git fetch origin && git merge origin/main` |
+| Push agent branch | `git push -u origin agent/<id>/<task-slug>` |
+| Return to parking branch after merge | `git checkout worker<N> && git reset --hard origin/main` |
