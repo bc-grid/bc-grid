@@ -44,6 +44,8 @@ export const bcGridThemeVars = {
   focusRing: "--bc-grid-focus-ring",
   invalid: "--bc-grid-invalid",
   dirty: "--bc-grid-dirty",
+  searchMatchBg: "--bc-grid-search-match-bg",
+  searchMatchFg: "--bc-grid-search-match-fg",
   rowHeight: "--bc-grid-row-height",
   headerHeight: "--bc-grid-header-height",
   cellPaddingX: "--bc-grid-cell-padding-x",
@@ -95,6 +97,8 @@ export const bcGridPreset = {
           ring: "var(--bc-grid-focus-ring)",
           invalid: "var(--bc-grid-invalid)",
           dirty: "var(--bc-grid-dirty)",
+          "search-match": "var(--bc-grid-search-match-bg)",
+          "search-match-fg": "var(--bc-grid-search-match-fg)",
         },
       },
       borderRadius: {

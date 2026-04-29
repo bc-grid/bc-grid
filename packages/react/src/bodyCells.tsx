@@ -13,6 +13,11 @@ import { BcGridTooltip } from "./tooltip"
 import type { BcCellRendererParams } from "./types"
 import { formatCellValue, getCellValue } from "./value"
 
+interface SearchTextPart {
+  match: boolean
+  text: string
+}
+
 interface RenderBodyCellParams<TRow> {
   activeCell: BcCellPosition | null
   column: ResolvedColumn<TRow> | undefined
@@ -122,8 +127,46 @@ export function renderBodyCell<TRow>({
           onCellFocus?.(position)
         }}
       >
-        {column.source.cellRenderer ? column.source.cellRenderer(params) : formattedValue}
+        {column.source.cellRenderer
+          ? column.source.cellRenderer(params)
+          : highlightSearchText(formattedValue, searchText)}
       </div>
     </BcGridTooltip>
+  )
+}
+
+export function splitSearchText(value: string, searchText: string): SearchTextPart[] {
+  const needle = searchText.trim()
+  if (!needle) return [{ match: false, text: value }]
+
+  const haystack = value.toLowerCase()
+  const query = needle.toLowerCase()
+  const parts: SearchTextPart[] = []
+  let start = 0
+
+  while (start < value.length) {
+    const matchIndex = haystack.indexOf(query, start)
+    if (matchIndex === -1) break
+    if (matchIndex > start) {
+      parts.push({ match: false, text: value.slice(start, matchIndex) })
+    }
+    const end = matchIndex + query.length
+    parts.push({ match: true, text: value.slice(matchIndex, end) })
+    start = end
+  }
+
+  if (start < value.length) parts.push({ match: false, text: value.slice(start) })
+  return parts.length > 0 ? parts : [{ match: false, text: value }]
+}
+
+export function highlightSearchText(value: string, searchText: string): ReactNode {
+  return splitSearchText(value, searchText).map((part, index) =>
+    part.match ? (
+      <mark data-bc-grid-search-match="true" key={`${part.text}-${index}`}>
+        {part.text}
+      </mark>
+    ) : (
+      part.text
+    ),
   )
 }

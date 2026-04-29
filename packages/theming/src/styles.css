@@ -12,6 +12,8 @@
   --bc-grid-focus-ring: hsl(var(--ring, 221 83% 53%));
   --bc-grid-invalid: hsl(var(--destructive, 0 84% 60%));
   --bc-grid-dirty: hsl(37 92% 50%);
+  --bc-grid-search-match-bg: hsl(48 96% 89%);
+  --bc-grid-search-match-fg: hsl(24 95% 24%);
   --bc-grid-status-open-bg: hsl(153 56% 92%);
   --bc-grid-status-open-fg: hsl(153 74% 28%);
   --bc-grid-status-posted-bg: hsl(221 83% 94%);
@@ -183,6 +185,13 @@
   }
 }
 
+.bc-grid [data-bc-grid-search-match="true"] {
+  border-radius: 0.125rem;
+  background: var(--bc-grid-search-match-bg);
+  color: var(--bc-grid-search-match-fg);
+  padding-inline: 0.0625rem;
+}
+
 /*
  * Pinned-region scroll shadows. Active when body content has scrolled
  * under a pinned region — signals to the user that the pinned columns
@@ -300,6 +309,8 @@
     --bc-grid-focus-ring: Highlight;
     --bc-grid-invalid: ButtonText;
     --bc-grid-dirty: ButtonText;
+    --bc-grid-search-match-bg: Highlight;
+    --bc-grid-search-match-fg: HighlightText;
     --bc-grid-status-open-bg: Canvas;
     --bc-grid-status-open-fg: CanvasText;
     --bc-grid-status-posted-bg: Canvas;
