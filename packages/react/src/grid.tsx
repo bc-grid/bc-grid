@@ -1173,7 +1173,7 @@ function renderFilterCell<TRow>({
         pinnedClassName(column.pinned),
         column.align === "right" ? "bc-grid-cell-right" : undefined,
       )}
-      role="cell"
+      role="gridcell"
       aria-colindex={index + 1}
       style={cellStyle({
         align: column.align,
