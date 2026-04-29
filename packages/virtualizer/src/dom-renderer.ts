@@ -3,20 +3,30 @@
  *
  * Mounts to a host element, listens for scroll, computes the render window
  * via Virtualizer.computeWindow(), and reconciles the DOM by reusing
- * row/cell nodes where possible. Cell content comes from a consumer-supplied
+ * row + cell nodes where possible. Cell content comes from a consumer-supplied
  * `renderCell` callback.
  *
  * No React. No framework dependencies. Used by the spike harness directly;
  * the React layer (`@bc-grid/react`) wraps this with its own component.
  *
- * Layout (matches design.md §6.3):
- *   .bc-grid                                 (container, position: relative)
- *   ├── .bc-grid-scroller                    (overflow: auto, fills container)
- *   │   └── .bc-grid-canvas                  (totalHeight × totalWidth, position: relative)
- *   │       └── .bc-grid-cell                (one per visible cell, position: absolute)
+ * Layout:
+ *   .bc-grid                                  (container, role=grid, aria-rowcount, aria-colcount)
+ *   └── .bc-grid-scroller                     (overflow: auto — the only scrolling element)
+ *       └── .bc-grid-canvas                   (totalHeight × totalWidth, position: relative)
+ *           └── .bc-grid-row                  (role=row, aria-rowindex; position: absolute, full canvas width)
+ *               └── .bc-grid-cell             (role=gridcell, aria-colindex)
+ *                   • body cells:    position: absolute; left: <colOffset>
+ *                   • pinned-left:   position: sticky;   left: 0;  z-index: 2
+ *                   • pinned-right:  position: sticky;   right: 0; z-index: 2
  *
- * Pinned regions are deferred to a follow-up commit; the spike validates the
- * non-pinned virtualization first to prove the perf bar.
+ * Pinned columns ride the row containers — `position: sticky` keeps them at
+ * the scroller-viewport edges as the body scrolls horizontally, while the row
+ * (and therefore the body cells inside it) move with the scroll.
+ *
+ * ARIA: every row is `<div role="row" aria-rowindex>`, every cell is
+ * `<div role="gridcell" aria-colindex>`. The grid root carries
+ * `aria-rowcount` and `aria-colcount` for the *full* dataset, per the
+ * accessibility-rfc.
  */
 
 import type { Virtualizer } from "./virtualizer"
@@ -34,10 +44,11 @@ export interface DOMRendererOptions {
   onAfterRender?: () => void
 }
 
-interface CellNode {
+interface RowNode {
   el: HTMLElement
   rowIndex: number
-  colIndex: number
+  /** key = colIndex → cell node */
+  cells: Map<number, HTMLElement>
 }
 
 export class DOMRenderer {
@@ -49,9 +60,11 @@ export class DOMRenderer {
   private scroller!: HTMLDivElement
   private canvas!: HTMLDivElement
 
-  // key = `${rowIndex}:${colIndex}` → cell node
-  private cells = new Map<string, CellNode>()
-  // Cells removed from the live set during a render pass; reused next pass.
+  // key = rowIndex → row node
+  private rows = new Map<number, RowNode>()
+  // Recycled row + cell nodes; the next render reuses them instead of
+  // allocating new DOM.
+  private freeRows: HTMLElement[] = []
   private freeCells: HTMLElement[] = []
 
   private scrollRafScheduled = false
@@ -78,14 +91,12 @@ export class DOMRenderer {
     this.scroller.appendChild(this.canvas)
     this.host.appendChild(this.scroller)
 
-    // Sync viewport to host size.
     this.resizeObserver = new ResizeObserver(() => {
       this.virtualizer.setViewport(this.scroller.clientHeight, this.scroller.clientWidth)
       this.render()
     })
     this.resizeObserver.observe(this.scroller)
 
-    // Initial sizing + render
     this.virtualizer.setViewport(this.scroller.clientHeight, this.scroller.clientWidth)
     this.render()
   }
@@ -95,7 +106,8 @@ export class DOMRenderer {
     this.resizeObserver?.disconnect()
     this.host.innerHTML = ""
     this.host.classList.remove("bc-grid")
-    this.cells.clear()
+    this.rows.clear()
+    this.freeRows = []
     this.freeCells = []
   }
 
@@ -119,47 +131,91 @@ export class DOMRenderer {
     this.canvas.style.height = `${window_.totalHeight}px`
     this.canvas.style.width = `${window_.totalWidth}px`
 
-    const seen = new Set<string>()
+    const seenRows = new Set<number>()
 
-    // Add or update cells for every (row, col) in the render window.
     for (const row of window_.rows) {
-      for (const col of window_.cols) {
-        const key = `${row.index}:${col.index}`
-        seen.add(key)
+      seenRows.add(row.index)
+      const seenCols = new Set<number>()
 
-        let cell = this.cells.get(key)
-        if (!cell) {
-          const el = this.acquireCellNode()
-          el.dataset.rowIndex = String(row.index)
-          el.dataset.colIndex = String(col.index)
-          cell = { el, rowIndex: row.index, colIndex: col.index }
-          this.cells.set(key, cell)
-          this.canvas.appendChild(el)
+      let rowNode = this.rows.get(row.index)
+      if (!rowNode) {
+        const el = this.acquireRowNode()
+        el.dataset.rowIndex = String(row.index)
+        el.setAttribute("aria-rowindex", String(row.index + 1))
+        rowNode = { el, rowIndex: row.index, cells: new Map() }
+        this.rows.set(row.index, rowNode)
+        this.canvas.appendChild(el)
+      }
+
+      // Position the row. translate3d for GPU compositing on scroll.
+      rowNode.el.style.transform = `translate3d(0, ${row.top}px, 0)`
+      rowNode.el.style.height = `${row.height}px`
+
+      for (const col of window_.cols) {
+        seenCols.add(col.index)
+
+        let cellEl = rowNode.cells.get(col.index)
+        if (!cellEl) {
+          cellEl = this.acquireCellNode(col.pinned)
+          cellEl.dataset.colIndex = String(col.index)
+          cellEl.setAttribute("aria-colindex", String(col.index + 1))
+          rowNode.cells.set(col.index, cellEl)
+          rowNode.el.appendChild(cellEl)
+        } else {
+          // Pinned status of an existing cell can change if the grid is
+          // reconfigured. Update the position class + style.
+          this.applyCellPinning(cellEl, col.pinned)
         }
 
-        const el = cell.el
-        // Position via top/left (cheaper to update than transform when the
-        // value rarely changes for a given cell instance — we recycle
-        // nodes, so positions DO change. Translate3d would be marginally
-        // faster but offsets harder to inspect in devtools).
-        el.style.transform = `translate3d(${col.left}px, ${row.top}px, 0)`
-        el.style.width = `${col.width}px`
-        el.style.height = `${row.height}px`
+        cellEl.style.width = `${col.width}px`
+        cellEl.style.height = `${row.height}px`
 
-        this.renderCell({ rowIndex: row.index, colIndex: col.index }, el)
+        if (col.pinned === "left") {
+          // sticky left: 0 — no horizontal offset needed.
+          cellEl.style.left = "0"
+          cellEl.style.right = ""
+        } else if (col.pinned === "right") {
+          // Pinned-right cells stick to the scroller's right edge.
+          // We anchor by `right: 0` and let the canvas being totalWidth do
+          // the work. The cell's intrinsic right edge is canvas-right minus
+          // (totalWidth - col.left - col.width); using `right` calc keeps it
+          // simple for the renderer.
+          cellEl.style.right = `${window_.totalWidth - col.left - col.width}px`
+          cellEl.style.left = ""
+        } else {
+          // Body cells: absolute-positioned at their column offset.
+          cellEl.style.left = `${col.left}px`
+          cellEl.style.right = ""
+        }
+
+        this.renderCell({ rowIndex: row.index, colIndex: col.index }, cellEl)
+      }
+
+      // Recycle cells in this row that are no longer in the window.
+      for (const [colIndex, cellEl] of rowNode.cells) {
+        if (seenCols.has(colIndex)) continue
+        rowNode.cells.delete(colIndex)
+        cellEl.style.transform = "translate3d(-99999px, 0, 0)"
+        this.freeCells.push(cellEl)
+        cellEl.parentElement?.removeChild(cellEl)
       }
     }
 
-    // Remove cells no longer in the window. Reusable nodes go to freeCells
-    // so the next render can reuse them without DOM allocation.
-    for (const [key, cell] of this.cells) {
-      if (seen.has(key)) continue
-      this.cells.delete(key)
-      cell.el.style.transform = "translate3d(-99999px, 0, 0)" // park off-screen
-      this.freeCells.push(cell.el)
+    // Recycle rows no longer in the window.
+    for (const [rowIndex, rowNode] of this.rows) {
+      if (seenRows.has(rowIndex)) continue
+      this.rows.delete(rowIndex)
+      // Park the row off-screen and recycle its cells.
+      rowNode.el.style.transform = "translate3d(-99999px, 0, 0)"
+      for (const cellEl of rowNode.cells.values()) {
+        this.freeCells.push(cellEl)
+        cellEl.parentElement?.removeChild(cellEl)
+      }
+      rowNode.cells.clear()
+      this.freeRows.push(rowNode.el)
+      rowNode.el.parentElement?.removeChild(rowNode.el)
     }
 
-    // ARIA contract — minimal for the spike. Real surface in @bc-grid/react.
     this.host.setAttribute("aria-rowcount", String(this.virtualizer.rowCount))
     this.host.setAttribute("aria-colcount", String(this.virtualizer.colCount))
 
@@ -178,15 +234,48 @@ export class DOMRenderer {
     })
   }
 
-  private acquireCellNode(): HTMLElement {
-    const reused = this.freeCells.pop()
+  private acquireRowNode(): HTMLElement {
+    const reused = this.freeRows.pop()
     if (reused) return reused
     const el = document.createElement("div")
-    el.className = "bc-grid-cell"
-    el.setAttribute("role", "gridcell")
+    el.className = "bc-grid-row"
+    el.setAttribute("role", "row")
     el.style.position = "absolute"
     el.style.top = "0"
     el.style.left = "0"
+    el.style.width = "100%"
     return el
+  }
+
+  private acquireCellNode(pinned: "left" | "right" | null): HTMLElement {
+    const reused = this.freeCells.pop()
+    if (reused) {
+      this.applyCellPinning(reused, pinned)
+      return reused
+    }
+    const el = document.createElement("div")
+    el.className = "bc-grid-cell"
+    el.setAttribute("role", "gridcell")
+    el.style.top = "0"
+    this.applyCellPinning(el, pinned)
+    return el
+  }
+
+  private applyCellPinning(el: HTMLElement, pinned: "left" | "right" | null): void {
+    if (pinned === "left") {
+      el.classList.add("bc-grid-cell-pinned-left")
+      el.classList.remove("bc-grid-cell-pinned-right")
+      el.style.position = "sticky"
+      el.style.zIndex = "2"
+    } else if (pinned === "right") {
+      el.classList.add("bc-grid-cell-pinned-right")
+      el.classList.remove("bc-grid-cell-pinned-left")
+      el.style.position = "sticky"
+      el.style.zIndex = "2"
+    } else {
+      el.classList.remove("bc-grid-cell-pinned-left", "bc-grid-cell-pinned-right")
+      el.style.position = "absolute"
+      el.style.zIndex = ""
+    }
   }
 }

@@ -18,6 +18,18 @@
           cols
           <input id="colCount" type="number" value="30" min="1" max="200" />
         </label>
+        <label>
+          pinned-L
+          <input id="pinnedLeft" type="number" value="2" min="0" max="10" />
+        </label>
+        <label>
+          pinned-R
+          <input id="pinnedRight" type="number" value="1" min="0" max="10" />
+        </label>
+        <label>
+          <input id="variableHeight" type="checkbox" />
+          variable heights
+        </label>
         <button id="apply" type="button">Apply</button>
         <button id="scrollToEnd" type="button">Scroll to end</button>
         <button id="scrollToMiddle" type="button">Scroll to middle</button>
@@ -27,6 +39,7 @@
         <span>FPS: <strong id="fps">--</strong></span>
         <span>Cells in DOM: <strong id="cellCount">--</strong></span>
         <span>Last render: <strong id="renderMs">--</strong></span>
+        <span>Active: <strong id="activeCell">R0,C0</strong></span>
       </div>
     </header>
     <main id="grid" aria-label="Spike grid"></main>

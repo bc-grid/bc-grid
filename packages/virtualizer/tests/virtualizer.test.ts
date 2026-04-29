@@ -103,6 +103,68 @@ describe("Virtualizer scroll alignment", () => {
   })
 })
 
+describe("Virtualizer scroll clamping", () => {
+  test("scrollOffsetForRow clamps negative results to 0 (first row, end align)", () => {
+    const v = new Virtualizer(baseOptions)
+    // row 0 ends at 32; with viewport 600, naive end-align = 32 - 600 = -568
+    // clamp to 0
+    expect(v.scrollOffsetForRow(0, "end")).toBe(0)
+  })
+
+  test("scrollOffsetForRow clamps to max for last row, start align", () => {
+    const v = new Virtualizer(baseOptions)
+    // last row index = 999; rowOffset(999) = 999 * 32 = 31968
+    // totalHeight = 32000; max scroll = 32000 - 600 = 31400
+    expect(v.scrollOffsetForRow(999, "start")).toBe(31400)
+  })
+
+  test("scrollOffsetForCol clamps negative results to 0 (first col, end align)", () => {
+    const v = new Virtualizer(baseOptions)
+    // col 0 ends at 120; viewport 1200; naive end-align = 120 - 1200 = -1080
+    expect(v.scrollOffsetForCol(0, "end")).toBe(0)
+  })
+
+  test("scrollOffsetForCol clamps to max for last col, start align", () => {
+    const v = new Virtualizer(baseOptions)
+    // last col index = 29; colOffset(29) = 29 * 120 = 3480
+    // totalWidth = 3600; max scroll = 3600 - 1200 = 2400
+    expect(v.scrollOffsetForCol(29, "start")).toBe(2400)
+  })
+
+  test("scrollOffsetForRow returns current scrollTop for out-of-range index", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollTop(200)
+    expect(v.scrollOffsetForRow(-1, "start")).toBe(200)
+    expect(v.scrollOffsetForRow(99999, "start")).toBe(200)
+  })
+
+  test("scrollOffsetForCol returns current scrollLeft for out-of-range index", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollLeft(50)
+    expect(v.scrollOffsetForCol(-1, "start")).toBe(50)
+    expect(v.scrollOffsetForCol(99999, "start")).toBe(50)
+  })
+
+  test("scrollOffsetForRow center clamps at viewport edges", () => {
+    const v = new Virtualizer(baseOptions)
+    // first row centered would be 32/2 - 600/2 = -284 → clamp 0
+    expect(v.scrollOffsetForRow(0, "center")).toBe(0)
+    // last row centered would be > max → clamp to max
+    expect(v.scrollOffsetForRow(999, "center")).toBe(31400)
+  })
+
+  test("when total < viewport, scrollOffsetForRow always returns 0", () => {
+    const v = new Virtualizer({
+      ...baseOptions,
+      rowCount: 5, // 5 * 32 = 160 < 600 viewport
+    })
+    expect(v.scrollOffsetForRow(0, "start")).toBe(0)
+    expect(v.scrollOffsetForRow(0, "end")).toBe(0)
+    expect(v.scrollOffsetForRow(4, "start")).toBe(0)
+    expect(v.scrollOffsetForRow(4, "end")).toBe(0)
+  })
+})
+
 describe("Virtualizer pinned regions", () => {
   test("pinned-top rows always rendered", () => {
     const v = new Virtualizer({ ...baseOptions, pinnedTopRows: 1 })

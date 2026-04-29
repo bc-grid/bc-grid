@@ -7,7 +7,8 @@
   "workspaces": ["packages/*", "apps/*", "tools/*"],
   "scripts": {
     "build": "bun run --filter './packages/*' build && bun run --filter './apps/*' build",
-    "test": "bun test",
+    "test": "bun test packages",
+    "test:e2e": "bunx playwright test",
     "type-check": "tsc -b",
     "type-check:watch": "tsc -b --watch",
     "lint": "biome check .",
@@ -15,10 +16,11 @@
     "bench": "bun run --filter './apps/benchmarks' bench"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
     "@biomejs/biome": "^1.9.4",
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^22.0.0",
     "tsup": "^8.3.5",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.7.0"
   },
   "engines": {
     "bun": ">=1.3"

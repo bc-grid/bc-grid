@@ -385,37 +385,56 @@ export class Virtualizer {
   }
 
   /**
-   * Calculate the scrollTop required to bring a row into view.
+   * Calculate the scrollTop required to bring a row into view. The returned
+   * value is always clamped to `[0, totalHeight - viewportHeight]` so the
+   * caller can apply it directly without further validation. If the row index
+   * is out of range, returns the current scrollTop unchanged.
    */
   scrollOffsetForRow(index: number, align: ScrollAlign = "nearest"): number {
+    if (index < 0 || index >= this.rowCount) return this.scrollTop
     const top = this.rowOffset(index)
     const height = this.rowHeight(index)
+    const max = Math.max(0, this.totalHeight() - this.viewportHeight)
 
-    if (align === "start") return top
-    if (align === "end") return top + height - this.viewportHeight
-    if (align === "center") return top + height / 2 - this.viewportHeight / 2
-
-    // nearest
-    if (top < this.scrollTop) return top
-    if (top + height > this.scrollTop + this.viewportHeight) {
-      return top + height - this.viewportHeight
+    let target: number
+    if (align === "start") {
+      target = top
+    } else if (align === "end") {
+      target = top + height - this.viewportHeight
+    } else if (align === "center") {
+      target = top + height / 2 - this.viewportHeight / 2
+    } else {
+      // nearest
+      if (top < this.scrollTop) target = top
+      else if (top + height > this.scrollTop + this.viewportHeight) {
+        target = top + height - this.viewportHeight
+      } else target = this.scrollTop
     }
-    return this.scrollTop
+
+    return Math.max(0, Math.min(max, target))
   }
 
   scrollOffsetForCol(index: number, align: ScrollAlign = "nearest"): number {
+    if (index < 0 || index >= this.colCount) return this.scrollLeft
     const left = this.colOffset(index)
     const width = this.colWidth(index)
+    const max = Math.max(0, this.totalWidth() - this.viewportWidth)
 
-    if (align === "start") return left
-    if (align === "end") return left + width - this.viewportWidth
-    if (align === "center") return left + width / 2 - this.viewportWidth / 2
-
-    if (left < this.scrollLeft) return left
-    if (left + width > this.scrollLeft + this.viewportWidth) {
-      return left + width - this.viewportWidth
+    let target: number
+    if (align === "start") {
+      target = left
+    } else if (align === "end") {
+      target = left + width - this.viewportWidth
+    } else if (align === "center") {
+      target = left + width / 2 - this.viewportWidth / 2
+    } else {
+      if (left < this.scrollLeft) target = left
+      else if (left + width > this.scrollLeft + this.viewportWidth) {
+        target = left + width - this.viewportWidth
+      } else target = this.scrollLeft
     }
-    return this.scrollLeft
+
+    return Math.max(0, Math.min(max, target))
   }
 
   // -------------------------------------------------------------------------
