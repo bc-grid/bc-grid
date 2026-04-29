@@ -211,7 +211,7 @@ Lookup steps:
 1. If `column.filter === false`: no filter UI on this column.
 2. Else: `def = reactFilterRegistry.get(column.filter.type)`. If undefined: render a console.error in dev, no UI in prod (graceful degradation).
 3. Render `<def.Editor value={...} commit={...} ... />` in the inline filter row.
-4. On `commit(criteria)`: build a `ServerColumnFilter` from `{ kind: "column", columnId, type, ...criteria }`; merge into the active `BcGridFilter` (replacing any existing filter on this column); fire `onFilterChange`.
+4. On `commit(value)`: the framework wraps the value with the active operator into a `ServerColumnFilter` (`{ kind: "column", columnId, type, operator, value }`); merge into the active `BcGridFilter` (replacing any existing filter on this column); fire `onFilterChange`. Editors call `commit(null)` to clear the column's filter.
 
 ---
 
@@ -492,8 +492,8 @@ The `number-filter-ui` and `date-filter-ui` tasks in Phase 5.5 are NOT blocked b
 
 ## Acceptance criteria
 
-- `@bc-grid/filters` ships with eight built-in filter definitions registered.
-- `@bc-grid/react/filter-registry` ships with eight matching `BcReactFilterDefinition` Editors.
+- `@bc-grid/filters` ships with seven built-in filter definitions registered (`text`, `number`, `date`, `set`, `boolean`, `date-range`, `number-range`).
+- `@bc-grid/react/filter-registry` ships with seven matching `BcReactFilterDefinition` Editors.
 - `matchesFilter` runtime exists and is `manifest.ts`-listed.
 - URL persistence helpers shipped + manifest-listed.
 - AR Customers demo exercises text + number-range + date-range + set in a single integration test.
