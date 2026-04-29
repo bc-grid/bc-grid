@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { type CSSProperties, useMemo, useState } from "react"
 import { type ExampleDefinition, type InvoiceRow, examples, packageRows } from "./examples"
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -6,6 +6,17 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
 })
+
+const densityModes = [
+  { id: "compact", label: "Compact" },
+  { id: "normal", label: "Normal" },
+  { id: "comfortable", label: "Comfortable" },
+] as const
+
+const themeModes = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+] as const
 
 export function App() {
   const [selectedExampleId, setSelectedExampleId] = useState(examples[0]?.id ?? "")
@@ -56,6 +67,7 @@ export function App() {
         </header>
 
         <ExamplePreview example={selectedExample} />
+        <ThemeSpikePreview example={selectedExample} />
         <PackageMatrix />
       </section>
     </main>
@@ -103,6 +115,71 @@ function ExamplePreview({ example }: { example: ExampleDefinition }) {
   )
 }
 
+function ThemeSpikePreview({ example }: { example: ExampleDefinition }) {
+  const gridTemplateColumns = example.columns.map((column) => column.width).join(" ")
+
+  return (
+    <section className="theme-panel" aria-label="Theme spike preview">
+      <header>
+        <div>
+          <h3>Theme Spike</h3>
+          <span>Light and dark tokens across three density modes</span>
+        </div>
+        <code>@bc-grid/theming/styles.css</code>
+      </header>
+
+      <div className="theme-preview-grid">
+        {themeModes.flatMap((theme) =>
+          densityModes.map((density) => (
+            <article key={`${theme.id}-${density.id}`} className="theme-card" data-theme={theme.id}>
+              <div className="theme-card-header">
+                <span>{theme.label}</span>
+                <strong>{density.label}</strong>
+              </div>
+
+              <div
+                className={`bc-grid bc-grid--${density.id}`}
+                style={{ "--bc-grid-columns": gridTemplateColumns } as CSSProperties}
+              >
+                <div className="bc-grid__header">
+                  {example.columns.map((column) => (
+                    <div
+                      key={column.key}
+                      className={
+                        column.align === "right"
+                          ? "bc-grid__cell bc-grid__cell--right"
+                          : "bc-grid__cell"
+                      }
+                    >
+                      {column.label}
+                    </div>
+                  ))}
+                </div>
+                {example.rows.slice(0, 3).map((row) => (
+                  <div key={row.id} className="bc-grid__row">
+                    {example.columns.map((column) => (
+                      <div
+                        key={column.key}
+                        className={
+                          column.align === "right"
+                            ? "bc-grid__cell bc-grid__cell--right"
+                            : "bc-grid__cell"
+                        }
+                      >
+                        {renderThemedCell(row, column.key)}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </article>
+          )),
+        )}
+      </div>
+    </section>
+  )
+}
+
 function GridRow({
   row,
   example,
@@ -133,6 +210,18 @@ function renderCell(row: InvoiceRow, key: string) {
   }
 
   return row[key as keyof InvoiceRow]
+}
+
+function renderThemedCell(row: InvoiceRow, key: string) {
+  if (key === "status") {
+    return (
+      <span className={`bc-grid__status bc-grid__status--${row.status.toLowerCase()}`}>
+        {row.status}
+      </span>
+    )
+  }
+
+  return renderCell(row, key)
 }
 
 function PackageMatrix() {

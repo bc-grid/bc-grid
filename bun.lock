@@ -26,6 +26,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@bc-grid/react": "workspace:*",
+        "@bc-grid/theming": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
       },
