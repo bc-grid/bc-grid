@@ -9,6 +9,7 @@ import {
   headerDomId,
   pinnedClassName,
 } from "./gridInternals"
+import { BcGridTooltip } from "./tooltip"
 import type { BcCellRendererParams } from "./types"
 import { formatCellValue, getCellValue } from "./value"
 
@@ -79,47 +80,50 @@ export function renderBodyCell<TRow>({
       ? column.source.cellStyle(params)
       : column.source.cellStyle
   const role = column.source.rowHeader ? "rowheader" : "gridcell"
+  const cellId = cellDomId(domBaseId, entry.rowId, column.columnId)
+  const tooltip =
+    typeof column.source.tooltip === "function"
+      ? column.source.tooltip(entry.row)
+      : column.source.tooltip
 
   return (
-    <div
-      key={column.columnId}
-      id={cellDomId(domBaseId, entry.rowId, column.columnId)}
-      className={classNames(
-        "bc-grid-cell",
-        pinnedClassName(virtualCol.pinned),
-        column.align === "right" ? "bc-grid-cell-right" : undefined,
-        active ? "bc-grid-cell-active" : undefined,
-        coreClassName,
-        reactClassName,
-      )}
-      role={role}
-      aria-colindex={virtualCol.index + 1}
-      aria-labelledby={`${headerDomId(domBaseId, column.columnId)} ${cellDomId(
-        domBaseId,
-        entry.rowId,
-        column.columnId,
-      )}`}
-      aria-selected={selected || undefined}
-      data-bc-grid-active-cell={active || undefined}
-      style={{
-        ...cellStyle({
-          align: column.align,
-          height: virtualRow.height,
-          left: virtualCol.left,
-          pinned: virtualCol.pinned,
-          scrollLeft,
-          totalWidth,
-          viewportWidth,
-          width: virtualCol.width,
-        }),
-        ...customStyle,
-      }}
-      onClick={() => {
-        setActiveCell(position)
-        onCellFocus?.(position)
-      }}
-    >
-      {column.source.cellRenderer ? column.source.cellRenderer(params) : formattedValue}
-    </div>
+    <BcGridTooltip key={column.columnId} content={tooltip} id={`${cellId}-tooltip`}>
+      <div
+        id={cellId}
+        className={classNames(
+          "bc-grid-cell",
+          pinnedClassName(virtualCol.pinned),
+          column.align === "right" ? "bc-grid-cell-right" : undefined,
+          active ? "bc-grid-cell-active" : undefined,
+          coreClassName,
+          reactClassName,
+        )}
+        role={role}
+        aria-colindex={virtualCol.index + 1}
+        aria-labelledby={`${headerDomId(domBaseId, column.columnId)} ${cellId}`}
+        aria-selected={selected || undefined}
+        data-bc-grid-active-cell={active || undefined}
+        data-column-id={column.columnId}
+        style={{
+          ...cellStyle({
+            align: column.align,
+            height: virtualRow.height,
+            left: virtualCol.left,
+            pinned: virtualCol.pinned,
+            scrollLeft,
+            totalWidth,
+            viewportWidth,
+            width: virtualCol.width,
+          }),
+          ...customStyle,
+        }}
+        onClick={() => {
+          setActiveCell(position)
+          onCellFocus?.(position)
+        }}
+      >
+        {column.source.cellRenderer ? column.source.cellRenderer(params) : formattedValue}
+      </div>
+    </BcGridTooltip>
   )
 }

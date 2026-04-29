@@ -114,6 +114,8 @@ function CustomerGridDemo({
         width: 280,
         rowHeader: true,
         filter: { type: "text" },
+        tooltip: (row) =>
+          `${row.legalName} · ${row.account} · ${currency.format(row.balance)} outstanding`,
       },
       {
         columnId: "tradingName",
@@ -135,6 +137,7 @@ function CustomerGridDemo({
         header: "Collector",
         width: 170,
         filter: { type: "text" },
+        tooltip: (row) => `Collector: ${row.owner}`,
       },
       {
         columnId: "terms",
