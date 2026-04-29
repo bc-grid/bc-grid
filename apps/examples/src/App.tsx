@@ -138,7 +138,7 @@ function ThemeSpikePreview({ example }: { example: ExampleDefinition }) {
               </div>
 
               <div
-                className={`bc-grid bc-grid--${density.id}`}
+                className={`bc-grid bc-grid-theme-${theme.id} bc-grid--${density.id}`}
                 style={{ "--bc-grid-columns": gridTemplateColumns } as CSSProperties}
               >
                 <div className="bc-grid__header">
