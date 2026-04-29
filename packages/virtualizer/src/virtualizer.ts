@@ -24,6 +24,7 @@
  */
 
 import type { BcScrollAlign } from "@bc-grid/core"
+import { FenwickTree } from "./fenwick"
 
 /**
  * Options for constructing a `Virtualizer`. Matches the `VirtualOptions`
@@ -163,22 +164,21 @@ export class Virtualizer {
   readonly pinnedTopRows: number
   readonly pinnedBottomRows: number
 
-  private rowHeights = new Map<number, number>()
-  private colWidths = new Map<number, number>()
-
   private scrollTop = 0
   private scrollLeft = 0
 
   private retainedRows = new Set<number>()
   private retainedCols = new Set<number>()
 
-  // Cumulative-offset cache. For uniform heights this is O(1); for variable
-  // heights we recompute lazily on size change. A fenwick tree would scale
-  // better; deferred until the spike validates the uniform path.
-  private rowOffsetsDirty = true
-  private colOffsetsDirty = true
-  private rowOffsetsCache: number[] = []
-  private colOffsetsCache: number[] = []
+  /**
+   * Cumulative-offset stores. Each Fenwick tree holds row heights / column
+   * widths at the corresponding 0-based index. `prefixSum(i)` is the
+   * bottom edge of row `i` (right edge for cols); `prefixSum(i-1)` is the
+   * top (left) edge. Per-update + per-query are both O(log N), eliminating
+   * the spike's O(N) rebuild on size changes.
+   */
+  private rowSizes: FenwickTree
+  private colSizes: FenwickTree
 
   constructor(opts: VirtualOptions) {
     this.rowCount = opts.rowCount
@@ -193,6 +193,8 @@ export class Virtualizer {
     this.pinnedRightCols = opts.pinnedRightCols ?? 0
     this.pinnedTopRows = opts.pinnedTopRows ?? 0
     this.pinnedBottomRows = opts.pinnedBottomRows ?? 0
+    this.rowSizes = new FenwickTree(this.rowCount, this.defaultRowHeight)
+    this.colSizes = new FenwickTree(this.colCount, this.defaultColWidth)
   }
 
   // -------------------------------------------------------------------------
@@ -213,15 +215,11 @@ export class Virtualizer {
   }
 
   setRowHeight(index: number, height: number): void {
-    if (this.rowHeights.get(index) === height) return
-    this.rowHeights.set(index, height)
-    this.rowOffsetsDirty = true
+    this.rowSizes.set(index, height)
   }
 
   setColWidth(index: number, width: number): void {
-    if (this.colWidths.get(index) === width) return
-    this.colWidths.set(index, width)
-    this.colOffsetsDirty = true
+    this.colSizes.set(index, width)
   }
 
   retainRow(index: number, retain = true): void {
@@ -239,54 +237,53 @@ export class Virtualizer {
   // -------------------------------------------------------------------------
 
   rowHeight(index: number): number {
-    return this.rowHeights.get(index) ?? this.defaultRowHeight
+    if (index < 0 || index >= this.rowCount) return this.defaultRowHeight
+    return this.rowSizes.value(index)
   }
 
   colWidth(index: number): number {
-    return this.colWidths.get(index) ?? this.defaultColWidth
+    if (index < 0 || index >= this.colCount) return this.defaultColWidth
+    return this.colSizes.value(index)
   }
 
   /**
-   * Cumulative pixel offset of the top of row `index` (relative to the start
-   * of the body — pinned-top rows are NOT included in this offset because
-   * they live in their own sticky region).
+   * Top edge of row `index`. Pixel offset relative to the body's scrollable
+   * region — pinned-top rows are NOT subtracted because they live in their
+   * own sticky region.
    */
   rowOffset(index: number): number {
-    this.ensureRowOffsets()
-    return this.rowOffsetsCache[index] ?? 0
+    if (index <= 0) return 0
+    return this.rowSizes.prefixSum(index - 1)
   }
 
+  /** Left edge of column `index`. */
   colOffset(index: number): number {
-    this.ensureColOffsets()
-    return this.colOffsetsCache[index] ?? 0
+    if (index <= 0) return 0
+    return this.colSizes.prefixSum(index - 1)
   }
 
   totalHeight(): number {
-    this.ensureRowOffsets()
-    if (this.rowCount === 0) return 0
-    const last = this.rowCount - 1
-    return (this.rowOffsetsCache[last] ?? 0) + this.rowHeight(last)
+    return this.rowSizes.total()
   }
 
   totalWidth(): number {
-    this.ensureColOffsets()
-    if (this.colCount === 0) return 0
-    const last = this.colCount - 1
-    return (this.colOffsetsCache[last] ?? 0) + this.colWidth(last)
+    return this.colSizes.total()
   }
 
   /**
-   * Find the row index whose top is at or just before `y` (relative to the
-   * body's scrollable region). Binary search over the offsets cache.
+   * Row index containing pixel `y`. Returns 0 if `y < 0` and `rowCount-1`
+   * if `y` exceeds the total height (clamps to the last row).
    */
   rowAtOffset(y: number): number {
-    this.ensureRowOffsets()
-    return binarySearchOffset(this.rowOffsetsCache, y, this.rowCount)
+    if (this.rowCount === 0) return 0
+    if (y <= 0) return 0
+    return Math.min(this.rowCount - 1, this.rowSizes.upperBound(y))
   }
 
   colAtOffset(x: number): number {
-    this.ensureColOffsets()
-    return binarySearchOffset(this.colOffsetsCache, x, this.colCount)
+    if (this.colCount === 0) return 0
+    if (x <= 0) return 0
+    return Math.min(this.colCount - 1, this.colSizes.upperBound(x))
   }
 
   // -------------------------------------------------------------------------
@@ -553,50 +550,4 @@ export class Virtualizer {
 
     return verticallyVisible && horizontallyVisible
   }
-
-  // -------------------------------------------------------------------------
-  // Internal: cumulative offset cache
-  // -------------------------------------------------------------------------
-
-  private ensureRowOffsets(): void {
-    if (!this.rowOffsetsDirty && this.rowOffsetsCache.length === this.rowCount) return
-    const cache: number[] = new Array(this.rowCount)
-    let acc = 0
-    for (let i = 0; i < this.rowCount; i++) {
-      cache[i] = acc
-      acc += this.rowHeights.get(i) ?? this.defaultRowHeight
-    }
-    this.rowOffsetsCache = cache
-    this.rowOffsetsDirty = false
-  }
-
-  private ensureColOffsets(): void {
-    if (!this.colOffsetsDirty && this.colOffsetsCache.length === this.colCount) return
-    const cache: number[] = new Array(this.colCount)
-    let acc = 0
-    for (let i = 0; i < this.colCount; i++) {
-      cache[i] = acc
-      acc += this.colWidths.get(i) ?? this.defaultColWidth
-    }
-    this.colOffsetsCache = cache
-    this.colOffsetsDirty = false
-  }
-}
-
-/**
- * Find the largest index `i` such that `offsets[i] <= target`. Binary
- * search over the cumulative-offset cache. O(log N).
- */
-function binarySearchOffset(offsets: number[], target: number, count: number): number {
-  if (count === 0) return 0
-  let lo = 0
-  let hi = count - 1
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1
-    const offset = offsets[mid] ?? 0
-    if (offset === target) return mid
-    if (offset < target) lo = mid + 1
-    else hi = mid - 1
-  }
-  return Math.max(0, hi)
 }
