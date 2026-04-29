@@ -157,6 +157,9 @@ export class DOMRenderer {
     const seenRows = new Set<number>()
     const pinnedLeftDx = this.scroller.scrollLeft
     const pinnedRightDx = this.scroller.scrollLeft + this.scroller.clientWidth - window_.totalWidth
+    const pinnedTopDy = this.scroller.scrollTop
+    const pinnedBottomDy =
+      this.scroller.scrollTop + this.scroller.clientHeight - window_.totalHeight
 
     for (const row of window_.rows) {
       seenRows.add(row.index)
@@ -173,7 +176,15 @@ export class DOMRenderer {
       }
 
       // Position the row. translate3d for GPU compositing on scroll.
-      rowNode.el.style.transform = `translate3d(0, ${row.top}px, 0)`
+      // Pinned rows get an additional Y offset that anchors them to the
+      // scroller's top / bottom edge, mirroring the JS-translate approach
+      // used for pinned columns. Body cells inside still flow with row.top;
+      // pinned cells inside still get their own X transform on top of this.
+      this.applyRowPinning(rowNode.el, row.pinned)
+      let rowDy = 0
+      if (row.pinned === "top") rowDy = pinnedTopDy
+      else if (row.pinned === "bottom") rowDy = pinnedBottomDy
+      rowNode.el.style.transform = `translate3d(0, ${row.top + rowDy}px, 0)`
       rowNode.el.style.height = `${row.height}px`
 
       for (const col of window_.cols) {
@@ -248,16 +259,32 @@ export class DOMRenderer {
   }
 
   /**
-   * Update only the pinned cells' transforms — runs synchronously on every
-   * scroll event so pinned cells don't lag the body by a frame. The full
-   * render still happens on the next RAF.
+   * Update only the pinned cells + pinned rows' transforms — runs
+   * synchronously on every scroll event so pinned regions don't lag the
+   * body by a frame. The full render still happens on the next RAF.
    */
   private updatePinnedTransforms(): void {
     const totalWidth = this.virtualizer.totalWidth()
-    const pinnedLeftDx = this.scroller.scrollLeft
-    const pinnedRightDx = this.scroller.scrollLeft + this.scroller.clientWidth - totalWidth
+    const totalHeight = this.virtualizer.totalHeight()
+    const scrollLeft = this.scroller.scrollLeft
+    const scrollTop = this.scroller.scrollTop
+    const pinnedLeftDx = scrollLeft
+    const pinnedRightDx = scrollLeft + this.scroller.clientWidth - totalWidth
+    const pinnedTopDy = scrollTop
+    const pinnedBottomDy = scrollTop + this.scroller.clientHeight - totalHeight
 
     for (const rowNode of this.rows.values()) {
+      const rowIndex = rowNode.rowIndex
+      const isPinnedTop = rowIndex < this.virtualizer.pinnedTopRows
+      const isPinnedBottom =
+        rowIndex >= this.virtualizer.rowCount - this.virtualizer.pinnedBottomRows
+
+      if (isPinnedTop || isPinnedBottom) {
+        const baseY = this.virtualizer.rowOffset(rowIndex)
+        const dy = isPinnedTop ? pinnedTopDy : pinnedBottomDy
+        rowNode.el.style.transform = `translate3d(0, ${baseY + dy}px, 0)`
+      }
+
       for (const [colIndex, cellEl] of rowNode.cells) {
         if (colIndex < this.virtualizer.pinnedLeftCols) {
           cellEl.style.transform = `translate3d(${pinnedLeftDx}px, 0, 0)`
@@ -295,6 +322,28 @@ export class DOMRenderer {
     el.style.left = "0"
     el.style.width = "100%"
     return el
+  }
+
+  /**
+   * Apply or remove the pinned-class state on a row. Pinned rows get a
+   * higher z-index than body rows so they layer over body content; the
+   * class adds visual treatment (background) defined by the consumer's
+   * stylesheet. Row transform (Y position) is set in `render()` /
+   * `updatePinnedTransforms()` — this method only manages classes + zIndex.
+   */
+  private applyRowPinning(el: HTMLElement, pinned: "top" | "bottom" | null): void {
+    if (pinned === "top") {
+      el.classList.add("bc-grid-row-pinned-top")
+      el.classList.remove("bc-grid-row-pinned-bottom")
+      el.style.zIndex = "3"
+    } else if (pinned === "bottom") {
+      el.classList.add("bc-grid-row-pinned-bottom")
+      el.classList.remove("bc-grid-row-pinned-top")
+      el.style.zIndex = "3"
+    } else {
+      el.classList.remove("bc-grid-row-pinned-top", "bc-grid-row-pinned-bottom")
+      el.style.zIndex = ""
+    }
   }
 
   private acquireCellNode(pinned: "left" | "right" | null): HTMLElement {

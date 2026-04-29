@@ -34,6 +34,8 @@ const rowCountInput = $<HTMLInputElement>("#rowCount")
 const colCountInput = $<HTMLInputElement>("#colCount")
 const pinnedLeftInput = $<HTMLInputElement>("#pinnedLeft")
 const pinnedRightInput = $<HTMLInputElement>("#pinnedRight")
+const pinnedTopInput = $<HTMLInputElement>("#pinnedTop")
+const pinnedBottomInput = $<HTMLInputElement>("#pinnedBottom")
 const variableHeightToggle = $<HTMLInputElement>("#variableHeight")
 const applyBtn = $<HTMLButtonElement>("#apply")
 const scrollToEndBtn = $<HTMLButtonElement>("#scrollToEnd")
@@ -72,6 +74,8 @@ function buildGrid(): void {
   const cols = Number(colCountInput.value)
   const pinnedLeft = Math.max(0, Math.min(cols, Number(pinnedLeftInput.value)))
   const pinnedRight = Math.max(0, Math.min(cols - pinnedLeft, Number(pinnedRightInput.value)))
+  const pinnedTop = Math.max(0, Math.min(rows, Number(pinnedTopInput.value)))
+  const pinnedBottom = Math.max(0, Math.min(rows - pinnedTop, Number(pinnedBottomInput.value)))
 
   if (renderer) renderer.unmount()
 
@@ -86,6 +90,8 @@ function buildGrid(): void {
     colOverscan: 2,
     pinnedLeftCols: pinnedLeft,
     pinnedRightCols: pinnedRight,
+    pinnedTopRows: pinnedTop,
+    pinnedBottomRows: pinnedBottom,
   })
 
   if (variableHeightToggle.checked) {
