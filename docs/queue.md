@@ -42,8 +42,8 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 ### Phase 5 — Vertical slice (weeks 9-12)
 
-- `[in-flight: x1]` **react-impl-v0** — plan + scaffold underway against merged `core-types`, `animations-impl`, and virtualizer surface alignment (#20). Final polish/integration still depends on `virtualizer-impl` internals and `theming-impl` (#15). Minimal `<BcGrid>` in `@bc-grid/react` integrating foundation. Read-only, no features. **Effort**: 1 week.
-- `[blocked: depends on react-impl-v0]` **q1-sort** — single-column sort + animation. **Effort**: 2-3 days.
+- `[done: x1 #25]` **react-impl-v0** — `<BcGrid>` scaffold in `@bc-grid/react`. Read-only, no features. **Effort**: 1 week (delivered).
+- `[in-flight: c1]` **q1-sort** — single-column sort + animation. Wires header click → toggle sort (none → asc → desc → none), sorts rowEntries via column comparator (or default), animates row position changes via FLIP with `Virtualizer.beginInFlightRow` retention so animating rows survive recycling. **Branch**: `agent/c1/q1-sort`. **Effort**: 2-3 days.
 - `[blocked: depends on react-impl-v0]` **q1-keyboard-focus** — cell focus + arrow keys + Tab/Enter. From the a11y RFC. **Effort**: 3-4 days.
 - `[blocked: depends on react-impl-v0]` **q1-pinned-cols** — left + right pinned columns wired through to the React layer. **Effort**: 2-3 days.
 - `[blocked: depends on q1-sort + q1-keyboard-focus + q1-pinned-cols]` **q1-vertical-slice-demo** — rebuild ONE bc-next screen (e.g., AR Customers list) entirely on bc-grid. Real data, real perf, real a11y. **Effort**: 3-5 days. **This is the Q1 "is the architecture sound?" gate.**
