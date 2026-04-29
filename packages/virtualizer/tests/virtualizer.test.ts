@@ -297,6 +297,91 @@ describe("Virtualizer isCellVisible", () => {
   })
 })
 
+describe("Virtualizer in-flight retention", () => {
+  test("beginInFlightRow returns a release handle", () => {
+    const v = new Virtualizer(baseOptions)
+    const handle = v.beginInFlightRow(5)
+    expect(typeof handle.release).toBe("function")
+  })
+
+  test("in-flight row appears in computeWindow even when scrolled out", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollTop(20000) // far past row 5
+    const before = v.computeWindow().rows.map((r) => r.index)
+    expect(before).not.toContain(5)
+    v.beginInFlightRow(5)
+    const after = v.computeWindow().rows.map((r) => r.index)
+    expect(after).toContain(5)
+  })
+
+  test("in-flight row gets retained: true in the output", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollTop(20000)
+    v.beginInFlightRow(5)
+    const row = v.computeWindow().rows.find((r) => r.index === 5)
+    expect(row?.retained).toBe(true)
+  })
+
+  test("release decrements ref count; row removed when count hits 0", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollTop(20000)
+    const h1 = v.beginInFlightRow(5)
+    const h2 = v.beginInFlightRow(5)
+    expect(v.computeWindow().rows.map((r) => r.index)).toContain(5)
+
+    h1.release()
+    // still one outstanding handle → row stays
+    expect(v.computeWindow().rows.map((r) => r.index)).toContain(5)
+
+    h2.release()
+    // last handle released → row removed
+    expect(v.computeWindow().rows.map((r) => r.index)).not.toContain(5)
+  })
+
+  test("release is idempotent — calling twice does not over-decrement", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollTop(20000)
+    const h1 = v.beginInFlightRow(5)
+    const h2 = v.beginInFlightRow(5)
+    h1.release()
+    h1.release() // duplicate — no effect
+    h1.release() // duplicate — no effect
+    // h2 still holds → row should still be present
+    expect(v.computeWindow().rows.map((r) => r.index)).toContain(5)
+    h2.release()
+    expect(v.computeWindow().rows.map((r) => r.index)).not.toContain(5)
+  })
+
+  test("out-of-range index returns a no-op handle", () => {
+    const v = new Virtualizer(baseOptions)
+    const handle = v.beginInFlightRow(99999)
+    // No throw, no crash on release.
+    handle.release()
+    handle.release()
+  })
+
+  test("retained rows + in-flight rows compose without duplication", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollTop(20000)
+    v.retainRow(5)
+    v.beginInFlightRow(5) // same index
+    const indexes = v.computeWindow().rows.map((r) => r.index)
+    const fives = indexes.filter((i) => i === 5)
+    expect(fives.length).toBe(1) // not duplicated
+  })
+
+  test("beginInFlightCol — column-axis sibling works symmetrically", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollLeft(2500) // far past col 5
+    const before = v.computeWindow().cols.map((c) => c.index)
+    expect(before).not.toContain(5)
+    const handle = v.beginInFlightCol(5)
+    expect(v.computeWindow().cols.map((c) => c.index)).toContain(5)
+    handle.release()
+    expect(v.computeWindow().cols.map((c) => c.index)).not.toContain(5)
+  })
+})
+
 describe("Public API surface (api.md §9)", () => {
   test("VirtualOptions matches the constructor's input shape", () => {
     // If this compiles, the surface is in sync with the constructor.
