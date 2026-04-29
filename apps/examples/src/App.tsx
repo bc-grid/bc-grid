@@ -1,5 +1,5 @@
 import { BcEditGrid, type BcGridColumn, type BcGridDensity, useBcGridApi } from "@bc-grid/react"
-import { type CSSProperties, useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { type CustomerRow, type CustomerStatus, customerRows, packageRows } from "./examples"
 
 type ThemeMode = "light" | "dark"
@@ -15,18 +15,6 @@ const themeModes = [
   { id: "dark", label: "Dark" },
 ] as const satisfies readonly { id: ThemeMode; label: string }[]
 
-const themePreviewColumns: readonly {
-  key: keyof Pick<CustomerRow, "balance" | "id" | "name" | "status">
-  label: string
-  align?: "left" | "right"
-  width: string
-}[] = [
-  { key: "id", label: "Customer", width: "8rem" },
-  { key: "name", label: "Name", width: "1fr" },
-  { key: "status", label: "Status", width: "8rem" },
-  { key: "balance", label: "Balance", align: "right", width: "8rem" },
-] as const
-
 const statusLabels: Record<CustomerStatus, string> = {
   Active: "active",
   "On Hold": "hold",
@@ -39,7 +27,7 @@ export function App() {
   const [density, setDensity] = useState<BcGridDensity>("normal")
 
   return (
-    <main className={`app-shell app-shell-${theme}`}>
+    <main className={theme === "dark" ? "app-shell dark" : "app-shell"}>
       <aside className="sidebar" aria-label="Examples">
         <div className="brand">
           <span className="brand-mark">bc</span>
@@ -53,10 +41,6 @@ export function App() {
           <a className="nav-item nav-item-active" href="#customer-grid">
             <span>Customer Grid</span>
             <small>@bc-grid/react</small>
-          </a>
-          <a className="nav-item" href="#theme-preview">
-            <span>Theme Preview</span>
-            <small>@bc-grid/theming</small>
           </a>
           <a className="nav-item" href="#package-matrix">
             <span>Package Matrix</span>
@@ -80,7 +64,6 @@ export function App() {
           onThemeChange={setTheme}
           theme={theme}
         />
-        <ThemeSpikePreview />
         <PackageMatrix />
       </section>
     </main>
@@ -194,11 +177,7 @@ function CustomerGridDemo({
   }, [apiRef, rows])
 
   return (
-    <section
-      id="customer-grid"
-      className={`demo-panel bc-grid-theme-${theme}`}
-      aria-label="Customer grid demo"
-    >
+    <section id="customer-grid" className="demo-panel" aria-label="Customer grid demo">
       <div className="demo-toolbar">
         <div>
           <strong>Accounts Receivable</strong>
@@ -207,7 +186,7 @@ function CustomerGridDemo({
 
         <div className="demo-controls">
           <SegmentedControl
-            label="Theme"
+            label="Mode"
             options={themeModes}
             value={theme}
             onChange={onThemeChange}
@@ -272,92 +251,10 @@ function SegmentedControl<TValue extends string>({
   )
 }
 
-function ThemeSpikePreview() {
-  const gridTemplateColumns = themePreviewColumns.map((column) => column.width).join(" ")
-  const rows = customerRows.slice(0, 3)
-
-  return (
-    <section id="theme-preview" className="theme-panel" aria-label="Theme spike preview">
-      <header>
-        <div>
-          <h3>Theme Preview</h3>
-          <span>Light and dark tokens across three density modes</span>
-        </div>
-        <code>@bc-grid/theming/styles.css</code>
-      </header>
-
-      <div className="theme-preview-grid">
-        {themeModes.flatMap((theme) =>
-          densityModes.map((density) => (
-            <article key={`${theme.id}-${density.id}`} className="theme-card" data-theme={theme.id}>
-              <div className="theme-card-header">
-                <span>{theme.label}</span>
-                <strong>{density.label}</strong>
-              </div>
-
-              <div
-                className={`bc-grid bc-grid-theme-${theme.id} bc-grid--${density.id}`}
-                style={{ "--bc-grid-columns": gridTemplateColumns } as CSSProperties}
-              >
-                <div className="bc-grid-header">
-                  {themePreviewColumns.map((column) => (
-                    <div
-                      key={column.key}
-                      className={
-                        column.align === "right"
-                          ? "bc-grid-cell bc-grid-cell-right"
-                          : "bc-grid-cell"
-                      }
-                    >
-                      {column.label}
-                    </div>
-                  ))}
-                </div>
-                {rows.map((row) => (
-                  <div key={row.id} className="bc-grid-row">
-                    {themePreviewColumns.map((column) => (
-                      <div
-                        key={column.key}
-                        className={
-                          column.align === "right"
-                            ? "bc-grid-cell bc-grid-cell-right"
-                            : "bc-grid-cell"
-                        }
-                      >
-                        {renderThemedCell(row, column.key)}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </article>
-          )),
-        )}
-      </div>
-    </section>
-  )
-}
-
 function StatusBadge({ status }: { status: CustomerStatus }) {
   return (
     <span className={`bc-grid-status erp-status erp-status-${statusLabels[status]}`}>{status}</span>
   )
-}
-
-function renderThemedCell(row: CustomerRow, key: string) {
-  if (key === "status") {
-    return <StatusBadge status={row.status} />
-  }
-
-  if (key === "balance") {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(row.balance)
-  }
-
-  return row[key as keyof CustomerRow]
 }
 
 function PackageMatrix() {

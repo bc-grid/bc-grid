@@ -7,7 +7,6 @@ import {
   createBcGridThemeVars,
   getBcGridDensityClass,
   getBcGridDensityVars,
-  getBcGridThemeClass,
 } from "../src"
 
 describe("@bc-grid/theming", () => {
@@ -18,9 +17,8 @@ describe("@bc-grid/theming", () => {
     expect(bcGridDensities.comfortable.rowHeight).toBe("44px")
   })
 
-  test("exports density and theme class helpers", () => {
+  test("exports density helpers", () => {
     expect(getBcGridDensityClass("compact")).toBe("bc-grid--compact")
-    expect(getBcGridThemeClass("dark")).toBe("bc-grid-theme-dark")
     expect(getBcGridDensityVars("comfortable")).toEqual({
       "--bc-grid-row-height": "44px",
       "--bc-grid-header-height": "48px",
