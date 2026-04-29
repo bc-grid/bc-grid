@@ -15,6 +15,10 @@ export interface ExportOptions {
   bom?: boolean
   /** XLSX worksheet name. Default "bc-grid". */
   sheetName?: string
+  /** PDF document title metadata. Default "bc-grid export". */
+  title?: string
+  /** PDF page orientation. Default "landscape". */
+  pageOrientation?: "portrait" | "landscape"
 }
 
 export interface ExportResult {
@@ -106,10 +110,63 @@ export async function toExcel<TRow>(
   }
 }
 
-export function toPdf(): never {
-  throw new Error(
-    "@bc-grid/export.toPdf is reserved for export-pdf-impl and is not implemented yet",
-  )
+export async function toPdf<TRow>(
+  rows: readonly TRow[],
+  columns: readonly BcGridColumn<TRow>[],
+  options: ExportOptions = {},
+): Promise<ExportResult> {
+  const { jsPDF } = await loadJsPdf()
+  const document = new jsPDF({
+    orientation: options.pageOrientation ?? "landscape",
+    unit: "pt",
+    format: "a4",
+    compress: true,
+    putOnlyUsedFonts: true,
+  })
+  document.setProperties({
+    title: options.title ?? "bc-grid export",
+    creator: "bc-grid",
+  })
+
+  const visibleColumns = getVisibleColumns(columns, options)
+  const page = pdfPageMetrics(document)
+  const columnWidths = pdfColumnWidths(visibleColumns, page.contentWidth)
+  let y = page.margin
+
+  const drawHeader = () => {
+    if (!(options.includeHeaders ?? true) || visibleColumns.length === 0) return
+    y = drawPdfRow(
+      document,
+      visibleColumns.map((column) => column.header),
+      columnWidths,
+      y,
+      { header: true },
+    )
+  }
+
+  drawHeader()
+
+  for (const row of rows) {
+    const values = visibleColumns.map((column) => {
+      const value = getCellValue(row, column)
+      return formatExportValue(value, row, column, options.locale)
+    })
+    const rowHeight = pdfRowHeight(document, values, columnWidths)
+
+    if (y + rowHeight > page.height - page.margin) {
+      document.addPage()
+      y = page.margin
+      drawHeader()
+    }
+
+    y = drawPdfRow(document, values, columnWidths, y)
+  }
+
+  return {
+    mimeType: "application/pdf",
+    extension: "pdf",
+    content: new Uint8Array(document.output("arraybuffer")),
+  }
 }
 
 function getCellValue<TRow>(row: TRow, column: BcGridColumn<TRow>): unknown {
@@ -356,11 +413,116 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+type PdfDocument = InstanceType<typeof import("jspdf").jsPDF>
+
+interface PdfPageMetrics {
+  width: number
+  height: number
+  margin: number
+  contentWidth: number
+}
+
+const PDF_MARGIN = 36
+const PDF_FONT_SIZE = 9
+const PDF_HEADER_FONT_SIZE = 9
+const PDF_LINE_HEIGHT = 12
+const PDF_CELL_PADDING_X = 4
+const PDF_CELL_PADDING_Y = 5
+
+function pdfPageMetrics(document: PdfDocument): PdfPageMetrics {
+  const width = document.internal.pageSize.getWidth()
+  const height = document.internal.pageSize.getHeight()
+  return {
+    width,
+    height,
+    margin: PDF_MARGIN,
+    contentWidth: width - PDF_MARGIN * 2,
+  }
+}
+
+function pdfColumnWidths<TRow>(
+  columns: readonly BcGridColumn<TRow>[],
+  contentWidth: number,
+): number[] {
+  if (columns.length === 0) return []
+  const weights = columns.map((column) => {
+    if (column.width) return clamp(column.width / 8, 6, 28)
+    return clamp(column.header.length + 2, 6, 28)
+  })
+  const totalWeight = weights.reduce((total, width) => total + width, 0)
+  return weights.map((weight) => (weight / totalWeight) * contentWidth)
+}
+
+function pdfRowHeight(
+  document: PdfDocument,
+  values: readonly string[],
+  widths: readonly number[],
+): number {
+  const lineCounts = values.map((value, index) => {
+    const lines = pdfCellLines(document, value, widths[index] ?? 0)
+    return Math.max(1, lines.length)
+  })
+  return Math.max(...lineCounts, 1) * PDF_LINE_HEIGHT + PDF_CELL_PADDING_Y * 2
+}
+
+function drawPdfRow(
+  document: PdfDocument,
+  values: readonly string[],
+  widths: readonly number[],
+  y: number,
+  options: { header?: boolean } = {},
+): number {
+  const rowHeight = pdfRowHeight(document, values, widths)
+  let x = PDF_MARGIN
+
+  document.setFont("helvetica", options.header ? "bold" : "normal")
+  document.setFontSize(options.header ? PDF_HEADER_FONT_SIZE : PDF_FONT_SIZE)
+  document.setDrawColor(214)
+  document.setLineWidth(0.5)
+
+  if (options.header) {
+    document.setFillColor(245, 245, 245)
+    document.rect(
+      PDF_MARGIN,
+      y,
+      widths.reduce((total, width) => total + width, 0),
+      rowHeight,
+      "F",
+    )
+  }
+
+  values.forEach((value, index) => {
+    const width = widths[index] ?? 0
+    const lines = pdfCellLines(document, value, width)
+    document.rect(x, y, width, rowHeight)
+    document.text(lines, x + PDF_CELL_PADDING_X, y + PDF_CELL_PADDING_Y + PDF_FONT_SIZE)
+    x += width
+  })
+
+  return y + rowHeight
+}
+
+function pdfCellLines(document: PdfDocument, value: string, width: number): string[] {
+  const textWidth = Math.max(1, width - PDF_CELL_PADDING_X * 2)
+  const lines = document.splitTextToSize(value || " ", textWidth) as string[]
+  return lines.length > 0 ? lines : [" "]
+}
+
 async function loadExcelJs(): Promise<typeof import("exceljs")> {
   try {
     return await import("exceljs")
   } catch (error) {
     throw new Error('@bc-grid/export.toExcel requires the optional peer dependency "exceljs"', {
+      cause: error,
+    })
+  }
+}
+
+async function loadJsPdf(): Promise<typeof import("jspdf")> {
+  try {
+    return await import("jspdf")
+  } catch (error) {
+    throw new Error('@bc-grid/export.toPdf requires the optional peer dependency "jspdf"', {
       cause: error,
     })
   }
