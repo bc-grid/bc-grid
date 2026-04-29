@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import type { BcSelection, RowId } from "@bc-grid/core"
-import { isRowSelected, selectOnly, selectRange, selectionSize, toggleRow } from "../src/selection"
+import {
+  clearSelection,
+  headerCheckboxState,
+  isRowSelected,
+  selectAllRows,
+  selectOnly,
+  selectRange,
+  selectionSize,
+  toggleRow,
+} from "../src/selection"
 
 const empty: BcSelection = { mode: "explicit", rowIds: new Set() }
 
@@ -134,5 +143,69 @@ describe("selectionSize", () => {
   test("all / filtered: undefined (consumer-dependent)", () => {
     expect(selectionSize({ mode: "all", except: new Set() })).toBeUndefined()
     expect(selectionSize({ mode: "filtered", except: new Set() })).toBeUndefined()
+  })
+})
+
+describe("selectAllRows", () => {
+  test("returns an explicit selection containing every supplied id", () => {
+    const ids = ["a", "b", "c"] as RowId[]
+    const sel = selectAllRows(ids)
+    expect(sel.mode).toBe("explicit")
+    if (sel.mode === "explicit") {
+      expect(Array.from(sel.rowIds).sort()).toEqual(["a", "b", "c"])
+    }
+  })
+
+  test("empty input → empty explicit selection", () => {
+    const sel = selectAllRows([])
+    expect(sel.mode).toBe("explicit")
+    if (sel.mode === "explicit") {
+      expect(sel.rowIds.size).toBe(0)
+    }
+  })
+})
+
+describe("clearSelection", () => {
+  test("returns a fresh empty explicit selection", () => {
+    const sel = clearSelection()
+    expect(sel.mode).toBe("explicit")
+    if (sel.mode === "explicit") {
+      expect(sel.rowIds.size).toBe(0)
+    }
+  })
+})
+
+describe("headerCheckboxState", () => {
+  const ids = ["a", "b", "c"] as RowId[]
+
+  test("'none' when no visible row is selected", () => {
+    expect(headerCheckboxState(empty, ids)).toBe("none")
+  })
+
+  test("'all' when every visible row is in the explicit set", () => {
+    const sel: BcSelection = { mode: "explicit", rowIds: new Set(ids) }
+    expect(headerCheckboxState(sel, ids)).toBe("all")
+  })
+
+  test("'some' when at least one but not all visible rows are selected", () => {
+    const a = ids[0]
+    const b = ids[1]
+    if (!a || !b) throw new Error("test fixture")
+    const sel: BcSelection = { mode: "explicit", rowIds: new Set([a, b]) }
+    expect(headerCheckboxState(sel, ids)).toBe("some")
+  })
+
+  test("'none' for an empty visible-rows list", () => {
+    expect(headerCheckboxState(empty, [])).toBe("none")
+  })
+
+  test("'all' / 'filtered' selection modes collapse to 'all' (the visible page is fully covered)", () => {
+    expect(headerCheckboxState({ mode: "all", except: new Set() }, ids)).toBe("all")
+    expect(headerCheckboxState({ mode: "filtered", except: new Set() }, ids)).toBe("all")
+  })
+
+  test("explicit selection containing rows OUTSIDE the visible set still reports 'none' if no visible row is in it", () => {
+    const sel: BcSelection = { mode: "explicit", rowIds: new Set(["x" as RowId]) }
+    expect(headerCheckboxState(sel, ids)).toBe("none")
   })
 })
