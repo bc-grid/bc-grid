@@ -48,7 +48,7 @@ Pivot tables expose a multi-dimensional view of the dataset: row-group dimension
 | Per-column eligibility | `column.pivot?: "row" | "col" | "value"` (additive, NEW). Default row pivots on string columns, value pivots on numeric columns; consumer override. |
 | Aggregation per value column | Inherits `column.aggregation` (per `api.md §1.1`). Multi-value support: same column can appear once per `aggregationFn` (e.g., sum and count of `balance`). |
 | Drag UI | The sidebar Pivot tool panel (`chrome-rfc §Sidebar`) hosts row/col/values drop zones. Drag a column header → move into a zone. Drag out of a zone → return to grid. |
-| Engine output shape | `BcPivotedData<TRow>`: a tree of row groups × tree of col groups × value cells at each intersection. Sparse-friendly (no rectangular materialisation). |
+| Engine output shape | Internal: `BcPivotedData<TRow>` with a `Map`-backed cell index (engine-only, non-public). Public/wire: `BcPivotedDataDTO` with `cells: readonly BcPivotCellDTO[]` and tuple `keyPath` instead of composite strings — JSON-safe for `ServerPagedResult.pivotedRows`. Sparse on both shapes. |
 | Sub-totals / grand-totals | Each axis has a per-level sub-total row/col + a grand-total. Toggle: `BcPivotState.subtotals: { rows: boolean; cols: boolean }`. Default: both true. |
 | Sort within pivot | Row-group axis sorts by the first value column descending by default; consumer can override per dimension. Col-group axis: lexicographic on the dimension value. |
 | Server-side pivot | Reserved: `<BcServerGrid pivotMode>` delegates pivot to server via `ServerPagedQuery.pivotState` (additive on `server-query-rfc` types — additive widening covered in this RFC's API surface section). |
@@ -60,8 +60,12 @@ Pivot tables expose a multi-dimensional view of the dataset: row-group dimension
 
 ### `BcPivotState`
 
+**Package split (pinned):**
+- `@bc-grid/core` owns all *public state and wire DTOs*: `BcPivotState`, `BcPivotValue`, `emptyBcPivotState`, plus the wire-safe DTO `BcPivotedDataDTO` (defined in §`BcPivotedData`). These appear on `BcGridProps`, `BcGridApi`, `ServerPagedQuery`, and `ServerPagedResult`, so they must live where every package can reference them without a layering cycle.
+- `@bc-grid/aggregations` owns the *pure engine* (`pivot`, internal trees, the `Map`-backed `BcPivotedData`) and imports `BcPivotState` / `BcPivotValue` from core. Engine output is exported as the wire-safe DTO; the internal `Map` representation is non-public.
+
 ```ts
-// In @bc-grid/aggregations (or @bc-grid/core; engine vs core split TBD by impl):
+// In @bc-grid/core:
 
 export interface BcPivotState {
   /** Columns to group rows by, in order (outer-most first). */
@@ -88,50 +92,91 @@ export const emptyBcPivotState: BcPivotState = {
 }
 ```
 
-### `BcPivotedData`
+### `BcPivotedData` (internal) and `BcPivotedDataDTO` (wire / public)
 
-The engine produces a sparse tree-of-trees:
+The engine internally builds a sparse tree-of-trees. **The internal shape uses `Map<string, BcPivotCell>` and is non-public** (lives in `@bc-grid/aggregations`, not exported from any package's public surface). For the public surface — anything appearing on `BcGridApi`, `ServerPagedResult.pivotedRows`, or `BcGridProps` — we expose a wire-safe DTO with array cells and tuple key paths.
+
+#### Internal (engine-only, not exported)
 
 ```ts
+// Lives in @bc-grid/aggregations. Not re-exported from @bc-grid/core.
 export interface BcPivotedData<TRow> {
-  /** Root row-group node; recursive structure. */
   rowRoot: BcPivotRowNode<TRow>
-  /** Root col-group node. */
   colRoot: BcPivotColNode
-  /** Value-aggregation results: Map<rowKey × colKey, BcPivotCell>. Sparse — only filled intersections. */
+  /** Sparse value cells. Internal only; do NOT cross package boundaries. */
   cells: Map<string, BcPivotCell>
 }
+```
 
-export interface BcPivotRowNode<TRow> {
-  /** Composite key: "{groupCol1Value}|{groupCol2Value}|...". */
-  key: string
-  /** Per-level value (e.g., "North America" at level 0, "USA" at level 1). */
-  value: unknown
-  /** Children (next group level), or empty array if leaf. */
-  children: readonly BcPivotRowNode<TRow>[]
-  /** True if this node represents the implicit grand-total or sub-total bucket. */
-  isTotal: boolean
-  /** Depth from root, 0-based. */
-  level: number
-  /** Rows that fall under this node. Available at leaf nodes (post-grouping). */
-  rows?: readonly TRow[]
+#### Wire-safe DTO (public; in `@bc-grid/core`)
+
+This is the shape that crosses *every* package boundary — server adapters serialize it as JSON, the React layer renders it, consumer code passes it via props.
+
+```ts
+// In @bc-grid/core:
+
+export interface BcPivotedDataDTO {
+  /** Row-group tree. Recursive, JSON-friendly. */
+  rowRoot: BcPivotRowNodeDTO
+  /** Col-group tree. */
+  colRoot: BcPivotColNodeDTO
+  /**
+   * Value cells as an explicit array (not a Map, not a composite-string key).
+   * Each cell carries its row-group and col-group key paths as tuples of
+   * unknown values, which the consumer formats per-column. Sparse — missing
+   * intersections are simply absent from the array.
+   */
+  cells: readonly BcPivotCellDTO[]
 }
 
-export interface BcPivotColNode {
-  key: string
+export interface BcPivotRowNodeDTO {
+  /** Per-level group values from root to this node, in order. */
+  keyPath: readonly unknown[]
+  /** This node's group value (last entry of keyPath, denormalised for convenience). */
   value: unknown
-  children: readonly BcPivotColNode[]
+  children: readonly BcPivotRowNodeDTO[]
   isTotal: boolean
   level: number
 }
 
-export interface BcPivotCell {
-  rowKey: string
-  colKey: string
-  /** One entry per BcPivotState.values. */
+export interface BcPivotColNodeDTO {
+  keyPath: readonly unknown[]
+  value: unknown
+  children: readonly BcPivotColNodeDTO[]
+  isTotal: boolean
+  level: number
+}
+
+export interface BcPivotCellDTO {
+  rowKeyPath: readonly unknown[]
+  colKeyPath: readonly unknown[]
+  /** One result per `BcPivotState.values`, in `values` order. */
   results: readonly AggregationResult[]
 }
+
+export interface BcPivotRowNode<TRow> extends BcPivotRowNodeDTO {
+  /** Rows that fall under this node. Available at leaf nodes (post-grouping). */
+  rows?: readonly TRow[]
+  children: readonly BcPivotRowNode<TRow>[]
+}
+
+export interface BcPivotColNode extends BcPivotColNodeDTO {
+  children: readonly BcPivotColNode[]
+}
+
+/** Internal cell shape — has tuple keyPaths *and* the cached composite string key. */
+export interface BcPivotCell extends BcPivotCellDTO {
+  /** Cached "{rowKeyJson}|{colKeyJson}" lookup key for the engine's internal Map. */
+  cacheKey: string
+}
 ```
+
+**Why tuple key paths instead of composite strings on the wire:**
+- `Map<string, BcPivotCell>` is not JSON-serializable; the server-paged path (`ServerPagedResult.pivotedRows`) requires a JSON-clean structure.
+- Composite string keys like `"{a}|{b}"` collide silently when group values stringify the same way (`Date` vs ISO string vs number, `null` vs `"null"`, the literal `"|"` character in the underlying value). Tuple key paths preserve types and ordering without collision.
+- Consumers (and the React layer) format keys per-column anyway — the engine should not pre-stringify.
+
+The engine's internal `Map` keys are still allowed (they're a cache); they're computed from the `keyPath` via a stable JSON-encoder for lookup/dedup purposes only and never leak past the package boundary.
 
 ### Engine API
 
@@ -287,7 +332,7 @@ interface ServerPagedQuery extends ServerQueryBase {
 
 interface ServerPagedResult<TRow> {
   // ...existing fields...
-  pivotedRows?: BcPivotedData<TRow>      // when consumer's loadPage returned pivot output
+  pivotedRows?: BcPivotedDataDTO         // wire-safe; when consumer's loadPage returned pivot output
 }
 ```
 
