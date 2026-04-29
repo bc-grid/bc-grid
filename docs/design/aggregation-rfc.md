@@ -47,7 +47,7 @@ The aggregation framework computes per-column scalar reductions (`sum`, `count`,
 | Streaming | Aggregations are incremental: `step(acc, row)` is called per-row append; `merge(a, b)` for parallel batching; `finalize(acc) → result`. Re-render only when finalize value changes. |
 | Group rows | When grouping is active, each group has its own accumulator; row events merged into the relevant group via the row's group key. Lazy: only currently-visible groups have computed values; off-screen groups compute on demand. |
 | React adapter | `@bc-grid/react/aggregations` exports `useAggregations(rows, columns, scope)` + a default footer renderer used by the status-bar `aggregations` segment (Track 5). |
-| Result rendering | Default render: `column.valueFormatter(result, sentinelRow)` where `sentinelRow` is `{}` (or fall back to `String(result)`). Consumers can override per column via `column.aggregationFormatter?: (result, column) => string` (additive, NEW). |
+| Result rendering | Resolution order: (1) `column.aggregationFormatter?(result, column)` if defined; else (2) preset formatter on `column.format` applied to the aggregate (Intl number/currency/percent/date), with `format: "muted"` and unrecognised non-numeric formats falling through; else (3) `String(result)`. The existing `column.valueFormatter` is **not** invoked for aggregates — it takes a row and may depend on row context, which the aggregate value doesn't have. |
 | Locale-aware | All formatting goes through `Intl.*` via the existing `BcGridProps.locale` propagation. |
 | Performance | O(n) per scope change; O(1) per row append (incremental). 100k row sum < 5ms client-side per smoke perf. |
 
@@ -202,6 +202,11 @@ export interface UseAggregationsOptions {
   /** Selection state when scope === "selected"; otherwise unused. */
   selection?: BcSelection
   rangeSelection?: BcRangeSelection
+  /**
+   * Locale for preset/Intl formatting of aggregate results.
+   * Defaults to the locale provided by `BcGridProps.locale` via context.
+   */
+  locale?: string
 }
 
 export function useAggregations<TRow>(
@@ -209,10 +214,13 @@ export function useAggregations<TRow>(
   columns: readonly BcGridColumn<TRow>[],
   options: UseAggregationsOptions,
 ): readonly AggregationResult[] {
+  // Read context-driven locale outside the memo to obey Rules of Hooks.
+  const contextLocale = useLocale()
+  const locale = options.locale ?? contextLocale
   return useMemo(() => {
     const scoped = applyScope(rows, options.scope, options.selection, options.rangeSelection)
-    return aggregateColumns(scoped, columns, { locale: useLocale() })
-  }, [rows, columns, options.scope, options.selection, options.rangeSelection])
+    return aggregateColumns(scoped, columns, { locale })
+  }, [rows, columns, options.scope, options.selection, options.rangeSelection, locale])
 }
 ```
 
@@ -265,7 +273,7 @@ export function aggregateGroups<TRow>(
 ): ReadonlyMap<string, readonly AggregationResult[]>
 ```
 
-Each group key independently `init` / `step` / `finalize`. `merge` is used when a row is reassigned between groups (sort change, filter shift) to avoid re-computing both groups from scratch.
+Each group key independently `init` / `step` / `finalize`. **Row removal/reassignment forces a full per-group recompute** at v1, matching the streaming section's choice for removes/updates: `step`/`merge` are append-only and don't carry an inverse, so subtraction would require re-deriving from the source rows anyway. `merge` is reserved for parallel batching of *additions* across worker shards (post-v1). A future `inverse?(acc, row)` op on the `Aggregation` factory could enable incremental subtraction; tracked as a non-blocking item in `queue.md`.
 
 Group-row rendering: `groupRow.cellRenderer` (consumer-supplied or default) receives `params.aggregations: readonly AggregationResult[]` and renders a group header showing the aggregation results inline.
 
