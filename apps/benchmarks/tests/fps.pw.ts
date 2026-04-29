@@ -272,11 +272,16 @@ async function scrollAndWaitForRender(
       if (s.scrollLeft !== undefined) el.scrollLeft = s.scrollLeft
     }
   }, scroll)
-  // The synchronous handler updates pinned transforms; the RAF fires the
-  // full render. Wait for the render-count to advance.
+  // The synchronous scroll handler updates pinned transforms; the RAF
+  // fires the full render. Wait for the render-count to advance, then
+  // wait one additional rAF tick — Firefox occasionally reports stale
+  // boundingBox values immediately after a render commit, presumably
+  // because layout/paint hasn't finished. The extra frame gives the
+  // browser time to commit before the test reads positions.
   await page.waitForFunction((prev) => (window.__renderCount__ ?? 0) > prev, before, {
     timeout: 2000,
   })
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
 }
 
 test("pinned-bottom rows stay anchored to viewport-bottom after vertical scroll", async ({
