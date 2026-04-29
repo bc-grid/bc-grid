@@ -473,6 +473,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (outcome.type === "noop") return
       event.preventDefault()
       if (outcome.type === "preventDefault") return
+      if (outcome.type === "toggleSelection") {
+        const targetRow = rowEntries[currentRow]
+        if (!targetRow) return
+        setSelectionState(toggleRow(selectionState, targetRow.rowId))
+        selectionAnchorRef.current = targetRow.rowId
+        return
+      }
 
       const nextRow = rowEntries[outcome.row]
       const nextColumn = resolvedColumns[outcome.col]
@@ -487,6 +494,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       resolvedColumns,
       rowEntries,
       rowIndexById,
+      selectionState,
+      setSelectionState,
     ],
   )
 
