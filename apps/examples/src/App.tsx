@@ -307,6 +307,7 @@ function CustomerGridDemo({
         density={density}
         detailPath="/accounts-receivable/customers"
         extraActions={(row) => [{ label: "Statement", onSelect: () => handleStatement(row) }]}
+        gridId="accounts-receivable.customers"
         height={560}
         linkField="legalName"
         locale="en-US"
