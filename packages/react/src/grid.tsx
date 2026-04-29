@@ -1,3 +1,10 @@
+import {
+  AnimationBudget,
+  type FlipRect,
+  type FlipTarget,
+  flip,
+  readFlipRect,
+} from "@bc-grid/animations"
 import type {
   BcCellPosition,
   BcColumnStateEntry,
@@ -19,16 +26,19 @@ import { Virtualizer } from "@bc-grid/virtualizer"
 import {
   type CSSProperties,
   type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
   type RefObject,
   type UIEvent,
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react"
+import { defaultCompareValues, toggleSortFor } from "./sort"
 import type {
   BcCellRendererParams,
   BcEditGridAction,
@@ -177,18 +187,50 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.onActiveCellChange,
   )
 
+  const resolvedColumns = useMemo(
+    () => resolveColumns(columns, columnState),
+    [columns, columnState],
+  )
+
+  const columnIndexById = useMemo(() => {
+    const map = new Map<ColumnId, number>()
+    resolvedColumns.forEach((column, index) => map.set(column.columnId, index))
+    return map
+  }, [resolvedColumns])
+
   const rowEntries = useMemo(() => {
     const visibleRows =
       props.showInactive === false && rowIsInactive
         ? data.filter((row) => !rowIsInactive(row))
         : [...data]
 
-    return visibleRows.map((row, index) => ({
+    const built = visibleRows.map((row, index) => ({
       row,
       index,
       rowId: rowId(row, index),
     }))
-  }, [data, props.showInactive, rowId, rowIsInactive])
+
+    if (sortState.length === 0) return built
+
+    // Sort using each column's comparator (or the default). Multi-column:
+    // run keys in order, return the first non-zero comparison. After sort,
+    // re-stamp `index` so DOM positioning + virtualizer state line up.
+    const sorted = [...built].sort((a, b) => {
+      for (const sort of sortState) {
+        const column = resolvedColumns.find((c) => c.columnId === sort.columnId)
+        if (!column) continue
+        const va = getCellValue(a.row, column.source)
+        const vb = getCellValue(b.row, column.source)
+        const cmp = column.source.comparator
+          ? column.source.comparator(va, vb, a.row, b.row)
+          : defaultCompareValues(va, vb)
+        if (cmp !== 0) return sort.direction === "asc" ? cmp : -cmp
+      }
+      return 0
+    })
+
+    return sorted.map((entry, index) => ({ ...entry, index }))
+  }, [data, props.showInactive, resolvedColumns, rowId, rowIsInactive, sortState])
 
   const rowsById = useMemo(() => {
     const map = new Map<RowId, RowEntry<TRow>>()
@@ -201,17 +243,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     for (const entry of rowEntries) map.set(entry.rowId, entry.index)
     return map
   }, [rowEntries])
-
-  const resolvedColumns = useMemo(
-    () => resolveColumns(columns, columnState),
-    [columns, columnState],
-  )
-
-  const columnIndexById = useMemo(() => {
-    const map = new Map<ColumnId, number>()
-    resolvedColumns.forEach((column, index) => map.set(column.columnId, index))
-    return map
-  }, [resolvedColumns])
 
   const pinnedLeftCols = useMemo(
     () => resolvedColumns.filter((column) => column.pinned === "left").length,
@@ -439,6 +470,83 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [activeCell, columnIndexById, focusCell, resolvedColumns, rowEntries, rowIndexById],
   )
 
+  // FLIP-animation state for sort transitions. We capture row rects right
+  // before sortState updates, then run flip() on the next layout commit.
+  // Budget is grid-instance-scoped so concurrent sorts don't blow past the
+  // design.md §3.2 100-row in-flight cap.
+  const flipBudget = useMemo(() => new AnimationBudget(), [])
+  const sortFlipRectsRef = useRef<Map<RowId, FlipRect>>(new Map())
+
+  const captureBodyRowRects = useCallback((): Map<RowId, FlipRect> => {
+    const rects = new Map<RowId, FlipRect>()
+    const scroller = scrollerRef.current
+    if (!scroller) return rects
+    const rows = scroller.querySelectorAll<HTMLElement>(".bc-grid-row[data-row-id]")
+    for (const row of rows) {
+      const id = row.dataset.rowId
+      if (id) rects.set(id as RowId, readFlipRect(row))
+    }
+    return rects
+  }, [])
+
+  const handleHeaderSort = useCallback(
+    (column: ResolvedColumn<TRow>) => {
+      if (column.source.sortable === false) return
+      sortFlipRectsRef.current = captureBodyRowRects()
+      setSortState(toggleSortFor(sortState, column.columnId))
+    },
+    [captureBodyRowRects, setSortState, sortState],
+  )
+
+  // After sortState commits and the new row positions render, run FLIP.
+  // useLayoutEffect runs synchronously before paint, so we read the new
+  // rects (the L of FLIP) and the play() animates from the captured first
+  // rects to the rendered last positions. sortState is a deliberate dep
+  // even though we don't read its value here — it's the change trigger.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sortState is a re-run trigger
+  useLayoutEffect(() => {
+    const captured = sortFlipRectsRef.current
+    if (captured.size === 0) return
+    sortFlipRectsRef.current = new Map()
+
+    const scroller = scrollerRef.current
+    if (!scroller) return
+
+    const targets: FlipTarget[] = []
+    const handles: { release(): void }[] = []
+    for (const [rowId, first] of captured) {
+      const rowEl = scroller.querySelector<HTMLElement>(
+        `.bc-grid-row[data-row-id="${cssEscape(rowId)}"]`,
+      )
+      if (!rowEl) continue
+      targets.push({ element: rowEl, first })
+      const rowIndexAttr = rowEl.dataset.rowIndex
+      if (rowIndexAttr) {
+        const rowIndex = Number(rowIndexAttr)
+        if (Number.isFinite(rowIndex)) {
+          handles.push(virtualizer.beginInFlightRow(rowIndex))
+        }
+      }
+    }
+
+    if (targets.length === 0) {
+      for (const h of handles) h.release()
+      return
+    }
+
+    const animations = flip(targets, { budget: flipBudget })
+    if (animations.length === 0) {
+      for (const h of handles) h.release()
+      return
+    }
+    // Hand back in-flight retention as each animation finishes.
+    for (const [i, animation] of animations.entries()) {
+      const handle = handles[i]
+      if (!handle) continue
+      animation.finished.finally(() => handle.release())
+    }
+  }, [flipBudget, sortState, virtualizer])
+
   return (
     <div
       ref={rootRef}
@@ -471,6 +579,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               domBaseId,
               headerHeight,
               index,
+              onSort: handleHeaderSort,
               scrollLeft: scrollOffset.left,
               sortState,
               totalWidth: virtualWindow.totalWidth,
@@ -704,6 +813,7 @@ interface RenderHeaderCellParams<TRow> {
   domBaseId: string
   headerHeight: number
   index: number
+  onSort: (column: ResolvedColumn<TRow>) => void
   scrollLeft: number
   sortState: readonly BcGridSort[]
   totalWidth: number
@@ -715,12 +825,38 @@ function renderHeaderCell<TRow>({
   domBaseId,
   headerHeight,
   index,
+  onSort,
   scrollLeft,
   sortState,
   totalWidth,
   viewportWidth,
 }: RenderHeaderCellParams<TRow>) {
   const sort = sortState.find((entry) => entry.columnId === column.columnId)
+  const sortable = column.source.sortable !== false
+  const ariaSort = sort
+    ? sort.direction === "asc"
+      ? "ascending"
+      : "descending"
+    : sortable
+      ? "none"
+      : undefined
+
+  const handleClick = sortable
+    ? (event: MouseEvent<HTMLDivElement>) => {
+        event.stopPropagation()
+        onSort(column)
+      }
+    : undefined
+
+  const handleKeyDown = sortable
+    ? (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== "Enter" && event.key !== " ") return
+        event.preventDefault()
+        event.stopPropagation()
+        onSort(column)
+      }
+    : undefined
+
   return (
     <div
       key={column.columnId}
@@ -728,11 +864,16 @@ function renderHeaderCell<TRow>({
       className={classNames(
         "bc-grid-cell",
         "bc-grid-header-cell",
+        sortable ? "bc-grid-header-cell-sortable" : undefined,
+        sort ? `bc-grid-header-cell-sorted-${sort.direction}` : undefined,
         column.align === "right" ? "bc-grid-cell-right" : undefined,
       )}
       role="columnheader"
       aria-colindex={index + 1}
-      aria-sort={sort ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
+      aria-sort={ariaSort}
+      tabIndex={sortable ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       style={cellStyle({
         align: column.align,
         height: headerHeight,
@@ -743,8 +884,14 @@ function renderHeaderCell<TRow>({
         viewportWidth,
         width: column.width,
       })}
+      data-column-id={column.columnId}
     >
-      {column.source.header}
+      <span className="bc-grid-header-label">{column.source.header}</span>
+      {sort ? (
+        <span aria-hidden="true" className="bc-grid-header-sort-indicator">
+          {sort.direction === "asc" ? "↑" : "↓"}
+        </span>
+      ) : null}
     </div>
   )
 }
@@ -1226,6 +1373,24 @@ function createEmptySelection(): BcSelection {
 function isRowSelected(selection: BcSelection, rowId: RowId): boolean {
   if (selection.mode === "explicit") return selection.rowIds.has(rowId)
   return !selection.except.has(rowId)
+}
+
+/**
+ * Default cell-value comparator. Handles `null` / `undefined` (sorted last),
+ * numbers, Dates, and strings (locale-aware). Symmetric and stable. Falls
+ * back to `localeCompare(String(a), String(b))` for mixed types.
+ */
+/**
+ * Safe CSS-attribute-selector escape. Falls back to a hand-rolled escape
+ * for runtimes that lack `CSS.escape` (Node + jsdom in certain test
+ * environments). Only escapes the small set of characters that break a
+ * `[data-row-id="..."]` selector; preserves everything else verbatim.
+ */
+function cssEscape(value: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(value)
+  }
+  return value.replace(/["\\]/g, "\\$&")
 }
 
 function classNames(...values: Array<string | undefined>): string {
