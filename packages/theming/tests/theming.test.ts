@@ -29,6 +29,7 @@ describe("@bc-grid/theming", () => {
 
   test("creates typed CSS variable override maps", () => {
     expect(bcGridThemeVars.focusRing).toBe("--bc-grid-focus-ring")
+    expect(bcGridThemeVars.searchMatchBg).toBe("--bc-grid-search-match-bg")
     expect(
       createBcGridThemeVars({
         "--bc-grid-bg": "Canvas",
@@ -45,6 +46,7 @@ describe("@bc-grid/theming", () => {
     expect(colors["bc-grid"]?.bg).toBe("var(--bc-grid-bg)")
     expect(colors["bc-grid"]?.["header-bg"]).toBe("var(--bc-grid-header-bg)")
     expect(colors["bc-grid"]?.ring).toBe("var(--bc-grid-focus-ring)")
+    expect(colors["bc-grid"]?.["search-match"]).toBe("var(--bc-grid-search-match-bg)")
   })
 
   test("CSS includes accessibility media contracts", () => {
@@ -52,6 +54,7 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("@media (prefers-reduced-motion: reduce)")
     expect(css).toContain("@media (forced-colors: active)")
     expect(css).toContain("--bc-grid-focus-ring: Highlight")
+    expect(css).toContain("--bc-grid-search-match-bg: Highlight")
     expect(css).toContain('[data-bc-grid-active-cell="true"]')
   })
 
