@@ -38,6 +38,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { nextKeyboardNav } from "./keyboard"
 import { defaultCompareValues, toggleSortFor } from "./sort"
 import type {
   BcCellRendererParams,
@@ -446,28 +447,50 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setActiveCell({ rowId: firstRow.rowId, columnId: firstColumn.columnId })
   }, [activeCell, resolvedColumns, rowEntries, setActiveCell])
 
+  // Approximate "page size" for PageUp/PageDown: full viewport rows minus
+  // one for context overlap. Variable heights are handled approximately —
+  // viewport / default-row gives close-enough behaviour for v0.1; q1-pinned-
+  // cols and editor-aware paging will tighten this later.
+  const pageRowCount = Math.max(1, Math.floor(viewport.height / defaultRowHeight) - 1)
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      const keyToDelta: Record<string, { row: number; col: number } | undefined> = {
-        ArrowUp: { row: -1, col: 0 },
-        ArrowDown: { row: 1, col: 0 },
-        ArrowLeft: { row: 0, col: -1 },
-        ArrowRight: { row: 0, col: 1 },
-      }
-      const delta = keyToDelta[event.key]
-      if (!delta) return
-      event.preventDefault()
+      const lastRow = rowEntries.length - 1
+      const lastCol = resolvedColumns.length - 1
+      if (lastRow < 0 || lastCol < 0) return
 
-      const currentRowIndex = activeCell ? (rowIndexById.get(activeCell.rowId) ?? 0) : 0
-      const currentColIndex = activeCell ? (columnIndexById.get(activeCell.columnId) ?? 0) : 0
-      const nextRowIndex = clamp(currentRowIndex + delta.row, 0, rowEntries.length - 1)
-      const nextColIndex = clamp(currentColIndex + delta.col, 0, resolvedColumns.length - 1)
-      const nextRow = rowEntries[nextRowIndex]
-      const nextColumn = resolvedColumns[nextColIndex]
+      const currentRow = activeCell ? (rowIndexById.get(activeCell.rowId) ?? 0) : 0
+      const currentCol = activeCell ? (columnIndexById.get(activeCell.columnId) ?? 0) : 0
+
+      const outcome = nextKeyboardNav({
+        key: event.key,
+        ctrlOrMeta: event.ctrlKey || event.metaKey,
+        shiftKey: event.shiftKey,
+        currentRow,
+        currentCol,
+        lastRow,
+        lastCol,
+        pageRowCount,
+      })
+
+      if (outcome.type === "noop") return
+      event.preventDefault()
+      if (outcome.type === "preventDefault") return
+
+      const nextRow = rowEntries[outcome.row]
+      const nextColumn = resolvedColumns[outcome.col]
       if (!nextRow || !nextColumn) return
       focusCell({ rowId: nextRow.rowId, columnId: nextColumn.columnId })
     },
-    [activeCell, columnIndexById, focusCell, resolvedColumns, rowEntries, rowIndexById],
+    [
+      activeCell,
+      columnIndexById,
+      focusCell,
+      pageRowCount,
+      resolvedColumns,
+      rowEntries,
+      rowIndexById,
+    ],
   )
 
   // FLIP-animation state for sort transitions. We capture row rects right
