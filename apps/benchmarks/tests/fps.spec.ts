@@ -30,6 +30,7 @@ declare global {
   interface Window {
     __fps__: number[]
     __autoScrollDone__: boolean
+    __renderCount__: number
   }
 }
 
@@ -214,4 +215,43 @@ test("focus retention — active row stays in DOM after scrolling out", async ({
   // And the active cell should still carry the highlight class.
   const activeCell = retainedRow.locator(".bc-grid-cell.is-active")
   await expect(activeCell).toHaveCount(1)
+})
+
+test("rapid resizes coalesce to a single render per RAF", async ({ page }) => {
+  await page.goto("/")
+  // Wait for initial render(s) to settle.
+  await page.waitForFunction(() => window.__renderCount__ >= 1, undefined, { timeout: 5000 })
+
+  const result = await page.evaluate(async () => {
+    const grid = document.querySelector<HTMLElement>("#grid")
+    if (!grid) throw new Error("missing #grid")
+
+    // Take baseline.
+    const before = window.__renderCount__
+
+    // Drive 10 rapid size changes synchronously. Each style change
+    // schedules a layout, which fires the ResizeObserver — without
+    // coalescing this would queue 10 renders.
+    for (let i = 0; i < 10; i++) {
+      grid.style.width = `${600 + i}px`
+      // Force a layout flush so RO actually fires.
+      void grid.offsetWidth
+    }
+
+    // Wait two RAFs to give the throttle a chance to fire its single
+    // render.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    )
+
+    // Restore size.
+    grid.style.width = ""
+    return { before, after: window.__renderCount__ }
+  })
+
+  // After 10 rapid resizes, render count should grow by at most 2 (one
+  // for the throttled batch + one for restoring the size). Critically,
+  // not by 10.
+  const delta = result.after - result.before
+  expect(delta, `render count grew by ${delta} after 10 rapid resizes`).toBeLessThanOrEqual(3)
 })

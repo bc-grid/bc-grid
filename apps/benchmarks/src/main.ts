@@ -114,6 +114,7 @@ function buildGrid(): void {
       const cost = performance.now() - lastRenderStart
       renderMsEl.textContent = `${cost.toFixed(2)}ms`
       refreshActiveCellHighlight()
+      ;(globalThis as unknown as { __renderCount__: number }).__renderCount__ = renderer.renderCount
     },
   })
 
