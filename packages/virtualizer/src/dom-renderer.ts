@@ -81,7 +81,12 @@ export class DOMRenderer {
   private freeCells: HTMLElement[] = []
 
   private scrollRafScheduled = false
+  private resizeRafScheduled = false
   private resizeObserver?: ResizeObserver
+
+  /** Monotonic counter — incremented on every render commit. Read by
+   * tests + perf telemetry to detect regressions in render frequency. */
+  private renderCommitCount = 0
 
   constructor(opts: DOMRendererOptions) {
     this.host = opts.host
@@ -104,9 +109,18 @@ export class DOMRenderer {
     this.scroller.appendChild(this.canvas)
     this.host.appendChild(this.scroller)
 
+    // Throttle to RAF — coalesce all observed-size changes into a single
+    // render at the next frame. Without this, drag-resizing the window
+    // fires the observer at sub-frame frequency and the linear-in-cell-count
+    // re-render cost compounds.
     this.resizeObserver = new ResizeObserver(() => {
-      this.virtualizer.setViewport(this.scroller.clientHeight, this.scroller.clientWidth)
-      this.render()
+      if (this.resizeRafScheduled) return
+      this.resizeRafScheduled = true
+      requestAnimationFrame(() => {
+        this.resizeRafScheduled = false
+        this.virtualizer.setViewport(this.scroller.clientHeight, this.scroller.clientWidth)
+        this.render()
+      })
     })
     this.resizeObserver.observe(this.scroller)
 
@@ -221,7 +235,16 @@ export class DOMRenderer {
     this.host.setAttribute("aria-rowcount", String(this.virtualizer.rowCount))
     this.host.setAttribute("aria-colcount", String(this.virtualizer.colCount))
 
+    this.renderCommitCount++
     this.onAfterRender?.()
+  }
+
+  /**
+   * Total number of render commits since mount. Useful for detecting
+   * regressions in render frequency (e.g. resize coalescing).
+   */
+  get renderCount(): number {
+    return this.renderCommitCount
   }
 
   /**
