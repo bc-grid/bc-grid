@@ -6,7 +6,7 @@
   "type": "module",
   "workspaces": ["packages/*", "apps/*", "tools/*"],
   "scripts": {
-    "build": "bun run --filter '*' build",
+    "build": "bun run --filter './packages/*' build && bun run --filter './apps/*' build",
     "test": "bun test",
     "type-check": "tsc -b",
     "type-check:watch": "tsc -b --watch",
