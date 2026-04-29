@@ -25,6 +25,7 @@ import type {
 import { Virtualizer } from "@bc-grid/virtualizer"
 import {
   type CSSProperties,
+  type FocusEvent,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
@@ -147,12 +148,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     width: DEFAULT_VIEWPORT_WIDTH,
   })
   const [scrollOffset, setScrollOffset] = useState({ top: 0, left: 0 })
+  const scrollOffsetRef = useRef(scrollOffset)
   const [, setRenderVersion] = useState(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
 
   const requestRender = useCallback(() => {
     setRenderVersion((version) => (version + 1) % Number.MAX_SAFE_INTEGER)
+  }, [])
+  const updateScrollOffset = useCallback((next: { top: number; left: number }) => {
+    scrollOffsetRef.current = next
+    setScrollOffset(next)
   }, [])
 
   const [sortState, setSortState] = useControlledState<readonly BcGridSort[]>(
@@ -269,6 +275,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     })
 
     resolvedColumns.forEach((column, index) => next.setColWidth(index, column.width))
+    next.setScrollTop(scrollOffsetRef.current.top)
+    next.setScrollLeft(scrollOffsetRef.current.left)
     return next
   }, [
     defaultRowHeight,
@@ -333,9 +341,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const rowIndex = rowIndexById.get(targetRowId)
       if (rowIndex == null) return
       const top = virtualizer.scrollOffsetForRow(rowIndex, align)
-      applyScroll(scrollerRef.current, virtualizer, top, undefined, setScrollOffset)
+      applyScroll(scrollerRef.current, virtualizer, top, undefined, updateScrollOffset)
     },
-    [rowIndexById, virtualizer],
+    [rowIndexById, updateScrollOffset, virtualizer],
   )
 
   const scrollToCell = useCallback(
@@ -345,9 +353,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (rowIndex == null || colIndex == null) return
       const top = virtualizer.scrollOffsetForRow(rowIndex, align)
       const left = virtualizer.scrollOffsetForCol(colIndex, align)
-      applyScroll(scrollerRef.current, virtualizer, top, left, setScrollOffset)
+      applyScroll(scrollerRef.current, virtualizer, top, left, updateScrollOffset)
     },
-    [columnIndexById, rowIndexById, virtualizer],
+    [columnIndexById, rowIndexById, updateScrollOffset, virtualizer],
   )
 
   const focusCell = useCallback(
@@ -436,18 +444,22 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const target = event.currentTarget
       virtualizer.setScrollTop(target.scrollTop)
       virtualizer.setScrollLeft(target.scrollLeft)
-      setScrollOffset({ top: target.scrollTop, left: target.scrollLeft })
+      updateScrollOffset({ top: target.scrollTop, left: target.scrollLeft })
     },
-    [virtualizer],
+    [updateScrollOffset, virtualizer],
   )
 
-  const handleFocus = useCallback(() => {
-    if (activeCell || rowEntries.length === 0 || resolvedColumns.length === 0) return
-    const firstRow = rowEntries[0]
-    const firstColumn = resolvedColumns[0]
-    if (!firstRow || !firstColumn) return
-    setActiveCell({ rowId: firstRow.rowId, columnId: firstColumn.columnId })
-  }, [activeCell, resolvedColumns, rowEntries, setActiveCell])
+  const handleFocus = useCallback(
+    (event: FocusEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget) return
+      if (activeCell || rowEntries.length === 0 || resolvedColumns.length === 0) return
+      const firstRow = rowEntries[0]
+      const firstColumn = resolvedColumns[0]
+      if (!firstRow || !firstColumn) return
+      setActiveCell({ rowId: firstRow.rowId, columnId: firstColumn.columnId })
+    },
+    [activeCell, resolvedColumns, rowEntries, setActiveCell],
+  )
 
   // Approximate "page size" for PageUp/PageDown: full viewport rows minus
   // one for context overlap. Variable heights are handled approximately —
@@ -506,7 +518,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     const rects = new Map<RowId, FlipRect>()
     const scroller = scrollerRef.current
     if (!scroller) return rects
-    const rows = scroller.querySelectorAll<HTMLElement>(".bc-grid-row[data-row-id]")
+    const rows = visibleBodyRows(scroller)
     for (const row of rows) {
       const id = row.dataset.rowId
       if (id) rects.set(id as RowId, readFlipRect(row))
@@ -594,12 +606,18 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
     const targets: FlipTarget[] = []
     const handles: { release(): void }[] = []
-    for (const [rowId, first] of captured) {
-      const rowEl = scroller.querySelector<HTMLElement>(
-        `.bc-grid-row[data-row-id="${cssEscape(rowId)}"]`,
-      )
-      if (!rowEl) continue
-      targets.push({ element: rowEl, first })
+    const visibleRows = visibleBodyRows(scroller)
+    if (visibleRows.length !== captured.size) return
+
+    for (const rowEl of visibleRows) {
+      const rowId = rowEl.dataset.rowId as RowId | undefined
+      if (!rowId) return
+      const first = captured.get(rowId)
+      if (!first) return
+      const last = readFlipRect(rowEl)
+      const maxDelta = Math.max(1, last.height * 1.5)
+      if (Math.abs(first.top - last.top) > maxDelta) return
+      targets.push({ element: rowEl, first, last })
       const rowIndexAttr = rowEl.dataset.rowIndex
       if (rowIndexAttr) {
         const rowIndex = Number(rowIndexAttr)
@@ -695,6 +713,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 aria-rowindex={virtualRow.index + 2}
                 aria-selected={selected || undefined}
                 data-row-id={entry.rowId}
+                data-row-index={virtualRow.index}
                 style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
                 onClick={(event) => onRowClick?.(entry.row, event)}
                 onDoubleClick={(event) => onRowDoubleClick?.(entry.row, event)}
@@ -1223,9 +1242,19 @@ function rowStyle(top: number, height: number, width: number): CSSProperties {
     height,
     minWidth: "100%",
     position: "absolute",
-    transform: `translate3d(0, ${top}px, 0)`,
+    top,
     width: Math.max(width, 1),
   }
+}
+
+function visibleBodyRows(scroller: HTMLElement): HTMLElement[] {
+  const viewport = scroller.getBoundingClientRect()
+  return Array.from(scroller.querySelectorAll<HTMLElement>(".bc-grid-row[data-row-id]")).filter(
+    (row) => {
+      const rect = row.getBoundingClientRect()
+      return rect.bottom > viewport.top && rect.top < viewport.bottom
+    },
+  )
 }
 
 const overlayStyle: CSSProperties = {
@@ -1497,24 +1526,6 @@ function createEmptySelection(): BcSelection {
 function isRowSelected(selection: BcSelection, rowId: RowId): boolean {
   if (selection.mode === "explicit") return selection.rowIds.has(rowId)
   return !selection.except.has(rowId)
-}
-
-/**
- * Default cell-value comparator. Handles `null` / `undefined` (sorted last),
- * numbers, Dates, and strings (locale-aware). Symmetric and stable. Falls
- * back to `localeCompare(String(a), String(b))` for mixed types.
- */
-/**
- * Safe CSS-attribute-selector escape. Falls back to a hand-rolled escape
- * for runtimes that lack `CSS.escape` (Node + jsdom in certain test
- * environments). Only escapes the small set of characters that break a
- * `[data-row-id="..."]` selector; preserves everything else verbatim.
- */
-function cssEscape(value: string): string {
-  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
-    return CSS.escape(value)
-  }
-  return value.replace(/["\\]/g, "\\$&")
 }
 
 function classNames(...values: Array<string | undefined>): string {
