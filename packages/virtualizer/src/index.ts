@@ -23,17 +23,18 @@
  */
 
 export {
-  Virtualizer,
-  type VirtualOptions,
-  type VirtualizerOptions,
-  type VirtualRow,
-  type VirtualCol,
-  type VirtualItem,
-  type VirtualWindow,
+  type InFlightHandle,
   type ScrollAlign,
-  type VirtualizerA11yInput,
-  type VirtualRowA11yMeta,
+  type VirtualCol,
   type VirtualColumnA11yMeta,
+  type VirtualItem,
+  Virtualizer,
+  type VirtualizerA11yInput,
+  type VirtualizerOptions,
+  type VirtualOptions,
+  type VirtualRow,
+  type VirtualRowA11yMeta,
+  type VirtualWindow,
 } from "./virtualizer"
 
 export {

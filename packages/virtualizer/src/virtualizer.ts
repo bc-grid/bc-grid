@@ -150,6 +150,14 @@ export interface VirtualColumnA11yMeta {
   isActive: boolean
 }
 
+/**
+ * Handle returned by `Virtualizer.beginInFlightRow` / `beginInFlightCol`.
+ * Calling `release()` decrements the in-flight ref count; idempotent.
+ */
+export interface InFlightHandle {
+  release(): void
+}
+
 export class Virtualizer {
   readonly rowCount: number
   readonly colCount: number
@@ -169,6 +177,18 @@ export class Virtualizer {
 
   private retainedRows = new Set<number>()
   private retainedCols = new Set<number>()
+
+  /**
+   * Reference-counted in-flight retention. Each `beginInFlightRow(index)`
+   * increments the count; the returned handle's `release()` decrements.
+   * While count > 0 the row is treated like a `retainedRows` member —
+   * `computeWindow()` emits it regardless of scroll position, so the
+   * renderer doesn't recycle its cells. Used by animation primitives
+   * (`@bc-grid/animations.flip`) to hold a row's DOM node steady through
+   * an animation that started in viewport but may end outside it.
+   */
+  private inFlightRows = new Map<number, number>()
+  private inFlightCols = new Map<number, number>()
 
   /**
    * Cumulative-offset stores. Each Fenwick tree holds row heights / column
@@ -230,6 +250,57 @@ export class Virtualizer {
   retainCol(index: number, retain = true): void {
     if (retain) this.retainedCols.add(index)
     else this.retainedCols.delete(index)
+  }
+
+  /**
+   * Mark a row as in-flight (e.g. during an animation that started while it
+   * was in viewport but may end while scrolled out). Returns a handle whose
+   * `release()` decrements the in-flight ref count for that row. Multiple
+   * concurrent begins on the same index are valid — each gets its own
+   * release. The row is emitted by `computeWindow()` until every
+   * outstanding handle has been released.
+   *
+   * Out-of-range indexes return a no-op handle.
+   *
+   * Idempotent: calling `release()` twice on the same handle has no effect.
+   */
+  beginInFlightRow(index: number): InFlightHandle {
+    if (index < 0 || index >= this.rowCount) {
+      return noopHandle
+    }
+    this.inFlightRows.set(index, (this.inFlightRows.get(index) ?? 0) + 1)
+    let released = false
+    const inFlight = this.inFlightRows
+    return {
+      release() {
+        if (released) return
+        released = true
+        const next = (inFlight.get(index) ?? 1) - 1
+        if (next <= 0) inFlight.delete(index)
+        else inFlight.set(index, next)
+      },
+    }
+  }
+
+  /**
+   * Column-axis sibling of `beginInFlightRow`. Symmetric semantics.
+   */
+  beginInFlightCol(index: number): InFlightHandle {
+    if (index < 0 || index >= this.colCount) {
+      return noopHandle
+    }
+    this.inFlightCols.set(index, (this.inFlightCols.get(index) ?? 0) + 1)
+    let released = false
+    const inFlight = this.inFlightCols
+    return {
+      release() {
+        if (released) return
+        released = true
+        const next = (inFlight.get(index) ?? 1) - 1
+        if (next <= 0) inFlight.delete(index)
+        else inFlight.set(index, next)
+      },
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -362,8 +433,10 @@ export class Virtualizer {
       })
     }
 
-    // Retained rows that aren't already in the window
-    for (const retained of this.retainedRows) {
+    // Retained rows + in-flight rows that aren't already in the window. Both
+    // sets get the same `retained: true` treatment in the output — the
+    // renderer doesn't distinguish "kept for focus" from "kept for animation".
+    for (const retained of this.iterRetainedRowIndexes()) {
       if (rowIndexes.has(retained)) continue
       if (retained < 0 || retained >= this.rowCount) continue
       rowIndexes.add(retained)
@@ -415,7 +488,7 @@ export class Virtualizer {
       })
     }
 
-    for (const retained of this.retainedCols) {
+    for (const retained of this.iterRetainedColIndexes()) {
       if (colIndexes.has(retained)) continue
       if (retained < 0 || retained >= this.colCount) continue
       colIndexes.add(retained)
@@ -550,4 +623,28 @@ export class Virtualizer {
 
     return verticallyVisible && horizontallyVisible
   }
+
+  // -------------------------------------------------------------------------
+  // Internal: union iterators over retained + in-flight indexes
+  // -------------------------------------------------------------------------
+
+  private *iterRetainedRowIndexes(): IterableIterator<number> {
+    for (const idx of this.retainedRows) yield idx
+    for (const idx of this.inFlightRows.keys()) {
+      if (!this.retainedRows.has(idx)) yield idx
+    }
+  }
+
+  private *iterRetainedColIndexes(): IterableIterator<number> {
+    for (const idx of this.retainedCols) yield idx
+    for (const idx of this.inFlightCols.keys()) {
+      if (!this.retainedCols.has(idx)) yield idx
+    }
+  }
 }
+
+/**
+ * Shared no-op handle returned by `beginInFlightRow` / `beginInFlightCol`
+ * for out-of-range indexes. `release()` does nothing.
+ */
+const noopHandle = Object.freeze({ release(): void {} })
