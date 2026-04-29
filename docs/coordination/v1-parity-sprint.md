@@ -12,13 +12,15 @@
 
 **Old goal:** AG Grid Enterprise replacement for ~80-90% of ERP use cases over a 2-year, 8-quarter timeline.
 
-**New goal:** Functional parity with AG Grid Enterprise for ERP workloads over a focused multi-week parallel sprint, leveraging best-of-class agent velocity demonstrated through Q1.
+**New goal:** Functional parity with AG Grid Enterprise for ERP workloads over a **2-week parallel sprint with 4 max-tier agents**, leveraging best-of-class agent velocity demonstrated on day 0 (Q1 vertical-slice gate cleared via #42).
 
 ### Why this is plausible
 
-In the ~5 hours since the project entered end-of-Q1, **13 substantive PRs** have landed at sustained quality (q1-pinned-cols, api-surface-diff, docs-q1-content, row-selection, nightly-perf-harness, filter-cell-role fix, live-regions, audit, etc.) — sustained ~2 PRs/hour with three implementer agents. A focused work-week at this velocity yields 80-100 PRs, enough to deliver Q2-Q7 feature scope plus charts integration if the spec is tight and tasks are parallel-safe.
+On day 0 (~5 hours of focused work), **13 substantive PRs** landed at sustained quality (q1-pinned-cols, api-surface-diff, docs-q1-content, row-selection, nightly-perf-harness, filter-cell-role fix, live-regions, audit, etc.) — sustained ~2 PRs/hour with three implementer agents + one auditor. That pace ships ~10-20% of the original 2-year scope on day 0.
 
-Honest range: **2-3 weeks of focused parallel work**, with v1.0-RC achievable in ~1 week if quality compromises are accepted on edge cases. Bug-for-bug parity with AG Grid's 7+ years of polish remains a post-sprint backlog.
+**At 4 max-tier parallel agents × ~10 hours/day × 14 days, the budget is ~560 agent-hours.** The remaining v1.0 scope (Tracks 1-7) is roughly 50-80 impl PRs of 1-3 hours each plus integration / e2e / perf hardening — a comfortable fit if the RFCs land cleanly and the queue stays parallel-safe. Bug-for-bug parity with AG Grid's 7+ years of polish remains a post-sprint backlog.
+
+**Target:** v1.0-rc1 by day 12; v1.0 tag by day 14.
 
 ---
 

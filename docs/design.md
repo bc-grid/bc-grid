@@ -22,7 +22,9 @@ Build a React data grid that can replace AG Grid Enterprise for ERP-class worklo
 - Clean, semver-stable public API
 - Zero AG Grid source code; clean-room implementation only from public docs and the user's own usage
 
-The 2-year target is **not** 100% AG Grid feature parity. It is a focused product that does the 80-90% of features 95% of users need, **better than AG Grid does them** on the dimensions we care about (perf, animation, DX, theme).
+**Timeline:** the v1.0 target is delivered in a **2-week parallel sprint** with 4 max-tier agents (compressed from the original 2-year plan; see §13 decision log entry 2026-04-29 for the scope+timeline pivot). v0.1-alpha (read-only, client-side, today's `main`) ships first; v1.0 covers the full feature parity scope.
+
+**Goal shape:** functional parity with AG Grid Enterprise on the features 95% of ERP users need, **better than AG Grid does them** on the dimensions we care about (perf, animation, DX, theme). Bug-for-bug AG Grid parity (test-suite-level edge-case match) is not a v1.0 gate; that's a continuous post-1.0 backlog.
 
 ## 2. Non-goals (initial release)
 
@@ -70,7 +72,7 @@ The memory metric measures grid *overhead* — the cost of having a bc-grid in y
 
 The animation budget caps the number of rows we ever animate concurrently. We never animate 100k rows; we animate the rows in the viewport plus those still in transit (off-screen but holding their DOM node until the animation completes). The default ceiling is **100 rows** based on the animation-perf-spike measurements (`docs/design/animation-perf-spike-report.md`): 1,000 rows = 45 FPS (fail), 200 rows = 57 FPS (borderline), 100 rows = 60 FPS (pass on a 2024 M-series Mac in headless Chrome). Raising the cap to 200 requires a fresh Chrome trace on the target hardware showing sustained 60fps; otherwise, we hold at 100.
 
-Benchmark harness in `apps/benchmarks/`. Smoke results logged to PR comments. Nightly results published to a perf-tracker service (Y1).
+Benchmark harness in `apps/benchmarks/`. Smoke results logged to PR comments. Nightly results published to a perf-tracker service post-v1.0.
 
 ### 3.3 Dependency policy
 
@@ -190,7 +192,7 @@ Rules:
 
 - `editors` — built-in cell editor components: text, number, date, datetime, select, multi-select, autocomplete, custom. Depend on `react`. Each editor is a folder.
 
-#### Future split (Y2)
+#### Future split (post-v1.0)
 
 - `enterprise/pivots` — engine layer (pivot computation) + React layer (drag-to-pivot UI). Split TBD when work starts (Q5).
 - `enterprise/master-detail` — mostly React; engine surface is small.
@@ -516,7 +518,7 @@ Any architectural change to this document must:
 
 | Date | Decision | Rationale | Who |
 |---|---|---|---|
-| 2026-04-29 | Initial design | Foundation laid for 2-year build | JohnC + Claude |
+| 2026-04-29 | Initial design | Foundation laid; original timeline 2-year build (compressed to 2-week parallel sprint per the 2026-04-29 scope+timeline pivot below) | JohnC + Claude |
 | 2026-04-29 | **Engine vs React adapter split**: `aggregations`, `filters`, `export`, `server-row-model` move from "feature packages depending on react" to engine packages depending on `core` only. React adapters live in `@bc-grid/react`. | Engine packages are unit-testable without DOM (Vitest in Node); doubles parallelism on heavy packages; preserves engine surface for non-React bindings later. | Codex review |
 | 2026-04-29 | **`useVirtualizer` hook moves to `@bc-grid/react`**, `virtualizer` package keeps only the framework-agnostic `Virtualizer` class. | The original §4.2 was self-contradictory: virtualizer claimed no React but exported a hook. Resolution keeps the package framework-free. | Codex review |
 | 2026-04-29 | **Naming standardised on `@bc-grid/*`**: every package is `@bc-grid/<name>`. Consumer-facing import is `@bc-grid/react`. README/api docs aligned. | Earlier doc mixed `bc-grid/react` and `@bc-grid/*` — inconsistent. | Codex review |
@@ -536,7 +538,7 @@ Any architectural change to this document must:
 | 2026-04-29 | **Pinned rows render at z-index 3, pinned cells at z-index 2.** Body rows + cells use the default. | Stacking corner cells (pinned row × pinned col) above all body content + body-row pinned cells. The cell's z-index is relative to siblings inside the row; the row's z-index 3 raises the entire row (including the corner cell) above content at z-index 2 elsewhere. | virtualizer-impl review |
 | 2026-04-29 | **`ResizeObserver` coalesces to one render per RAF.** A `resizePending` flag guards the actual work; the first observed change schedules a single `requestAnimationFrame`, subsequent changes within the same frame are dropped. | Without this, continuous drag-resize fires the observer at sub-frame frequency, compounding the linear-in-cell-count re-render cost unboundedly. The Playwright test fires 10 rapid synchronous size changes and asserts render count grows by ≤ 3 (vs unthrottled 10). | virtualizer-impl review |
 | 2026-04-29 | **Index ↔ row ID translation is the React layer's responsibility, not the engine's.** The virtualizer's retention sets remain index-keyed; the React layer translates `RowId` → index at the boundary. | Index-keyed sets are O(1) lookup with no allocation; rowId-keyed would force a `Map<RowId, Set<unknown>>` and an extra hop per render. Row-identity invariants under sort/filter/edit are a React-layer concern (it knows the row model); the engine can stay row-model-agnostic. If post-mutation row identity invariants force the engine to be rowId-aware, that's a v0.2 migration — `VirtualOptions` is already named to anticipate the deprecation cycle. | virtualizer-impl review |
-| 2026-04-29 | **Scope + timeline pivot for v1.0:** functional parity with AG Grid Enterprise for ERP workloads, delivered in a focused multi-week parallel sprint instead of the original 8-quarter calendar. **What changes:** Q5-Q7 feature scope (aggregations, pivots, status-bar, sidebar/tool-panels, context menu, CSV/XLSX/PDF export, streaming row updates, mobile/touch fallback, WCAG deep pass) pulled forward into the same sprint as Q2-Q4 (editing, range selection, server-row-model). **What's added:** charts integration as a peer-dep adapter (was a `design.md §2` non-goal — promoted). **What stays:** every architectural decision in this §13 log; engine vs React split; kebab-case CSS; api.md v0.1 freeze; `accessibility-rfc` ARIA contracts; perf bars from §3.2; AGENTS.md golden rules. **What's still out:** RTL (post-1.0), spreadsheet-class formula editing (deferred), bug-for-bug AG Grid edge-case parity (we ship feature parity, not test-suite parity), mobile-first (touch fallback only). Active orchestration plan is `docs/coordination/v1-parity-sprint.md`. | JohnC + c2 (auditor) |
+| 2026-04-29 | **Scope + timeline pivot for v1.0:** functional parity with AG Grid Enterprise for ERP workloads, delivered in a **2-week parallel sprint with 4 max-tier agents** instead of the original 8-quarter (24-month) calendar. Velocity demonstrated: ~10-20% of the original 2-year scope shipped in day 0 (Q1 vertical-slice gate cleared via #42). **What changes:** Q5-Q7 feature scope (aggregations, pivots, status-bar, sidebar/tool-panels, context menu, CSV/XLSX/PDF export, streaming row updates, mobile/touch fallback, WCAG deep pass) pulled forward into the same sprint as Q2-Q4 (editing, range selection, server-row-model). **What's added:** charts integration as a peer-dep adapter (was a `design.md §2` non-goal — promoted). **What stays:** every architectural decision in this §13 log; engine vs React split; kebab-case CSS; api.md v0.1 freeze; `accessibility-rfc` ARIA contracts; perf bars from §3.2; AGENTS.md golden rules. **What's still out:** RTL (post-1.0), spreadsheet-class formula editing (deferred), bug-for-bug AG Grid edge-case parity (we ship feature parity, not test-suite parity), mobile-first (touch fallback only). Active orchestration plan is `docs/coordination/v1-parity-sprint.md`. | JohnC + c2 (auditor) |
 
 ## 14. Quality bars (full list)
 

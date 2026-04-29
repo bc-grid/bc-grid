@@ -6,7 +6,7 @@ This is the binding process for all agents (Claude Max, Codex Max, or any other)
 
 ## 1. The mission
 
-Build a high-performance shadcn-native data grid that competes with AG Grid Enterprise. See `design.md` for the architecture, `roadmap.md` for the 2-year plan, `queue.md` for the current task list.
+Build a high-performance shadcn-native data grid that competes with AG Grid Enterprise. See `design.md` for the architecture, `roadmap.md` for the **2-week parallel sprint to v1.0** (compressed from the original 2-year plan; see `design.md §13` for the 2026-04-29 scope+timeline pivot), `queue.md` for the current task list, and `coordination/v1-parity-sprint.md` for the active orchestration.
 
 ## 2. Reading order on first session
 
