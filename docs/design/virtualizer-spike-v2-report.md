@@ -64,9 +64,9 @@ Keyboard-driven active-cell movement: ArrowUp/Down/Left/Right, PageUp/Down, Home
 
 FPS sample buffer is exposed at `globalThis.__fps__` for headless test access. The page accepts `?autorun=fps` to start auto-scroll on first paint, signalling completion via `globalThis.__autoScrollDone__`.
 
-### 3. Playwright tests — `apps/benchmarks/tests/fps.spec.ts`
+### 3. Playwright tests — `apps/benchmarks/tests/fps.pw.ts`
 
-Eight tests, all running in Chromium via `playwright.config.ts` at the repo root:
+Nine tests via `playwright.config.ts` at the repo root. FPS tests run in Chromium; functional tests run across Chromium, Firefox, and WebKit:
 
 1. **Scroll FPS at 100k × 30 (with pinned cols) ≥ 58 median.** Headline. (CI: skipped, see below.)
 2. **Variable-height mode FPS ≥ 58 median.** (CI: skipped.)
@@ -76,8 +76,9 @@ Eight tests, all running in Chromium via `playwright.config.ts` at the repo root
 6. **Pinned-right cells stay anchored to viewport-right after horizontal scroll.** Scrolls the grid all the way right, then back to 0; asserts the pinned-right cell's viewport-x stays constant across both extremes (within sub-pixel rounding).
 7. **Multiple pinned-right cells stack flush against the right edge.** Reconfigures to 2 pinned-right cols, asserts both cells exist in the DOM and that col 29 sits to the right of col 28.
 8. **Focus retention.** Drives keyboard arrows to row 50, then scrolls the body 50,000px down (~1500 rows). Asserts `.bc-grid-row[data-row-index="50"]` is still in the DOM and still carries `.is-active`.
+9. **ResizeObserver RAF coalescing.** Drives 10 rapid size changes and asserts the renderer commits at most one batched resize render plus restore work.
 
-Run with `bunx playwright test`. CI runs the same suite via the e2e job in `.github/workflows/ci.yml` (gated on smoke passing). FPS assertions are skipped on CI because GHA runners are shared VMs with highly variable headless-Chromium perf — see "Why CI doesn't gate the FPS bar" above. The functional checks (3-8) run everywhere.
+Run with `bunx playwright test`. CI runs the same suite via the e2e job in `.github/workflows/ci.yml` (gated on smoke passing). FPS assertions are skipped on CI because GHA runners are shared VMs with highly variable headless-Chromium perf — see "Why CI doesn't gate the FPS bar" above. The functional checks (3-9) run everywhere.
 
 ## How to run locally
 

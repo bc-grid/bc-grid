@@ -16,7 +16,7 @@
  * Pure DOM, no React.
  */
 
-import { DOMRenderer, Virtualizer } from "@bc-grid/virtualizer"
+import { DOMRenderer, type RenderCellParams, Virtualizer } from "@bc-grid/virtualizer"
 
 function $<T extends Element>(selector: string): T {
   const el = document.querySelector<T>(selector)
@@ -110,7 +110,7 @@ function buildGrid(): void {
   renderer = new DOMRenderer({
     host: grid,
     virtualizer,
-    renderCell({ rowIndex, colIndex }, cell) {
+    renderCell({ rowIndex, colIndex }: RenderCellParams, cell: HTMLElement) {
       const text =
         colIndex === 0 ? `R-${String(rowIndex).padStart(7, "0")}` : `${rowIndex}.${colIndex}`
       if (cell.textContent !== text) cell.textContent = text

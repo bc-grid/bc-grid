@@ -1,1 +1,0 @@
-// @bc-grid/react — placeholder

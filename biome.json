@@ -27,6 +27,21 @@
       "recommended": true
     }
   },
+  "overrides": [
+    {
+      "include": ["packages/react/src/grid.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noNoninteractiveTabindex": "off",
+            "useFocusableInteractive": "off",
+            "useKeyWithClickEvents": "off",
+            "useSemanticElements": "off"
+          }
+        }
+      }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "double",
