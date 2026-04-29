@@ -2,54 +2,1123 @@
 import { Code } from "astro:components"
 import DocsLayout from "../layouts/DocsLayout.astro"
 
-const stateSnippet = `type ControlledState<TValue> = {
-  value?: TValue
-  defaultValue?: TValue
-  onChange?: (next: TValue) => void
+const gridSnippet = `import { BcGrid, useBcGridApi, type BcGridColumn } from "@bc-grid/react"
+import "@bc-grid/theming/styles.css"
+
+type Customer = {
+  id: string
+  code: string
+  name: string
+  balance: number
+  active: boolean
 }
 
-type BcGridProps<TRow> = {
-  data: TRow[]
-  columns: BcGridColumn<TRow>[]
-  rowId: (row: TRow) => string
-  sort?: ControlledState<BcSortState>
-  selection?: ControlledState<BcSelectionState>
-}`
+const columns: BcGridColumn<Customer>[] = [
+  { field: "code", header: "Code", width: 120, pinned: "left", format: "code" },
+  { field: "name", header: "Customer", minWidth: 240, flex: 1, filter: { type: "text" } },
+  { field: "balance", header: "Balance", align: "right", format: "currency" },
+]
+
+const apiRef = useBcGridApi<Customer>()
+
+<BcGrid
+  data={customers}
+  columns={columns}
+  rowId={(row) => row.id}
+  density="normal"
+  defaultSort={[{ columnId: "code", direction: "asc" }]}
+  apiRef={apiRef}
+/>`
+
+const themingSnippet = `/* Host app globals.css */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --border: 214 32% 91%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 210 40% 96%;
+  --ring: 221 83% 53%;
+  --destructive: 0 84% 60%;
+}
+
+/* App entry */
+import "@bc-grid/theming/styles.css"`
+
+const components = [
+  [
+    "BcGrid",
+    "implemented",
+    "Read-only React grid: virtual rows and columns, pinned columns, keyboard focus, basic sort, column resize, inline text filters, slots, loading/no-rows overlays, and imperative API wiring.",
+  ],
+  [
+    "BcEditGrid",
+    "partial",
+    "Wraps BcGrid with an optional detail link column and actions column. In-grid editing, validation, and commit events are reserved for Q2.",
+  ],
+  [
+    "BcServerGrid",
+    "partial",
+    "Exports the server-grid shell and API type. Paged mode can render initialResult rows; live loaders, cache, invalidation, infinite mode, and tree mode are reserved for Q4.",
+  ],
+  [
+    "useBcGridApi",
+    "implemented",
+    "Creates a RefObject<BcGridApi<TRow> | null> for imperative scroll, focus, lookup, and state shortcut methods.",
+  ],
+]
+
+const gridProps = [
+  ["data", "readonly TRow[]", "implemented", "Client-side rows rendered by BcGrid."],
+  [
+    "columns",
+    "readonly BcReactGridColumn<TRow>[]",
+    "implemented",
+    "Column definitions. React consumers normally import this as BcGridColumn from @bc-grid/react.",
+  ],
+  [
+    "rowId",
+    "BcRowId<TRow>",
+    "implemented",
+    "Required stable row identity callback. Do not derive IDs from visible indexes.",
+  ],
+  [
+    "gridId",
+    "string",
+    "partial",
+    "Accepted and used for stable DOM IDs. LocalStorage persistence from docs/api.md is reserved for a follow-up.",
+  ],
+  [
+    "density",
+    '"compact" | "normal" | "comfortable"',
+    "implemented",
+    "Applies row/header height and spacing density.",
+  ],
+  [
+    "height",
+    '"auto" | number',
+    "implemented",
+    "Numeric height fixes the grid; auto sizes the body to visible content up to the default viewport.",
+  ],
+  [
+    "rowHeight",
+    "number",
+    "implemented",
+    "Overrides density row height while density still controls other spacing.",
+  ],
+  [
+    "pagination",
+    "boolean",
+    "reserved",
+    "Reserved Q2 read-only catch-up. No pager UI is currently rendered.",
+  ],
+  ["pageSizeOptions", "number[]", "reserved", "Reserved with pagination."],
+  ["groupableColumns", "{ columnId; header }[]", "reserved", "Reserved Q2 group-by UI."],
+  ["groupsExpandedByDefault", "boolean", "reserved", "Reserved with expansion/grouping."],
+  [
+    "showInactive",
+    "boolean",
+    "implemented",
+    "When false and rowIsInactive is supplied, inactive rows are filtered out.",
+  ],
+  [
+    "onShowInactiveChange",
+    "(next) => void",
+    "partial",
+    "Type is present, but the current grid does not render a built-in toggle that calls it.",
+  ],
+  ["rowIsInactive", "(row) => boolean", "implemented", "Predicate used by showInactive=false."],
+  ["toolbar", "ReactNode", "implemented", "Rendered above the grid body."],
+  ["footer", "ReactNode", "implemented", "Rendered below the grid body."],
+  ["apiRef", "RefObject<BcGridApi<TRow> | null>", "implemented", "Populated on mount."],
+  ["locale", "string", "implemented", "Passed to Intl formatters."],
+  [
+    "messages",
+    "Partial<BcGridMessages>",
+    "partial",
+    "No-rows and loading messages are used. Action-column labels are not fully wired through messages yet.",
+  ],
+  ["loading", "boolean", "implemented", "Shows the loading overlay."],
+  ["loadingOverlay", "ReactNode", "implemented", "Custom loading overlay content."],
+  ["ariaLabel", "string", "implemented", "Sets aria-label on the grid root."],
+  ["ariaLabelledBy", "string", "implemented", "Sets aria-labelledby on the grid root."],
+]
+
+const events = [
+  [
+    "onSortChange",
+    "(next, prev) => void",
+    "implemented",
+    "Controlled-state callback for sort changes.",
+  ],
+  [
+    "onSearchTextChange",
+    "(next, prev) => void",
+    "reserved",
+    "Search text is passed to renderers, but built-in search matching is not implemented.",
+  ],
+  [
+    "onFilterChange",
+    "(next, prev) => void",
+    "partial",
+    "Inline text filters emit BcGridFilter. Fully controlled external filter application is still being tightened.",
+  ],
+  [
+    "onSelectionChange",
+    "(next, prev) => void",
+    "partial",
+    "Selection state affects aria-selected and API reads, but row-selection UI is not implemented.",
+  ],
+  ["onExpansionChange", "(next, prev) => void", "reserved", "Reserved for grouped/tree data."],
+  ["onGroupByChange", "(next, prev) => void", "reserved", "Reserved Q2 group-by UI."],
+  [
+    "onColumnStateChange",
+    "(next, prev) => void",
+    "implemented",
+    "Emitted for column resize and API column-state changes.",
+  ],
+  [
+    "onActiveCellChange",
+    "(next, prev) => void",
+    "implemented",
+    "Emitted when focus navigation changes the active cell.",
+  ],
+  ["onPaginationChange", "(next, prev) => void", "reserved", "Reserved with pagination."],
+  ["onRowClick", "(row, event) => void", "implemented", "Body-row click event."],
+  ["onRowDoubleClick", "(row, event) => void", "implemented", "Body-row double-click event."],
+  ["onCellFocus", "(position) => void", "implemented", "Cell focus/active-cell notification."],
+  ["onCellEditCommit", "(event) => void", "reserved", "Reserved Q2 post-commit edit event."],
+]
+
+const statePairs = [
+  [
+    "sort/defaultSort",
+    "BcGridSort[]",
+    "implemented",
+    "Header click toggles a single visible sort; the state shape supports ordered sort entries.",
+  ],
+  [
+    "searchText/defaultSearchText",
+    "string",
+    "partial",
+    "Visible to cellRenderer params. Built-in search filtering/highlighting is reserved.",
+  ],
+  [
+    "filter/defaultFilter",
+    "BcGridFilter",
+    "partial",
+    "Used by inline text filters; full filter UI and custom filter registry are Q2.",
+  ],
+  [
+    "selection/defaultSelection",
+    "BcSelection",
+    "partial",
+    "State is typed and reflected for selected rows; selection interactions are later work.",
+  ],
+  [
+    "expansion/defaultExpansion",
+    "ReadonlySet<RowId>",
+    "reserved",
+    "Reserved for tree/grouped data.",
+  ],
+  ["groupBy/defaultGroupBy", "ColumnId[]", "reserved", "Reserved Q2."],
+  [
+    "columnState/defaultColumnState",
+    "BcColumnStateEntry[]",
+    "implemented",
+    "Width, flex, hidden, pinned, and position are consumed.",
+  ],
+  [
+    "activeCell/defaultActiveCell",
+    "BcCellPosition | null",
+    "implemented",
+    "Backs aria-activedescendant and keyboard navigation.",
+  ],
+  [
+    "page/defaultPage and pageSize/defaultPageSize",
+    "number",
+    "reserved",
+    "Reserved with pagination/server modes.",
+  ],
+]
+
+const columnProps = [
+  [
+    "columnId",
+    "ColumnId",
+    "implemented",
+    "Stable column identifier. Derived from field or fallback index when omitted.",
+  ],
+  ["field", "keyof TRow & string", "implemented", "Default value source."],
+  ["header", "string in core; ReactNode in react", "implemented", "Header label/content."],
+  ["width", "number", "implemented", "Fixed width and resize starting point."],
+  ["minWidth", "number", "implemented", "Resize lower bound."],
+  ["maxWidth", "number", "implemented", "Resize upper bound."],
+  ["flex", "number", "implemented", "Splits remaining width for columns without explicit width."],
+  ["align", '"left" | "right" | "center"', "implemented", "Cell and header alignment."],
+  [
+    "pinned",
+    '"left" | "right"',
+    "implemented",
+    "Pinned columns stay visible during horizontal scroll.",
+  ],
+  ["hidden", "boolean", "implemented", "Column is omitted from render."],
+  ["sortable", "boolean", "implemented", "false disables header sort affordance."],
+  ["resizable", "boolean", "implemented", "false disables pointer resize."],
+  [
+    "filter",
+    "BcColumnFilter | false",
+    "partial",
+    "Text inline filters are implemented; number/date/set/boolean/custom UIs are reserved.",
+  ],
+  ["groupable", "boolean", "reserved", "Reserved Q2 group-by UI."],
+  ["comparator", "(a, b, rowA, rowB) => number", "implemented", "Custom sort comparator."],
+  ["valueGetter", "(row) => TValue", "implemented", "Computes raw value."],
+  ["valueFormatter", "(value, row) => string", "implemented", "Formats displayed/exportable text."],
+  ["valueParser", "(input, row) => TValue", "reserved", "Reserved Q2 editing."],
+  [
+    "format",
+    "BcColumnFormat",
+    "implemented",
+    "Preset display formatting. Custom date pattern fields are accepted by the type but not yet interpreted.",
+  ],
+  ["cellClass", "string | function", "implemented", "Core semantic class hook."],
+  ["editable", "boolean | function", "reserved", "Reserved Q2 editing."],
+  [
+    "validate",
+    "(newValue, row) => BcValidationResult",
+    "reserved",
+    "Reserved Q2 editing validation.",
+  ],
+  ["aggregation", "BcAggregation", "reserved", "Reserved Q5 aggregation work."],
+  [
+    "tooltip",
+    "string | function",
+    "reserved",
+    "Type is accepted; tooltip rendering is not wired yet.",
+  ],
+  [
+    "rowHeader",
+    "boolean",
+    "implemented",
+    "Renders body cells as rowheader for first-column-as-row-ID patterns.",
+  ],
+]
+
+const reactColumnProps = [
+  [
+    "header",
+    "string | ReactNode",
+    "implemented",
+    "React widens the core header string to support custom content.",
+  ],
+  [
+    "cellRenderer",
+    "(params) => ReactNode",
+    "implemented",
+    "Receives value, formattedValue, row, rowId, column, searchText, rowState, and editing=false in Q1.",
+  ],
+  ["cellClassName", "string | function", "implemented", "React-specific cell class hook."],
+  [
+    "cellStyle",
+    "CSSProperties | function",
+    "implemented",
+    "Inline style hook. Prefer class names for hot paths.",
+  ],
+  ["cellEditor", "BcCellEditor", "reserved", "Reserved Q2 editor protocol."],
+]
+
+const editGridProps = [
+  [
+    "detailPath",
+    "string",
+    "implemented",
+    "With linkField, renders that column as an anchor to detailPath/rowId.",
+  ],
+  ["linkField", "keyof TRow & string", "implemented", "Column field to turn into the detail link."],
+  ["onEdit", "(row) => void", "implemented", "Adds an Edit action button when supplied."],
+  ["onDelete", "(row) => void", "implemented", "Adds a Delete action button when supplied."],
+  ["canEdit", "(row) => boolean", "implemented", "Disables the Edit action per row."],
+  ["canDelete", "(row) => boolean", "implemented", "Disables the Delete action per row."],
+  ["extraActions", "BcEditGridAction[] | function", "implemented", "Adds custom row actions."],
+  ["hideActions", "boolean", "implemented", "Suppresses the generated actions column."],
+  ["editLabel/deleteLabel", "string", "implemented", "Action labels."],
+  [
+    "DeleteIcon",
+    "ComponentType",
+    "reserved",
+    "Type is present; current action rendering does not use it.",
+  ],
+  ["onCellEditCommit", "BcCellEditCommitEvent", "reserved", "Reserved Q2 in-grid editing."],
+]
+
+const serverGridProps = [
+  [
+    "rowModel",
+    '"paged" | "infinite" | "tree"',
+    "partial",
+    "Discriminates the public prop union. Only initial paged display is useful in Q1.",
+  ],
+  ["loadPage", "LoadServerPage<TRow>", "reserved", "Reserved Q4 live loading."],
+  [
+    "initialResult",
+    "ServerPagedResult<TRow>",
+    "partial",
+    "Paged mode renders these rows immediately.",
+  ],
+  ["loadBlock", "LoadServerBlock<TRow>", "reserved", "Reserved Q4 infinite mode."],
+  ["blockSize", "number", "reserved", "Reserved with infinite mode."],
+  ["maxCachedBlocks", "number", "reserved", "Reserved with infinite mode cache."],
+  ["blockLoadDebounceMs", "number", "reserved", "Reserved with infinite mode."],
+  ["maxConcurrentRequests", "number", "reserved", "Reserved with infinite mode."],
+  ["loadChildren", "LoadServerTreeChildren<TRow>", "reserved", "Reserved Q4 tree mode."],
+  ["loadRoots", "LoadServerTreeChildren<TRow>", "reserved", "Reserved Q4 tree mode."],
+  [
+    "apiRef",
+    "RefObject<BcServerGridApi<TRow> | null>",
+    "partial",
+    "Delegates base grid API and exposes a static server-state snapshot.",
+  ],
+]
+
+const gridApi = [
+  ["scrollToRow", "(rowId, opts?) => void", "implemented", "Scrolls a known row into view."],
+  ["scrollToCell", "(position, opts?) => void", "implemented", "Scrolls a known cell into view."],
+  ["focusCell", "(position) => void", "implemented", "Sets active cell and focuses the grid root."],
+  [
+    "isCellVisible",
+    "(position) => boolean",
+    "implemented",
+    "Checks current virtualizer visibility.",
+  ],
+  [
+    "getRowById",
+    "(rowId) => TRow | undefined",
+    "implemented",
+    "Looks up a rendered row model entry.",
+  ],
+  ["getActiveCell", "() => BcCellPosition | null", "implemented", "Returns active cell state."],
+  [
+    "getSelection",
+    "() => BcSelection",
+    "implemented",
+    "Returns the current selection state snapshot.",
+  ],
+  ["getColumnState", "() => BcColumnStateEntry[]", "implemented", "Returns derived column state."],
+  ["setColumnState", "(state) => void", "implemented", "Shortcut for uncontrolled column state."],
+  ["setSort", "(sort) => void", "implemented", "Shortcut for uncontrolled sort state."],
+  [
+    "setFilter",
+    "(filter) => void",
+    "partial",
+    "State shortcut exists; full external filter application is not complete.",
+  ],
+  ["expandAll/collapseAll", "() => void", "reserved", "Reserved for grouped/tree data."],
+  ["refresh", "() => void", "implemented", "Forces a render pass."],
+]
+
+const serverApi = [
+  [
+    "refreshServerRows",
+    "({ purge }?) => void",
+    "partial",
+    "Currently delegates to base refresh; real refetch/purge is Q4.",
+  ],
+  ["invalidateServerRows", "(invalidation) => void", "reserved", "Reserved Q4."],
+  ["retryServerBlock", "(blockKey) => void", "reserved", "Reserved Q4."],
+  [
+    "getServerRowModelState",
+    "() => ServerRowModelState<TRow>",
+    "partial",
+    "Returns a static snapshot over current props and base selection.",
+  ],
+]
+
+const coreTypes = [
+  "ColumnId",
+  "RowId",
+  "BcGridColumn",
+  "BcColumnFilter",
+  "BcColumnFormat",
+  "BcAggregation",
+  "BcValidationResult",
+  "BcRowId",
+  "BcRowState",
+  "BcGridSort",
+  "BcGridFilter",
+  "BcSelection",
+  "BcColumnStateEntry",
+  "BcCellPosition",
+  "BcRange",
+  "BcPaginationState",
+  "BcGridStateProps",
+  "BcGridIdentity",
+  "BcScrollAlign",
+  "BcScrollOptions",
+  "BcGridApi",
+  "BcServerGridApi",
+]
+
+const serverTypes = [
+  ["ServerRowModelMode", "Mode discriminator: paged, infinite, or tree."],
+  ["ServerSort", "Server-side sort entry."],
+  ["ServerFilter", "ServerFilterGroup or ServerColumnFilter."],
+  ["ServerFilterGroup", "AND/OR filter tree node."],
+  ["ServerColumnFilter", "Per-column filter leaf."],
+  ["ServerGroup", "Server group-by entry."],
+  ["ServerViewState", "Sort/filter/search/group/visible-column view snapshot."],
+  ["ServerQueryBase", "Shared requestId/view/viewKey fields."],
+  ["ServerLoadContext", "AbortSignal context passed to loaders."],
+  ["ServerPagedQuery", "Paged-mode query."],
+  ["ServerPagedResult", "Paged-mode result."],
+  ["LoadServerPage", "Paged loader function."],
+  ["ServerBlockQuery", "Infinite/block query."],
+  ["ServerBlockResult", "Infinite/block result."],
+  ["LoadServerBlock", "Block loader function."],
+  ["ServerTreeQuery", "Tree children query."],
+  ["ServerGroupKey", "Grouped/tree key."],
+  ["ServerTreeRow", "Tree row wrapper for leaf/group data."],
+  ["ServerTreeResult", "Tree children result."],
+  ["LoadServerTreeChildren", "Tree loader function."],
+  ["ServerRowIdentity", "Server row and group row identity callbacks."],
+  ["ServerSelection", "Explicit/all/filtered server selection model."],
+  ["ServerSelectionSnapshot", "Serializable selection snapshot."],
+  ["ServerRowPatch", "Optimistic row mutation payload."],
+  ["ServerMutationResult", "Mutation settle payload."],
+  ["ServerBlockKey", "Block cache key."],
+  ["ServerCacheBlock", "Cached block entry."],
+  ["ServerBlockCacheOptions", "Cache limits and request policy."],
+  ["ServerInvalidation", "All/view/block/row/tree invalidation command."],
+  ["ServerExportQuery", "Server export request."],
+  ["ServerExportResult", "Blob/url/job export response."],
+  ["ServerRowUpdate", "Reserved streaming row update event."],
+  ["ServerRowModelState", "Server row model state snapshot."],
+  ["ServerRowModelEvent", "Server row model event union."],
+]
+
+const reactTypes = [
+  "BcGridDensity",
+  "BcGridMessages",
+  "BcReactGridColumn",
+  "BcGridColumn",
+  "BcCellRendererParams",
+  "BcGridProps",
+  "BcEditGridProps",
+  "BcEditGridAction",
+  "BcServerGridProps",
+  "BcCellEditor",
+  "BcCellEditorPrepareParams",
+  "BcCellEditorProps",
+  "BcCellEditCommitEvent",
+  "BcFilterDefinition",
+  "BcReactFilterDefinition",
+  "BcFilterEditorProps",
+]
+
+const reactCoreReExports = [
+  "BcCellPosition",
+  "BcColumnFilter",
+  "BcColumnFormat",
+  "BcColumnStateEntry",
+  "BcGridApi",
+  "BcGridFilter",
+  "BcGridSort",
+  "BcGridStateProps",
+  "BcPaginationState",
+  "BcSelection",
+  "BcServerGridApi",
+  "BcValidationResult",
+  "ColumnId",
+  "LoadServerBlock",
+  "LoadServerPage",
+  "LoadServerTreeChildren",
+  "RowId",
+  "ServerBlockQuery",
+  "ServerBlockResult",
+  "ServerLoadContext",
+  "ServerPagedQuery",
+  "ServerPagedResult",
+  "ServerTreeQuery",
+  "ServerTreeResult",
+]
+
+const editingProtocol = [
+  [
+    "BcCellEditor",
+    "Component, optional prepare(params), optional kind.",
+    "reserved",
+    "Q2 editor factories consume this protocol.",
+  ],
+  [
+    "BcCellEditorPrepareParams",
+    "row, rowId, columnId.",
+    "reserved",
+    "Passed to editor prepare before mount.",
+  ],
+  [
+    "BcCellEditorProps",
+    "initialValue, row, rowId, column, commit, cancel, error, focusRef.",
+    "reserved",
+    "Editor component props for Q2.",
+  ],
+  [
+    "BcCellEditCommitEvent",
+    "rowId, row, columnId, column, previousValue, nextValue, source.",
+    "reserved",
+    "Post-commit event reserved for Q2.",
+  ],
+  [
+    "BcValidationResult",
+    "{ valid: true } or { valid: false; error }.",
+    "reserved",
+    "Column validate() result for Q2.",
+  ],
+]
+
+const futureProtocol = [
+  ["BcRange", "start and end BcCellPosition.", "reserved", "Q3 range selection."],
+  [
+    "BcAggregation",
+    "sum, count, avg, min, max, or custom aggregation.",
+    "reserved",
+    "Q5 aggregation framework.",
+  ],
+  [
+    "BcFilterDefinition",
+    "type, predicate, serialize, parse.",
+    "reserved",
+    "Q2 filter registry engine contract.",
+  ],
+  [
+    "BcReactFilterDefinition",
+    "BcFilterDefinition plus optional Editor component.",
+    "reserved",
+    "Q2 React filter UI contract.",
+  ],
+  [
+    "BcFilterEditorProps",
+    "value, commit, clear, locale.",
+    "reserved",
+    "Q2 custom filter editor props.",
+  ],
+]
+
+const packageExports = [
+  [
+    "@bc-grid/core",
+    "type-only",
+    coreTypes.join(", "),
+    "Framework-agnostic public types and server query contracts.",
+  ],
+  [
+    "@bc-grid/react",
+    "implemented",
+    `BcGrid, BcEditGrid, BcServerGrid, useBcGridApi, ${reactTypes.join(", ")}, ${reactCoreReExports.join(", ")}.`,
+    "Primary consumer package for React apps.",
+  ],
+  [
+    "@bc-grid/virtualizer",
+    "mismatch",
+    "Virtualizer, VirtualItem, VirtualOptions, VirtualizerA11yInput, VirtualRowA11yMeta, VirtualColumnA11yMeta. Currently also exports DOMRenderer, DOMRendererOptions, RenderCellParams, InFlightHandle, ScrollAlign, VirtualRow, VirtualCol, VirtualWindow, VirtualizerOptions.",
+    "Extra current exports are implementation-facing and not in docs/api.md section 9.",
+  ],
+  [
+    "@bc-grid/animations",
+    "mismatch",
+    "flip, flash, slide, AnimationBudget, AnimationOptions, MotionPolicy. Currently also exports FlipRect, FlipDelta, SlideDirection, FlipOptions, FlipTarget, SlideOptions, AnimationBudgetOptions, DEFAULT_ANIMATION_MAX_IN_FLIGHT, HARD_ANIMATION_MAX_IN_FLIGHT, readFlipRect, calculateFlipDelta, shouldAnimateDelta, createFlipKeyframes, createFlashKeyframes, createSlideKeyframes, playFlip, prefersReducedMotion, and resolveMotionPolicy.",
+    "Extra current exports are under API-surface review.",
+  ],
+  [
+    "@bc-grid/theming",
+    "implemented",
+    "bcGridDensities, bcGridDensityClasses, bcGridThemeVars, bcGridPreset, getBcGridDensityClass, getBcGridDensityVars, createBcGridThemeVars, BcGridDensity, BcGridCssVar, BcGridCssVars, styles.css.",
+    "Consumes host app CSS variables and ships density helpers.",
+  ],
+  [
+    "@bc-grid/aggregations",
+    "reserved",
+    "Planned: sum, count, avg, min, max, registerAggregation, Aggregation, AggregationContext, AggregationResult.",
+    "Placeholder package; no current exports.",
+  ],
+  [
+    "@bc-grid/filters",
+    "reserved",
+    "Planned: textFilter, numberFilter, dateFilter, setFilter, booleanFilter, registerFilter, matchesFilter, BcFilterDefinition.",
+    "Placeholder package; no current exports.",
+  ],
+  [
+    "@bc-grid/export",
+    "reserved",
+    "Planned: toCsv, toExcel, toPdf, ExportOptions, ExportResult.",
+    "Placeholder package; no current exports.",
+  ],
+  [
+    "@bc-grid/server-row-model",
+    "reserved",
+    "Planned: createServerRowModel, ServerBlockCache, defaultBlockKey.",
+    "Placeholder package; server types live in @bc-grid/core.",
+  ],
+  [
+    "@bc-grid/editors",
+    "reserved",
+    "Reserved Q2 editor factories: textEditor, numberEditor, dateEditor, datetimeEditor, selectEditor, multiSelectEditor, autocompleteEditor.",
+    "No v0.1 runtime exports.",
+  ],
+  ["@bc-grid/enterprise", "reserved", "Reserved Q5+ enterprise features.", "No v0.1 exports."],
+]
+
+const statusLabels = {
+  implemented: "implemented",
+  partial: "partial",
+  reserved: "reserved",
+  "type-only": "type-only",
+  mismatch: "mismatch",
+} as const
+
+function statusClass(status: keyof typeof statusLabels) {
+  return `status-${status}`
+}
 ---
 
 <DocsLayout
-  title="API"
-  description="The public API is still pre-freeze. This page is the scaffold for the v0.1 API reference that will be generated from the Q1 API RFC."
+  title="API Reference"
+  description="v0.1 public API reference for the implemented Q1 surface, with reserved Q2/Q3/Q4 contracts marked separately."
   active="api"
 >
   <section class="section">
-    <h2>Freeze Status</h2>
+    <div class="status-strip">
+      <span>Source: docs/api.md</span>
+      <span>Q1 vertical slice</span>
+      <span>Reserved contracts labelled</span>
+      <span>React consumer surface</span>
+    </div>
+    <p class="lead">
+      Import components and React-aware types from <code>@bc-grid/react</code>. Import
+      framework-agnostic contracts from <code>@bc-grid/core</code> when a non-React package needs
+      them. Reserved surfaces are exported as types where needed so future features can attach to
+      the same contract without breaking consumers.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>Read-only Grid</h2>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>read-only-grid.tsx</span>
+        <span>implemented Q1 surface</span>
+      </div>
+      <Code code={gridSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Components And Hooks</h2>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Contract</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            components.map(([name, status, description]) => (
+              <tr>
+                <td><code>{name}</code></td>
+                <td><span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span></td>
+                <td>{description}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>BcGrid Props</h2>
+    <p class="section-note">
+      <code>BcGridProps&lt;TRow&gt;</code> extends <code>BcGridIdentity</code> and
+      <code>BcGridStateProps</code>. Controlled and uncontrolled state props must not be mixed for
+      the same state pair.
+    </p>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Prop</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            gridProps.map(([name, type, status, notes]) => (
+              <tr>
+                <td><code>{name}</code></td>
+                <td><code>{type}</code></td>
+                <td><span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span></td>
+                <td>{notes}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Events</h2>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            events.map(([name, type, status, notes]) => (
+              <tr>
+                <td><code>{name}</code></td>
+                <td><code>{type}</code></td>
+                <td><span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span></td>
+                <td>{notes}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Controlled State</h2>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Pair</th>
+            <th>Value</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            statePairs.map(([name, type, status, notes]) => (
+              <tr>
+                <td><code>{name}</code></td>
+                <td><code>{type}</code></td>
+                <td><span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span></td>
+                <td>{notes}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Columns</h2>
+    <p class="section-note">
+      <code>BcReactGridColumn</code> is exported from <code>@bc-grid/react</code> as
+      <code>BcGridColumn</code>. It widens the core column header and adds React renderer hooks.
+    </p>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Property</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            columnProps.map(([name, type, status, notes]) => (
+              <tr>
+                <td><code>{name}</code></td>
+                <td><code>{type}</code></td>
+                <td><span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span></td>
+                <td>{notes}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <h3>React Column Extension</h3>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Property</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            reactColumnProps.map(([name, type, status, notes]) => (
+              <tr>
+                <td><code>{name}</code></td>
+                <td><code>{type}</code></td>
+                <td><span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span></td>
+                <td>{notes}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>BcEditGrid Props</h2>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Prop</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            editGridProps.map(([name, type, status, notes]) => (
+              <tr>
+                <td><code>{name}</code></td>
+                <td><code>{type}</code></td>
+                <td><span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span></td>
+                <td>{notes}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Reserved Editing And Future Protocols</h2>
     <div class="grid-two">
       <article class="panel">
-        <h3>Current State</h3>
-        <p>
-          <code>docs/api.md</code> is a placeholder until <code>api-rfc-v0</code> lands and
-          the Q1 public surface is reviewed.
+        <h3>Q2 Editing</h3>
+        <div class="compact-list">
+          {
+            editingProtocol.map(([name, shape, status, notes]) => (
+              <p>
+                <code>{name}</code> <span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span>
+                <br />
+                <small>{shape} {notes}</small>
+              </p>
+            ))
+          }
+        </div>
+      </article>
+      <article class="panel">
+        <h3>Later Contracts</h3>
+        <div class="compact-list">
+          {
+            futureProtocol.map(([name, shape, status, notes]) => (
+              <p>
+                <code>{name}</code> <span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span>
+                <br />
+                <small>{shape} {notes}</small>
+              </p>
+            ))
+          }
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>BcServerGrid Props</h2>
+    <p class="section-note">
+      The type surface is frozen now, but server behavior is a Q4 deliverable. Treat the loaders and
+      cache controls as reserved until the server-row-model package ships.
+    </p>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Prop</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            serverGridProps.map(([name, type, status, notes]) => (
+              <tr>
+                <td><code>{name}</code></td>
+                <td><code>{type}</code></td>
+                <td><span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span></td>
+                <td>{notes}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Imperative APIs</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>BcGridApi</h3>
+        <div class="compact-list">
+          {
+            gridApi.map(([name, type, status, notes]) => (
+              <p>
+                <code>{name}</code> <span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span>
+                <br />
+                <small><code>{type}</code> - {notes}</small>
+              </p>
+            ))
+          }
+        </div>
+      </article>
+      <article class="panel">
+        <h3>BcServerGridApi</h3>
+        <div class="compact-list">
+          {
+            serverApi.map(([name, type, status, notes]) => (
+              <p>
+                <code>{name}</code> <span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span>
+                <br />
+                <small><code>{type}</code> - {notes}</small>
+              </p>
+            ))
+          }
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Public Types</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>@bc-grid/core</h3>
+        <p class="token-list">
+          {coreTypes.map((name) => <code>{name}</code>)}
         </p>
       </article>
       <article class="panel">
-        <h3>Target</h3>
-        <p>
-          Every public prop, event, type, controlled state pair, value pipeline hook, and package
-          export appears here before v0.1 freezes.
+        <h3>@bc-grid/react</h3>
+        <p class="token-list">
+          {reactTypes.map((name) => <code>{name}</code>)}
         </p>
       </article>
     </div>
   </section>
 
   <section class="section">
-    <h2>Controlled State Pattern</h2>
+    <h2>Server Query Types</h2>
+    <p class="section-note">
+      These types are exported from <code>@bc-grid/core</code> now. Runtime behavior is reserved for
+      Q4, where <code>@bc-grid/server-row-model</code> will provide the cache and fetcher
+      implementation.
+    </p>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            serverTypes.map(([name, description]) => (
+              <tr>
+                <td><code>{name}</code></td>
+                <td>{description}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Package Exports</h2>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Status</th>
+            <th>Exports</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            packageExports.map(([pkg, status, exports, notes]) => (
+              <tr>
+                <td><code>{pkg}</code></td>
+                <td><span class:list={["api-status", statusClass(status)]}>{statusLabels[status]}</span></td>
+                <td>{exports}</td>
+                <td>{notes}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Theming Contract</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>Host App Tokens</h3>
+        <p>
+          bc-grid consumes the host app's shadcn-style CSS variables such as
+          <code>--background</code>, <code>--foreground</code>, <code>--border</code>,
+          <code>--muted</code>, <code>--accent</code>, <code>--ring</code>, and
+          <code>--destructive</code>. It does not ship opinionated product themes.
+        </p>
+        <p>
+          See the
+          <a href="https://ui.shadcn.com/docs/theming" rel="noreferrer">shadcn/ui theming docs</a>
+          for the CSS variable token model.
+        </p>
+      </article>
+      <article class="panel">
+        <h3>bc-grid Tokens</h3>
+        <p>
+          Override <code>--bc-grid-*</code> variables only when the grid chrome needs to differ
+          from the rest of the app. Use <code>bcGridPreset</code> for Tailwind utility mapping and
+          <code>createBcGridThemeVars</code> for typed override maps.
+        </p>
+      </article>
+    </div>
     <div class="code-shell">
       <div class="code-title">
-        <span>controlled-state.ts</span>
-        <span>draft</span>
+        <span>host-theme.css</span>
+        <span>token consumption</span>
       </div>
-      <Code code={stateSnippet} lang="ts" theme="github-dark" />
+      <Code code={themingSnippet} lang="ts" theme="github-dark" />
     </div>
   </section>
 </DocsLayout>
