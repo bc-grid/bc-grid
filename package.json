@@ -6,8 +6,9 @@
   "type": "module",
   "workspaces": ["packages/*", "apps/*", "tools/*"],
   "scripts": {
+    "api-surface": "bun run --filter '@bc-grid/api-surface' check",
     "build": "bun run --filter './packages/*' build && bun run --filter './apps/*' build",
-    "test": "bun test packages",
+    "test": "bun test packages tools tests",
     "test:e2e": "bunx playwright test",
     "type-check": "tsc -b",
     "type-check:watch": "tsc -b --watch",

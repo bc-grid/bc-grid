@@ -1,0 +1,10 @@
+{
+  "name": "@bc-grid/api-surface",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "bun run src/cli.ts",
+    "type-check": "tsc -b"
+  }
+}
