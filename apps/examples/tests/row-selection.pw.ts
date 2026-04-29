@@ -52,6 +52,37 @@ test("Ctrl/Cmd-click toggles a row in the current selection", async ({ page }) =
   expect((await selectedRowIndexes(page)).sort((a, b) => a - b)).toEqual([1, 5])
 })
 
+test("Space toggles selection on the focused row", async ({ page }) => {
+  await page.goto("/")
+  await page.locator(".bc-grid").focus()
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("ArrowDown")
+
+  await page.keyboard.press("Space")
+  expect(await selectedRowIndexes(page)).toEqual([2])
+
+  await page.keyboard.press("Space")
+  expect(await selectedRowIndexes(page)).toEqual([])
+})
+
+test("Shift+Space and Ctrl/Cmd+Space are reserved and do not toggle selection", async ({
+  page,
+}) => {
+  await page.goto("/")
+  await page.locator(".bc-grid").focus()
+  await page.keyboard.press("ArrowDown")
+
+  await page.keyboard.down("Shift")
+  await page.keyboard.press("Space")
+  await page.keyboard.up("Shift")
+  expect(await selectedRowIndexes(page)).toEqual([])
+
+  await page.keyboard.down("Control")
+  await page.keyboard.press("Space")
+  await page.keyboard.up("Control")
+  expect(await selectedRowIndexes(page)).toEqual([])
+})
+
 test("Shift-click selects the range from anchor to current", async ({ page }) => {
   await page.goto("/")
   // Anchor at row 2, range to row 6 → select 2..6 inclusive.

@@ -4,12 +4,13 @@
  * component so the matrix is unit-testable without a DOM.
  *
  * Implements the WAI-ARIA grid pattern per `docs/design/accessibility-rfc.md
- * §Keyboard Model`. Q1 covers entry/exit + cell navigation. Q2-reserved
- * keys (F2, Enter, Escape, printable chars) return `"noop"` here so the
- * caller can fall through to the editor protocol when it lands. Q3-reserved
- * keys (Shift+Arrow, Ctrl+A) return `"preventDefault"` so the browser
- * doesn't trigger text selection inside the grid, without moving the
- * active cell.
+ * §Keyboard Model`. Q1 covers entry/exit + cell navigation plus Space to
+ * toggle selection on the active row. Q2-reserved keys (F2, Enter, Escape,
+ * printable chars except Space) return `"noop"` here so the caller can fall
+ * through to the editor protocol when it lands. Q3-reserved keys
+ * (Shift+Arrow, Ctrl+A, Shift+Space, Ctrl/Cmd+Space) return
+ * `"preventDefault"` so the browser doesn't trigger text selection or page
+ * scrolling inside the grid, without moving the active cell.
  */
 
 export interface KeyboardNavInput {
@@ -30,6 +31,7 @@ export interface KeyboardNavInput {
 
 export type KeyboardNavOutcome =
   | { type: "move"; row: number; col: number }
+  | { type: "toggleSelection" }
   | { type: "preventDefault" }
   | { type: "noop" }
 
@@ -48,6 +50,10 @@ export function nextKeyboardNav(input: KeyboardNavInput): KeyboardNavOutcome {
   // browser's text-selection default, but don't move the active cell.
   if (shiftKey && /^Arrow/.test(key)) return { type: "preventDefault" }
   if (ctrlOrMeta && (key === "a" || key === "A")) return { type: "preventDefault" }
+  if (key === " " || key === "Spacebar") {
+    if (shiftKey || ctrlOrMeta) return { type: "preventDefault" }
+    return { type: "toggleSelection" }
+  }
 
   let row = currentRow
   let col = currentCol
