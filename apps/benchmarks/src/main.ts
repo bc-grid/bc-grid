@@ -48,8 +48,6 @@ let renderer: DOMRenderer
 // out of viewport (per accessibility-rfc 2-row retention budget).
 let activeRow = 0
 let activeCol = 0
-let lastActiveRow: number | null = null
-let lastActiveCol: number | null = null
 
 function updateActiveCellLabel(): void {
   activeCellEl.textContent = `R${activeRow},C${activeCol}`
@@ -62,13 +60,11 @@ function findCellElement(rowIndex: number, colIndex: number): HTMLElement | null
 }
 
 function refreshActiveCellHighlight(): void {
-  if (lastActiveRow !== null && lastActiveCol !== null) {
-    findCellElement(lastActiveRow, lastActiveCol)?.classList.remove("is-active")
+  for (const cell of grid.querySelectorAll(".bc-grid-cell.is-active")) {
+    cell.classList.remove("is-active")
   }
   const cell = findCellElement(activeRow, activeCol)
   cell?.classList.add("is-active")
-  lastActiveRow = activeRow
-  lastActiveCol = activeCol
 }
 
 function buildGrid(): void {
