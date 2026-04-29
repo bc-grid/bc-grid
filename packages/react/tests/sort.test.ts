@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { defaultCompareValues, toggleSortFor } from "../src/sort"
+import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "../src/sort"
 
 describe("defaultCompareValues", () => {
   test("equal values return 0", () => {
@@ -87,5 +87,77 @@ describe("toggleSortFor", () => {
     ]
     const result = toggleSortFor(input, "name")
     expect(result).not.toBe(input)
+  })
+})
+
+describe("appendSortFor (Shift+click multi-column)", () => {
+  test("appending a new column adds it at the end with asc direction", () => {
+    expect(appendSortFor([{ columnId: "name", direction: "asc" }], "balance")).toEqual([
+      { columnId: "name", direction: "asc" },
+      { columnId: "balance", direction: "asc" },
+    ])
+  })
+
+  test("appending the first sort key behaves like a single-column asc", () => {
+    expect(appendSortFor([], "name")).toEqual([{ columnId: "name", direction: "asc" }])
+  })
+
+  test("appending an asc-sorted column flips it in place to desc (preserves position)", () => {
+    expect(
+      appendSortFor(
+        [
+          { columnId: "name", direction: "asc" },
+          { columnId: "balance", direction: "asc" },
+        ],
+        "name",
+      ),
+    ).toEqual([
+      { columnId: "name", direction: "desc" },
+      { columnId: "balance", direction: "asc" },
+    ])
+  })
+
+  test("appending a desc-sorted column drops it from the array (cycle: asc → desc → none)", () => {
+    expect(
+      appendSortFor(
+        [
+          { columnId: "name", direction: "desc" },
+          { columnId: "balance", direction: "asc" },
+        ],
+        "name",
+      ),
+    ).toEqual([{ columnId: "balance", direction: "asc" }])
+  })
+
+  test("the result is always a fresh array", () => {
+    const input: readonly { columnId: string; direction: "asc" | "desc" }[] = [
+      { columnId: "name", direction: "asc" },
+    ]
+    expect(appendSortFor(input, "balance")).not.toBe(input)
+  })
+})
+
+describe("removeSortFor (Ctrl/Cmd+click)", () => {
+  test("removing a sorted column drops only that entry", () => {
+    expect(
+      removeSortFor(
+        [
+          { columnId: "name", direction: "asc" },
+          { columnId: "balance", direction: "desc" },
+        ],
+        "name",
+      ),
+    ).toEqual([{ columnId: "balance", direction: "desc" }])
+  })
+
+  test("removing a column not in the sort returns the input untouched (ref-equal)", () => {
+    const input: readonly { columnId: string; direction: "asc" | "desc" }[] = [
+      { columnId: "name", direction: "asc" },
+    ]
+    expect(removeSortFor(input, "balance")).toBe(input)
+  })
+
+  test("removing the only sort key clears the array", () => {
+    expect(removeSortFor([{ columnId: "name", direction: "asc" }], "name")).toEqual([])
   })
 })

@@ -9,6 +9,15 @@ import {
   pinnedClassName,
 } from "./gridInternals"
 
+/**
+ * Modifier flags forwarded from the header click / keyboard handler so the
+ * grid can route to single-column toggle vs multi-column append vs remove.
+ */
+export interface SortModifiers {
+  shiftKey: boolean
+  ctrlOrMeta: boolean
+}
+
 interface RenderHeaderCellParams<TRow> {
   column: ResolvedColumn<TRow>
   domBaseId: string
@@ -17,7 +26,7 @@ interface RenderHeaderCellParams<TRow> {
   onResizeEnd: (event: PointerEvent<HTMLDivElement>) => void
   onResizeMove: (event: PointerEvent<HTMLDivElement>) => void
   onResizeStart: (column: ResolvedColumn<TRow>, event: PointerEvent<HTMLDivElement>) => void
-  onSort: (column: ResolvedColumn<TRow>) => void
+  onSort: (column: ResolvedColumn<TRow>, modifiers: SortModifiers) => void
   scrollLeft: number
   sortState: readonly BcGridSort[]
   totalWidth: number
@@ -38,7 +47,8 @@ export function renderHeaderCell<TRow>({
   totalWidth,
   viewportWidth,
 }: RenderHeaderCellParams<TRow>): ReactNode {
-  const sort = sortState.find((entry) => entry.columnId === column.columnId)
+  const sortIndex = sortState.findIndex((entry) => entry.columnId === column.columnId)
+  const sort = sortIndex >= 0 ? sortState[sortIndex] : undefined
   const sortable = column.source.sortable !== false
   const ariaSort = sort
     ? sort.direction === "asc"
@@ -47,11 +57,17 @@ export function renderHeaderCell<TRow>({
     : sortable
       ? "none"
       : undefined
+  // Show the 1-based sort-order index when more than one column is sorted,
+  // so users can see the priority order they composed via Shift+click.
+  const showSortOrder = sort != null && sortState.length > 1
 
   const handleClick = sortable
     ? (event: MouseEvent<HTMLDivElement>) => {
         event.stopPropagation()
-        onSort(column)
+        onSort(column, {
+          shiftKey: event.shiftKey,
+          ctrlOrMeta: event.ctrlKey || event.metaKey,
+        })
       }
     : undefined
 
@@ -60,7 +76,10 @@ export function renderHeaderCell<TRow>({
         if (event.key !== "Enter" && event.key !== " ") return
         event.preventDefault()
         event.stopPropagation()
-        onSort(column)
+        onSort(column, {
+          shiftKey: event.shiftKey,
+          ctrlOrMeta: event.ctrlKey || event.metaKey,
+        })
       }
     : undefined
 
@@ -96,8 +115,15 @@ export function renderHeaderCell<TRow>({
     >
       <span className="bc-grid-header-label">{column.source.header}</span>
       {sort ? (
-        <span aria-hidden="true" className="bc-grid-header-sort-indicator">
+        <span
+          aria-hidden="true"
+          className="bc-grid-header-sort-indicator"
+          data-bc-grid-sort-index={showSortOrder ? sortIndex + 1 : undefined}
+        >
           {sort.direction === "asc" ? "↑" : "↓"}
+          {showSortOrder ? (
+            <span className="bc-grid-header-sort-order">{sortIndex + 1}</span>
+          ) : null}
         </span>
       ) : null}
       {column.source.resizable === false ? null : (
