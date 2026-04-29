@@ -507,6 +507,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       event.preventDefault()
       if (outcome.type === "preventDefault") return
 
+      if (outcome.type === "toggleSelection") {
+        // Plain Space on the focused row toggles its selection. Anchor
+        // updates so a subsequent Shift-click range starts here. The
+        // active cell stays put — Space is selection-only, not movement.
+        const target = rowEntries[outcome.row]
+        if (!target) return
+        setSelectionState(toggleRow(selectionState, target.rowId))
+        selectionAnchorRef.current = target.rowId
+        return
+      }
+
       const nextRow = rowEntries[outcome.row]
       const nextColumn = resolvedColumns[outcome.col]
       if (!nextRow || !nextColumn) return
@@ -520,6 +531,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       resolvedColumns,
       rowEntries,
       rowIndexById,
+      selectionState,
+      setSelectionState,
     ],
   )
 

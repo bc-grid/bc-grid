@@ -10,6 +10,11 @@
  * keys (Shift+Arrow, Ctrl+A) return `"preventDefault"` so the browser
  * doesn't trigger text selection inside the grid, without moving the
  * active cell.
+ *
+ * Plain `Space` toggles selection on the focused row (per
+ * `accessibility-rfc §Selection Extension Points`; Space is unreserved).
+ * `Shift+Space` and `Ctrl/Cmd+Space` stay Q3-reserved (range / select-all)
+ * — they swallow the keystroke without acting.
  */
 
 export interface KeyboardNavInput {
@@ -30,6 +35,7 @@ export interface KeyboardNavInput {
 
 export type KeyboardNavOutcome =
   | { type: "move"; row: number; col: number }
+  | { type: "toggleSelection"; row: number }
   | { type: "preventDefault" }
   | { type: "noop" }
 
@@ -48,6 +54,14 @@ export function nextKeyboardNav(input: KeyboardNavInput): KeyboardNavOutcome {
   // browser's text-selection default, but don't move the active cell.
   if (shiftKey && /^Arrow/.test(key)) return { type: "preventDefault" }
   if (ctrlOrMeta && (key === "a" || key === "A")) return { type: "preventDefault" }
+
+  // Q3-reserved: Shift+Space (extend range), Ctrl/Cmd+Space (select all).
+  // Swallow without acting — the Q3 range / select-all RFCs will pin
+  // semantics. Plain Space falls through to the toggleSelection branch.
+  if (key === " " && (shiftKey || ctrlOrMeta)) return { type: "preventDefault" }
+
+  // Plain Space → toggle selection on the focused row.
+  if (key === " ") return { type: "toggleSelection", row: currentRow }
 
   let row = currentRow
   let col = currentCol

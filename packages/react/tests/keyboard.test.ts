@@ -232,3 +232,37 @@ describe("nextKeyboardNav — empty grid", () => {
     })
   })
 })
+
+describe("nextKeyboardNav — Space (row-select-keyboard)", () => {
+  test("plain Space toggles selection on the focused row", () => {
+    expect(nextKeyboardNav({ ...baseInput, currentRow: 7, key: " " })).toEqual({
+      type: "toggleSelection",
+      row: 7,
+    })
+  })
+
+  test("Space toggles even at row 0", () => {
+    expect(nextKeyboardNav({ ...baseInput, currentRow: 0, key: " " })).toEqual({
+      type: "toggleSelection",
+      row: 0,
+    })
+  })
+
+  test("Shift+Space is preventDefault (Q3-reserved range extension)", () => {
+    expect(nextKeyboardNav({ ...baseInput, key: " ", shiftKey: true })).toEqual({
+      type: "preventDefault",
+    })
+  })
+
+  test("Ctrl+Space is preventDefault (Q3-reserved select-all)", () => {
+    expect(nextKeyboardNav({ ...baseInput, key: " ", ctrlOrMeta: true })).toEqual({
+      type: "preventDefault",
+    })
+  })
+
+  test("Space on an empty grid returns noop (no row to toggle)", () => {
+    expect(nextKeyboardNav({ ...baseInput, lastRow: -1, lastCol: -1, key: " " })).toEqual({
+      type: "noop",
+    })
+  })
+})
