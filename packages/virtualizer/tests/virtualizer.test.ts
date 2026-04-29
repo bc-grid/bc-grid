@@ -216,24 +216,57 @@ describe("Virtualizer isCellVisible", () => {
     expect(v.isCellVisible(0, 0)).toBe(false)
   })
 
-  test("pinned-left cell is always visible regardless of scroll", () => {
+  test("pinned-left cell in viewport-row is visible regardless of scrollLeft", () => {
     const v = new Virtualizer({ ...baseOptions, pinnedLeftCols: 1 })
     v.setScrollLeft(2000)
-    v.setScrollTop(8000)
+    v.setScrollTop(0)
+    // row 0 is in the viewport, col 0 is pinned-left → both axes visible
     expect(v.isCellVisible(0, 0)).toBe(true)
   })
 
-  test("pinned-right cell is always visible regardless of scroll", () => {
-    const v = new Virtualizer({ ...baseOptions, pinnedRightCols: 1 })
+  test("pinned-left cell in OUT-OF-VIEWPORT row is NOT visible", () => {
+    const v = new Virtualizer({ ...baseOptions, pinnedLeftCols: 1 })
     v.setScrollLeft(0)
     v.setScrollTop(8000)
+    // col 0 sticks horizontally, but row 0 is far above viewport → not visible
+    expect(v.isCellVisible(0, 0)).toBe(false)
+  })
+
+  test("pinned-right cell in viewport-row is visible regardless of scrollLeft", () => {
+    const v = new Virtualizer({ ...baseOptions, pinnedRightCols: 1 })
+    v.setScrollLeft(0)
+    v.setScrollTop(0)
     expect(v.isCellVisible(0, 29)).toBe(true)
   })
 
-  test("pinned-top cell is always visible regardless of scroll", () => {
+  test("pinned-right cell in OUT-OF-VIEWPORT row is NOT visible", () => {
+    const v = new Virtualizer({ ...baseOptions, pinnedRightCols: 1 })
+    v.setScrollLeft(0)
+    v.setScrollTop(8000)
+    expect(v.isCellVisible(0, 29)).toBe(false)
+  })
+
+  test("pinned-top cell in viewport-col is visible regardless of scrollTop", () => {
     const v = new Virtualizer({ ...baseOptions, pinnedTopRows: 1 })
     v.setScrollTop(20000)
+    v.setScrollLeft(0)
+    // row 0 sticks vertically, col 5 is in the viewport horizontally
     expect(v.isCellVisible(0, 5)).toBe(true)
+  })
+
+  test("pinned-top cell in OUT-OF-VIEWPORT col is NOT visible", () => {
+    const v = new Virtualizer({ ...baseOptions, pinnedTopRows: 1 })
+    v.setScrollTop(0)
+    v.setScrollLeft(2000) // col 5 (left=600) is now far to the left of viewport (2000..3200)
+    expect(v.isCellVisible(0, 5)).toBe(false)
+  })
+
+  test("pinned-top + pinned-left intersection cell is always visible", () => {
+    const v = new Virtualizer({ ...baseOptions, pinnedTopRows: 1, pinnedLeftCols: 1 })
+    v.setScrollTop(20000)
+    v.setScrollLeft(2000)
+    // row 0 sticks, col 0 sticks → both axes always visible
+    expect(v.isCellVisible(0, 0)).toBe(true)
   })
 
   test("out-of-range indexes are not visible", () => {

@@ -439,9 +439,12 @@ export class Virtualizer {
 
   /**
    * Whether the cell at (rowIndex, colIndex) is currently rendered AND
-   * visible to the user. Pinned cells (left, right, top, bottom) are
-   * always considered visible because they stick to the viewport edges.
-   * Body cells are visible iff their bounding box overlaps the viewport.
+   * visible to the user. Visibility is computed per-axis: a pinned row or
+   * pinned column is always visible *on its own axis* (it sticks to the
+   * viewport edge), but visibility of a cell still requires both axes to
+   * be visible. A pinned-left cell in row 50,000 isn't visible if row
+   * 50,000 is scrolled far out of the viewport — the column sticks but
+   * the row doesn't.
    *
    * Out-of-range indexes are not visible.
    *
@@ -458,19 +461,25 @@ export class Virtualizer {
     const isPinnedCol =
       colIndex < this.pinnedLeftCols || colIndex >= this.colCount - this.pinnedRightCols
 
-    // Pinned regions are always painted at the viewport edges.
-    if (isPinnedRow && isPinnedCol) return true
-    if (isPinnedRow || isPinnedCol) return true
+    let verticallyVisible: boolean
+    if (isPinnedRow) {
+      verticallyVisible = true
+    } else {
+      const rowTop = this.rowOffset(rowIndex)
+      const rowBottom = rowTop + this.rowHeight(rowIndex)
+      verticallyVisible =
+        rowBottom > this.scrollTop && rowTop < this.scrollTop + this.viewportHeight
+    }
 
-    const rowTop = this.rowOffset(rowIndex)
-    const rowBottom = rowTop + this.rowHeight(rowIndex)
-    const colLeft = this.colOffset(colIndex)
-    const colRight = colLeft + this.colWidth(colIndex)
-
-    const verticallyVisible =
-      rowBottom > this.scrollTop && rowTop < this.scrollTop + this.viewportHeight
-    const horizontallyVisible =
-      colRight > this.scrollLeft && colLeft < this.scrollLeft + this.viewportWidth
+    let horizontallyVisible: boolean
+    if (isPinnedCol) {
+      horizontallyVisible = true
+    } else {
+      const colLeft = this.colOffset(colIndex)
+      const colRight = colLeft + this.colWidth(colIndex)
+      horizontallyVisible =
+        colRight > this.scrollLeft && colLeft < this.scrollLeft + this.viewportWidth
+    }
 
     return verticallyVisible && horizontallyVisible
   }

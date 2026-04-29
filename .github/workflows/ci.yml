@@ -58,9 +58,9 @@ jobs:
         run: bun run --filter '@bc-grid/virtualizer' build
 
       - name: Install Playwright browsers
-        run: bunx playwright install chromium --with-deps
+        run: bunx playwright install chromium firefox webkit --with-deps
 
-      - name: Run Playwright tests
+      - name: Run Playwright tests (Chromium + Firefox + WebKit)
         run: bunx playwright test
 
   # Future: api-surface diff, perf smoke, bundle-size gates.

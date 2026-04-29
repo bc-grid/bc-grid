@@ -111,7 +111,27 @@ Codex caught two real gaps in the round-1 fixes plus a missing required item:
 |---|---|---|
 | **Pinned-right does not stick** — verified by Codex in headless Chromium; right-pinned cell moves x=0 → x=-1500 after horizontal scroll | ✅ resolved | Switched the pinned-cell mechanism from CSS sticky to JS-driven translate3d (full rationale in "DOMRenderer" section above). Added Playwright test 6 (pinned-right anchors to viewport-right across full scroll range) and test 7 (multiple pinned-right cells stack correctly). |
 | **No NVDA / VoiceOver pinned-column DOM-order spot checks documented** — required by the queue task spec | ✅ documented; **screenreader run still required before merge** | See the "Screenreader spot-check methodology" section below. The spike code is screenreader-ready (DOM order matches visual order; pinned cells share the row container with body cells in canvas order) but the actual NVDA + VoiceOver run requires Windows + macOS hardware, which I can't drive from this terminal. The methodology + expected behaviour are written so that a screenreader user can run them and post results back on the PR before merge. |
-| **`isCellVisible` (active-cell visibility query) missing** — required by `api.md §6.1` and `accessibility-rfc` line 214 | ✅ resolved | Added `Virtualizer.isCellVisible(rowIndex, colIndex)`. Pinned cells are always visible; body cells visible iff bounding box overlaps viewport. 9 new unit tests (origin, scrolled-out, pinned-always-visible, partial-overlap, out-of-range). The React layer's `BcGridApi.isCellVisible(position)` will route through this. |
+| **`isCellVisible` (active-cell visibility query) missing** — required by `api.md §6.1` and `accessibility-rfc` line 214 | ✅ resolved | Added `Virtualizer.isCellVisible(rowIndex, colIndex)`. Visibility is per-axis: pinned rows are always vertically visible, pinned cols are always horizontally visible, but cell visibility requires both axes. Body cells visible iff bounding box overlaps viewport. The React layer's `BcGridApi.isCellVisible(position)` will route through this. |
+
+### Round 3 (PR #9)
+
+Codex re-reviewed after the round-2 push and caught a logic bug:
+
+| Finding | Status | What changed |
+|---|---|---|
+| **`isCellVisible` over-reports visibility for pinned cells in scrolled-out rows/cols** — a pinned-left cell in row 50,000 returned `true` even when row 50,000 was far below the viewport, which would break keyboard/focus scroll decisions | ✅ resolved | Reworked the function to compute visibility per-axis: vertical visibility (pinned-row OR row overlaps viewport vertically) AND horizontal visibility (pinned-col OR col overlaps viewport horizontally). The intersection cell of a pinned row × pinned col is always visible; otherwise the non-pinned axis still has to be in the viewport. Added 5 new unit tests covering the corrected behaviour: pinned-left in viewport-row (visible), pinned-left in scrolled-out row (NOT visible), same for pinned-right and pinned-top, plus the pinned-row × pinned-col intersection (always visible). |
+
+### Cross-browser breadth
+
+Following round-3, added Firefox and WebKit projects to `playwright.config.ts`. The 6 functional tests (ARIA + sticky + focus retention, excluding FPS) now run in all three engines on every CI invocation. The 2 FPS tests stay Chromium-only via `grepInvert: /scroll FPS|variable-height mode/`.
+
+| Engine | Tests run | Result |
+|---|---|---|
+| Chromium 1217 | 8 (incl. FPS) | ✅ all pass; median FPS 61 |
+| Firefox 142 | 6 (functional only) | ✅ all pass |
+| WebKit 26.4 | 6 (functional only) | ✅ all pass |
+
+Cross-browser pass matters because the round-2 fix swapped CSS sticky for JS-driven `translate3d`, which has different compositing and `getBoundingClientRect` semantics in each engine. Running the suite in Firefox + WebKit caught zero regressions.
 
 ## Screenreader spot-check methodology
 

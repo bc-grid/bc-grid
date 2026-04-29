@@ -7,9 +7,17 @@ import { defineConfig, devices } from "@playwright/test"
  * Each test starts its own dev server via `webServer` so CI doesn't depend
  * on an already-running process.
  *
- * Tests intentionally run in Chromium only — bc-grid's perf bars target
- * Chromium first; Firefox/Safari smoke tests come later in Q1.
+ * Browser breadth: Chromium is the perf-bar target, but the *functional*
+ * tests (ARIA, sticky pinned cells, focus retention) run in Firefox and
+ * WebKit too. Pinned cells use JS-driven translate3d, which has different
+ * compositing and getBoundingClientRect semantics across engines — running
+ * cross-browser catches regressions early.
+ *
+ * The FPS perf tests are gated to Chromium only via `grepInvert` in the
+ * Firefox/WebKit projects. They run unconditionally in Chromium.
  */
+
+const FPS_TEST_TITLE = /scroll FPS|variable-height mode/
 
 export default defineConfig({
   testDir: "./apps/benchmarks/tests",
@@ -28,6 +36,16 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "firefox",
+      use: { ...devices["Desktop Firefox"] },
+      grepInvert: FPS_TEST_TITLE,
+    },
+    {
+      name: "webkit",
+      use: { ...devices["Desktop Safari"] },
+      grepInvert: FPS_TEST_TITLE,
     },
   ],
   webServer: {
