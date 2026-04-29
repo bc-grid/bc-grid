@@ -224,6 +224,12 @@ CSS variables:
   height: 8px;
   background: hsl(var(--ring));
   cursor: crosshair;
+  /*
+   * The parent `.bc-grid-range-overlay` is `pointer-events: none` so the
+   * canvas underneath stays interactive. The fill handle is the one
+   * exception: it must receive pointer events to start fill-drag mode.
+   */
+  pointer-events: auto;
 }
 ```
 
@@ -531,7 +537,7 @@ The two selection modes are visually distinguishable:
 Ranges store cell positions by `(rowId, columnId)` — stable across virtualization. The virtualizer's render window only renders cells in the visual viewport; the visual range overlay computes which segments of each range fall inside the current viewport and draws them.
 
 Anchor / active-range frontier cells **must** stay in the DOM while the user is dragging. Reuse the editing-rfc retention pattern:
-- During pointer-drag: virtualizer retains the rows/columns at the active-range frontier via `Virtualizer.beginInFlightRow / beginInFlightColumn`.
+- During pointer-drag: virtualizer retains the rows/columns at the active-range frontier via `Virtualizer.beginInFlightRow / beginInFlightCol`.
 - After pointerup: retention is released. The range data persists; cells are rendered only when in viewport.
 
 The active cell (anchor) follows the existing `aria-activedescendant` focus-retention pattern from `accessibility-rfc §Focus Model + §Virtualization Contract` — it's already in the DOM whenever the grid has focus.
@@ -630,7 +636,7 @@ Critical path: range-state-machine → visual-selection-layer → (clipboard-cop
 **Resolved.** Both fire, in that order, with the full payload shapes pinned in §Clipboard / §Fill handle. `BcRangePasteEvent` and `BcRangeFillEvent` carry `appliedCount` / `truncatedCount` / `validationErrors` so consumers can group per-cell events into undo entries. `perCellEventsFired: true` flag is permanent at v1 — a future `BcRangeOptions.suppressPerCellEvents` boolean could change that, but adds complexity that v1 doesn't need.
 
 ### Should range copy include hidden columns?
-**Decision: no.** Hidden columns are excluded from copy (matches `aria-colcount` semantics — hidden columns aren't in the visible-column count per `accessibility-rfc §Column Count`). Consumers wanting to include hidden cols use the imperative API `api.copyRangeWithHidden(range)`.
+**Decision: no, with a future opt-in.** Hidden columns are excluded from copy at v1 (matches `aria-colcount` semantics — hidden columns aren't in the visible-column count per `accessibility-rfc §Column Count`). Consumers wanting to include hidden cols are deferred to a post-v1 `copyRange` option (`api.copyRange(range, { includeHidden?: boolean })`). Tracked as a non-blocking item in `queue.md` under the range track. **Not** part of v1's `BcGridApi` surface — only `copyRange(range?)`, `getRangeSelection`, `setRangeSelection`, and `clearRangeSelection` are guaranteed.
 
 ### Drag-auto-scroll speed
 Linear with pointer distance from viewport edge: 100px from edge = 4px/frame; at edge = 16px/frame; capped at 24px/frame. Matches Excel feel.
