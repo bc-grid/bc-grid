@@ -111,7 +111,24 @@
   background: var(--bc-grid-row-hover);
 }
 
-.bc-grid-row[aria-selected="true"],
+.bc-grid-row[aria-selected="true"] {
+  background: var(--bc-grid-row-selected);
+  color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-header .bc-grid-cell {
+  background: var(--bc-grid-header-bg);
+}
+
+.bc-grid-row .bc-grid-cell {
+  background: var(--bc-grid-bg);
+}
+
+.bc-grid-row:hover .bc-grid-cell {
+  background: var(--bc-grid-row-hover);
+}
+
+.bc-grid-row[aria-selected="true"] .bc-grid-cell,
 .bc-grid-cell[aria-selected="true"] {
   background: var(--bc-grid-row-selected);
   color: var(--bc-grid-row-selected-fg);
