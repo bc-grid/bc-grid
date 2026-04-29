@@ -16,12 +16,24 @@
  *           └── .bc-grid-row                  (role=row, aria-rowindex; position: absolute, full canvas width)
  *               └── .bc-grid-cell             (role=gridcell, aria-colindex)
  *                   • body cells:    position: absolute; left: <colOffset>
- *                   • pinned-left:   position: sticky;   left: 0;  z-index: 2
- *                   • pinned-right:  position: sticky;   right: 0; z-index: 2
+ *                   • pinned-left:   position: absolute; left: <colOffset>; transform: translate3d(scrollLeft, 0, 0); z-index: 2
+ *                   • pinned-right:  position: absolute; left: <colOffset>; transform: translate3d(scrollLeft + viewportWidth - totalWidth, 0, 0); z-index: 2
  *
- * Pinned columns ride the row containers — `position: sticky` keeps them at
- * the scroller-viewport edges as the body scrolls horizontally, while the row
- * (and therefore the body cells inside it) move with the scroll.
+ * **Pinned columns use JS-driven translate3d, not CSS sticky.**
+ *
+ * Why not sticky: with sticky, cells without an explicit `position: absolute`
+ * fall back into normal flow, which stacks them vertically inside the row.
+ * That breaks layout. Setting `position: sticky` plus `right: <px>` doesn't
+ * fully fix it either — sticky uses inset values as offsets, not as the
+ * cell's positioned location, and the row's containing-block math doesn't
+ * line up cleanly when the row is itself absolute and full canvas width.
+ *
+ * The translate3d approach: every cell (pinned or body) is `position: absolute`
+ * at its column offset. Pinned cells additionally apply a transform that
+ * cancels out the canvas's horizontal scroll, anchoring them to the viewport
+ * edges. The renderer recomputes these transforms on every scroll event
+ * synchronously (in the scroll handler, not the RAF), so pinned cells never
+ * lag behind a scroll by a frame.
  *
  * ARIA: every row is `<div role="row" aria-rowindex>`, every cell is
  * `<div role="gridcell" aria-colindex>`. The grid root carries
@@ -132,6 +144,8 @@ export class DOMRenderer {
     this.canvas.style.width = `${window_.totalWidth}px`
 
     const seenRows = new Set<number>()
+    const pinnedLeftDx = this.scroller.scrollLeft
+    const pinnedRightDx = this.scroller.scrollLeft + this.scroller.clientWidth - window_.totalWidth
 
     for (const row of window_.rows) {
       seenRows.add(row.index)
@@ -169,23 +183,14 @@ export class DOMRenderer {
 
         cellEl.style.width = `${col.width}px`
         cellEl.style.height = `${row.height}px`
+        cellEl.style.left = `${col.left}px`
 
         if (col.pinned === "left") {
-          // sticky left: 0 — no horizontal offset needed.
-          cellEl.style.left = "0"
-          cellEl.style.right = ""
+          cellEl.style.transform = `translate3d(${pinnedLeftDx}px, 0, 0)`
         } else if (col.pinned === "right") {
-          // Pinned-right cells stick to the scroller's right edge.
-          // We anchor by `right: 0` and let the canvas being totalWidth do
-          // the work. The cell's intrinsic right edge is canvas-right minus
-          // (totalWidth - col.left - col.width); using `right` calc keeps it
-          // simple for the renderer.
-          cellEl.style.right = `${window_.totalWidth - col.left - col.width}px`
-          cellEl.style.left = ""
+          cellEl.style.transform = `translate3d(${pinnedRightDx}px, 0, 0)`
         } else {
-          // Body cells: absolute-positioned at their column offset.
-          cellEl.style.left = `${col.left}px`
-          cellEl.style.right = ""
+          cellEl.style.transform = ""
         }
 
         this.renderCell({ rowIndex: row.index, colIndex: col.index }, cellEl)
@@ -222,9 +227,34 @@ export class DOMRenderer {
     this.onAfterRender?.()
   }
 
+  /**
+   * Update only the pinned cells' transforms — runs synchronously on every
+   * scroll event so pinned cells don't lag the body by a frame. The full
+   * render still happens on the next RAF.
+   */
+  private updatePinnedTransforms(): void {
+    const totalWidth = this.virtualizer.totalWidth()
+    const pinnedLeftDx = this.scroller.scrollLeft
+    const pinnedRightDx = this.scroller.scrollLeft + this.scroller.clientWidth - totalWidth
+
+    for (const rowNode of this.rows.values()) {
+      for (const [colIndex, cellEl] of rowNode.cells) {
+        if (colIndex < this.virtualizer.pinnedLeftCols) {
+          cellEl.style.transform = `translate3d(${pinnedLeftDx}px, 0, 0)`
+        } else if (colIndex >= this.virtualizer.colCount - this.virtualizer.pinnedRightCols) {
+          cellEl.style.transform = `translate3d(${pinnedRightDx}px, 0, 0)`
+        }
+      }
+    }
+  }
+
   private handleScroll = (): void => {
     this.virtualizer.setScrollTop(this.scroller.scrollTop)
     this.virtualizer.setScrollLeft(this.scroller.scrollLeft)
+
+    // Update pinned cell transforms synchronously to avoid a 1-frame lag
+    // between the scroll committing and the next render.
+    this.updatePinnedTransforms()
 
     if (this.scrollRafScheduled) return
     this.scrollRafScheduled = true
@@ -256,25 +286,32 @@ export class DOMRenderer {
     const el = document.createElement("div")
     el.className = "bc-grid-cell"
     el.setAttribute("role", "gridcell")
+    el.style.position = "absolute"
     el.style.top = "0"
     this.applyCellPinning(el, pinned)
     return el
   }
 
+  /**
+   * Apply or remove the pinned-class state on a cell. Position is always
+   * `absolute`; the pinned variants additionally raise z-index so pinned
+   * cells render above body cells, and the class adds the visual treatment
+   * (background + edge shadow) defined by the consumer's stylesheet.
+   * Cell transforms are set in `render()` / `updatePinnedTransforms()` —
+   * this method does not touch them.
+   */
   private applyCellPinning(el: HTMLElement, pinned: "left" | "right" | null): void {
+    el.style.position = "absolute"
     if (pinned === "left") {
       el.classList.add("bc-grid-cell-pinned-left")
       el.classList.remove("bc-grid-cell-pinned-right")
-      el.style.position = "sticky"
       el.style.zIndex = "2"
     } else if (pinned === "right") {
       el.classList.add("bc-grid-cell-pinned-right")
       el.classList.remove("bc-grid-cell-pinned-left")
-      el.style.position = "sticky"
       el.style.zIndex = "2"
     } else {
       el.classList.remove("bc-grid-cell-pinned-left", "bc-grid-cell-pinned-right")
-      el.style.position = "absolute"
       el.style.zIndex = ""
     }
   }

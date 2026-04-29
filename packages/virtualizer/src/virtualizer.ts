@@ -437,6 +437,44 @@ export class Virtualizer {
     return Math.max(0, Math.min(max, target))
   }
 
+  /**
+   * Whether the cell at (rowIndex, colIndex) is currently rendered AND
+   * visible to the user. Pinned cells (left, right, top, bottom) are
+   * always considered visible because they stick to the viewport edges.
+   * Body cells are visible iff their bounding box overlaps the viewport.
+   *
+   * Out-of-range indexes are not visible.
+   *
+   * Used by the React layer's `isCellVisible(position)` API
+   * (`api.md §6.1`) and for keyboard-nav scroll decisions per the
+   * accessibility-rfc.
+   */
+  isCellVisible(rowIndex: number, colIndex: number): boolean {
+    if (rowIndex < 0 || rowIndex >= this.rowCount) return false
+    if (colIndex < 0 || colIndex >= this.colCount) return false
+
+    const isPinnedRow =
+      rowIndex < this.pinnedTopRows || rowIndex >= this.rowCount - this.pinnedBottomRows
+    const isPinnedCol =
+      colIndex < this.pinnedLeftCols || colIndex >= this.colCount - this.pinnedRightCols
+
+    // Pinned regions are always painted at the viewport edges.
+    if (isPinnedRow && isPinnedCol) return true
+    if (isPinnedRow || isPinnedCol) return true
+
+    const rowTop = this.rowOffset(rowIndex)
+    const rowBottom = rowTop + this.rowHeight(rowIndex)
+    const colLeft = this.colOffset(colIndex)
+    const colRight = colLeft + this.colWidth(colIndex)
+
+    const verticallyVisible =
+      rowBottom > this.scrollTop && rowTop < this.scrollTop + this.viewportHeight
+    const horizontallyVisible =
+      colRight > this.scrollLeft && colLeft < this.scrollLeft + this.viewportWidth
+
+    return verticallyVisible && horizontallyVisible
+  }
+
   // -------------------------------------------------------------------------
   // Internal: cumulative offset cache
   // -------------------------------------------------------------------------

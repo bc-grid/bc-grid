@@ -184,4 +184,76 @@ describe("Virtualizer pinned regions", () => {
     expect(indexes).toContain(1)
     expect(window_.cols.find((c) => c.index === 0)?.pinned).toBe("left")
   })
+
+  test("pinned-right cols always rendered + tagged as pinned: right", () => {
+    const v = new Virtualizer({ ...baseOptions, pinnedRightCols: 2 })
+    v.setScrollLeft(0)
+    const window_ = v.computeWindow()
+    const indexes = window_.cols.map((c) => c.index)
+    // last two cols (28, 29) should always be in the window
+    expect(indexes).toContain(28)
+    expect(indexes).toContain(29)
+    expect(window_.cols.find((c) => c.index === 28)?.pinned).toBe("right")
+    expect(window_.cols.find((c) => c.index === 29)?.pinned).toBe("right")
+  })
+})
+
+describe("Virtualizer isCellVisible", () => {
+  test("cell at scroll origin is visible", () => {
+    const v = new Virtualizer(baseOptions)
+    expect(v.isCellVisible(0, 0)).toBe(true)
+  })
+
+  test("cell scrolled out of viewport vertically is not visible", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollTop(10000)
+    expect(v.isCellVisible(0, 0)).toBe(false)
+  })
+
+  test("cell scrolled out of viewport horizontally is not visible", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollLeft(3000) // way past col 0
+    expect(v.isCellVisible(0, 0)).toBe(false)
+  })
+
+  test("pinned-left cell is always visible regardless of scroll", () => {
+    const v = new Virtualizer({ ...baseOptions, pinnedLeftCols: 1 })
+    v.setScrollLeft(2000)
+    v.setScrollTop(8000)
+    expect(v.isCellVisible(0, 0)).toBe(true)
+  })
+
+  test("pinned-right cell is always visible regardless of scroll", () => {
+    const v = new Virtualizer({ ...baseOptions, pinnedRightCols: 1 })
+    v.setScrollLeft(0)
+    v.setScrollTop(8000)
+    expect(v.isCellVisible(0, 29)).toBe(true)
+  })
+
+  test("pinned-top cell is always visible regardless of scroll", () => {
+    const v = new Virtualizer({ ...baseOptions, pinnedTopRows: 1 })
+    v.setScrollTop(20000)
+    expect(v.isCellVisible(0, 5)).toBe(true)
+  })
+
+  test("out-of-range indexes are not visible", () => {
+    const v = new Virtualizer(baseOptions)
+    expect(v.isCellVisible(-1, 0)).toBe(false)
+    expect(v.isCellVisible(0, -1)).toBe(false)
+    expect(v.isCellVisible(99999, 0)).toBe(false)
+    expect(v.isCellVisible(0, 99999)).toBe(false)
+  })
+
+  test("partially visible body cell at top edge of viewport is visible", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollTop(10) // row 0 (top=0, bottom=32) overlaps with viewport (10..610)
+    expect(v.isCellVisible(0, 0)).toBe(true)
+  })
+
+  test("body cell just past viewport bottom is not visible", () => {
+    const v = new Virtualizer(baseOptions)
+    v.setScrollTop(0)
+    // viewport 0..600; row 19 starts at 608 — just below
+    expect(v.isCellVisible(19, 0)).toBe(false)
+  })
 })

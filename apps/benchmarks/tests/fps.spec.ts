@@ -106,26 +106,90 @@ test("aria-rowindex + aria-colindex on rendered cells", async ({ page }) => {
   await expect(firstCell).toBeVisible()
 })
 
-test("pinned-left cells stay visible after horizontal scroll", async ({ page }) => {
+test("pinned-left cells stay anchored to viewport-left after horizontal scroll", async ({
+  page,
+}) => {
   await page.goto("/")
   const pinned = page.locator(".bc-grid-cell-pinned-left").first()
   const beforeBox = await pinned.boundingBox()
-  expect(beforeBox, "pinned cell visible before scroll").not.toBeNull()
+  expect(beforeBox, "pinned-left cell visible before scroll").not.toBeNull()
 
-  // Scroll the grid horizontally.
+  // Scroll the grid horizontally past where the pinned cell would otherwise be.
   await page.evaluate(() => {
     const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
     if (el) el.scrollLeft = 1500
   })
-  // Give the renderer a frame to commit.
   await page.waitForTimeout(50)
 
   const afterBox = await pinned.boundingBox()
-  expect(afterBox, "pinned cell still visible after scroll").not.toBeNull()
-  // Pinned cell should remain near the left edge (within a few px tolerance
-  // for browser-specific sticky implementations).
+  expect(afterBox, "pinned-left cell still visible after scroll").not.toBeNull()
   if (beforeBox && afterBox) {
     expect(Math.abs(afterBox.x - beforeBox.x)).toBeLessThan(5)
+  }
+})
+
+test("pinned-right cells stay anchored to viewport-right after horizontal scroll", async ({
+  page,
+}) => {
+  await page.goto("/")
+  // Pinned-right cells are the harness's last column (col 29 by default; the
+  // harness opens with 1 pinned-right). Find a pinned-right cell that's
+  // actually rendered and check it stays glued to the viewport's right edge.
+  const pinned = page.locator(".bc-grid-cell-pinned-right").first()
+  await expect(pinned).toBeVisible()
+  const beforeBox = await pinned.boundingBox()
+  expect(beforeBox, "pinned-right cell visible before scroll").not.toBeNull()
+
+  // Reverse-scroll: start fully scrolled right, then back to 0. The pinned-
+  // right cell should not move horizontally.
+  await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
+    if (el) el.scrollLeft = el.scrollWidth - el.clientWidth
+  })
+  await page.waitForTimeout(50)
+  const fullyRightBox = await pinned.boundingBox()
+  expect(fullyRightBox, "pinned-right cell still visible at scrollLeft=max").not.toBeNull()
+
+  await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
+    if (el) el.scrollLeft = 0
+  })
+  await page.waitForTimeout(50)
+  const fullyLeftBox = await pinned.boundingBox()
+  expect(fullyLeftBox, "pinned-right cell still visible at scrollLeft=0").not.toBeNull()
+
+  if (beforeBox && fullyRightBox && fullyLeftBox) {
+    // Cell stays at the same viewport-x in both extremes. Allow a few px for
+    // sub-pixel rounding.
+    expect(Math.abs(fullyRightBox.x - fullyLeftBox.x)).toBeLessThan(5)
+    // And at the original position too (sanity).
+    expect(Math.abs(fullyLeftBox.x - beforeBox.x)).toBeLessThan(5)
+    // Sanity: pinned-right is on the right side of the grid (large viewport-x).
+    const scroller = await page.locator(".bc-grid-scroller").boundingBox()
+    expect(scroller).not.toBeNull()
+    if (scroller) {
+      expect(beforeBox.x).toBeGreaterThan(scroller.x + scroller.width / 2)
+    }
+  }
+})
+
+test("multiple pinned-right cells stack flush against the right edge", async ({ page }) => {
+  await page.goto("/")
+  // Reconfigure to 2 pinned-right.
+  await page.locator("#pinnedRight").fill("2")
+  await page.locator("#apply").click()
+  await page.waitForTimeout(50)
+
+  // Both pinned-right cells in the first row should be visible, with col 29
+  // strictly to the right of col 28.
+  const pinned = page.locator('.bc-grid-row[data-row-index="0"] .bc-grid-cell-pinned-right')
+  await expect(pinned).toHaveCount(2)
+  const a = await pinned.nth(0).boundingBox()
+  const b = await pinned.nth(1).boundingBox()
+  expect(a).not.toBeNull()
+  expect(b).not.toBeNull()
+  if (a && b) {
+    expect(b.x).toBeGreaterThan(a.x)
   }
 })
 
