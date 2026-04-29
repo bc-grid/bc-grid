@@ -7,6 +7,7 @@
   "workspaces": ["packages/*", "apps/*", "tools/*"],
   "scripts": {
     "api-surface": "bun run --filter '@bc-grid/api-surface' check",
+    "bundle-size": "bun run --filter '@bc-grid/bundle-size' check",
     "build": "bun run --filter './packages/*' build && bun run --filter './apps/*' build",
     "test": "bun test packages tools tests",
     "test:e2e": "bunx playwright test",
