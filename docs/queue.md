@@ -42,7 +42,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 ### Phase 5 — Vertical slice (weeks 9-12)
 
-- `[blocked: depends on virtualizer-impl + animations-impl + theming-impl + core-types]` **react-impl-v0** — minimal `<BcGrid>` in `@bc-grid/react` integrating foundation. Read-only, no features. **Effort**: 1 week.
+- `[in-flight: x1]` **react-impl-v0** — plan + scaffold underway against merged `core-types`, `animations-impl`, and virtualizer surface alignment (#20). Final polish/integration still depends on `virtualizer-impl` internals and `theming-impl` (#15). Minimal `<BcGrid>` in `@bc-grid/react` integrating foundation. Read-only, no features. **Effort**: 1 week.
 - `[blocked: depends on react-impl-v0]` **q1-sort** — single-column sort + animation. **Effort**: 2-3 days.
 - `[blocked: depends on react-impl-v0]` **q1-keyboard-focus** — cell focus + arrow keys + Tab/Enter. From the a11y RFC. **Effort**: 3-4 days.
 - `[blocked: depends on react-impl-v0]` **q1-pinned-cols** — left + right pinned columns wired through to the React layer. **Effort**: 2-3 days.

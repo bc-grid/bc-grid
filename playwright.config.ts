@@ -21,6 +21,7 @@ const FPS_TEST_TITLE = /scroll FPS|variable-height mode/
 
 export default defineConfig({
   testDir: "./apps/benchmarks/tests",
+  testMatch: "**/*.pw.ts",
   // Perf tests rely on stable timing; do not parallelise them.
   fullyParallel: false,
   workers: 1,
