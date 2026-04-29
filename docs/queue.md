@@ -36,7 +36,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 ### Phase 4 — Foundation impls (weeks 5-9)
 
 - `[done: x1 #14]` **core-types** — write all public types in `@bc-grid/core` from `api.md`. **Effort**: 4-5 days.
-- `[done: c1 #20+#21+#22+#23+#24]` **virtualizer-impl** — production virtualizer based on the spike. Plan in `docs/design/virtualizer-impl-plan.md`; impl report in `docs/design/virtualizer-impl-report.md`. Six PRs: surface alignment (#20), Fenwick tree (#21), in-flight retention (#22), RO RAF throttling (#23), pinned-row support (#24), impl report (this PR). 96 unit + 35 e2e tests. **Effort**: 2-3 weeks (delivered).
+- `[done: c1 #20+#21+#22+#23+#24+#26]` **virtualizer-impl** — production virtualizer based on the spike. Plan in `docs/design/virtualizer-impl-plan.md`; impl report in `docs/design/virtualizer-impl-report.md`. Six PRs: surface alignment (#20), Fenwick tree (#21), in-flight retention (#22), RO RAF throttling (#23), pinned-row support (#24), impl report (#26). 96 unit + 35 e2e tests. **Effort**: 2-3 weeks (delivered).
 - `[done: x1 #16]` **animations-impl** — production animation system based on the spike. **Branch**: `agent/x1/animations-impl`. **Effort**: 1-2 weeks.
 - `[done: x1 #15]` **theming-impl** — production theming layer. Class-name convention aligned to kebab-case per `design.md §13` (#18). **Branch**: `agent/x1/theming-impl`. **Effort**: 3-5 days.
 
@@ -48,20 +48,20 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: c1 #33]` **q1-pinned-cols** — pin classes on React-rendered cells, scroll-shadow indicators, multi-app Playwright (5 new tests × 3 browsers = 15 e2e cases). **Effort**: 2-3 days (delivered).
 - `[done: c1 #31]` **column-resize** — drag the right edge of a column header to resize. **Effort**: 1 day (delivered).
 - `[done: c1 #32]` **column-filter** — per-column inline text-filter row. **Effort**: 1-2 days (delivered).
-- `[in-flight: c1]` **row-selection** — plain click selects single row, Ctrl/Cmd-click toggles, Shift-click range. Pure selection algebra in `packages/react/src/selection.ts` (selectOnly, toggleRow, selectRange, isRowSelected, selectionSize). Anchor for Shift held in a ref. Visual via `aria-selected` + `.bc-grid-row-selected` class. Playwright tests for all three click modes + ARIA. **Branch**: `agent/c1/row-selection`. **Effort**: 1 day.
-- `[blocked: depends on q1-sort + q1-keyboard-focus + q1-pinned-cols]` **q1-vertical-slice-demo** — rebuild ONE bc-next screen (e.g., AR Customers list) entirely on bc-grid. Real data, real perf, real a11y. **Effort**: 3-5 days. **This is the Q1 "is the architecture sound?" gate.**
+- `[done: c1 #37]` **row-selection** — plain click selects single row, Ctrl/Cmd-click toggles, Shift-click range. Pure selection algebra in `packages/react/src/selection.ts` (selectOnly, toggleRow, selectRange, isRowSelected, selectionSize). Anchor for Shift held in a ref. Visual via `aria-selected` + `.bc-grid-row-selected` class. Playwright tests for all three click modes + ARIA. **Branch**: `agent/c1/row-selection`. **Effort**: 1 day.
+- `[ready]` **q1-vertical-slice-demo** — rebuild ONE bc-next screen (e.g., AR Customers list) entirely on bc-grid. Real data, real perf, real a11y. Dependencies q1-sort (#27), q1-keyboard-focus (#28), q1-pinned-cols (#33) all merged. **Effort**: 3-5 days. **This is the Q1 "is the architecture sound?" gate.**
 
 ### Documentation & examples (parallel throughout Q1)
 
 - `[done: x1 #6]` **docs-app-skeleton** — `apps/docs/` Astro or Next.js site. Just the shell, navigation, syntax highlighting. **Effort**: 2-3 days.
 - `[done: x1 #4]` **examples-app-skeleton** — `apps/examples/` Vite app. Renders example components live. **Effort**: 2 days.
 - `[done: x1 #29]` **examples-demo** — mount the real React `<BcGrid>` in `apps/examples` with deterministic ERP-shaped data, production theme CSS, host-app shadcn light/dark tokens, density controls, pinned columns, custom cell renderer, and an imperative API exercise. **Effort**: half day (delivered).
-- `[in-flight: x3]` **docs-q1-content** — write API reference for v0.1: every public type, every prop, every event. (react-impl-v0 unblocker resolved by #25.) **Branch**: `agent/x3/docs-q1-content`. **Effort**: 1 week.
+- `[done: x3 #35]` **docs-q1-content** — write API reference for v0.1: every public type, every prop, every event. (react-impl-v0 unblocker resolved by #25.) **Branch**: `agent/x3/docs-q1-content`. **Effort**: 1 week.
 
 ### Quality + infra (parallel throughout Q1)
 
 - `[ready]` **screenreader-spot-check** — run the NVDA + VoiceOver pinned-column DOM-order methodology from `docs/design/virtualizer-spike-v2-report.md` against the merged spike. Validates that pinned cells + body cells announce in column-index order, that ARIA rowcount/colcount semantics match the dataset, and that no spurious "leaving / entering" events appear at pinned↔body transitions. Deferred from `virtualizer-spike-v2` (PR #9) at merge time because it requires Windows + macOS hardware. If a divergence surfaces, file as a virtualizer-impl follow-up rather than blocking unrelated work. **Effort**: half day per engine.
-- `[review: x1 #38]` **nightly-perf-harness** — measure `design.md §3.2` nightly bars on stable hardware: scroll FPS at 100k × 30 (≥58 sustained over 2s), grid-overhead memory (< 30MB above raw dataset, heap diff via CDP `HeapProfiler.takeHeapSnapshot`), filter / sort latency. Runs via Playwright + dedicated workflow (not the per-PR e2e job) so CI variance doesn't gate. Median of 3 runs. **Effort**: 2-3 days.
+- `[done: x1 #38]` **nightly-perf-harness** — measure `design.md §3.2` nightly bars on stable hardware: scroll FPS at 100k × 30 (≥58 sustained over 2s), grid-overhead memory (< 30MB above raw dataset, heap diff via CDP `HeapProfiler.takeHeapSnapshot`), filter / sort latency. Runs via Playwright + dedicated workflow (not the per-PR e2e job) so CI variance doesn't gate. Median of 3 runs. **Effort**: 2-3 days.
 - `[done: x1 #34]` **api-surface-diff** — `tools/api-surface/` walks every package's built `dist/index.d.ts` + `dist/index.js` (TypeScript compiler API), diffs against a per-package manifest of expected exports. Two modes: `enforced` (drift fails the build) and `planned` (manifest documents intent for packages still being filled in). CI step in smoke job. **Branch**: `agent/x1/api-surface-diff`. **Effort**: 1-2 days.
 
 ---
