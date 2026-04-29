@@ -19,7 +19,7 @@
 
 Numbers are stable on real hardware — every 1-second sample of the 6-second auto-scroll lands in the 60–61 range, including the variable-height case which exercises the cumulative-offset cache rebuilds on a non-uniform dataset.
 
-**Why CI doesn't gate the FPS bar.** GitHub Actions `ubuntu-latest` runners are shared VMs with no GPU. Headless Chromium falls back to software rasterisation, and the runner allocation varies enough that back-to-back runs of identical code have produced medians of 56, 47, and 38. The variance makes any FPS gate on shared CI noise, not signal. The CI job runs the *functional* contract (ARIA wrapping, sticky pinned cells, focus retention) and logs the FPS numbers for trend tracking, but does not assert on them. Local runs use the strict ≥58 bar from `design.md §3.2`. A dedicated nightly perf harness on stable hardware is the right place for an absolute FPS gate — tracked as the future `nightly-perf-harness` task.
+**Why CI doesn't gate the FPS bar.** GitHub Actions `ubuntu-latest` runners are shared VMs with no GPU. Headless Chromium falls back to software rasterisation, and the runner allocation varies enough that back-to-back runs of identical code have produced medians of 56, 47, and 38. The variance makes any FPS gate on shared CI noise, not signal. The CI job runs the *functional* contract (ARIA wrapping, JS-translated pinned cells, focus retention) and logs the FPS numbers for trend tracking, but does not assert on them. Local runs use the strict ≥58 bar from `design.md §3.2`. A dedicated nightly perf harness on stable hardware is the right place for an absolute FPS gate — tracked as the future `nightly-perf-harness` task.
 
 ## What landed
 
@@ -179,7 +179,7 @@ Open VoiceOver with `Cmd+F5`. Set verbosity to "high" so column / row indexes ar
 | 6 | `VO+↓` × 5 then `VO+Cmd+Home` | "row 6, column 1, R-0000005, gridcell" |
 | 7 | Scroll horizontally via the grid, then VO-walk cells 1, 2, 29, 30 | Same announce as before — DOM order is unaffected by visual scroll. |
 
-**Pass criteria:** as for NVDA above. Plus VoiceOver should announce the pinned-cell column indexes the same way it announces body-cell indexes (i.e. nothing in the VO output betrays that some cells are sticky vs absolute).
+**Pass criteria:** as for NVDA above. Plus VoiceOver should announce the pinned-cell column indexes the same way it announces body-cell indexes (i.e. nothing in the VO output betrays that some cells are pinned vs body cells).
 
 ### What to report back
 
@@ -202,7 +202,7 @@ If any divergence is found, that's an architecture issue with the DOM structure,
 These survived from the original spike report and remain valid for the production implementation:
 
 - **Cumulative-offset O(N) rebuilds.** Currently triggered by any size change. With frequent measurements (e.g., dynamic auto-row-height), this could dominate render cost. Plan: switch to a fenwick tree (O(log N) update + query) when measurements show this in the hot path. The variable-height Playwright test passes 60 FPS today, so the bar isn't urgent — but the algorithm is the obvious next optimization.
-- **Sticky positioning composes with `transform` differently than absolute.** The sticky pinned cells lose the `translate3d` GPU-layer hint that body cells have. At the spike's pinned counts (2-3) this is invisible, but `virtualizer-impl` should benchmark grids with 5+ pinned cols to make sure sticky cells aren't a layer-promotion regression.
+- **Pinned-cell transform cost at larger counts.** Pinned columns now use JS-driven `translate3d` transforms instead of CSS sticky. At the spike's pinned counts (2-3) this is invisible, but `virtualizer-impl` should benchmark grids with 5+ pinned columns to make sure synchronous pinned transform updates do not become a scroll-handler regression.
 - **Cell node recycling vs animation handoff.** The free-list pops nodes for reuse; an in-flight animation expecting a stable node would break. The retained-row API covers focus today; animations need a parallel "in-flight" retention set in `virtualizer-impl`.
 - **`ResizeObserver` triggers full re-render.** Continuous drag-resize would scale linearly with cell count. Throttle to RAF in production.
 
@@ -210,4 +210,4 @@ These survived from the original spike report and remain valid for the productio
 
 ✅ **Architecture validated. Unblock `virtualizer-impl`.**
 
-The smoke + variable-height + ARIA + pinned-pane + focus-retention contracts are all met under measurement, not analysis. The DOM-renderer pattern (rows-as-containers + sticky pinned cells + GPU-composited row transforms + cell free-list) is the right shape for the production virtualizer; `virtualizer-impl` is now scoped to hardening it (better cache structure, in-flight retention, browser-breadth, memory bar) rather than re-architecting it.
+The smoke + variable-height + ARIA + pinned-pane + focus-retention contracts are all met under measurement, not analysis. The DOM-renderer pattern (rows-as-containers + JS-translated pinned cells + GPU-composited row transforms + cell free-list) is the right shape for the production virtualizer; `virtualizer-impl` is now scoped to hardening it (better cache structure, in-flight retention, browser-breadth, memory bar) rather than re-architecting it.

@@ -8,7 +8,7 @@ import { defineConfig, devices } from "@playwright/test"
  * on an already-running process.
  *
  * Browser breadth: Chromium is the perf-bar target, but the *functional*
- * tests (ARIA, sticky pinned cells, focus retention) run in Firefox and
+ * tests (ARIA, pinned-cell anchoring, focus retention) run in Firefox and
  * WebKit too. Pinned cells use JS-driven translate3d, which has different
  * compositing and getBoundingClientRect semantics across engines — running
  * cross-browser catches regressions early.

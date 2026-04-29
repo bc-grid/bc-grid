@@ -15,7 +15,7 @@ import { expect, test } from "@playwright/test"
  * with no GPU and highly variable allocation — back-to-back runs of the
  * same code have produced medians of 56, 38, and 47. The variance makes
  * any FPS gate on shared CI noise, not signal. So the FPS *assertions*
- * are skipped on CI; the *functional* tests (ARIA, sticky pinned cells,
+ * are skipped on CI; the *functional* tests (ARIA, pinned-cell anchoring,
  * focus retention) run everywhere. The FPS test still runs locally for
  * the spike acceptance gate, and the actual numbers are logged on every
  * run for trend tracking. A nightly perf job on dedicated hardware is the
@@ -36,8 +36,8 @@ declare global {
 test(`scroll FPS at 100k × 30 stays ≥${FPS_BAR} (median, local only)`, async ({ page }) => {
   // 100k rows × 30 cols, 2 pinned-left, 1 pinned-right (the harness defaults
   // to these — the spike validates the perf bar with pinned panes engaged,
-  // since pinned cells are sticky-positioned and a worst-case scenario for
-  // scroll compositing).
+  // since pinned cells are JS-translated and part of the scroll-compositing
+  // workload).
   await page.goto("/?autorun=fps")
 
   // Wait for the auto-scroll to finish (6s + a small buffer).
