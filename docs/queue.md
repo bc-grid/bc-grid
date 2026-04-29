@@ -29,16 +29,16 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 ### Phase 3 — Spikes (weeks 3-5, after RFCs reviewed)
 
-- `[review: c1 #9]` **virtualizer-spike-v2** — minimal virtualizer that scrolls 100k rows × 30 cols at 60fps. Pinned columns (sticky), variable row heights, focus retention with a max 2-row retention budget, scroll-to-cell API, active-cell visibility query, `aria-rowindex` / `aria-rowcount` per the a11y RFC. Pure DOM. **Output**: a working spike + a perf report, including pinned-column DOM-order spot checks with NVDA and VoiceOver. If the bar is missed, the architecture changes (escalate). **Branch**: `agent/c1/virtualizer-spike-v2`. **Effort**: 1-2 weeks.
+- `[done: c1 #9]` **virtualizer-spike-v2** — minimal virtualizer that scrolls 100k rows × 30 cols at 60fps. Pinned columns, variable row heights, focus retention with a max 2-row retention budget, scroll-to-cell API, active-cell visibility query, `aria-rowindex` / `aria-rowcount` per the a11y RFC. Pure DOM. NVDA + VoiceOver spot-check deferred to `screenreader-spot-check` task below. **Branch**: `agent/c1/virtualizer-spike-v2` (merged). **Effort**: 1-2 weeks.
 - `[done: x1 #11]` **animation-perf-spike** — 1000 rows; click sort; rows animate to new positions at 60fps via FLIP + Web Animations. Output: working spike + perf report. **Branch**: `agent/x1/animation-perf-spike`. **Effort**: 1 week.
 - `[done: x1 #10]` **theme-spike** — CSS variables + Tailwind preset. Render a static grid in light + dark + 3 density modes. No JS. **Effort**: 2-3 days.
 
 ### Phase 4 — Foundation impls (weeks 5-9)
 
-- `[blocked: depends on api-rfc-v0]` **core-types** — write all public types in `@bc-grid/core` from `api.md`. **Effort**: 4-5 days.
-- `[blocked: depends on virtualizer-spike-v2]` **virtualizer-impl** — production virtualizer based on the spike. **Effort**: 2-3 weeks.
-- `[review: x1 #16]` **animations-impl** — production animation system based on the spike. **Branch**: `agent/x1/animations-impl`. **Effort**: 1-2 weeks.
-- `[blocked: depends on theme-spike]` **theming-impl** — production theming layer. **Effort**: 3-5 days.
+- `[done: x1 #14]` **core-types** — write all public types in `@bc-grid/core` from `api.md`. **Effort**: 4-5 days.
+- `[in-flight: c1]` **virtualizer-impl** — production virtualizer based on the spike. Plan in `docs/design/virtualizer-impl-plan.md` (PR #17). Sub-tasks: kebab-case decision (done #18), fenwick tree, in-flight retention set, ResizeObserver RAF throttling, pinned-row DOMRenderer support, public API surface alignment, memory-bar harness wiring, impl report. **Branch**: `agent/c1/virtualizer-impl`. **Effort**: 2-3 weeks.
+- `[done: x1 #16]` **animations-impl** — production animation system based on the spike. **Branch**: `agent/x1/animations-impl`. **Effort**: 1-2 weeks.
+- `[review: x1 #15]` **theming-impl** — production theming layer. Awaiting class-name rename to kebab-case per `design.md §13` (#18). **Branch**: `agent/x1/theming-impl`. **Effort**: 3-5 days.
 
 ### Phase 5 — Vertical slice (weeks 9-12)
 
@@ -53,6 +53,12 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: x1 #6]` **docs-app-skeleton** — `apps/docs/` Astro or Next.js site. Just the shell, navigation, syntax highlighting. **Effort**: 2-3 days.
 - `[done: x1 #4]` **examples-app-skeleton** — `apps/examples/` Vite app. Renders example components live. **Effort**: 2 days.
 - `[blocked: depends on react-impl-v0]` **docs-q1-content** — write API reference for v0.1: every public type, every prop, every event. **Effort**: 1 week.
+
+### Quality + infra (parallel throughout Q1)
+
+- `[ready]` **screenreader-spot-check** — run the NVDA + VoiceOver pinned-column DOM-order methodology from `docs/design/virtualizer-spike-v2-report.md` against the merged spike. Validates that pinned cells + body cells announce in column-index order, that ARIA rowcount/colcount semantics match the dataset, and that no spurious "leaving / entering" events appear at pinned↔body transitions. Deferred from `virtualizer-spike-v2` (PR #9) at merge time because it requires Windows + macOS hardware. If a divergence surfaces, file as a virtualizer-impl follow-up rather than blocking unrelated work. **Effort**: half day per engine.
+- `[ready]` **nightly-perf-harness** — measure `design.md §3.2` nightly bars on stable hardware: scroll FPS at 100k × 30 (≥58 sustained over 2s), grid-overhead memory (< 30MB above raw dataset, heap diff via CDP `HeapProfiler.takeHeapSnapshot`), filter / sort latency. Runs via Playwright + dedicated workflow (not the per-PR e2e job) so CI variance doesn't gate. Median of 3 runs. **Effort**: 2-3 days.
+- `[ready]` **api-surface-diff** — `tools/api-surface/` script that walks every package's built `dist/index.d.ts`, extracts the export names, and diffs against an expected manifest derived from `docs/api.md §9`. CI step in smoke job; fails the build on drift. Catches over-exports (helper functions leaking out of `@bc-grid/animations`) and under-exports (api.md promises a name the package doesn't ship). **Effort**: 1-2 days.
 
 ---
 
