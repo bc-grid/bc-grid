@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { type Page, expect, test } from "@playwright/test"
 
 declare global {
   interface Window {
@@ -135,7 +135,7 @@ test("focus retention — active row stays in DOM after scrolling out", async ({
 })
 
 async function configureGrid(
-  page: import("@playwright/test").Page,
+  page: Page,
   config: {
     pinnedLeft?: number
     pinnedRight?: number
@@ -165,20 +165,14 @@ test("pinned-top rows stay anchored to viewport-top after vertical scroll", asyn
 
   const pinned = page.locator(".bc-grid-row-pinned-top").first()
   await expect(pinned).toBeVisible()
-  const beforeBox = await pinned.boundingBox()
-  expect(beforeBox).not.toBeNull()
+  await expectPinnedRowAnchored(page, ".bc-grid-row-pinned-top", "top")
 
   await scrollAndWaitForRender(page, { scrollTop: 5000 })
-  const afterBox = await pinned.boundingBox()
-  expect(afterBox).not.toBeNull()
-  if (beforeBox && afterBox) {
-    // Pinned-top row stays at the same viewport-y (within sub-pixel rounding).
-    expect(Math.abs(afterBox.y - beforeBox.y)).toBeLessThan(5)
-  }
+  await expectPinnedRowAnchored(page, ".bc-grid-row-pinned-top", "top")
 })
 
 async function scrollAndWaitForRender(
-  page: import("@playwright/test").Page,
+  page: Page,
   scroll: { scrollTop?: number; scrollLeft?: number },
 ): Promise<void> {
   const before = await page.evaluate(() => window.__renderCount__ ?? 0)
@@ -199,6 +193,40 @@ async function scrollAndWaitForRender(
     timeout: 2000,
   })
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+}
+
+async function expectPinnedRowAnchored(
+  page: Page,
+  selector: string,
+  edge: "top" | "bottom",
+): Promise<void> {
+  await expect
+    .poll(() => pinnedRowEdgeOffset(page, selector, edge), {
+      message: `${selector} stays anchored to the scroller ${edge}`,
+      timeout: 2000,
+    })
+    .toBeLessThan(5)
+}
+
+async function pinnedRowEdgeOffset(
+  page: Page,
+  selector: string,
+  edge: "top" | "bottom",
+): Promise<number> {
+  return page.evaluate(
+    ({ edge, selector }) => {
+      const row = document.querySelector<HTMLElement>(selector)
+      const scroller = document.querySelector<HTMLElement>(".bc-grid-scroller")
+      if (!row || !scroller) return Number.POSITIVE_INFINITY
+
+      const rowBox = row.getBoundingClientRect()
+      const scrollerBox = scroller.getBoundingClientRect()
+      return edge === "top"
+        ? Math.abs(rowBox.top - scrollerBox.top)
+        : Math.abs(rowBox.bottom - scrollerBox.bottom)
+    },
+    { edge, selector },
+  )
 }
 
 test("pinned-bottom rows stay anchored to viewport-bottom after vertical scroll", async ({
