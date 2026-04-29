@@ -251,11 +251,7 @@ test("pinned-top rows stay anchored to viewport-top after vertical scroll", asyn
   const beforeBox = await pinned.boundingBox()
   expect(beforeBox).not.toBeNull()
 
-  await page.evaluate(() => {
-    const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
-    if (el) el.scrollTop = 5000
-  })
-  await page.waitForTimeout(50)
+  await scrollAndWaitForRender(page, { scrollTop: 5000 })
   const afterBox = await pinned.boundingBox()
   expect(afterBox).not.toBeNull()
   if (beforeBox && afterBox) {
@@ -263,6 +259,25 @@ test("pinned-top rows stay anchored to viewport-top after vertical scroll", asyn
     expect(Math.abs(afterBox.y - beforeBox.y)).toBeLessThan(5)
   }
 })
+
+async function scrollAndWaitForRender(
+  page: import("@playwright/test").Page,
+  scroll: { scrollTop?: number; scrollLeft?: number },
+): Promise<void> {
+  const before = await page.evaluate(() => window.__renderCount__ ?? 0)
+  await page.evaluate((s) => {
+    const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
+    if (el) {
+      if (s.scrollTop !== undefined) el.scrollTop = s.scrollTop
+      if (s.scrollLeft !== undefined) el.scrollLeft = s.scrollLeft
+    }
+  }, scroll)
+  // The synchronous handler updates pinned transforms; the RAF fires the
+  // full render. Wait for the render-count to advance.
+  await page.waitForFunction((prev) => (window.__renderCount__ ?? 0) > prev, before, {
+    timeout: 2000,
+  })
+}
 
 test("pinned-bottom rows stay anchored to viewport-bottom after vertical scroll", async ({
   page,
@@ -275,18 +290,17 @@ test("pinned-bottom rows stay anchored to viewport-bottom after vertical scroll"
   const beforeBox = await pinned.boundingBox()
   expect(beforeBox).not.toBeNull()
 
-  // Scroll fully down then back to top — pinned-bottom y should be steady.
-  await page.evaluate(() => {
-    const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
-    if (el) el.scrollTop = el.scrollHeight - el.clientHeight
+  // Scroll fully down — pinned-bottom y should not change.
+  await scrollAndWaitForRender(page, {
+    scrollTop: await page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
+      return el ? el.scrollHeight - el.clientHeight : 0
+    }),
   })
-  await page.waitForTimeout(50)
   const fullyDownBox = await pinned.boundingBox()
-  await page.evaluate(() => {
-    const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
-    if (el) el.scrollTop = 0
-  })
-  await page.waitForTimeout(50)
+
+  // Then back to the top — y should still match.
+  await scrollAndWaitForRender(page, { scrollTop: 0 })
   const fullyUpBox = await pinned.boundingBox()
 
   expect(fullyDownBox).not.toBeNull()
@@ -312,14 +326,14 @@ test("pinned-top × pinned-left corner cell stays anchored under any scroll", as
   expect(start).not.toBeNull()
 
   // Scroll diagonally to the far corner.
-  await page.evaluate(() => {
+  const max = await page.evaluate(() => {
     const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
-    if (el) {
-      el.scrollLeft = el.scrollWidth - el.clientWidth
-      el.scrollTop = el.scrollHeight - el.clientHeight
+    return {
+      scrollLeft: el ? el.scrollWidth - el.clientWidth : 0,
+      scrollTop: el ? el.scrollHeight - el.clientHeight : 0,
     }
   })
-  await page.waitForTimeout(80)
+  await scrollAndWaitForRender(page, max)
   const end = await corner.boundingBox()
   expect(end).not.toBeNull()
   if (start && end) {
@@ -350,23 +364,25 @@ test("pinned-bottom × pinned-right corner cell stays anchored under any scroll"
     `.bc-grid-row[data-row-index="${lastRowIndex}"] .bc-grid-cell[data-col-index="${lastColIndex}"]`,
   )
   await expect(corner).toBeVisible()
-  const start = await corner.boundingBox()
-  expect(start).not.toBeNull()
+  const startAtOrigin = await corner.boundingBox()
+  expect(startAtOrigin).not.toBeNull()
 
-  // Scroll all the way back to the origin.
-  await page.evaluate(() => {
+  // Scroll diagonally to the far end. The corner should stay at the same
+  // viewport position because pinned-bottom + pinned-right both anchor
+  // their respective axes.
+  const max = await page.evaluate(() => {
     const el = document.querySelector<HTMLElement>(".bc-grid-scroller")
-    if (el) {
-      el.scrollLeft = 0
-      el.scrollTop = 0
+    return {
+      scrollLeft: el ? el.scrollWidth - el.clientWidth : 0,
+      scrollTop: el ? el.scrollHeight - el.clientHeight : 0,
     }
   })
-  await page.waitForTimeout(80)
-  const end = await corner.boundingBox()
-  expect(end).not.toBeNull()
-  if (start && end) {
-    expect(Math.abs(end.x - start.x)).toBeLessThan(5)
-    expect(Math.abs(end.y - start.y)).toBeLessThan(5)
+  await scrollAndWaitForRender(page, max)
+  const atFarEnd = await corner.boundingBox()
+  expect(atFarEnd).not.toBeNull()
+  if (startAtOrigin && atFarEnd) {
+    expect(Math.abs(atFarEnd.x - startAtOrigin.x)).toBeLessThan(5)
+    expect(Math.abs(atFarEnd.y - startAtOrigin.y)).toBeLessThan(5)
   }
 })
 
