@@ -278,9 +278,10 @@ export const apiSurfaceManifest = [
     packageName: "@bc-grid/export",
     declarationPath: "packages/export/dist/index.d.ts",
     runtimePath: "packages/export/dist/index.js",
-    mode: "planned",
+    mode: "enforced",
     runtimeExports: ["toCsv", "toExcel", "toPdf"],
     declarationExports: ["ExportOptions", "ExportResult", "toCsv", "toExcel", "toPdf"],
+    note: "CSV is implemented for Q1; XLSX and PDF exports are reserved stubs until their follow-up tasks.",
   },
   {
     packageName: "@bc-grid/server-row-model",
