@@ -205,6 +205,40 @@ button {
   overflow: hidden;
 }
 
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.35);
+}
+
+.summary-tile {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  border-right: 1px solid hsl(var(--border));
+  padding: 0.875rem 1rem;
+}
+
+.summary-tile:last-child {
+  border-right: 0;
+}
+
+.summary-tile span,
+.customer-detail span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.summary-tile strong {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 1.05rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .demo-toolbar {
   border-bottom: 1px solid hsl(var(--border));
   padding: 0.875rem 1rem;
@@ -313,6 +347,16 @@ button {
   font-size: 0.8125rem;
 }
 
+.aging-warning-cell {
+  color: hsl(32 95% 34%);
+  font-weight: 600;
+}
+
+.aging-danger-cell {
+  color: hsl(var(--destructive));
+  font-weight: 700;
+}
+
 .bc-grid-actions {
   align-items: center;
 }
@@ -334,7 +378,7 @@ button {
   border: 1px solid transparent;
 }
 
-.erp-status-active {
+.erp-status-open {
   background: hsl(142 76% 92%);
   color: hsl(142 76% 28%);
 }
@@ -349,12 +393,12 @@ button {
   color: hsl(var(--destructive));
 }
 
-.erp-status-prospect {
+.erp-status-disputed {
   background: hsl(var(--secondary));
   color: hsl(var(--secondary-foreground));
 }
 
-.dark .erp-status-active {
+.dark .erp-status-open {
   background: hsl(142 65% 18%);
   color: hsl(142 70% 78%);
 }
@@ -367,6 +411,56 @@ button {
 .dark .erp-status-past-due {
   background: hsl(var(--destructive) / 0.24);
   color: hsl(0 84% 78%);
+}
+
+.risk-meter {
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 2.5rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-weight: 700;
+}
+
+.risk-meter-low {
+  background: hsl(142 76% 92%);
+  color: hsl(142 76% 28%);
+}
+
+.risk-meter-medium {
+  background: hsl(38 92% 90%);
+  color: hsl(32 95% 28%);
+}
+
+.risk-meter-high {
+  background: hsl(var(--destructive) / 0.12);
+  color: hsl(var(--destructive));
+}
+
+.customer-detail {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.8fr) minmax(14rem, 1.6fr) repeat(4, minmax(7rem, 1fr));
+  gap: 0;
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+
+.customer-detail > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  border-right: 1px solid hsl(var(--border));
+  padding: 0.75rem 1rem;
+}
+
+.customer-detail > div:last-child {
+  border-right: 0;
+}
+
+.customer-detail strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .package-panel {
@@ -415,6 +509,11 @@ button {
     flex-direction: column;
   }
 
+  .summary-strip,
+  .customer-detail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .demo-controls {
     justify-content: flex-start;
   }
@@ -449,6 +548,17 @@ button {
   .control-group,
   .primary-action {
     width: 100%;
+  }
+
+  .summary-strip,
+  .customer-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-tile,
+  .customer-detail > div {
+    border-right: 0;
+    border-bottom: 1px solid hsl(var(--border));
   }
 
   .segmented {

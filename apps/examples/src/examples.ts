@@ -1,16 +1,24 @@
-export type CustomerStatus = "Active" | "On Hold" | "Past Due" | "Prospect"
+export type CustomerStatus = "Open" | "Credit Hold" | "Past Due" | "Disputed"
 
 export interface CustomerRow {
   id: string
-  name: string
-  email: string
-  company: string
-  tier: "Enterprise" | "Growth" | "Starter"
+  account: string
+  legalName: string
+  tradingName: string
   region: "Northeast" | "Midwest" | "South" | "West" | "International"
   owner: string
+  terms: "Net 15" | "Net 30" | "Net 45" | "Net 60"
+  creditLimit: number
   balance: number
+  current: number
+  days1to30: number
+  days31to60: number
+  daysOver60: number
+  openInvoices: number
+  riskScore: number
   status: CustomerStatus
-  created: string
+  lastInvoice: string
+  lastPayment: string
 }
 
 const customerNames = [
@@ -32,14 +40,6 @@ const customerNames = [
   "Cedar & Finch",
 ]
 
-const domains = [
-  "example.com",
-  "bcgrid.test",
-  "contoso.example",
-  "northwind.example",
-  "erp-demo.test",
-]
-
 const owners = [
   "Alex Chen",
   "Maya Singh",
@@ -51,11 +51,11 @@ const owners = [
   "Jamie Patel",
 ]
 
-const statuses: CustomerStatus[] = ["Active", "On Hold", "Past Due", "Prospect"]
-const tiers: CustomerRow["tier"][] = ["Enterprise", "Growth", "Starter"]
+const statuses: CustomerStatus[] = ["Open", "Credit Hold", "Past Due", "Disputed"]
 const regions: CustomerRow["region"][] = ["Northeast", "Midwest", "South", "West", "International"]
+const terms: CustomerRow["terms"][] = ["Net 15", "Net 30", "Net 45", "Net 60"]
 
-export const customerRows = createCustomerRows(1000)
+export const customerRows = createCustomerRows(5000)
 
 export const packageRows = [
   { name: "@bc-grid/core", role: "Types and row/column state", phase: "Q1" },
@@ -76,29 +76,44 @@ function createCustomerRows(count: number): CustomerRow[] {
     const sequence = index + 1
     const customer = customerNames[index % customerNames.length] ?? "Customer"
     const suffix = Math.floor(random() * 900 + 100)
-    const company = `${customer} ${suffix}`
-    const domain = domains[index % domains.length]
-    const emailName = customer
-      .toLowerCase()
-      .replaceAll("&", "and")
-      .replaceAll(" ", ".")
-      .replaceAll(/[^a-z.]/g, "")
-    const balance = Math.round((random() * 115_000 + 1_250) / 25) * 25
-    const created = new Date(start + Math.floor(random() * 820) * dayMs).toISOString()
+    const current = money(random() * 42_000)
+    const days1to30 = money(random() * 28_000)
+    const days31to60 = money(random() * 16_000)
+    const daysOver60 = money(random() * 11_000)
+    const balance = current + days1to30 + days31to60 + daysOver60
+    const creditLimit = money(balance + random() * 160_000 + 20_000)
+    const riskScore = Math.min(
+      99,
+      Math.round((daysOver60 / Math.max(balance, 1)) * 120 + random() * 35),
+    )
+    const invoiceOffset = Math.floor(random() * 60)
+    const paymentOffset = Math.floor(random() * 90)
 
     return {
-      id: `CUS-${String(sequence).padStart(5, "0")}`,
-      name: `${customer} ${sequence}`,
-      email: `accounts.${emailName}@${domain}`,
-      company,
-      tier: tiers[Math.floor(random() * tiers.length)] ?? "Growth",
+      id: `AR-${String(sequence).padStart(5, "0")}`,
+      account: `CUST-${String(sequence).padStart(5, "0")}`,
+      legalName: `${customer} Pty Ltd ${suffix}`,
+      tradingName: `${customer} ${sequence}`,
       region: regions[Math.floor(random() * regions.length)] ?? "West",
       owner: owners[Math.floor(random() * owners.length)] ?? "Alex Chen",
+      terms: terms[Math.floor(random() * terms.length)] ?? "Net 30",
+      creditLimit,
       balance,
-      status: statuses[Math.floor(random() * statuses.length)] ?? "Active",
-      created,
+      current,
+      days1to30,
+      days31to60,
+      daysOver60,
+      openInvoices: Math.max(1, Math.round(random() * 18)),
+      riskScore,
+      status: statuses[Math.floor(random() * statuses.length)] ?? "Open",
+      lastInvoice: new Date(start + (820 - invoiceOffset) * dayMs).toISOString(),
+      lastPayment: new Date(start + (820 - paymentOffset) * dayMs).toISOString(),
     }
   })
+}
+
+function money(value: number): number {
+  return Math.round(value / 25) * 25
 }
 
 function mulberry32(initialSeed: number) {

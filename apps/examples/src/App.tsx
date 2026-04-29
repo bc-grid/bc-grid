@@ -1,4 +1,10 @@
-import { BcEditGrid, type BcGridColumn, type BcGridDensity, useBcGridApi } from "@bc-grid/react"
+import {
+  BcEditGrid,
+  type BcGridColumn,
+  type BcGridDensity,
+  type BcSelection,
+  useBcGridApi,
+} from "@bc-grid/react"
 import { useCallback, useMemo, useState } from "react"
 import { type CustomerRow, type CustomerStatus, customerRows, packageRows } from "./examples"
 
@@ -16,10 +22,10 @@ const themeModes = [
 ] as const satisfies readonly { id: ThemeMode; label: string }[]
 
 const statusLabels: Record<CustomerStatus, string> = {
-  Active: "active",
-  "On Hold": "hold",
+  Open: "open",
+  "Credit Hold": "hold",
   "Past Due": "past-due",
-  Prospect: "prospect",
+  Disputed: "disputed",
 }
 
 export function App() {
@@ -39,8 +45,8 @@ export function App() {
 
         <nav className="example-nav">
           <a className="nav-item nav-item-active" href="#customer-grid">
-            <span>Customer Grid</span>
-            <small>@bc-grid/react</small>
+            <span>AR Customers</span>
+            <small>Q1 vertical slice</small>
           </a>
           <a className="nav-item" href="#package-matrix">
             <span>Package Matrix</span>
@@ -52,10 +58,10 @@ export function App() {
       <section className="workspace" aria-labelledby="example-title">
         <header className="toolbar">
           <div>
-            <h2 id="example-title">ERP Customer Grid</h2>
-            <p>{customerRows.length.toLocaleString()} generated customer accounts</p>
+            <h2 id="example-title">Accounts Receivable Customers</h2>
+            <p>{customerRows.length.toLocaleString()} customer ledger rows</p>
           </div>
-          <span className="status-pill">React v0</span>
+          <span className="status-pill">Q1 gate</span>
         </header>
 
         <CustomerGridDemo
@@ -83,77 +89,149 @@ function CustomerGridDemo({
 }) {
   const apiRef = useBcGridApi<CustomerRow>()
   const [lastAction, setLastAction] = useState("Ready")
+  const [selectedCount, setSelectedCount] = useState(0)
+  const [activeCustomer, setActiveCustomer] = useState<CustomerRow | null>(customerRows[0] ?? null)
   const rows = customerRows
+
+  const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
 
   const columns = useMemo<readonly BcGridColumn<CustomerRow>[]>(
     () => [
       {
-        columnId: "id",
-        field: "id",
-        header: "ID",
+        columnId: "account",
+        field: "account",
+        header: "Account",
         pinned: "left",
-        width: 118,
+        width: 132,
         format: "code",
         cellClassName: "customer-code-cell",
+        filter: { type: "text" },
       },
       {
-        columnId: "name",
-        field: "name",
+        columnId: "legalName",
+        field: "legalName",
         header: "Customer",
-        width: 240,
-        rowHeader: true,
-      },
-      {
-        columnId: "email",
-        field: "email",
-        header: "Email",
         width: 280,
+        rowHeader: true,
+        filter: { type: "text" },
       },
       {
-        columnId: "company",
-        field: "company",
-        header: "Company",
-        width: 240,
-      },
-      {
-        columnId: "tier",
-        field: "tier",
-        header: "Tier",
-        width: 136,
+        columnId: "tradingName",
+        field: "tradingName",
+        header: "Trading Name",
+        width: 220,
+        filter: { type: "text" },
       },
       {
         columnId: "region",
         field: "region",
         header: "Region",
         width: 150,
+        filter: { type: "text" },
       },
       {
         columnId: "owner",
         field: "owner",
-        header: "Owner",
-        width: 160,
+        header: "Collector",
+        width: 170,
+        filter: { type: "text" },
+      },
+      {
+        columnId: "terms",
+        field: "terms",
+        header: "Terms",
+        width: 118,
+        filter: { type: "text" },
+      },
+      {
+        columnId: "creditLimit",
+        field: "creditLimit",
+        header: "Credit Limit",
+        align: "right",
+        width: 140,
+        format: { type: "currency", currency: "USD", precision: 0 },
       },
       {
         columnId: "balance",
         field: "balance",
-        header: "Balance",
+        header: "Outstanding",
         align: "right",
-        width: 136,
+        width: 144,
         format: { type: "currency", currency: "USD", precision: 0 },
+      },
+      {
+        columnId: "current",
+        field: "current",
+        header: "Current",
+        align: "right",
+        width: 132,
+        format: { type: "currency", currency: "USD", precision: 0 },
+      },
+      {
+        columnId: "days1to30",
+        field: "days1to30",
+        header: "1-30",
+        align: "right",
+        width: 118,
+        format: { type: "currency", currency: "USD", precision: 0 },
+      },
+      {
+        columnId: "days31to60",
+        field: "days31to60",
+        header: "31-60",
+        align: "right",
+        width: 118,
+        format: { type: "currency", currency: "USD", precision: 0 },
+        cellClassName: (params) => (Number(params.value) > 0 ? "aging-warning-cell" : undefined),
+      },
+      {
+        columnId: "daysOver60",
+        field: "daysOver60",
+        header: "60+",
+        align: "right",
+        width: 118,
+        format: { type: "currency", currency: "USD", precision: 0 },
+        cellClassName: (params) => (Number(params.value) > 0 ? "aging-danger-cell" : undefined),
+      },
+      {
+        columnId: "openInvoices",
+        field: "openInvoices",
+        header: "Open Inv.",
+        align: "right",
+        width: 116,
+        format: "number",
+      },
+      {
+        columnId: "riskScore",
+        field: "riskScore",
+        header: "Risk",
+        align: "right",
+        width: 116,
+        cellRenderer(params) {
+          return <RiskMeter value={params.row.riskScore} />
+        },
       },
       {
         columnId: "status",
         field: "status",
         header: "Status",
-        width: 130,
+        width: 136,
+        filter: { type: "text" },
         cellRenderer(params) {
           return <StatusBadge status={params.row.status} />
         },
       },
       {
-        columnId: "created",
-        field: "created",
-        header: "Created",
+        columnId: "lastInvoice",
+        field: "lastInvoice",
+        header: "Last Invoice",
+        width: 140,
+        format: "date",
+      },
+      {
+        columnId: "lastPayment",
+        field: "lastPayment",
+        header: "Last Payment",
         width: 140,
         format: "date",
       },
@@ -162,22 +240,37 @@ function CustomerGridDemo({
   )
 
   const handleEdit = useCallback((row: CustomerRow) => {
-    setLastAction(`Edit ${row.id}`)
+    setActiveCustomer(row)
+    setLastAction(`Open account ${row.account}`)
   }, [])
 
-  const handleEmail = useCallback((row: CustomerRow) => {
-    setLastAction(`Email ${row.email}`)
+  const handleStatement = useCallback((row: CustomerRow) => {
+    setActiveCustomer(row)
+    setLastAction(`Statement queued for ${row.account}`)
   }, [])
 
   const handleScrollToRow500 = useCallback(() => {
     const target = rows[499]
     if (!target) return
     apiRef.current?.scrollToRow(target.id, { align: "center" })
-    setLastAction(`Scrolled to ${target.id}`)
+    setActiveCustomer(target)
+    setLastAction(`Scrolled to ${target.account}`)
   }, [apiRef, rows])
+
+  const handleSelectionChange = useCallback((next: BcSelection) => {
+    setSelectedCount(selectionCount(next) ?? 0)
+  }, [])
 
   return (
     <section id="customer-grid" className="demo-panel" aria-label="Customer grid demo">
+      <div className="summary-strip" aria-label="Accounts receivable summary">
+        <SummaryTile label="Outstanding" value={currency.format(ledgerSummary.balance)} />
+        <SummaryTile label="Overdue" value={currency.format(ledgerSummary.overdue)} />
+        <SummaryTile label="60+ Bucket" value={currency.format(ledgerSummary.daysOver60)} />
+        <SummaryTile label="Credit Holds" value={ledgerSummary.creditHolds.toLocaleString()} />
+        <SummaryTile label="Selected" value={selectedCount.toLocaleString()} />
+      </div>
+
       <div className="demo-toolbar">
         <div>
           <strong>Accounts Receivable</strong>
@@ -198,26 +291,63 @@ function CustomerGridDemo({
             onChange={onDensityChange}
           />
           <button type="button" className="primary-action" onClick={handleScrollToRow500}>
-            Scroll to row 500
+            Row 500
           </button>
         </div>
       </div>
 
       <BcEditGrid
-        ariaLabel="Customer accounts"
+        ariaLabel="Accounts receivable customer ledger"
         apiRef={apiRef}
         columns={columns}
         data={rows}
         density={density}
-        detailPath="/customers"
-        extraActions={(row) => [{ label: "Email", onSelect: () => handleEmail(row) }]}
+        detailPath="/accounts-receivable/customers"
+        extraActions={(row) => [{ label: "Statement", onSelect: () => handleStatement(row) }]}
         height={560}
-        linkField="name"
+        linkField="legalName"
         locale="en-US"
         onEdit={handleEdit}
+        onRowClick={setActiveCustomer}
+        onSelectionChange={handleSelectionChange}
         rowId={(row) => row.id}
       />
+
+      {activeCustomer ? <CustomerDetail row={activeCustomer} /> : null}
     </section>
+  )
+}
+
+const currency = new Intl.NumberFormat("en-US", {
+  currency: "USD",
+  maximumFractionDigits: 0,
+  style: "currency",
+})
+
+function summarizeLedger(rows: readonly CustomerRow[]) {
+  return rows.reduce(
+    (summary, row) => {
+      summary.balance += row.balance
+      summary.overdue += row.days1to30 + row.days31to60 + row.daysOver60
+      summary.daysOver60 += row.daysOver60
+      if (row.status === "Credit Hold") summary.creditHolds += 1
+      return summary
+    },
+    { balance: 0, creditHolds: 0, daysOver60: 0, overdue: 0 },
+  )
+}
+
+function selectionCount(selection: BcSelection): number | undefined {
+  if (selection.mode !== "explicit") return undefined
+  return selection.rowIds.size
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="summary-tile">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   )
 }
 
@@ -254,6 +384,46 @@ function SegmentedControl<TValue extends string>({
 function StatusBadge({ status }: { status: CustomerStatus }) {
   return (
     <span className={`bc-grid-status erp-status erp-status-${statusLabels[status]}`}>{status}</span>
+  )
+}
+
+function RiskMeter({ value }: { value: number }) {
+  const level = value >= 70 ? "high" : value >= 40 ? "medium" : "low"
+  return (
+    <span className={`risk-meter risk-meter-${level}`} aria-label={`Risk score ${value}`}>
+      {value}
+    </span>
+  )
+}
+
+function CustomerDetail({ row }: { row: CustomerRow }) {
+  return (
+    <aside className="customer-detail" aria-label="Selected customer account">
+      <div>
+        <span>Selected Account</span>
+        <strong>{row.account}</strong>
+      </div>
+      <div>
+        <span>Customer</span>
+        <strong>{row.legalName}</strong>
+      </div>
+      <div>
+        <span>Collector</span>
+        <strong>{row.owner}</strong>
+      </div>
+      <div>
+        <span>Outstanding</span>
+        <strong>{currency.format(row.balance)}</strong>
+      </div>
+      <div>
+        <span>60+ Balance</span>
+        <strong>{currency.format(row.daysOver60)}</strong>
+      </div>
+      <div>
+        <span>Risk</span>
+        <strong>{row.riskScore}</strong>
+      </div>
+    </aside>
   )
 }
 
