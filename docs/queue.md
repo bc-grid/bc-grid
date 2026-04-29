@@ -36,7 +36,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 ### Phase 4 — Foundation impls (weeks 5-9)
 
 - `[done: x1 #14]` **core-types** — write all public types in `@bc-grid/core` from `api.md`. **Effort**: 4-5 days.
-- `[in-flight: c1]` **virtualizer-impl** — production virtualizer based on the spike. Plan in `docs/design/virtualizer-impl-plan.md` (PR #17). Sub-tasks: kebab-case decision (done #18), fenwick tree, in-flight retention set, ResizeObserver RAF throttling, pinned-row DOMRenderer support, public API surface alignment, memory-bar harness wiring, impl report. **Branch**: `agent/c1/virtualizer-impl`. **Effort**: 2-3 weeks.
+- `[done: c1 #20+#21+#22+#23+#24]` **virtualizer-impl** — production virtualizer based on the spike. Plan in `docs/design/virtualizer-impl-plan.md`; impl report in `docs/design/virtualizer-impl-report.md`. Six PRs: surface alignment (#20), Fenwick tree (#21), in-flight retention (#22), RO RAF throttling (#23), pinned-row support (#24), impl report (this PR). 96 unit + 35 e2e tests. **Effort**: 2-3 weeks (delivered).
 - `[done: x1 #16]` **animations-impl** — production animation system based on the spike. **Branch**: `agent/x1/animations-impl`. **Effort**: 1-2 weeks.
 - `[review: x1 #15]` **theming-impl** — production theming layer. Awaiting class-name rename to kebab-case per `design.md §13` (#18). **Branch**: `agent/x1/theming-impl`. **Effort**: 3-5 days.
 
