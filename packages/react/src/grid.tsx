@@ -57,6 +57,7 @@ import {
 } from "./gridInternals"
 import { type SortModifiers, renderFilterCell, renderHeaderCell } from "./headerCells"
 import { nextKeyboardNav } from "./keyboard"
+import { loadPersistedState, useGridPersistence } from "./persistence"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
@@ -150,12 +151,27 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // re-render the grid just to update the anchor.
   const selectionAnchorRef = useRef<RowId | null>(null)
 
+  // `gridId`-scoped localStorage persistence per `api.md §3.3`. When
+  // `gridId` is set, the persisted columnState is the initial uncontrolled
+  // default — a controlled `columnState` prop still overrides it (controlled
+  // props always win over persisted state). Read once at mount via useMemo;
+  // we don't re-read mid-session even if storage is mutated externally.
+  const persistedColumnState = useMemo(
+    () =>
+      loadPersistedState<readonly BcColumnStateEntry[]>(
+        props.gridId,
+        "columnState",
+        props.defaultColumnState ?? [],
+      ),
+    [props.gridId, props.defaultColumnState],
+  )
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
     props.columnState ?? [],
-    props.defaultColumnState ?? [],
+    persistedColumnState,
     props.onColumnStateChange,
   )
+  useGridPersistence(props.gridId, "columnState", columnState)
   const [activeCell, setActiveCell] = useControlledState<BcCellPosition | null>(
     hasProp(props, "activeCell"),
     props.activeCell ?? null,

@@ -97,6 +97,18 @@ function disabledRowsEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("disabled") === "1"
 }
 
+/**
+ * `?persist=1` URL flag opts the AR Customers grid into `gridId`-based
+ * persistence (api.md §3.3). The flag isolates the persistence test so
+ * existing e2e tests (which don't pass it) get no-gridId / no-persistence
+ * behaviour.
+ */
+function persistenceGridId(): string | undefined {
+  if (typeof window === "undefined") return undefined
+  if (new URLSearchParams(window.location.search).get("persist") !== "1") return undefined
+  return "ar-customers-demo"
+}
+
 function customerRowIsDisabled(row: CustomerRow): boolean {
   // Every customer with a "Credit Hold" status is treated as disabled —
   // a realistic ERP scenario (read-only, can't post against this account).
@@ -293,6 +305,13 @@ function CustomerGridDemo({
     setSelectedCount(selectionCount(next) ?? 0)
   }, [])
 
+  // Spread-style opt-in for the persistence gridId — the consumer's
+  // `BcGridProps.gridId` is `string` (no undefined under
+  // exactOptionalPropertyTypes), so we omit the prop entirely when
+  // persistence is disabled.
+  const gridIdValue = persistenceGridId()
+  const persistenceProps: { gridId?: string } = gridIdValue ? { gridId: gridIdValue } : {}
+
   return (
     <section id="customer-grid" className="demo-panel" aria-label="Customer grid demo">
       <div className="summary-strip" aria-label="Accounts receivable summary">
@@ -337,6 +356,7 @@ function CustomerGridDemo({
         density={density}
         detailPath="/accounts-receivable/customers"
         extraActions={(row) => [{ label: "Statement", onSelect: () => handleStatement(row) }]}
+        {...persistenceProps}
         height={560}
         linkField="legalName"
         locale="en-US"
