@@ -30,14 +30,14 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 ### Phase 3 — Spikes (weeks 3-5, after RFCs reviewed)
 
 - `[review: c1 #9]` **virtualizer-spike-v2** — minimal virtualizer that scrolls 100k rows × 30 cols at 60fps. Pinned columns (sticky), variable row heights, focus retention with a max 2-row retention budget, scroll-to-cell API, active-cell visibility query, `aria-rowindex` / `aria-rowcount` per the a11y RFC. Pure DOM. **Output**: a working spike + a perf report, including pinned-column DOM-order spot checks with NVDA and VoiceOver. If the bar is missed, the architecture changes (escalate). **Branch**: `agent/c1/virtualizer-spike-v2`. **Effort**: 1-2 weeks.
-- `[review: x1]` **animation-perf-spike** — 1000 rows; click sort; rows animate to new positions at 60fps via FLIP + Web Animations. Output: working spike + perf report. **Branch**: `agent/x1/animation-perf-spike`. **Effort**: 1 week.
+- `[done: x1 #11]` **animation-perf-spike** — 1000 rows; click sort; rows animate to new positions at 60fps via FLIP + Web Animations. Output: working spike + perf report. **Branch**: `agent/x1/animation-perf-spike`. **Effort**: 1 week.
 - `[done: x1 #10]` **theme-spike** — CSS variables + Tailwind preset. Render a static grid in light + dark + 3 density modes. No JS. **Effort**: 2-3 days.
 
 ### Phase 4 — Foundation impls (weeks 5-9)
 
 - `[blocked: depends on api-rfc-v0]` **core-types** — write all public types in `@bc-grid/core` from `api.md`. **Effort**: 4-5 days.
 - `[blocked: depends on virtualizer-spike-v2]` **virtualizer-impl** — production virtualizer based on the spike. **Effort**: 2-3 weeks.
-- `[blocked: depends on animation-perf-spike]` **animations-impl** — production animation system based on the spike. **Effort**: 1-2 weeks.
+- `[in-flight: x1]` **animations-impl** — production animation system based on the spike. **Branch**: `agent/x1/animations-impl`. **Effort**: 1-2 weeks.
 - `[blocked: depends on theme-spike]` **theming-impl** — production theming layer. **Effort**: 3-5 days.
 
 ### Phase 5 — Vertical slice (weeks 9-12)
