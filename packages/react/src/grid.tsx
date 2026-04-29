@@ -27,6 +27,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type ReactNode,
   type RefObject,
   type UIEvent,
@@ -38,6 +39,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { type ColumnResizeSession, computeResizedWidth } from "./columnResize"
 import { nextKeyboardNav } from "./keyboard"
 import { defaultCompareValues, toggleSortFor } from "./sort"
 import type {
@@ -521,6 +523,61 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [captureBodyRowRects, setSortState, sortState],
   )
 
+  // Column-resize session state. Held in a ref so pointer-move callbacks
+  // don't trigger re-renders just to read the session; actual width updates
+  // flow through setColumnState (which does re-render the grid).
+  const resizeSessionRef = useRef<ColumnResizeSession | null>(null)
+
+  const commitColumnWidth = useCallback(
+    (columnId: ColumnId, width: number) => {
+      // Replace-or-insert into columnState. Preserves any other entry
+      // properties (pinned, hidden, position, sortDirection).
+      const next = columnState.some((entry) => entry.columnId === columnId)
+        ? columnState.map((entry) => (entry.columnId === columnId ? { ...entry, width } : entry))
+        : [...columnState, { columnId, width }]
+      setColumnState(next)
+    },
+    [columnState, setColumnState],
+  )
+
+  const handleResizePointerDown = useCallback(
+    (column: ResolvedColumn<TRow>, event: PointerEvent<HTMLDivElement>) => {
+      if (column.source.resizable === false) return
+      // Only the primary button starts a resize.
+      if (event.button !== 0) return
+      event.preventDefault()
+      event.stopPropagation()
+      const handle = event.currentTarget
+      handle.setPointerCapture(event.pointerId)
+      resizeSessionRef.current = {
+        columnId: column.columnId,
+        startClientX: event.clientX,
+        startWidth: column.width,
+        minWidth: column.source.minWidth ?? 48,
+        maxWidth: column.source.maxWidth ?? Number.POSITIVE_INFINITY,
+      }
+    },
+    [],
+  )
+
+  const handleResizePointerMove = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const session = resizeSessionRef.current
+      if (!session) return
+      const next = computeResizedWidth(session, event.clientX)
+      commitColumnWidth(session.columnId, next)
+    },
+    [commitColumnWidth],
+  )
+
+  const endResize = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const handle = event.currentTarget
+    if (handle.hasPointerCapture(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId)
+    }
+    resizeSessionRef.current = null
+  }, [])
+
   // After sortState commits and the new row positions render, run FLIP.
   // useLayoutEffect runs synchronously before paint, so we read the new
   // rects (the L of FLIP) and the play() animates from the captured first
@@ -602,6 +659,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               domBaseId,
               headerHeight,
               index,
+              onResizeEnd: endResize,
+              onResizeMove: handleResizePointerMove,
+              onResizeStart: handleResizePointerDown,
               onSort: handleHeaderSort,
               scrollLeft: scrollOffset.left,
               sortState,
@@ -836,6 +896,9 @@ interface RenderHeaderCellParams<TRow> {
   domBaseId: string
   headerHeight: number
   index: number
+  onResizeEnd: (event: PointerEvent<HTMLDivElement>) => void
+  onResizeMove: (event: PointerEvent<HTMLDivElement>) => void
+  onResizeStart: (column: ResolvedColumn<TRow>, event: PointerEvent<HTMLDivElement>) => void
   onSort: (column: ResolvedColumn<TRow>) => void
   scrollLeft: number
   sortState: readonly BcGridSort[]
@@ -848,6 +911,9 @@ function renderHeaderCell<TRow>({
   domBaseId,
   headerHeight,
   index,
+  onResizeEnd,
+  onResizeMove,
+  onResizeStart,
   onSort,
   scrollLeft,
   sortState,
@@ -915,8 +981,43 @@ function renderHeaderCell<TRow>({
           {sort.direction === "asc" ? "↑" : "↓"}
         </span>
       ) : null}
+      {column.source.resizable === false ? null : (
+        // Drag handle pinned to the right edge of the header cell. Pointer
+        // events with setPointerCapture so the drag survives the cursor
+        // leaving the handle's bounding box during the gesture.
+        <div
+          aria-hidden="true"
+          className="bc-grid-header-resize-handle"
+          data-bc-grid-resize-handle="true"
+          onPointerDown={(event) => onResizeStart(column, event)}
+          onPointerMove={onResizeMove}
+          onPointerUp={onResizeEnd}
+          onPointerCancel={onResizeEnd}
+          onClick={(event) => event.stopPropagation()}
+          style={resizeHandleStyle}
+        />
+      )}
     </div>
   )
+}
+
+const resizeHandleStyle: CSSProperties = {
+  position: "absolute",
+  top: 0,
+  right: 0,
+  width: 6,
+  height: "100%",
+  cursor: "col-resize",
+  // Above body cells but below the focus-ring outline (z-index: 5 in the
+  // benchmarks stylesheet); 4 fits between body z-index 0 and active-cell
+  // outline z-index 5.
+  zIndex: 4,
+  // No background — the handle is invisible but capturing. Theming can add
+  // a hover treatment via .bc-grid-header-resize-handle:hover.
+  touchAction: "none",
+  // Prevent the click from bubbling to the parent header cell, which
+  // would trigger sort. We also stopPropagation in the click handler.
+  userSelect: "none",
 }
 
 interface RenderBodyCellParams<TRow> {

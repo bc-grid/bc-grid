@@ -46,6 +46,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: c1 #27]` **q1-sort** — single-column sort + FLIP animation. **Effort**: 2-3 days (delivered).
 - `[in-flight: c1]` **q1-keyboard-focus** — full WAI-ARIA keyboard matrix per accessibility-rfc §Keyboard Model. Arrows, Home/End, Ctrl+Home/Ctrl+End, PageUp/PageDown, Ctrl+Arrow extremes. Q3-reserved keys (Shift+Arrow, Ctrl+A) swallow without moving. Q2-reserved keys (F2, Enter, Escape) noop so the editor protocol can hook them later. **Branch**: `agent/c1/q1-keyboard-focus`. **Effort**: 3-4 days.
 - `[blocked: depends on react-impl-v0]` **q1-pinned-cols** — left + right pinned columns wired through to the React layer. **Effort**: 2-3 days.
+- `[in-flight: c1]` **column-resize** — drag the right edge of a column header to resize. Pointer events with setPointerCapture so drags survive the cursor leaving the handle. Respects `column.resizable: false` and `column.minWidth` / `maxWidth`. Commits to `columnState`. **Branch**: `agent/c1/column-resize`. **Effort**: 1 day.
 - `[blocked: depends on q1-sort + q1-keyboard-focus + q1-pinned-cols]` **q1-vertical-slice-demo** — rebuild ONE bc-next screen (e.g., AR Customers list) entirely on bc-grid. Real data, real perf, real a11y. **Effort**: 3-5 days. **This is the Q1 "is the architecture sound?" gate.**
 
 ### Documentation & examples (parallel throughout Q1)
