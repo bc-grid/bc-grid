@@ -686,12 +686,24 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     }
   }, [flipBudget, sortState, virtualizer])
 
+  // Pinned-edge scroll-shadow indicators. Surfaces as data attrs on the
+  // grid root so theming can render shadows when content has scrolled
+  // under a pinned region. `data-scrolled-left` is true once scrollLeft
+  // moves off zero (shadow on right edge of pinned-left); the right side
+  // is true when there's still body content to the right of the
+  // viewport.
+  const maxScrollLeft = Math.max(0, virtualWindow.totalWidth - viewport.width)
+  const isScrolledLeft = scrollOffset.left > 1 && pinnedLeftCols > 0
+  const isScrolledRight = scrollOffset.left < maxScrollLeft - 1 && pinnedRightCols > 0
+
   return (
     <div
       ref={rootRef}
       className={classNames("bc-grid", `bc-grid--${density}`)}
       data-density={density}
       data-bc-grid-react="v0"
+      data-scrolled-left={isScrolledLeft || undefined}
+      data-scrolled-right={isScrolledRight || undefined}
       role="grid"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
@@ -1036,6 +1048,7 @@ function renderHeaderCell<TRow>({
         "bc-grid-header-cell",
         sortable ? "bc-grid-header-cell-sortable" : undefined,
         sort ? `bc-grid-header-cell-sorted-${sort.direction}` : undefined,
+        pinnedClassName(column.pinned),
         column.align === "right" ? "bc-grid-cell-right" : undefined,
       )}
       role="columnheader"
@@ -1131,6 +1144,7 @@ function renderFilterCell<TRow>({
       className={classNames(
         "bc-grid-cell",
         "bc-grid-filter-cell",
+        pinnedClassName(column.pinned),
         column.align === "right" ? "bc-grid-cell-right" : undefined,
       )}
       role="cell"
@@ -1258,6 +1272,7 @@ function renderBodyCell<TRow>({
       id={cellDomId(domBaseId, entry.rowId, column.columnId)}
       className={classNames(
         "bc-grid-cell",
+        pinnedClassName(virtualCol.pinned),
         column.align === "right" ? "bc-grid-cell-right" : undefined,
         active ? "bc-grid-cell-active" : undefined,
         coreClassName,
@@ -1675,6 +1690,12 @@ function isRowSelected(selection: BcSelection, rowId: RowId): boolean {
 
 function classNames(...values: Array<string | undefined>): string {
   return values.filter(Boolean).join(" ")
+}
+
+function pinnedClassName(pinned: "left" | "right" | null): string | undefined {
+  if (pinned === "left") return "bc-grid-cell-pinned-left"
+  if (pinned === "right") return "bc-grid-cell-pinned-right"
+  return undefined
 }
 
 function hasProp(object: object, key: PropertyKey): boolean {

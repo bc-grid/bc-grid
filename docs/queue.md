@@ -45,9 +45,9 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: x1 #25]` **react-impl-v0** — `<BcGrid>` scaffold in `@bc-grid/react`. Read-only, no features. **Effort**: 1 week (delivered).
 - `[done: c1 #27]` **q1-sort** — single-column sort + FLIP animation. **Effort**: 2-3 days (delivered).
 - `[done: c1 #28]` **q1-keyboard-focus** — full WAI-ARIA keyboard matrix per accessibility-rfc §Keyboard Model. Arrows, Home/End, Ctrl+Home/Ctrl+End, PageUp/PageDown, Ctrl+Arrow extremes. Q3-reserved keys (Shift+Arrow, Ctrl+A) swallow without moving. Q2-reserved keys (F2, Enter, Escape) noop so the editor protocol can hook them later. **Effort**: 3-4 days (delivered).
-- `[blocked: depends on react-impl-v0]` **q1-pinned-cols** — left + right pinned columns wired through to the React layer. **Effort**: 2-3 days.
+- `[in-flight: c1]` **q1-pinned-cols** — left + right pinned columns wired through to the React layer. Adds `bc-grid-cell-pinned-{left,right}` classes to React-rendered cells (header + body + filter), pinned scroll-shadow indicators via `data-scrolled-{left,right}` data attrs on the grid root, and Playwright coverage against the real React demo (apps/examples). **Branch**: `agent/c1/q1-pinned-cols`. **Effort**: 2-3 days.
 - `[done: c1 #31]` **column-resize** — drag the right edge of a column header to resize. **Effort**: 1 day (delivered).
-- `[in-flight: c1]` **column-filter** — per-column inline text-filter row below the headers. Substring match against `valueFormatter` output, case-insensitive. Multiple columns AND together. Filter algebra extracted to `packages/react/src/filter.ts` (pure `BcGridFilter` + `matchesGridFilter`); the controlled `setFilterState` callback receives the canonical `BcGridFilter` shape. Honours `column.filter: false` to opt out per column. **Branch**: `agent/c1/column-filter`. **Effort**: 1-2 days.
+- `[done: c1 #32]` **column-filter** — per-column inline text-filter row. **Effort**: 1-2 days (delivered).
 - `[blocked: depends on q1-sort + q1-keyboard-focus + q1-pinned-cols]` **q1-vertical-slice-demo** — rebuild ONE bc-next screen (e.g., AR Customers list) entirely on bc-grid. Real data, real perf, real a11y. **Effort**: 3-5 days. **This is the Q1 "is the architecture sound?" gate.**
 
 ### Documentation & examples (parallel throughout Q1)
@@ -55,7 +55,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: x1 #6]` **docs-app-skeleton** — `apps/docs/` Astro or Next.js site. Just the shell, navigation, syntax highlighting. **Effort**: 2-3 days.
 - `[done: x1 #4]` **examples-app-skeleton** — `apps/examples/` Vite app. Renders example components live. **Effort**: 2 days.
 - `[done: x1 #29]` **examples-demo** — mount the real React `<BcGrid>` in `apps/examples` with deterministic ERP-shaped data, production theme CSS, host-app shadcn light/dark tokens, density controls, pinned columns, custom cell renderer, and an imperative API exercise. **Effort**: half day (delivered).
-- `[blocked: depends on react-impl-v0]` **docs-q1-content** — write API reference for v0.1: every public type, every prop, every event. **Effort**: 1 week.
+- `[ready]` **docs-q1-content** — write API reference for v0.1: every public type, every prop, every event. (react-impl-v0 unblocker resolved by #25.) **Effort**: 1 week.
 
 ### Quality + infra (parallel throughout Q1)
 
