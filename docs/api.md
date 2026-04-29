@@ -1,8 +1,8 @@
 # bc-grid Public API — v0.1 (RFC)
 
-**Status:** Draft for review (`api-rfc-v0`)
+**Status:** Accepted with follow-up clarifications (`api-rfc-v0`)
 **Owner:** c1 (Claude)
-**Reviewer:** fresh agent
+**Reviewer:** fresh agent; subsequent follow-up PRs require review
 **Informed by:** `design.md`, `design/ag-grid-poc-audit.md`, `design/accessibility-rfc.md`, `design/server-query-rfc.md`
 **Freeze gate:** end of Q1 (M1.8). Once merged + reviewed, every PR runs an API-surface diff in CI. Non-empty diff → architect review.
 
@@ -23,7 +23,8 @@ The spec is grounded in:
 
 ## 0. Conventions
 
-- **Package scope:** every package is `@bc-grid/<name>`. Consumer-facing import is `@bc-grid/react` for components and `@bc-grid/core` for types. Engine packages (`virtualizer`, `animations`, `theming`, `aggregations`, `filters`, `export`, `server-row-model`) are workspace-internal but published; consumers wanting headless access can import them directly.
+- **Package scope:** every package is `@bc-grid/<name>`. Consumer-facing import is `@bc-grid/react` for components and React-aware types. `@bc-grid/core` owns framework-agnostic state, column, API, and server query types only. Engine packages (`virtualizer`, `animations`, `theming`, `aggregations`, `filters`, `export`, `server-row-model`) are workspace-internal but published; consumers wanting headless access can import them directly.
+- **Framework boundary:** `@bc-grid/core` must not reference `React.*`, DOM types, JSX, browser events, or component constructors. React renderers, slots, event objects, refs, and editor components live in `@bc-grid/react` or `@bc-grid/editors`.
 - **Type naming:** `Bc<Thing>` for surface types (`BcGridColumn`, `BcGridApi`, `BcRow`, `BcCellPosition`, `BcRange`). Server query types keep their `Server*` prefix (no `Bc`) per `server-query-rfc`.
 - **Generics:** every component and type that touches row data is generic over `TRow`. `<BcGrid<Customer>>` is the recommended usage style. Where a useful type is row-agnostic (e.g. `BcGridApi`), the generic is `<TRow = unknown>` so untyped use compiles.
 - **Optional vs required:** every required property is documented; every optional property has a stated default. Components reject unknown props at `tsc` (TypeScript's `exact` semantics).
@@ -52,9 +53,10 @@ export interface BcGridColumn<TRow, TValue = unknown> {
   field?: keyof TRow & string
 
   /**
-   * Header label. ReactNode for icon-bearing headers.
+   * Plain text header label. React-aware header rendering lives in
+   * `BcReactGridColumn` from `@bc-grid/react`.
    */
-  header: string | React.ReactNode
+  header: string
 
   // --- Layout -------------------------------------------------------------
 
@@ -130,25 +132,13 @@ export interface BcGridColumn<TRow, TValue = unknown> {
    */
   format?: BcColumnFormat
 
-  // --- Cell rendering -----------------------------------------------------
+  // --- Styling hints ------------------------------------------------------
 
   /**
-   * Custom cell renderer. Receives the value (post-getter, pre-formatter)
-   * plus row and column context. Memoised internally; identity changes
-   * trigger re-render of all cells in the column.
-   *
-   * If both `cellRenderer` and `valueFormatter` are set, the renderer
-   * receives the raw value and is responsible for any formatting.
-   *
-   * Hot path — keep cheap. Prefer `format` or `valueFormatter` when possible.
+   * Static or row-derived semantic class token. React-specific `className`
+   * callbacks live in `BcReactGridColumn`.
    */
-  cellRenderer?: (params: BcCellRendererParams<TRow, TValue>) => React.ReactNode
-
-  /** Static or row-derived class name on the cell `<div>`. */
-  cellClassName?: string | ((params: BcCellRendererParams<TRow, TValue>) => string | undefined)
-
-  /** Static or row-derived inline style. Prefer `cellClassName` + CSS where possible. */
-  cellStyle?: React.CSSProperties | ((params: BcCellRendererParams<TRow, TValue>) => React.CSSProperties | undefined)
+  cellClass?: string | ((value: TValue, row: TRow) => string | undefined)
 
   // --- Editing (reserved for Q2) ------------------------------------------
 
@@ -157,13 +147,6 @@ export interface BcGridColumn<TRow, TValue = unknown> {
    * @reserved Q2
    */
   editable?: boolean | ((row: TRow) => boolean)
-
-  /**
-   * Cell editor component. Required when `editable` is true and the column
-   * is part of a `BcEditGrid`.
-   * @reserved Q2
-   */
-  cellEditor?: BcCellEditor<TRow, TValue>
 
   /**
    * Per-cell validator. Runs at edit-commit time before the value is applied.
@@ -197,21 +180,6 @@ export interface BcGridColumn<TRow, TValue = unknown> {
 export type ColumnId = string
 export type RowId = string
 
-export interface BcCellRendererParams<TRow, TValue = unknown> {
-  /** Raw value (post-getter, pre-formatter). */
-  value: TValue
-  /** Pre-formatted display string. */
-  formattedValue: string
-  /** The row this cell belongs to. */
-  row: TRow
-  /** Stable row ID. */
-  rowId: RowId
-  /** The column being rendered. */
-  column: BcGridColumn<TRow, TValue>
-  /** Active search text (for highlight rendering). May be empty string. */
-  searchText: string
-}
-
 export interface BcColumnFilter {
   type: "text" | "number" | "date" | "set" | "boolean" | "custom"
   /** Optional starting value. */
@@ -240,9 +208,69 @@ export interface BcAggregation {
   type: "sum" | "count" | "avg" | "min" | "max" | "custom"
   custom?: (rows: unknown[]) => unknown
 }
+
+export type BcValidationResult =
+  | { valid: true }
+  | { valid: false; error: string }
 ```
 
-### 1.3 Column-level events
+### 1.3 React column extension (frozen at v0.1 in `@bc-grid/react`)
+
+`@bc-grid/react` widens the framework-agnostic core column with React rendering hooks. The React package exports this type as its consumer-facing `BcGridColumn`.
+
+```ts
+export type BcReactGridColumn<TRow, TValue = unknown> =
+  Omit<BcGridColumn<TRow, TValue>, "header"> & {
+    /** Header label or custom React header content. */
+    header: string | React.ReactNode
+
+    /**
+     * Custom cell renderer. Receives the value (post-getter, pre-formatter)
+     * plus row and column context. Memoised internally; identity changes
+     * trigger re-render of all cells in the column.
+     *
+     * If both `cellRenderer` and `valueFormatter` are set, the renderer
+     * receives the raw value and is responsible for any formatting.
+     *
+     * Hot path — keep cheap. Prefer `format` or `valueFormatter` when possible.
+     */
+    cellRenderer?: (params: BcCellRendererParams<TRow, TValue>) => React.ReactNode
+
+    /** Static or row-derived class name on the cell `<div>`. */
+    cellClassName?: string | ((params: BcCellRendererParams<TRow, TValue>) => string | undefined)
+
+    /** Static or row-derived inline style. Prefer `cellClassName` + CSS where possible. */
+    cellStyle?: React.CSSProperties | ((params: BcCellRendererParams<TRow, TValue>) => React.CSSProperties | undefined)
+
+    /**
+     * Cell editor component. Required when `editable` is true and the column
+     * is part of a `BcEditGrid`.
+     * @reserved Q2
+     */
+    cellEditor?: BcCellEditor<TRow, TValue>
+  }
+
+export interface BcCellRendererParams<TRow, TValue = unknown> {
+  /** Raw value (post-getter, pre-formatter). */
+  value: TValue
+  /** Pre-formatted display string. */
+  formattedValue: string
+  /** The row this cell belongs to. */
+  row: TRow
+  /** Stable row ID. */
+  rowId: RowId
+  /** The column being rendered. */
+  column: BcReactGridColumn<TRow, TValue>
+  /** Active search text (for highlight rendering). May be empty string. */
+  searchText: string
+  /** Row-level UI state. */
+  rowState: BcRowState
+  /** Whether this cell is currently in edit mode. Reserved Q2. */
+  editing: boolean
+}
+```
+
+### 1.4 Column-level events
 
 Columns don't fire events directly — events are surfaced at the grid level (§3, §5). A column can react to events via `cellRenderer` (which has access to `searchText`, `selected`, `editing` flags via params).
 
@@ -347,9 +375,56 @@ export interface BcCellPosition {
   rowId: RowId
   columnId: ColumnId
 }
+
+export interface BcPaginationState {
+  page: number
+  pageSize: number
+}
+
+export interface BcGridStateProps {
+  sort?: readonly BcGridSort[]
+  defaultSort?: readonly BcGridSort[]
+  onSortChange?: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
+
+  searchText?: string
+  defaultSearchText?: string
+  onSearchTextChange?: (next: string, prev: string) => void
+
+  filter?: BcGridFilter
+  defaultFilter?: BcGridFilter
+  onFilterChange?: (next: BcGridFilter, prev: BcGridFilter) => void
+
+  selection?: BcSelection
+  defaultSelection?: BcSelection
+  onSelectionChange?: (next: BcSelection, prev: BcSelection) => void
+
+  expansion?: ReadonlySet<RowId>
+  defaultExpansion?: ReadonlySet<RowId>
+  onExpansionChange?: (next: ReadonlySet<RowId>, prev: ReadonlySet<RowId>) => void
+
+  groupBy?: readonly ColumnId[]
+  defaultGroupBy?: readonly ColumnId[]
+  onGroupByChange?: (next: readonly ColumnId[], prev: readonly ColumnId[]) => void
+
+  columnState?: readonly BcColumnStateEntry[]
+  defaultColumnState?: readonly BcColumnStateEntry[]
+  onColumnStateChange?: (next: readonly BcColumnStateEntry[], prev: readonly BcColumnStateEntry[]) => void
+
+  activeCell?: BcCellPosition | null
+  defaultActiveCell?: BcCellPosition | null
+  onActiveCellChange?: (next: BcCellPosition | null, prev: BcCellPosition | null) => void
+
+  page?: number
+  defaultPage?: number
+  pageSize?: number
+  defaultPageSize?: number
+  onPaginationChange?: (next: BcPaginationState, prev: BcPaginationState) => void
+}
 ```
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
+
+Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
 ### 3.3 Grid identity for persistence (frozen at v0.1)
 
@@ -364,7 +439,7 @@ export interface BcGridIdentity {
 }
 ```
 
-When `gridId` is set, the React layer persists `columnState`, `pageSize`, `density`, and `groupBy` to a consumer-provided storage backend (default: `localStorage`). The storage backend is overridable via `<BcGridProvider storage={...}>` (Q2).
+When `gridId` is set, the React layer persists `columnState`, `pageSize`, `density`, and `groupBy` to `localStorage` by default. A consumer-provided storage backend via `<BcGridProvider storage={...}>` is reserved for Q2 and is not exported at v0.1.
 
 ---
 
@@ -374,7 +449,7 @@ The value pipeline runs once per cell render. Stages:
 
 1. `valueGetter(row)` → raw `value`. Default: `row[field]`.
 2. `valueFormatter(value, row)` or `format` → `formattedValue: string`. Default: `String(value)`.
-3. `cellRenderer(params)` → `ReactNode`. Default: `formattedValue`.
+3. `cellRenderer(params)` → `ReactNode` in `@bc-grid/react`. Default: `formattedValue`.
 4. (Edit mode, Q2) `valueParser(input, row)` → next raw value, then `validate`.
 
 ### 4.1 Hot-path rules (frozen at v0.1)
@@ -413,14 +488,25 @@ Per-column `filter` declares **what kind of filter UI to show** and what parser 
 Built-in filter types: `text`, `number`, `date`, `set`, `boolean`. Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
 
 ```ts
-// from @bc-grid/filters (engine), re-exported by @bc-grid/react
+// from @bc-grid/filters (engine)
 export interface BcFilterDefinition<TValue = unknown> {
   type: string
   predicate: (value: TValue, criteria: unknown) => boolean
   serialize: (criteria: unknown) => string
   parse: (serialized: string) => unknown
+}
+
+// from @bc-grid/react (Q2)
+export interface BcReactFilterDefinition<TValue = unknown> extends BcFilterDefinition<TValue> {
   /** UI component (Q2). */
   Editor?: React.ComponentType<BcFilterEditorProps<TValue>>
+}
+
+export interface BcFilterEditorProps<TValue = unknown> {
+  value: TValue | null
+  commit(next: TValue | null): void
+  clear(): void
+  locale?: string
 }
 ```
 
@@ -494,13 +580,11 @@ export interface BcFilterDefinition<TValue = unknown> {
 #### `<BcGrid>` props summary (frozen at v0.1)
 
 ```ts
-export interface BcGridProps<TRow> extends BcGridIdentity {
+export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   /** Row data (client-side). For server-side, use BcServerGrid. */
   data: readonly TRow[]
-  columns: readonly BcGridColumn<TRow>[]
+  columns: readonly BcReactGridColumn<TRow>[]
   rowId: BcRowId<TRow>
-
-  // State (all controlled / uncontrolled pairs from §3.1)
 
   // Layout
   density?: "compact" | "normal" | "comfortable"
@@ -580,6 +664,8 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
 
   onEdit?: (row: TRow) => void
   onDelete?: (row: TRow) => void
+  /** Post-commit edit event. Reserved Q2. */
+  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void
   canEdit?: (row: TRow) => boolean
   canDelete?: (row: TRow) => boolean
 
@@ -671,7 +757,7 @@ export interface BcServerTreeProps<TRow> extends Omit<BcGridProps<TRow>, "data">
 }
 ```
 
-The `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren` types come from `@bc-grid/server-row-model` (re-exported through `@bc-grid/react`).
+The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are declared in `@bc-grid/core` with the rest of the server query contract and re-exported through `@bc-grid/react`. Runtime cache/state-machine helpers live in `@bc-grid/server-row-model`.
 
 ---
 
@@ -724,7 +810,7 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
 
 ## 7. Editor protocol (reserved for Q2)
 
-Cell editors live in `@bc-grid/editors` and are React components implementing `BcCellEditor`. The protocol is declared at v0.1 so column types reference it; no editors ship until Q2.
+Cell editors live in `@bc-grid/editors` and are React components implementing `BcCellEditor`. The React protocol lives in `@bc-grid/react`; editor factories live in `@bc-grid/editors`. The protocol is declared at v0.1 so React column types can reference it; no editor factories ship until Q2.
 
 ```ts
 export interface BcCellEditor<TRow, TValue = unknown> {
@@ -740,7 +826,7 @@ export interface BcCellEditorProps<TRow, TValue = unknown> {
   initialValue: TValue
   row: TRow
   rowId: RowId
-  column: BcGridColumn<TRow, TValue>
+  column: BcReactGridColumn<TRow, TValue>
   commit(newValue: TValue): void
   cancel(): void
   /** True after a `validate` call returned an error; the editor surfaces it. */
@@ -749,9 +835,15 @@ export interface BcCellEditorProps<TRow, TValue = unknown> {
   focusRef?: React.RefObject<HTMLElement | null>
 }
 
-export type BcValidationResult =
-  | { valid: true }
-  | { valid: false; error: string }
+export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
+  rowId: RowId
+  row: TRow
+  columnId: ColumnId
+  column: BcReactGridColumn<TRow, TValue>
+  previousValue: TValue
+  nextValue: TValue
+  source: "keyboard" | "pointer" | "api"
+}
 ```
 
 The `<BcEditGrid>` and (Q2) editing variant of `<BcGrid>` consume this protocol; consumers can pass column.cellEditor as either a built-in (`textEditor()`, `numberEditor()`) or a custom implementation.
@@ -798,25 +890,29 @@ Every export listed here is the v0.1 public API. CI runs `tools/api-surface-diff
 
 ```ts
 // Types only (no runtime exports).
-// All BcGridColumn-related types (§1, §3, §4, §6, §7).
+// Framework-agnostic column/state/API types (§1.1-1.2, §3, §4, §6).
 // All Server* types from server-query-rfc.
 // Helpers: ColumnId, RowId, BcCellPosition, BcRange (Q3-reserved).
+// Excludes React component props, React renderers, refs, DOM events, and editor components.
 ```
 
 ### `@bc-grid/react`
 
 ```ts
 // Components
-export { BcGrid, BcEditGrid, BcServerGrid, BcGridProvider }
+export { BcGrid, BcEditGrid, BcServerGrid }
 
 // Hooks
-export { useBcGridApi, useCellEditor, useBcGridContext }
+export { useBcGridApi }
 
-// Types (re-exported from @bc-grid/core for convenience)
-export type { BcGridColumn, BcGridProps, BcEditGridProps, BcServerGridProps, BcGridApi, BcServerGridApi, BcCellPosition, BcSelection, BcGridSort, BcGridFilter, BcColumnStateEntry, BcCellRendererParams, BcCellEditor, BcCellEditorProps, BcValidationResult }
+// React-aware types plus selected @bc-grid/core re-exports for convenience.
+export type { BcReactGridColumn as BcGridColumn, BcGridProps, BcEditGridProps, BcServerGridProps, BcGridStateProps, BcPaginationState, BcGridApi, BcServerGridApi, BcCellPosition, BcSelection, BcGridSort, BcGridFilter, BcColumnStateEntry, BcCellRendererParams, BcCellEditor, BcCellEditorProps, BcCellEditCommitEvent, BcValidationResult, BcReactFilterDefinition, BcFilterEditorProps }
 
 // Server row model loaders (re-exports)
 export type { LoadServerPage, LoadServerBlock, LoadServerTreeChildren, ServerLoadContext }
+
+// Reserved Q2 runtime exports, not shipped at v0.1:
+// BcGridProvider, useBcGridContext, useCellEditor
 ```
 
 ### `@bc-grid/virtualizer`
@@ -857,7 +953,7 @@ export {
   registerFilter,
   matchesFilter,
 }
-export type { BcFilterDefinition, BcFilterEditorProps }
+export type { BcFilterDefinition }
 ```
 
 ### `@bc-grid/export`
@@ -877,11 +973,12 @@ export { createServerRowModel, ServerBlockCache, defaultBlockKey }
 ### `@bc-grid/editors`
 
 ```ts
-export {
-  textEditor, numberEditor, dateEditor, datetimeEditor,
-  selectEditor, multiSelectEditor, autocompleteEditor,
-}
-// Each export is a `BcCellEditor` factory.
+// No v0.1 runtime exports. Reserved Q2 export shape:
+// export {
+//   textEditor, numberEditor, dateEditor, datetimeEditor,
+//   selectEditor, multiSelectEditor, autocompleteEditor,
+// }
+// Each future export is a `BcCellEditor` factory.
 ```
 
 ### `@bc-grid/enterprise`
@@ -904,13 +1001,13 @@ Re-stated from `design.md §9` and confirmed here:
 
 ---
 
-## 11. Open questions (resolve before merge or defer with rationale)
+## 11. Resolved / deferred questions
 
-1. **`BcGridProvider`**: a context provider for grid-wide config (locale, theme, storage backend, animation policy). Q2 deliverable; surface declared here. Does any v0.1 grid actually need it before then? **Answer:** `gridId` persistence needs a storage backend; default `localStorage`; provider for override is Q2. v0.1 ships without provider but reserved.
+1. **`BcGridProvider`**: a context provider for grid-wide config (locale, theme, storage backend, animation policy). Q2 deliverable. **Answer:** v0.1 uses `localStorage` for `gridId` persistence and does not export a provider. Provider override is reserved for Q2.
 2. **Density and `rowHeight`**: are these mutually exclusive? **Proposal:** `density` sets a rowHeight via theming token; explicit `rowHeight` overrides. Density still affects header height + paddings even when `rowHeight` is overridden.
 3. **`groupableColumns` redundancy with `groupable: true` per column**: the per-column `groupable` is the source of truth; `groupableColumns` (in `BcGridProps`) is reserved if/when we want UI-side filtering of which groupables appear in the dropdown. **Decision:** keep both; `groupableColumns` defaults to `columns.filter(c => c.groupable)`.
 4. **Locale sources of truth**: grid `locale` prop vs `view.locale` (in `ServerViewState`) — for client grids, `BcGridProps.locale` is canonical. For server grids, `view.locale` is what the server sees; the grid copies the prop into the view state.
-5. **`onCellEditCommit` event timing**: pre-commit (with cancel option) or post-commit only? **Proposal:** post-commit only at v0.1. Pre-commit hook is `column.validate`.
+5. **`onCellEditCommit` event timing**: pre-commit (with cancel option) or post-commit only? **Decision:** post-commit only. Pre-commit validation is `column.validate`; cancelled edits do not emit `onCellEditCommit`.
 6. **`BcRange` (range selection)**: declared in `core` for Q3. Does the v0.1 surface need to mention it at all? **Answer:** declared as `@reserved Q3`, not implemented; consumers can't use it but the type exists so future component props can reference it.
 7. **i18n message keys**: which strings are localizable at v0.1? **Proposal:** `BcGridMessages` covers loading state, no-rows, search placeholder, page-size label, group-by label, action-column label, action-menu items, sort-direction labels, accessibility live-region templates from `accessibility-rfc §Live Regions`.
 
@@ -923,7 +1020,7 @@ Re-stated from `design.md §9` and confirmed here:
 - ✅ Consumes `server-query-rfc` types verbatim; pins location to `@bc-grid/core`.
 - ✅ Public exports listed per package (§9).
 - ✅ Stability tier marked on every property/type (frozen / reserved / experimental).
-- ⏳ Reviewer (fresh agent) sign-off — pending PR review.
+- ✅ Fresh-agent sign-off completed on the original RFC; follow-up API clarifications require their own review before merge.
 
 ## Process
 
