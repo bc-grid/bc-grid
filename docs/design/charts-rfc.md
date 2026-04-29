@@ -18,7 +18,7 @@ Charts integration was an explicit non-goal in `design.md §2` ("Chart libraries
 - **Hook-based**: `useBcGridChartData(config)` returns chart-ready data; consumer renders with their library of choice.
 - **Pivot-aware**: pivot output (`BcPivotedData`) flows naturally into multi-series charts.
 - **Range-aware**: a chart can render the active range only (Track 2); auto-updates as range changes.
-- **a11y**: charts are decorative by default (`role="img"` + `aria-label`); consumers wanting deeper a11y use the chart library's own primitives.
+- **a11y**: charts default to a *labelled image* — `role="img"` + `aria-label="Chart of {description}"` on the chart container. (This is **not** decorative; consumers wanting a truly decorative chart should add `aria-hidden="true"` themselves. Consumers wanting deeper a11y like an exposed data table use the chart library's own primitives.)
 - **Forward-compatible** with chart-as-renderer (drag a chart into the grid as a custom cell renderer or as a sidebar tool panel) — out of v1 but not contradicted by the v1 design.
 
 ## Non-Goals
@@ -60,7 +60,7 @@ User direction (sprint pivot): **recharts**. The other two are documented as dro
 | Data flow | Grid → adapter hook → chart-data shape → consumer's chart component. Reactive via React state — when grid filter/sort/range/selection changes, chart data updates without manual sync. |
 | Pivot-aware | Pivot output (`BcPivotedData`) maps naturally to multi-series charts. The adapter's `pivotForChart` helper produces a series-per-row-group + categories-per-col-group shape. |
 | Range-aware | Active range (per `range-rfc`) can be the chart's data scope. `rangeForChart(range)` produces the data subset within the range. |
-| a11y | Default: `role="img"` + `aria-label="Chart of {description}"` on the chart container. Consumers wanting "exposed data table" mode wire their library's a11y option (recharts has `<text>` accessibility, echarts has SVG accessibility plugins). |
+| a11y | Default: `role="img"` + `aria-label="Chart of {description}"` on the chart container — a *labelled image*, not decorative. Consumers wanting "exposed data table" mode wire their library's a11y option (recharts has `<text>` accessibility, echarts has SVG accessibility plugins). |
 | Output coordination with grid | A chart rendered as a sidebar panel (Track 5 chrome) gets the same `useBcGridChartData` data; lifecycle + render are owned by the consumer. |
 
 ---
@@ -120,17 +120,48 @@ export interface BcChartSeries {
   groupKey?: string
 }
 
+/**
+ * Subscribe to grid state changes for reactive consumption.
+ * Added to BcGridApi as part of the charts-peer-dep-integration task.
+ *
+ * The listener is invoked synchronously after any of:
+ *   filter, sort, data, selection, range, pivot state, or row model
+ * is updated. The grid de-bounces this internally so listeners are not
+ * called during the same render commit twice.
+ *
+ * Returns an unsubscribe function.
+ */
+export interface BcGridApi<TRow> {
+  // ...existing methods...
+  subscribe(listener: () => void): () => void
+}
+
 export function useBcGridChartData<TRow>(
-  api: BcGridApi<TRow>,
+  apiRef: React.RefObject<BcGridApi<TRow>>,
   config: BcChartConfig<TRow>,
 ): BcChartData
 ```
 
-The hook reads from the grid's API (passes through `apiRef.current`). It re-runs when:
-- `api.getRowModel()` changes (filter/sort/data update)
-- `api.getSelection()` changes (when scope === "selected")
-- `api.getRangeSelection()` changes (when scope === "range")
-- `api.getPivotState()` changes (when scope === "pivot")
+**Reactivity model (pinned):** the hook accepts the `apiRef` *ref object* (not the imperative `apiRef.current`, which is `BcGridApi<TRow> | null` until mount). Internally it uses `useSyncExternalStore` against `api.subscribe`:
+
+```ts
+function useBcGridChartData<TRow>(
+  apiRef: React.RefObject<BcGridApi<TRow>>,
+  config: BcChartConfig<TRow>,
+): BcChartData {
+  const subscribe = useCallback(
+    (listener: () => void) => apiRef.current?.subscribe(listener) ?? (() => {}),
+    [apiRef],
+  )
+  const snapshot = useSyncExternalStore(subscribe, () => apiRef.current?.getRowModelStamp() ?? 0)
+  return useMemo(() => deriveChartData(apiRef.current, config), [snapshot, config])
+}
+```
+
+`api.subscribe(listener)` is the new primitive added to `BcGridApi` for charts (and is reusable for any other reactive consumer that needs to mirror grid state). `getRowModelStamp(): number` increments on any state change so React's `useSyncExternalStore` can detect changes via referential identity.
+
+The hook re-derives `BcChartData` when:
+- the snapshot changes (filter, sort, data, selection, range, pivot — anything that triggers a `subscribe` notification)
 - `config` shallow-equality changes
 
 ### Helpers
@@ -171,7 +202,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } fro
 
 function CustomerBalanceByQuarter({ rows, columns }) {
   const apiRef = useBcGridApi()
-  const chartData = useBcGridChartData(apiRef.current, {
+  const chartData = useBcGridChartData(apiRef, {
     scope: "filtered",
     categoryColumn: "quarter",
     valueColumns: ["balance"],
@@ -243,11 +274,16 @@ V1.x extension: `<BcServerGrid>` consumers can compute a separate "chart data fe
 
 ## Implementation tasks (Phase 6 Track 7)
 
+The single task in the prior draft conflated four distinct dependency sets. Splitting by scope so each piece can land in its track's natural order:
+
 | Task | Effort | Depends on |
 |---|---|---|
-| `charts-peer-dep-integration` (`@bc-grid/react/charts` module + 3 worked examples in `apps/docs/charts`) | M | aggregation-engine + this RFC |
+| `charts-api-subscribe` (add `BcGridApi.subscribe` + `getRowModelStamp` + integration tests; the reactive primitive used by the chart hook and any future external store consumer) | S | core grid (already shipped) |
+| `charts-peer-dep-integration` (`@bc-grid/react/charts` module: `BcChartConfig`, `BcChartData`, `useBcGridChartData`, `rowsToChartData`, `aggregateForChart`; flat-row / aggregated / `scope: "filtered" \| "selected" \| "all"` modes; 1 recharts worked example in `apps/docs/charts`) | M | `charts-api-subscribe` + `aggregation-engine` (Track 4) + this RFC |
+| `charts-range-helper` (`rangeForChart` helper + `scope: "range"` support in `useBcGridChartData` + worked example) | S | `charts-peer-dep-integration` + `range-state-machine` (Track 2) |
+| `charts-pivot-helper` (`pivotForChart` helper + `scope: "pivot"` support in `useBcGridChartData` + worked example) | S | `charts-peer-dep-integration` + `pivot-engine` / `pivot-row-col-groups` (Track 4 second half) |
 
-Single task; no further decomposition needed for v1. Worked examples land in the same PR.
+Splitting unblocks the flat-row chart from waiting on Track 2/4 — the v1 alpha can ship with `charts-peer-dep-integration` and pick up range/pivot scopes as those tracks land.
 
 ## Test plan
 
