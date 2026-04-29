@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test"
 
 /**
- * Root Playwright config for bc-grid e2e + perf tests.
+ * Root Playwright config for bc-grid e2e tests.
  *
  * Two suites under one config:
  *   - `apps/benchmarks/tests/*.pw.ts` against the spike harness (port 5174)
@@ -11,19 +11,20 @@ import { defineConfig, devices } from "@playwright/test"
  * because pinned cells use JS-driven translate3d and getBoundingClientRect
  * semantics differ slightly across engines.
  *
- * The FPS perf tests are gated to Chromium-only via `grepInvert`.
+ * Absolute perf bars run through `playwright.perf.config.ts` and the
+ * nightly perf workflow. PR e2e stays behavior-focused so shared CI timing
+ * variance does not gate normal feature work.
  */
-
-const FPS_TEST_TITLE = /scroll FPS|variable-height mode/
 
 export default defineConfig({
   // Tests live under each app's `tests/` directory; pick them up by name.
   testMatch: "**/*.pw.ts",
+  testIgnore: "**/*.perf.pw.ts",
   // Perf tests rely on stable timing; do not parallelise them.
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   reporter: "list",
   use: {
     trace: "retain-on-failure",
@@ -40,13 +41,11 @@ export default defineConfig({
       name: "spike-firefox",
       testDir: "./apps/benchmarks/tests",
       use: { ...devices["Desktop Firefox"], baseURL: "http://localhost:5174" },
-      grepInvert: FPS_TEST_TITLE,
     },
     {
       name: "spike-webkit",
       testDir: "./apps/benchmarks/tests",
       use: { ...devices["Desktop Safari"], baseURL: "http://localhost:5174" },
-      grepInvert: FPS_TEST_TITLE,
     },
     // ---- React demo (apps/examples) ----
     {

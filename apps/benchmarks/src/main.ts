@@ -18,6 +18,33 @@
 
 import { DOMRenderer, type RenderCellParams, Virtualizer } from "@bc-grid/virtualizer"
 
+interface PerfMetric {
+  durationMs: number
+  rowCount: number
+}
+
+interface PerfRow {
+  id: number
+  customer: string
+  status: "open" | "posted" | "held"
+  amount: number
+  values: number[]
+}
+
+declare global {
+  interface Window {
+    __autoScrollDone__: boolean
+    __bcGridPerf: {
+      mountGrid(): void
+      sortRows(): Promise<PerfMetric>
+      filterRows(): Promise<PerfMetric>
+      rawRowCount: number
+    }
+    __fps__: number[]
+    __renderCount__: number
+  }
+}
+
 function $<T extends Element>(selector: string): T {
   const el = document.querySelector<T>(selector)
   if (!el) throw new Error(`Missing element: ${selector}`)
@@ -41,6 +68,12 @@ const applyBtn = $<HTMLButtonElement>("#apply")
 const scrollToEndBtn = $<HTMLButtonElement>("#scrollToEnd")
 const scrollToMiddleBtn = $<HTMLButtonElement>("#scrollToMiddle")
 const autoScrollBtn = $<HTMLButtonElement>("#autoScroll")
+
+const urlParams = new URLSearchParams(location.search)
+const rawRows = urlParams.has("rawData")
+  ? createPerfRows(Number(rowCountInput.value), Number(colCountInput.value))
+  : []
+let filteredRows: PerfRow[] = []
 
 let virtualizer: Virtualizer
 let renderer: DOMRenderer
@@ -120,7 +153,7 @@ function buildGrid(): void {
       const cost = performance.now() - lastRenderStart
       renderMsEl.textContent = `${cost.toFixed(2)}ms`
       refreshActiveCellHighlight()
-      ;(globalThis as unknown as { __renderCount__: number }).__renderCount__ = renderer.renderCount
+      window.__renderCount__ = renderer.renderCount
     },
   })
 
@@ -150,7 +183,7 @@ function applyVariableHeights(v: Virtualizer, rowCount: number): void {
 let frameCount = 0
 let lastFpsUpdate = performance.now()
 const fpsSamples: number[] = []
-;(globalThis as unknown as { __fps__: number[] }).__fps__ = fpsSamples
+window.__fps__ = fpsSamples
 
 function fpsTick() {
   frameCount++
@@ -168,7 +201,11 @@ requestAnimationFrame(fpsTick)
 
 // ---- Initial build + control wiring ---------------------------------------
 
-buildGrid()
+if (urlParams.get("mount") !== "false") {
+  buildGrid()
+} else {
+  window.__renderCount__ = 0
+}
 
 applyBtn.addEventListener("click", () => buildGrid())
 variableHeightToggle.addEventListener("change", () => buildGrid())
@@ -188,7 +225,7 @@ scrollToMiddleBtn.addEventListener("click", () => {
 // ---- Auto-scroll (ping-pong, 6s) ------------------------------------------
 
 let autoScrollHandle: number | null = null
-;(globalThis as unknown as { __autoScrollDone__: boolean }).__autoScrollDone__ = false
+window.__autoScrollDone__ = false
 
 autoScrollBtn.addEventListener("click", () => startAutoScroll())
 
@@ -201,7 +238,7 @@ function startAutoScroll(): void {
   }
 
   autoScrollBtn.textContent = "Stop auto-scroll"
-  ;(globalThis as unknown as { __autoScrollDone__: boolean }).__autoScrollDone__ = false
+  window.__autoScrollDone__ = false
   const scrollerEl = grid.querySelector<HTMLElement>(".bc-grid-scroller")
   if (!scrollerEl) return
   const scroller: HTMLElement = scrollerEl
@@ -215,7 +252,7 @@ function startAutoScroll(): void {
     if (elapsed >= duration) {
       autoScrollHandle = null
       autoScrollBtn.textContent = "Auto-scroll (FPS test)"
-      ;(globalThis as unknown as { __autoScrollDone__: boolean }).__autoScrollDone__ = true
+      window.__autoScrollDone__ = true
       return
     }
     const progress = (elapsed % duration) / duration
@@ -308,6 +345,45 @@ grid.tabIndex = 0
 // When Playwright loads the page with `?autorun=fps`, kick off auto-scroll
 // after first paint so the test can sample without UI clicking.
 
-if (new URLSearchParams(location.search).get("autorun") === "fps") {
+if (urlParams.get("autorun") === "fps") {
   requestAnimationFrame(() => requestAnimationFrame(() => startAutoScroll()))
+}
+
+window.__bcGridPerf = {
+  mountGrid() {
+    buildGrid()
+  },
+  async sortRows() {
+    const start = performance.now()
+    rawRows.sort((a, b) => a.amount - b.amount || a.id - b.id)
+    await nextPaint()
+    return { durationMs: performance.now() - start, rowCount: rawRows.length }
+  },
+  async filterRows() {
+    const start = performance.now()
+    filteredRows = rawRows.filter((row) => row.customer.includes("42") || row.status === "held")
+    await nextPaint()
+    return { durationMs: performance.now() - start, rowCount: filteredRows.length }
+  },
+  get rawRowCount() {
+    return rawRows.length
+  },
+}
+
+function createPerfRows(rowCount: number, colCount: number): PerfRow[] {
+  const statuses = ["open", "posted", "held"] as const
+  return Array.from({ length: rowCount }, (_, rowIndex) => {
+    const values = Array.from({ length: colCount }, (_, colIndex) => rowIndex * colCount + colIndex)
+    return {
+      id: rowIndex,
+      customer: `Customer ${String(rowIndex % 997).padStart(3, "0")}`,
+      status: statuses[rowIndex % statuses.length] ?? "open",
+      amount: ((rowIndex * 7919) % 1_000_000) / 100,
+      values,
+    }
+  })
+}
+
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()))
 }
