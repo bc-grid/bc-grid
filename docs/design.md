@@ -64,11 +64,11 @@ These are the bars. Two tiers: **smoke** runs on every PR (must pass to merge); 
 | Scroll FPS (100k rows × 30 cols) | ≥ 58 (target 60) | sustained over 2s scroll |
 | Filter (100k rows) | < 100ms | end-to-end |
 | **Grid overhead memory** (100k rows × 30 cols of typical width) | **< 30MB above raw dataset size** | heap snapshot diff (with grid mounted vs same data without) |
-| **Animation visible+retained budget** | ≤ 200 rows in flight at once | viewport rows + animation handoff queue |
+| **Animation visible+retained budget** | **100 rows in flight (default); 200 hard cap only with a Chrome trace proving it sustains 60fps in production** | viewport rows + animation handoff queue |
 
 The memory metric measures grid *overhead* — the cost of having a bc-grid in your app vs the raw data sitting in JS. Total heap minus baseline-without-grid. This is what users actually experience.
 
-The animation budget caps the number of rows we ever animate concurrently. We never animate 100k rows; we animate the rows in the viewport plus those still in transit (off-screen but holding their DOM node until the animation completes). 200 is a hard ceiling.
+The animation budget caps the number of rows we ever animate concurrently. We never animate 100k rows; we animate the rows in the viewport plus those still in transit (off-screen but holding their DOM node until the animation completes). The default ceiling is **100 rows** based on the animation-perf-spike measurements (`docs/design/animation-perf-spike-report.md`): 1,000 rows = 45 FPS (fail), 200 rows = 57 FPS (borderline), 100 rows = 60 FPS (pass on a 2024 M-series Mac in headless Chrome). Raising the cap to 200 requires a fresh Chrome trace on the target hardware showing sustained 60fps; otherwise, we hold at 100.
 
 Benchmark harness in `apps/benchmarks/`. Smoke results logged to PR comments. Nightly results published to a perf-tracker service (Y1).
 
@@ -528,6 +528,7 @@ Any architectural change to this document must:
 | 2026-04-29 | **Virtualized focus uses `aria-activedescendant`**, not roving `tabindex` on individual cells. | DOM focus stays stable on the grid root while the virtualizer retains the active cell element, which avoids focus loss when rows scroll out of the normal render window. | accessibility-rfc review |
 | 2026-04-29 | **Tab exits the grid in navigation mode.** | bc-grid follows the WAI-ARIA grid pattern for read-only navigation; editor-specific Tab commit/move behavior is deferred to the Q2 editor contract. | accessibility-rfc review |
 | 2026-04-29 | **Virtualizer must expose accessibility retention hooks.** `Virtualizer` needs retained row/column inputs, `scrollToCell`, and a visibility query for active cells. | The React layer cannot maintain valid `aria-activedescendant`, `aria-rowindex`, pinned-column DOM order, or focus-retention behavior without explicit virtualizer support. | accessibility-rfc review |
+| 2026-04-29 | **Animation in-flight cap lowered: 100 default, 200 hard cap only with measured proof.** Replaces the original "≤200 rows in flight" bar. | `animation-perf-spike` (#11) measured FLIP perf on a 2024 M-series Mac in headless Chrome: 1,000 rows = 45 FPS, 200 rows = 57 FPS, 100 rows = 60 FPS. 200 was directionally close but borderline; 100 is the safe default. Raising the cap requires fresh hardware-specific evidence rather than asserting it on the original assumption. | animation-perf-spike review |
 
 ## 14. Quality bars (full list)
 
