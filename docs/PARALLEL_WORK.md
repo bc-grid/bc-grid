@@ -74,22 +74,24 @@ git -C ~/work/bc-grid branch -d agent/c2/<task-slug>   # local cleanup
 
 ## 3. Phase-by-phase parallelism
 
-The split below assumes Q1's foundation work is complete (architecture, package skeletons, perf spikes).
+> **Note (2026-04-29 scope+timeline pivot):** the original calendar below described Q1-Q8 in months over a 2-year build. The actual sprint is now compressed to **2 weeks with 4 max-tier parallel agents**. The Q1-Q8 phase NAMES are preserved as feature buckets; the calendar below is rewritten in days. See `docs/coordination/v1-parity-sprint.md` for the active orchestration; that doc's 7 parallel feature tracks supersede the strict quarter-by-quarter sequencing below.
 
-### Q1 (months 1-3) — Foundation. Mostly serial.
+The split below assumes Q1's foundation work is complete (architecture, package skeletons, perf spikes — done day 0).
 
-Q1 is **not** the place for 5-agent parallelism. The architecture has to cohere. Work distribution:
+### Q1 (Day 0, DONE) — Foundation. Mostly serial.
+
+Q1 is **not** the place for 5-agent parallelism. The architecture has to cohere. Work distribution that day:
 
 - **Architect (1 agent or human)**: design doc, API spec, foundation packages (`core`, `virtualizer`, `animations`, `theming`). Owns the perf spike.
 - **Test-infra agent (1 agent)**: CI, perf harness, visual regression infrastructure, type-check setup, lint/format config. Independent of architect's work.
 - **Docs agent (1 agent)**: docs site scaffold, examples app skeleton, README content.
 - **Reviewer agent (1 agent)**: reviews architect's PRs (always-fresh review).
 
-Maximum 4 concurrent in Q1; usually 2-3.
+Maximum 4 concurrent in Q1; usually 2-3. Cleared via PR #42 (AR Customers vertical slice).
 
-### Q2 (months 4-6) — In-grid editing + cell editors. 5 agents unlock.
+### Q2 (Days 1-3) — In-grid editing + cell editors. 5-agent parallelism unlocks.
 
-After the editor framework lands (architect-driven, week 1 of Q2), parallel agents fan out:
+After the editor framework lands (architect-driven, day 1 morning), parallel agents fan out:
 
 - **Agent C1**: keyboard nav state machine + the editor framework's React adapter
 - **Agent C2**: text + number editors (`editors/text`, `editors/number`)
@@ -99,7 +101,7 @@ After the editor framework lands (architect-driven, week 1 of Q2), parallel agen
 
 Each agent owns a leaf package or two; PRs land independently; reviewer agent rotates.
 
-### Q3 (months 7-9) — Range selection + master-detail.
+### Q3 (Days 4-6) — Range selection + master-detail.
 
 - **Agent C1**: range selection model (`core/range`) — coherent design, single owner
 - **Agent C2**: clipboard handlers (TSV serialize, HTML serialize, paste-from-Excel parser)
@@ -107,26 +109,30 @@ Each agent owns a leaf package or two; PRs land independently; reviewer agent ro
 - **Agent X2**: master-detail rows
 - **Agent X3**: column groups (multi-row headers) + sticky header polish
 
-### Q4 (months 10-12) — Server-side row model + tree.
+### Q4 (Days 5-8, parallel with Q3 latter half) — Server-side row model + tree.
 
-- **Agent C1**: server-paged + server-sort/filter wiring
+- **Agent C1**: server-paged + server-sort/filter wiring (already in flight as #60 day 0)
 - **Agent C2**: infinite scroll + block caching + LRU eviction
 - **Agent X1**: lazy tree children (server-tree mode)
 - **Agent X2**: server-side group expand/collapse
 - **Agent X3**: integration tests + perf testing for server modes (cross-cutting)
 
-### Y2 — Massive parallelism. 5 agents on independent features.
+### Q5-Q7 (Days 8-13) — Aggregations / Pivots / Filters / Chrome / Export / Charts / Polish — massive parallelism, 5 agents on independent tracks.
 
-Year 2 is the breadth phase. Most tasks are isolated.
+Days 8-13 are the breadth phase. Most tasks are isolated; cross-track conflicts rare.
 
-Example month split (months 13-15, aggregations + pivots):
-- **Agent C1**: aggregation core + sum/avg/count/min/max
-- **Agent C2**: custom aggregation hooks + pivot table architect
+Example day split (days 8-9, aggregations + pivots):
+- **Agent C1**: aggregation core + sum/avg/count/min/max (`@bc-grid/aggregations` engine)
+- **Agent C2**: custom aggregation hooks + pivot engine
 - **Agent X1**: filter UIs (set, multi, date-range)
-- **Agent X2**: filter UIs (number-range, text, custom)
-- **Agent X3**: status bar + sidebar + context menu
+- **Agent X2**: filter UIs (number-range, text-extend, custom-extension recipe) + `@bc-grid/export` impls (csv/xlsx/pdf)
+- **Agent X3**: status bar + sidebar + context menu (`chrome-rfc`)
 
-The roadmap.md will track quarter-by-quarter assignments. Architects can shuffle as priorities shift.
+Days 11-13: charts adapter + streaming row updates + mobile/touch fallback + WCAG deep-pass + animation polish.
+
+### Q8 (Days 13-14) — Beta + 1.0 launch.
+
+`docs/queue.md` tracks task-level assignments. Architects can shuffle as priorities shift.
 
 ## 4. Coordination protocol
 

@@ -2,7 +2,7 @@
 
 A high-performance, shadcn-native data grid for React. Built to compete with AG Grid Enterprise on speed, animations, and developer experience — without the licence fees and aftermarket-styling friction.
 
-**Status:** Pre-alpha. Architecture phase. No public API yet.
+**Status:** v0.1-alpha imminent (read-only client-side grid; see `docs/coordination/v0.1-alpha-release-plan.md`). v1.0 targets full feature parity with AG Grid Enterprise for ERP workloads, delivered in a **2-week parallel sprint** with 4 max-tier agents (see `docs/coordination/v1-parity-sprint.md`).
 
 ---
 
@@ -19,9 +19,12 @@ Most React data grids are either capable but visually disconnected from modern d
 
 ## Non-goals (initial release)
 
-- 100% AG Grid feature parity. The 80-90% of features that 95% of users actually need is the target.
-- Charts integration. Out-of-scope until 1.0+; chart libraries do this better.
+- **Bug-for-bug AG Grid parity.** v1.0 targets feature parity for ERP workloads, not test-suite parity with AG Grid's 7+ years of edge-case polish. Edge-case parity is a continuous post-1.0 backlog.
 - Frameworks beyond React. Vue/Solid/Angular bindings deferred indefinitely.
+- RTL languages. Post-1.0.
+- Spreadsheet-class formula editing. Deferred indefinitely; bc-grid is a data grid, not a spreadsheet.
+
+(Charts integration was originally a non-goal; promoted to v1.0 as a peer-dep adapter — see `docs/design/charts-rfc.md`.)
 
 ## Architecture (high-level)
 
@@ -47,7 +50,9 @@ See `docs/design.md` for the architecture in depth.
 
 ## Roadmap
 
-2-year plan to 1.0. See `docs/roadmap.md`.
+**2-week sprint to v1.0** with 4 max-tier parallel agents — covers the original 8-quarter scope plus charts integration. See `docs/roadmap.md` for the day-by-day plan and `docs/coordination/v1-parity-sprint.md` for the active orchestration. Q1 vertical-slice gate cleared on day 0 (PR #42).
+
+The original 2-year timeline is preserved as historical context in `design.md §13`'s decision log — the compression is real and is documented as the 2026-04-29 scope+timeline pivot.
 
 ## Working on this project
 
