@@ -423,6 +423,24 @@ export function assertNoMixedControlledProps<TRow>(props: BcGridProps<TRow>): vo
 // Live-region announcements (sort / filter / selection).
 // ---------------------------------------------------------------------------
 
+/**
+ * Find the sort key that was added or whose direction changed between
+ * `prev` and `next`. Returns `null` for pure-removal transitions (handled
+ * separately as "Sorting cleared." when nothing remains, otherwise silent
+ * — the visual update is sufficient).
+ */
+export function pickChangedSort(
+  prev: readonly BcGridSort[],
+  next: readonly BcGridSort[],
+): BcGridSort | null {
+  const prevById = new Map(prev.map((entry) => [entry.columnId, entry.direction]))
+  for (const entry of next) {
+    const prevDirection = prevById.get(entry.columnId)
+    if (prevDirection !== entry.direction) return entry
+  }
+  return null
+}
+
 export interface UseLiveRegionAnnouncementsParams<TRow> {
   sortState: readonly BcGridSort[]
   resolvedColumns: readonly ResolvedColumn<TRow>[]
@@ -451,7 +469,10 @@ export function useLiveRegionAnnouncements<TRow>({
   }, [])
 
   // Announce sort changes. Compares to a ref of the previous sort state so
-  // we only announce when it actually changes, not on initial mount.
+  // we only announce when it actually changes, not on initial mount. With
+  // multi-column sort, announce whichever key was just added or whose
+  // direction changed (not always sortState[0] — Shift+click appends to
+  // the tail, leaving the head untouched).
   const prevSortStateRef = useRef<readonly BcGridSort[]>(sortState)
   useEffect(() => {
     const prev = prevSortStateRef.current
@@ -461,12 +482,12 @@ export function useLiveRegionAnnouncements<TRow>({
       announcePolite(messages.sortClearedAnnounce())
       return
     }
-    const head = sortState[0]
-    if (!head) return
-    const column = resolvedColumns.find((c) => c.columnId === head.columnId)
+    const changed = pickChangedSort(prev, sortState)
+    if (!changed) return
+    const column = resolvedColumns.find((c) => c.columnId === changed.columnId)
     const columnLabel =
-      typeof column?.source.header === "string" ? column.source.header : head.columnId
-    announcePolite(messages.sortAnnounce({ columnLabel, direction: head.direction }))
+      typeof column?.source.header === "string" ? column.source.header : changed.columnId
+    announcePolite(messages.sortAnnounce({ columnLabel, direction: changed.direction }))
   }, [sortState, resolvedColumns, messages, announcePolite])
 
   // Announce filter changes. Includes visible / total row counts so users
