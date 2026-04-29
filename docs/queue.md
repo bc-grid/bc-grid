@@ -37,7 +37,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 - `[blocked: depends on api-rfc-v0]` **core-types** — write all public types in `@bc-grid/core` from `api.md`. **Effort**: 4-5 days.
 - `[blocked: depends on virtualizer-spike-v2]` **virtualizer-impl** — production virtualizer based on the spike. **Effort**: 2-3 weeks.
-- `[in-flight: x1]` **animations-impl** — production animation system based on the spike. **Branch**: `agent/x1/animations-impl`. **Effort**: 1-2 weeks.
+- `[review: x1 #16]` **animations-impl** — production animation system based on the spike. **Branch**: `agent/x1/animations-impl`. **Effort**: 1-2 weeks.
 - `[blocked: depends on theme-spike]` **theming-impl** — production theming layer. **Effort**: 3-5 days.
 
 ### Phase 5 — Vertical slice (weeks 9-12)
