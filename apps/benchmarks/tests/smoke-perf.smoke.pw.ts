@@ -26,7 +26,7 @@ interface ScrollPerfMetric extends PerfMetric {
 }
 
 test(`cold mount 1k x 10 stays under ${COLD_MOUNT_BAR_MS}ms`, async ({ page }) => {
-  await page.goto("/?mount=false&rows=1000&cols=10")
+  await page.goto("/?mount=false&rows=1000&cols=10&pinnedLeft=0&pinnedRight=0")
 
   const metric = await page.evaluate(() => window.__bcGridPerf.mountGrid())
 
@@ -37,7 +37,7 @@ test(`cold mount 1k x 10 stays under ${COLD_MOUNT_BAR_MS}ms`, async ({ page }) =
 })
 
 test(`sort 10k rows stays under ${SORT_BAR_MS}ms`, async ({ page }) => {
-  await page.goto("/?rawData=1&rows=10000&cols=10")
+  await page.goto("/?rawData=1&rows=10000&cols=10&pinnedLeft=0&pinnedRight=0")
   await page.waitForFunction(() => window.__bcGridPerf.rawRowCount === 10_000)
 
   const metric = await page.evaluate(() => window.__bcGridPerf.sortRows())
@@ -49,7 +49,7 @@ test(`sort 10k rows stays under ${SORT_BAR_MS}ms`, async ({ page }) => {
 })
 
 test(`scroll 10k x 20 sustains >=${SCROLL_FPS_BAR} FPS over 1s`, async ({ page }) => {
-  await page.goto("/?rows=10000&cols=20")
+  await page.goto("/?rows=10000&cols=20&pinnedLeft=0&pinnedRight=0")
 
   const metric = await page.evaluate(() => window.__bcGridPerf.scrollForFps(1000))
 
