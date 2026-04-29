@@ -31,4 +31,9 @@ bun-debug.log*
 tests/perf/results/
 tests/visual/__snapshots__/diff/
 
+# playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
 # Note: bun.lock IS committed (project state, not artifact).

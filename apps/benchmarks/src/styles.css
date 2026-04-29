@@ -1,0 +1,165 @@
+/* bc-grid benchmark — minimal styling, focused on perf. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  font-size: 13px;
+  background: #fafafa;
+  color: #0a0a0a;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.bench-header {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e5e5;
+  background: #ffffff;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px 24px;
+  align-items: center;
+}
+
+.bench-header h1 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0a0a0a;
+}
+
+.bench-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bench-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #525252;
+}
+
+.bench-controls input[type="number"] {
+  width: 100px;
+  padding: 4px 6px;
+  border: 1px solid #d4d4d4;
+  border-radius: 4px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-controls button {
+  padding: 4px 10px;
+  border: 1px solid #d4d4d4;
+  border-radius: 4px;
+  background: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bench-controls button:hover {
+  background: #fafafa;
+  border-color: #a3a3a3;
+}
+
+.bench-metrics {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #525252;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-metrics strong {
+  color: #0a0a0a;
+  font-weight: 600;
+}
+
+#grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+/* Virtualizer DOM shape. Mirrors the contract documented in
+   packages/virtualizer/src/dom-renderer.ts. */
+
+.bc-grid {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #ffffff;
+}
+
+.bc-grid-scroller {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  /* Scroll container -- everything else is positioned relative to .bc-grid-canvas */
+}
+
+.bc-grid-canvas {
+  position: relative;
+}
+
+.bc-grid-row {
+  /* Each row is positioned absolutely at its rowOffset; the renderer sets
+     transform: translate3d(0, top, 0) and width: 100% (of canvas).
+     Cells inside the row are positioned relative to the row. */
+  contain: layout style;
+  will-change: transform;
+}
+
+.bc-grid-cell {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-right: 1px solid #f5f5f5;
+  border-bottom: 1px solid #f5f5f5;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: #ffffff;
+}
+
+.bc-grid-cell[data-col-index="0"] {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+  font-weight: 600;
+  color: #404040;
+}
+
+.bc-grid-cell-pinned-left {
+  /* Sticky to the scroller's left edge. The renderer sets `position: sticky`
+     and `left: 0`. A right-side shadow signals the boundary with body cells. */
+  background: #fafafa;
+  box-shadow: 1px 0 0 #e5e5e5;
+}
+
+.bc-grid-cell-pinned-right {
+  /* Sticky to the scroller's right edge. */
+  background: #fafafa;
+  box-shadow: -1px 0 0 #e5e5e5;
+}
+
+/* Focus ring for the active cell — visible whether scrolled in or out. */
+.bc-grid-cell.is-active {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  z-index: 5;
+}

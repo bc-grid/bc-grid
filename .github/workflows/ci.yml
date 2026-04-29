@@ -36,8 +36,32 @@ jobs:
         run: bun run build
 
       - name: Test
-        run: bun test
+        run: bun run test
         continue-on-error: false
+
+  e2e:
+    name: e2e (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: smoke
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build virtualizer (workspace dep needed by benchmarks)
+        run: bun run --filter '@bc-grid/virtualizer' build
+
+      - name: Install Playwright browsers
+        run: bunx playwright install chromium firefox webkit --with-deps
+
+      - name: Run Playwright tests (Chromium + Firefox + WebKit)
+        run: bunx playwright test
 
   # Future: api-surface diff, perf smoke, bundle-size gates.
   # Added by repo-foundation task.

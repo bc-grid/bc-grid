@@ -13,6 +13,7 @@
     { "path": "./packages/editors" },
     { "path": "./packages/enterprise" },
     { "path": "./apps/examples" },
-    { "path": "./apps/animation-benchmarks" }
+    { "path": "./apps/animation-benchmarks" },
+    { "path": "./apps/benchmarks" }
   ]
 }
