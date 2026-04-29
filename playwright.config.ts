@@ -19,7 +19,7 @@ import { defineConfig, devices } from "@playwright/test"
 export default defineConfig({
   // Tests live under each app's `tests/` directory; pick them up by name.
   testMatch: "**/*.pw.ts",
-  testIgnore: "**/*.perf.pw.ts",
+  testIgnore: ["**/*.perf.pw.ts", "**/*.smoke.pw.ts"],
   // Perf tests rely on stable timing; do not parallelise them.
   fullyParallel: false,
   workers: 1,
