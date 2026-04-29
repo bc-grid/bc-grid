@@ -80,6 +80,14 @@ export function renderBodyCell<TRow>({
       : column.source.cellStyle
   const role = column.source.rowHeader ? "rowheader" : "gridcell"
 
+  // `column.tooltip` from `api.md §1.1` — string or row-fn returning a
+  // string. Rendered as the native browser `title` attribute (v0.1
+  // default; consumers wanting a richer popover can wrap via cellRenderer).
+  // Native `title` is keyboard-accessible (focus+hover) and works with
+  // forced-colors / reduced-motion without theming work.
+  const tooltipSource = column.source.tooltip
+  const tooltip = typeof tooltipSource === "function" ? tooltipSource(entry.row) : tooltipSource
+
   return (
     <div
       key={column.columnId}
@@ -101,6 +109,8 @@ export function renderBodyCell<TRow>({
       )}`}
       aria-selected={selected || undefined}
       data-bc-grid-active-cell={active || undefined}
+      data-column-id={column.columnId}
+      title={tooltip || undefined}
       style={{
         ...cellStyle({
           align: column.align,

@@ -148,6 +148,9 @@ function CustomerGridDemo({
         header: "Trading Name",
         width: 220,
         filter: { type: "text" },
+        // Tooltip: function-of-row variant (api.md §1.1). Mirrors the
+        // ERP convention of disambiguating legal name vs trading name.
+        tooltip: (row) => `Legal: ${row.legalName}`,
       },
       {
         columnId: "region",
@@ -162,6 +165,8 @@ function CustomerGridDemo({
         header: "Collector",
         width: 170,
         filter: { type: "text" },
+        // Tooltip: string variant (api.md §1.1).
+        tooltip: "Customer's assigned credit-control owner.",
       },
       {
         columnId: "terms",
