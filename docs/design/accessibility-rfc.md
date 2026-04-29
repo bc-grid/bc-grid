@@ -207,7 +207,7 @@ Required virtualizer behavior:
 
 - Always render the active row and active cell while the grid has DOM focus.
 - Accept retained row IDs from focus, edit mode, and animation handoff.
-- Retained focus rows count against a separate small retention budget, not the animation budget.
+- Retained focus rows count against a separate budget of at most 2 rows, not the animation budget.
 - Never recycle a DOM node without updating its row ID, cell IDs, `aria-rowindex`, `aria-colindex`, and labelled-by relationships in the same render commit.
 - If a retained active row is outside the visual viewport, keep it in its real scroll-space position. Do not move it to a fake visible proxy row.
 - Provide `scrollToCell(rowId, columnId, { align })` so keyboard navigation can keep active cells visible.
@@ -235,6 +235,7 @@ Decision:
 Implementation implication:
 
 - `virtualizer-spike-v2` must test pinned left and pinned right columns with screen-reader DOM order enabled.
+- `virtualizer-spike-v2` must be manually spot-checked with NVDA and VoiceOver against pinned columns before it can be accepted.
 - The React layer must provide a debug assertion that no two accessible cells share the same `{rowId, columnId}`.
 
 ## Focus Model
@@ -456,7 +457,9 @@ Rules:
 
 - `virtualizer-spike-v2` demonstrates 100k rows with correct `aria-rowcount` and `aria-rowindex` on a subset of rows.
 - Active cell remains mounted and `aria-activedescendant` remains valid while scrolling.
+- Focus-retained rows stay within the 2-row retention budget.
 - Pinned left and right columns do not create duplicate accessible cells.
+- Pinned column DOM order is spot-checked with NVDA and VoiceOver.
 - Keyboard navigation passes the table in this RFC for flat data.
 - `Tab` exits the grid in navigation mode.
 - `Enter`, `F2`, and `Escape` mode transitions are implemented at the grid shell level, even before real editors exist.

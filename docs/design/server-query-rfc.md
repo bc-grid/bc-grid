@@ -270,7 +270,7 @@ Rules:
 - `childCount` is fixed by the same block-size default unless configured.
 - `totalChildCount` is required when known and omitted when unknown.
 - Group rows must have stable IDs. If `rowId` is missing for a group row, bc-grid derives it as `group:${hash(viewKey, groupPath)}`.
-- Leaf row IDs still come from `rowId(row)`.
+- Leaf row IDs always come from the consumer's `rowId(row)` callback. `ServerTreeRow.rowId` is only for server-overridden group IDs.
 - Expanded children remain cached on collapse until evicted by LRU. `evictOnCollapse` is deferred; explicit invalidation can drop a subtree.
 
 Accessibility implications:
@@ -303,7 +303,8 @@ Rules:
 Group identity:
 
 - Group row IDs are part of the row model even if no backing database row exists.
-- Default group ID: `group:${viewKey ?? "view"}:${pathHash}`.
+- `viewKey` is required before deriving group IDs; the grid uses the server-provided `viewKey` or a client-derived key from `ServerViewState`.
+- Default group ID: `group:${viewKey}:${pathHash}`.
 - If the server provides a group row ID, it wins as long as it is stable.
 
 ## Selection Across Unloaded Rows
@@ -369,6 +370,8 @@ export interface ServerMutationResult<TRow> {
   reason?: string
 }
 ```
+
+`changes` is keyed by `ColumnId`. Editable columns should use the convention `ColumnId === field` so persistence code can map patches back to business fields. Computed/display-only columns are not editable and should not appear in `changes`.
 
 State rules:
 
@@ -501,6 +504,7 @@ Contract:
 - Preferred path: consumer supplies `exportRows(query): Promise<ServerExportResult>`.
 - Fallback path: consumer supplies `loadAllRows(query)` and bc-grid serializes through `@bc-grid/export`.
 - Fallback path requires an explicit `maxRows`; default maximum is 50,000 rows.
+- Consumers may override `maxRows` per grid, but any view that can exceed 50,000 rows should prefer the server-side `exportRows` path.
 - If the current view exceeds `maxRows`, the React layer prompts the user or fails with a clear message.
 - Selection-aware exports pass `ServerSelectionSnapshot`.
 - `viewKey` may be used by the server as an opaque handle for a previously computed filter/sort view. The client must still include the full `view` for auditability and fallback.
@@ -514,6 +518,8 @@ Bulk edit/delete:
 ## Streaming Row Updates
 
 Streaming implementation is deferred to Q7 / v1.3, but reserve the event shape now so the cache model does not block it.
+
+Product checkpoint: if bc-next needs real-time audit/status updates before v1.0, keep the type shape below but ship manual invalidation first. Do not add a subscription API to the v1.0 public surface without a separate RFC.
 
 ```ts
 export type ServerRowUpdate<TRow> =
@@ -678,7 +684,7 @@ Cached blocks remain visible as stale data. New unloaded fetches fail visibly an
 
 ### Streaming in v1.0?
 
-Deferred. Reserve `ServerRowUpdate` types, but v1.0 uses manual invalidation/refresh.
+Deferred. Reserve `ServerRowUpdate` types, but v1.0 uses manual invalidation/refresh unless a product review promotes real-time updates before the v1.0 API freeze.
 
 ## Test Plan
 
