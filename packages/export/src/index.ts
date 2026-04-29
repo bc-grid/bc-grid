@@ -5,14 +5,16 @@ export interface ExportOptions {
   includeHeaders?: boolean
   /** Include columns whose `hidden` flag is true. Default false. */
   includeHiddenColumns?: boolean
-  /** Field delimiter. Default ",". */
+  /** CSV field delimiter. Default ",". */
   delimiter?: string
-  /** Row delimiter. Default "\n". */
+  /** CSV row delimiter. Default "\n". */
   lineEnding?: "\n" | "\r\n"
   /** Locale used by preset formatters. */
   locale?: string
-  /** Prefix the CSV with a UTF-8 BOM for legacy spreadsheet apps. Default false. */
+  /** Prefix CSV with a UTF-8 BOM for legacy spreadsheet apps. Default false. */
   bom?: boolean
+  /** XLSX worksheet name. Default "bc-grid". */
+  sheetName?: string
 }
 
 export interface ExportResult {
@@ -32,7 +34,7 @@ export function toCsv<TRow>(
   }
 
   const lineEnding = options.lineEnding ?? "\n"
-  const visibleColumns = columns.filter((column) => options.includeHiddenColumns || !column.hidden)
+  const visibleColumns = getVisibleColumns(columns, options)
   const outputRows: string[][] = []
 
   if (options.includeHeaders ?? true) {
@@ -54,10 +56,54 @@ export function toCsv<TRow>(
   return options.bom ? `\uFEFF${csv}` : csv
 }
 
-export function toExcel(): never {
-  throw new Error(
-    "@bc-grid/export.toExcel is reserved for export-xlsx-impl and is not implemented yet",
-  )
+export async function toExcel<TRow>(
+  rows: readonly TRow[],
+  columns: readonly BcGridColumn<TRow>[],
+  options: ExportOptions = {},
+): Promise<ExportResult> {
+  const ExcelJS = await loadExcelJs()
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = "bc-grid"
+  workbook.created = new Date()
+  workbook.modified = new Date()
+
+  const visibleColumns = getVisibleColumns(columns, options)
+  const worksheet = workbook.addWorksheet(normalizeWorksheetName(options.sheetName))
+
+  visibleColumns.forEach((column, index) => {
+    worksheet.getColumn(index + 1).width = excelColumnWidth(column)
+  })
+
+  if (options.includeHeaders ?? true) {
+    worksheet.addRow(visibleColumns.map((column) => column.header))
+    const headerRow = worksheet.getRow(1)
+    headerRow.font = { bold: true }
+    if (visibleColumns.length > 0) {
+      worksheet.views = [{ state: "frozen", ySplit: 1 }]
+      worksheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: 1, column: visibleColumns.length },
+      }
+    }
+  }
+
+  for (const row of rows) {
+    const excelCells = visibleColumns.map((column) => {
+      const value = getCellValue(row, column)
+      return toExcelCell(value, row, column, options.locale)
+    })
+    const worksheetRow = worksheet.addRow(excelCells.map((cell) => cell.value))
+    excelCells.forEach((cell, index) => {
+      if (cell.numFmt) worksheetRow.getCell(index + 1).numFmt = cell.numFmt
+    })
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  return {
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    extension: "xlsx",
+    content: new Uint8Array(buffer),
+  }
 }
 
 export function toPdf(): never {
@@ -70,6 +116,13 @@ function getCellValue<TRow>(row: TRow, column: BcGridColumn<TRow>): unknown {
   if (column.valueGetter) return column.valueGetter(row)
   if (!column.field) return undefined
   return (row as Record<string, unknown>)[column.field]
+}
+
+function getVisibleColumns<TRow>(
+  columns: readonly BcGridColumn<TRow>[],
+  options: ExportOptions,
+): BcGridColumn<TRow>[] {
+  return columns.filter((column) => options.includeHiddenColumns || !column.hidden)
 }
 
 function formatExportValue<TRow>(
@@ -122,6 +175,82 @@ function formatPresetValue(
 
   if (format.type === "date") return formatDate(value, locale, { dateStyle: "medium" })
   return formatDate(value, locale, { dateStyle: "medium", timeStyle: "short" })
+}
+
+type ExcelCellValue = import("exceljs").CellValue
+
+interface ExcelCell {
+  value: ExcelCellValue
+  numFmt?: string
+}
+
+function toExcelCell<TRow>(
+  value: unknown,
+  row: TRow,
+  column: BcGridColumn<TRow>,
+  locale: string | undefined,
+): ExcelCell {
+  if (column.valueFormatter) return { value: column.valueFormatter(value, row) }
+  if (column.format) return formatExcelPresetValue(value, column.format, locale)
+  return { value: defaultExcelValue(value) }
+}
+
+function formatExcelPresetValue(
+  value: unknown,
+  format: BcColumnFormat,
+  locale: string | undefined,
+): ExcelCell {
+  if (value == null || value === "") {
+    return { value: format === "muted" ? "\u2014" : null }
+  }
+
+  if (format === "text" || format === "code" || format === "muted") return { value: String(value) }
+  if (format === "boolean") return { value: Boolean(value) }
+  if (format === "number") return excelNumberCell(value, "0")
+  if (format === "currency") return excelNumberCell(value, '"USD" #,##0.00')
+  if (format === "percent") return excelNumberCell(value, "0%")
+  if (format === "date") return excelDateCell(value, "mmm d, yyyy", locale)
+  if (format === "datetime") return excelDateCell(value, "mmm d, yyyy h:mm AM/PM", locale)
+
+  if (format.type === "number") {
+    return excelNumberCell(value, excelNumberFormat(format.precision, format.thousands ?? false))
+  }
+
+  if (format.type === "currency") {
+    return excelNumberCell(
+      value,
+      excelCurrencyFormat(format.currency ?? "USD", format.precision ?? 2),
+    )
+  }
+
+  if (format.type === "percent") {
+    return excelNumberCell(value, excelPercentFormat(format.precision))
+  }
+
+  if (format.type === "date") return excelDateCell(value, "mmm d, yyyy", locale)
+  return excelDateCell(value, "mmm d, yyyy h:mm AM/PM", locale)
+}
+
+function defaultExcelValue(value: unknown): ExcelCellValue {
+  if (value == null) return null
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value
+  }
+  if (value instanceof Date) return value
+  return String(value)
+}
+
+function excelNumberCell(value: unknown, numFmt: string): ExcelCell {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return { value: String(value) }
+  return { value: numeric, numFmt }
+}
+
+function excelDateCell(value: unknown, numFmt: string, locale: string | undefined): ExcelCell {
+  const date = value instanceof Date ? value : new Date(String(value))
+  if (Number.isNaN(date.valueOf()))
+    return { value: formatDate(value, locale, { dateStyle: "medium" }) }
+  return { value: date, numFmt }
 }
 
 function escapeCsvCell(value: string, delimiter: string): string {
@@ -188,5 +317,51 @@ function precisionOptions(precision: number | undefined): Intl.NumberFormatOptio
   return {
     maximumFractionDigits: precision,
     minimumFractionDigits: precision,
+  }
+}
+
+function excelNumberFormat(precision: number | undefined, thousands: boolean): string {
+  const whole = thousands ? "#,##0" : "0"
+  return `${whole}${excelDecimalPattern(precision)}`
+}
+
+function excelCurrencyFormat(currency: string, precision: number): string {
+  return `"${escapeExcelFormatLiteral(currency)}" #,##0${excelDecimalPattern(precision)}`
+}
+
+function excelPercentFormat(precision: number | undefined): string {
+  return `0${excelDecimalPattern(precision)}%`
+}
+
+function excelDecimalPattern(precision: number | undefined): string {
+  if (!precision) return ""
+  return `.${"0".repeat(precision)}`
+}
+
+function escapeExcelFormatLiteral(value: string): string {
+  return value.replaceAll('"', '""')
+}
+
+function excelColumnWidth<TRow>(column: BcGridColumn<TRow>): number {
+  if (column.width) return clamp(Math.round(column.width / 8), 8, 80)
+  return clamp(column.header.length + 4, 8, 80)
+}
+
+function normalizeWorksheetName(sheetName: string | undefined): string {
+  const candidate = (sheetName ?? "bc-grid").replace(/[\\/?*:[\]]/g, " ").trim()
+  return (candidate || "bc-grid").slice(0, 31)
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+async function loadExcelJs(): Promise<typeof import("exceljs")> {
+  try {
+    return await import("exceljs")
+  } catch (error) {
+    throw new Error('@bc-grid/export.toExcel requires the optional peer dependency "exceljs"', {
+      cause: error,
+    })
   }
 }

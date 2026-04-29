@@ -20,5 +20,11 @@
   },
   "dependencies": {
     "@bc-grid/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "exceljs": "^4.4.0"
   }
 }
