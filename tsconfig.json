@@ -12,6 +12,7 @@
     { "path": "./packages/react" },
     { "path": "./packages/editors" },
     { "path": "./packages/enterprise" },
+    { "path": "./tools/api-surface" },
     { "path": "./apps/examples" },
     { "path": "./apps/animation-benchmarks" },
     { "path": "./apps/benchmarks" }
