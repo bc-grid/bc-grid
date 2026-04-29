@@ -19,9 +19,8 @@ export function defaultCompareValues(a: unknown, b: unknown): number {
 }
 
 /**
- * Toggle sort state for a single column. Cycle: none → asc → desc → none.
- * v0.1 supports single-column sort only — clicking a different column
- * replaces (not stacks) the previous sort. Multi-column sort is a Q2 task.
+ * Toggle the primary sort to a single column. Cycle: none → asc → desc → none.
+ * Wired to plain header click — replaces any existing multi-column sort.
  */
 export function toggleSortFor(
   current: readonly BcGridSort[],
@@ -31,4 +30,45 @@ export function toggleSortFor(
   if (!existing) return [{ columnId, direction: "asc" }]
   if (existing.direction === "asc") return [{ columnId, direction: "desc" }]
   return []
+}
+
+/**
+ * Append (or cycle within) a sort key without disturbing existing keys.
+ * Wired to Shift+click on a header. `BcGridSort[]` shape already supports
+ * multi-column per `api.md §3.2`.
+ *
+ * - If `columnId` is not in `current`: append `{ columnId, direction: "asc" }`.
+ * - If `columnId` is already at direction `asc`: flip the existing entry to
+ *   `desc` (preserve its position in the sort order).
+ * - If `columnId` is already at direction `desc`: drop it from the array.
+ *
+ * The cycle keeps a column's position stable so users editing a complex
+ * sort don't lose their composition just by adjusting one direction.
+ */
+export function appendSortFor(
+  current: readonly BcGridSort[],
+  columnId: ColumnId,
+): readonly BcGridSort[] {
+  const index = current.findIndex((s) => s.columnId === columnId)
+  if (index === -1) return [...current, { columnId, direction: "asc" }]
+  const existing = current[index]
+  if (!existing) return current
+  if (existing.direction === "asc") {
+    const next = current.slice()
+    next[index] = { columnId, direction: "desc" }
+    return next
+  }
+  return current.filter((s) => s.columnId !== columnId)
+}
+
+/**
+ * Remove a single column from the sort state. Wired to Ctrl/Cmd+click on a
+ * header. Returns `current` unchanged if the column wasn't sorted.
+ */
+export function removeSortFor(
+  current: readonly BcGridSort[],
+  columnId: ColumnId,
+): readonly BcGridSort[] {
+  if (!current.some((s) => s.columnId === columnId)) return current
+  return current.filter((s) => s.columnId !== columnId)
 }

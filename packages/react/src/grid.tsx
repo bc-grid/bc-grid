@@ -55,10 +55,10 @@ import {
   useViewportSync,
   visuallyHiddenStyle,
 } from "./gridInternals"
-import { renderFilterCell, renderHeaderCell } from "./headerCells"
+import { type SortModifiers, renderFilterCell, renderHeaderCell } from "./headerCells"
 import { nextKeyboardNav } from "./keyboard"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
-import { defaultCompareValues, toggleSortFor } from "./sort"
+import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
 import type { BcGridProps } from "./types"
 import { formatCellValue, getCellValue } from "./value"
 
@@ -493,12 +493,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const { prepareSortAnimation } = useFlipOnSort({ sortState, scrollerRef, virtualizer })
 
   const handleHeaderSort = useCallback(
-    (column: {
-      columnId: (typeof resolvedColumns)[number]["columnId"]
-      source: (typeof resolvedColumns)[number]["source"]
-    }) => {
+    (
+      column: {
+        columnId: (typeof resolvedColumns)[number]["columnId"]
+        source: (typeof resolvedColumns)[number]["source"]
+      },
+      modifiers: SortModifiers,
+    ) => {
       if (column.source.sortable === false) return
       prepareSortAnimation()
+      // Ctrl/Cmd-click drops the column from the sort. Shift-click composes
+      // a multi-column sort (append/cycle within). Plain click cycles a
+      // single primary sort, replacing any multi-column composition.
+      if (modifiers.ctrlOrMeta) {
+        setSortState(removeSortFor(sortState, column.columnId))
+        return
+      }
+      if (modifiers.shiftKey) {
+        setSortState(appendSortFor(sortState, column.columnId))
+        return
+      }
       setSortState(toggleSortFor(sortState, column.columnId))
     },
     [prepareSortAnimation, setSortState, sortState],
