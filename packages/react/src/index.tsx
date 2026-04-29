@@ -1,4 +1,6 @@
-export { BcEditGrid, BcGrid, BcServerGrid, useBcGridApi } from "./grid"
+export { BcEditGrid } from "./editGrid"
+export { BcGrid, useBcGridApi } from "./grid"
+export { BcServerGrid } from "./serverGrid"
 
 export type {
   BcCellEditCommitEvent,

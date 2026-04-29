@@ -1,0 +1,224 @@
+import type { BcGridSort } from "@bc-grid/core"
+import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react"
+import {
+  type ResolvedColumn,
+  cellStyle,
+  classNames,
+  domToken,
+  headerDomId,
+  pinnedClassName,
+} from "./gridInternals"
+
+interface RenderHeaderCellParams<TRow> {
+  column: ResolvedColumn<TRow>
+  domBaseId: string
+  headerHeight: number
+  index: number
+  onResizeEnd: (event: PointerEvent<HTMLDivElement>) => void
+  onResizeMove: (event: PointerEvent<HTMLDivElement>) => void
+  onResizeStart: (column: ResolvedColumn<TRow>, event: PointerEvent<HTMLDivElement>) => void
+  onSort: (column: ResolvedColumn<TRow>) => void
+  scrollLeft: number
+  sortState: readonly BcGridSort[]
+  totalWidth: number
+  viewportWidth: number
+}
+
+export function renderHeaderCell<TRow>({
+  column,
+  domBaseId,
+  headerHeight,
+  index,
+  onResizeEnd,
+  onResizeMove,
+  onResizeStart,
+  onSort,
+  scrollLeft,
+  sortState,
+  totalWidth,
+  viewportWidth,
+}: RenderHeaderCellParams<TRow>): ReactNode {
+  const sort = sortState.find((entry) => entry.columnId === column.columnId)
+  const sortable = column.source.sortable !== false
+  const ariaSort = sort
+    ? sort.direction === "asc"
+      ? "ascending"
+      : "descending"
+    : sortable
+      ? "none"
+      : undefined
+
+  const handleClick = sortable
+    ? (event: MouseEvent<HTMLDivElement>) => {
+        event.stopPropagation()
+        onSort(column)
+      }
+    : undefined
+
+  const handleKeyDown = sortable
+    ? (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== "Enter" && event.key !== " ") return
+        event.preventDefault()
+        event.stopPropagation()
+        onSort(column)
+      }
+    : undefined
+
+  return (
+    <div
+      key={column.columnId}
+      id={headerDomId(domBaseId, column.columnId)}
+      className={classNames(
+        "bc-grid-cell",
+        "bc-grid-header-cell",
+        sortable ? "bc-grid-header-cell-sortable" : undefined,
+        sort ? `bc-grid-header-cell-sorted-${sort.direction}` : undefined,
+        pinnedClassName(column.pinned),
+        column.align === "right" ? "bc-grid-cell-right" : undefined,
+      )}
+      role="columnheader"
+      aria-colindex={index + 1}
+      aria-sort={ariaSort}
+      tabIndex={sortable ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      style={cellStyle({
+        align: column.align,
+        height: headerHeight,
+        left: column.left,
+        pinned: column.pinned,
+        scrollLeft,
+        totalWidth,
+        viewportWidth,
+        width: column.width,
+      })}
+      data-column-id={column.columnId}
+    >
+      <span className="bc-grid-header-label">{column.source.header}</span>
+      {sort ? (
+        <span aria-hidden="true" className="bc-grid-header-sort-indicator">
+          {sort.direction === "asc" ? "↑" : "↓"}
+        </span>
+      ) : null}
+      {column.source.resizable === false ? null : (
+        // Drag handle pinned to the right edge of the header cell. Pointer
+        // events with setPointerCapture so the drag survives the cursor
+        // leaving the handle's bounding box during the gesture.
+        <div
+          aria-hidden="true"
+          className="bc-grid-header-resize-handle"
+          data-bc-grid-resize-handle="true"
+          onPointerDown={(event) => onResizeStart(column, event)}
+          onPointerMove={onResizeMove}
+          onPointerUp={onResizeEnd}
+          onPointerCancel={onResizeEnd}
+          onClick={(event) => event.stopPropagation()}
+          style={resizeHandleStyle}
+        />
+      )}
+    </div>
+  )
+}
+
+const resizeHandleStyle: CSSProperties = {
+  position: "absolute",
+  top: 0,
+  right: 0,
+  width: 6,
+  height: "100%",
+  cursor: "col-resize",
+  // Above body cells but below the focus-ring outline (z-index: 5 in the
+  // benchmarks stylesheet); 4 fits between body z-index 0 and active-cell
+  // outline z-index 5.
+  zIndex: 4,
+  // No background — the handle is invisible but capturing. Theming can add
+  // a hover treatment via .bc-grid-header-resize-handle:hover.
+  touchAction: "none",
+  // Prevent the click from bubbling to the parent header cell, which
+  // would trigger sort. We also stopPropagation in the click handler.
+  userSelect: "none",
+}
+
+interface RenderFilterCellParams<TRow> {
+  column: ResolvedColumn<TRow>
+  domBaseId: string
+  filterText: string
+  headerHeight: number
+  index: number
+  onFilterChange: (next: string) => void
+  scrollLeft: number
+  totalWidth: number
+  viewportWidth: number
+}
+
+export function renderFilterCell<TRow>({
+  column,
+  domBaseId,
+  filterText,
+  headerHeight,
+  index,
+  onFilterChange,
+  scrollLeft,
+  totalWidth,
+  viewportWidth,
+}: RenderFilterCellParams<TRow>): ReactNode {
+  const filterDisabled = column.source.filter === false
+  return (
+    <div
+      key={`filter-${column.columnId}`}
+      className={classNames(
+        "bc-grid-cell",
+        "bc-grid-filter-cell",
+        pinnedClassName(column.pinned),
+        column.align === "right" ? "bc-grid-cell-right" : undefined,
+      )}
+      role="gridcell"
+      aria-colindex={index + 1}
+      style={cellStyle({
+        align: column.align,
+        height: headerHeight,
+        left: column.left,
+        pinned: column.pinned,
+        scrollLeft,
+        totalWidth,
+        viewportWidth,
+        width: column.width,
+      })}
+      data-column-id={column.columnId}
+      onClick={(event) => {
+        // Clicks on the filter cell shouldn't bubble to the header (which
+        // would toggle sort).
+        event.stopPropagation()
+      }}
+    >
+      {filterDisabled ? null : (
+        <input
+          aria-label={`Filter ${typeof column.source.header === "string" ? column.source.header : column.columnId}`}
+          className="bc-grid-filter-input"
+          type="text"
+          value={filterText}
+          onChange={(event) => onFilterChange(event.currentTarget.value)}
+          // Prevent the grid's keyboard handler from claiming arrow keys
+          // while the user is typing in the filter input.
+          onKeyDown={(event) => event.stopPropagation()}
+          id={`${domBaseId}-filter-${domToken(column.columnId)}`}
+          placeholder="Filter"
+          style={filterInputStyle}
+        />
+      )}
+    </div>
+  )
+}
+
+const filterInputStyle: CSSProperties = {
+  width: "100%",
+  height: "70%",
+  border: "1px solid hsl(var(--border, 220 13% 91%))",
+  borderRadius: "calc(var(--radius, 0.375rem) - 2px)",
+  background: "hsl(var(--background, 0 0% 100%))",
+  color: "inherit",
+  padding: "0 0.5rem",
+  font: "inherit",
+  fontSize: "0.8125rem",
+  outline: "none",
+}

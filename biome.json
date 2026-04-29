@@ -29,7 +29,11 @@
   },
   "overrides": [
     {
-      "include": ["packages/react/src/grid.tsx"],
+      "include": [
+        "packages/react/src/grid.tsx",
+        "packages/react/src/bodyCells.tsx",
+        "packages/react/src/headerCells.tsx"
+      ],
       "linter": {
         "rules": {
           "a11y": {
