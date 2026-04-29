@@ -44,7 +44,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 - `[done: x1 #25]` **react-impl-v0** — `<BcGrid>` scaffold in `@bc-grid/react`. Read-only, no features. **Effort**: 1 week (delivered).
 - `[done: c1 #27]` **q1-sort** — single-column sort + FLIP animation. **Effort**: 2-3 days (delivered).
-- `[in-flight: c1]` **q1-keyboard-focus** — full WAI-ARIA keyboard matrix per accessibility-rfc §Keyboard Model. Arrows, Home/End, Ctrl+Home/Ctrl+End, PageUp/PageDown, Ctrl+Arrow extremes. Q3-reserved keys (Shift+Arrow, Ctrl+A) swallow without moving. Q2-reserved keys (F2, Enter, Escape) noop so the editor protocol can hook them later. **Branch**: `agent/c1/q1-keyboard-focus`. **Effort**: 3-4 days.
+- `[done: c1 #28]` **q1-keyboard-focus** — full WAI-ARIA keyboard matrix per accessibility-rfc §Keyboard Model. Arrows, Home/End, Ctrl+Home/Ctrl+End, PageUp/PageDown, Ctrl+Arrow extremes. Q3-reserved keys (Shift+Arrow, Ctrl+A) swallow without moving. Q2-reserved keys (F2, Enter, Escape) noop so the editor protocol can hook them later. **Effort**: 3-4 days (delivered).
 - `[blocked: depends on react-impl-v0]` **q1-pinned-cols** — left + right pinned columns wired through to the React layer. **Effort**: 2-3 days.
 - `[in-flight: c1]` **column-resize** — drag the right edge of a column header to resize. Pointer events with setPointerCapture so drags survive the cursor leaving the handle. Respects `column.resizable: false` and `column.minWidth` / `maxWidth`. Commits to `columnState`. **Branch**: `agent/c1/column-resize`. **Effort**: 1 day.
 - `[blocked: depends on q1-sort + q1-keyboard-focus + q1-pinned-cols]` **q1-vertical-slice-demo** — rebuild ONE bc-next screen (e.g., AR Customers list) entirely on bc-grid. Real data, real perf, real a11y. **Effort**: 3-5 days. **This is the Q1 "is the architecture sound?" gate.**
@@ -53,7 +53,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 - `[done: x1 #6]` **docs-app-skeleton** — `apps/docs/` Astro or Next.js site. Just the shell, navigation, syntax highlighting. **Effort**: 2-3 days.
 - `[done: x1 #4]` **examples-app-skeleton** — `apps/examples/` Vite app. Renders example components live. **Effort**: 2 days.
-- `[in-flight: x1]` **examples-demo** — mount the real React `<BcGrid>` in `apps/examples` with deterministic ERP-shaped data, production theme CSS, light/dark and density controls, pinned columns, custom cell renderer, and an imperative API exercise. **Branch**: `agent/x1/examples-demo`. **Effort**: half day.
+- `[done: x1 #29]` **examples-demo** — mount the real React `<BcGrid>` in `apps/examples` with deterministic ERP-shaped data, production theme CSS, host-app shadcn light/dark tokens, density controls, pinned columns, custom cell renderer, and an imperative API exercise. **Effort**: half day (delivered).
 - `[blocked: depends on react-impl-v0]` **docs-q1-content** — write API reference for v0.1: every public type, every prop, every event. **Effort**: 1 week.
 
 ### Quality + infra (parallel throughout Q1)

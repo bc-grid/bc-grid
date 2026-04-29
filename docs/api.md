@@ -935,18 +935,15 @@ export type { AnimationOptions, MotionPolicy }
 export {
   bcGridDensities,
   bcGridDensityClasses,
-  bcGridThemeClasses,
   bcGridThemeVars,
   bcGridPreset,
   getBcGridDensityClass,
-  getBcGridThemeClass,
   getBcGridDensityVars,
   createBcGridThemeVars,
 }
 
 export type {
   BcGridDensity,
-  BcGridThemeMode,
   BcGridCssVar,
   BcGridCssVars,
 }

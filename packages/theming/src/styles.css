@@ -35,30 +35,6 @@
   font-size: var(--bc-grid-font-size);
 }
 
-.bc-grid-theme-light {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-  --border: 214 32% 91%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 176 42% 91%;
-  --ring: 221 83% 53%;
-
-  color-scheme: light;
-}
-
-.bc-grid-theme-dark {
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-  --border: 217 33% 26%;
-  --muted: 217 33% 18%;
-  --muted-foreground: 215 20% 72%;
-  --accent: 189 52% 24%;
-  --ring: 189 94% 43%;
-
-  color-scheme: dark;
-}
-
 .bc-grid--compact,
 .bc-grid[data-density="compact"] {
   --bc-grid-row-height: 28px;

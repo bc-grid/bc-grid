@@ -10,7 +10,7 @@
 
 - `@bc-grid/theming/styles.css` defines the Q1 CSS-variable contract from `design.md §8`: shadcn-aligned color tokens, grid chrome tokens, and compact / normal / comfortable density classes.
 - `@bc-grid/theming` exports `bcGridPreset`, a Tailwind preset object that maps utility tokens to the same CSS variables without adding a Tailwind runtime dependency.
-- `apps/examples` renders a static theme preview: light and dark token sets across all three density modes, using the package CSS classes directly.
+- `apps/examples` originally rendered a static token preview. The production examples app now demonstrates the intended integration: a host shadcn token scope (`:root` / `.dark`) with the real React grid mounted inside it.
 - The package has a small unit test covering density exports and Tailwind token mapping.
 
 ## Contract
@@ -43,7 +43,6 @@ Consumers can override `--bc-grid-*` variables directly for grid-specific chrome
 ## Acceptance
 
 - Light theme uses shadcn token fallbacks.
-- Dark theme uses the same bc-grid CSS variables with different host tokens.
+- Dark mode is provided by the host app's shadcn token scope, not by bc-grid-specific theme classes.
 - Compact / normal / comfortable classes change row height, header height, cell padding, and font size without JS.
 - The examples preview is static markup styled by CSS variables only.
-

@@ -20,7 +20,6 @@ export const bcGridDensities = {
 } as const
 
 export type BcGridDensity = keyof typeof bcGridDensities
-export type BcGridThemeMode = "light" | "dark"
 
 export type BcGridCssVar = `--bc-grid-${string}`
 export type BcGridCssVars = Partial<Record<BcGridCssVar, string>>
@@ -30,11 +29,6 @@ export const bcGridDensityClasses = {
   normal: "bc-grid--normal",
   comfortable: "bc-grid--comfortable",
 } as const satisfies Record<BcGridDensity, string>
-
-export const bcGridThemeClasses = {
-  light: "bc-grid-theme-light",
-  dark: "bc-grid-theme-dark",
-} as const satisfies Record<BcGridThemeMode, string>
 
 export const bcGridThemeVars = {
   bg: "--bc-grid-bg",
@@ -60,10 +54,6 @@ export const bcGridThemeVars = {
 
 export function getBcGridDensityClass(density: BcGridDensity): string {
   return bcGridDensityClasses[density]
-}
-
-export function getBcGridThemeClass(theme: BcGridThemeMode): string {
-  return bcGridThemeClasses[theme]
 }
 
 export function getBcGridDensityVars(density: BcGridDensity): BcGridCssVars {
