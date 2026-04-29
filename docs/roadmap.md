@@ -1,8 +1,10 @@
 # bc-grid Roadmap — 2-Year Plan
 
-**Goal:** by month 24, ship a 1.0 release that's a credible AG Grid Enterprise replacement for ~80-90% of ERP-class use cases.
+**Goal (revised 2026-04-29):** ship a 1.0 release with **functional parity with AG Grid Enterprise for ERP workloads** over a focused multi-week parallel sprint, leveraging the agent velocity demonstrated through Q1.
 
-This document is the rolling phase plan. Updated at end of each quarter with retrospective + next-quarter scope.
+> **Status — 2026-04-29:** the original 2-year quarterly cadence below remains documented as the historical scope ladder, but **the timeline is compressed**. Q5-Q7 feature scope is pulled forward into the same sprint as Q2-Q4, plus a new charts integration track. **The active orchestration plan is `docs/coordination/v1-parity-sprint.md`** — read it before claiming Phase B work. `docs/queue.md` reflects the new task list. The revised scope and timeline are recorded in `design.md §13` and `docs/audit-c2-001.md`'s follow-up audit pass.
+
+This document is the rolling phase plan. The Q1-Q8 sections below describe the *original* mission; treat them as feature inventory + acceptance criteria. The active sprint structure is in `v1-parity-sprint.md`.
 
 ---
 
