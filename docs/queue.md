@@ -18,8 +18,8 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 ### Phase 1 — Get the repo right (week 1, blocks everything)
 
 - `[done]` **design** — write `docs/design.md` and revise post-Codex-review. **Architect**. Done.
-- `[ready]` **repo-foundation** — wire the repo to actually run. Add root devDeps (typescript, tsup or unbuild, vitest, biome or eslint), per-package `tsconfig.json` extending the base, project references for `tsc -b`, build scripts producing `dist/` with proper `exports` map per package, commit `bun.lock` (remove from `.gitignore`), CI smoke workflow (`.github/workflows/ci.yml`: type-check, lint, test on every PR). End state: `bun install && bun run type-check && bun run build && bun test` all green from a clean clone. **Effort**: 1-2 days. **Owner**: any agent.
-- `[review: c1]` **api-rfc-v0** — write the real public API spec to `docs/api.md`: `BcGridColumn<T>` (every property), row identity rules (`rowId` callback, server-row-id semantics), controlled/uncontrolled state pairs (sort, filter, expansion, selection, columns), event names + payload shapes (`onSortChanged`, `onFilterChanged`, `onCellEditCommit`, etc.), value pipeline (getter / formatter / parser / comparator), editor contract, server query objects (`ServerQuery`, `ServerBlockResult`, `ServerTreeQuery`), public export list per package. Spec only — no implementation. Reviewer: fresh agent. **Branch**: `agent/c1/api-rfc-v0`. **Effort**: 3-5 days.
+- `[done: architect af249af]` **repo-foundation** — wire the repo to actually run. Add root devDeps (typescript, tsup or unbuild, vitest, biome or eslint), per-package `tsconfig.json` extending the base, project references for `tsc -b`, build scripts producing `dist/` with proper `exports` map per package, commit `bun.lock` (remove from `.gitignore`), CI smoke workflow (`.github/workflows/ci.yml`: type-check, lint, test on every PR). End state: `bun install && bun run type-check && bun run build && bun test` all green from a clean clone. **Effort**: 1-2 days.
+- `[done: c1 #5]` **api-rfc-v0** — write the real public API spec to `docs/api.md`: `BcGridColumn<T>` (every property), row identity rules (`rowId` callback, server-row-id semantics), controlled/uncontrolled state pairs (sort, filter, expansion, selection, columns), event names + payload shapes (`onSortChanged`, `onFilterChanged`, `onCellEditCommit`, etc.), value pipeline (getter / formatter / parser / comparator), editor contract, server query objects (`ServerQuery`, `ServerBlockResult`, `ServerTreeQuery`), public export list per package. Spec only — no implementation. **Effort**: 3-5 days.
 
 ### Phase 2 — RFCs (weeks 1-3, parallel after Phase 1)
 
@@ -29,9 +29,9 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 ### Phase 3 — Spikes (weeks 3-5, after RFCs reviewed)
 
-- `[blocked: depends on accessibility-rfc + repo-foundation]` **virtualizer-spike-v2** — minimal virtualizer that scrolls 100k rows × 30 cols at 60fps. Pinned columns (sticky), variable row heights, focus retention as the focused row scrolls in/out of viewport, scroll-to-cell API, `aria-rowindex` / `aria-rowcount` per the a11y RFC. Pure DOM. **Output**: a working spike + a perf report. If the bar is missed, the architecture changes (escalate). **Effort**: 1-2 weeks.
+- `[review: c1 #9]` **virtualizer-spike-v2** — minimal virtualizer that scrolls 100k rows × 30 cols at 60fps. Pinned columns (sticky), variable row heights, focus retention with a max 2-row retention budget, scroll-to-cell API, active-cell visibility query, `aria-rowindex` / `aria-rowcount` per the a11y RFC. Pure DOM. **Output**: a working spike + a perf report, including pinned-column DOM-order spot checks with NVDA and VoiceOver. If the bar is missed, the architecture changes (escalate). **Branch**: `agent/c1/virtualizer-spike-v2`. **Effort**: 1-2 weeks.
 - `[review: x1]` **animation-perf-spike** — 1000 rows; click sort; rows animate to new positions at 60fps via FLIP + Web Animations. Output: working spike + perf report. **Branch**: `agent/x1/animation-perf-spike`. **Effort**: 1 week.
-- `[blocked: depends on repo-foundation]` **theme-spike** — CSS variables + Tailwind preset. Render a static grid in light + dark + 3 density modes. No JS. **Effort**: 2-3 days.
+- `[done: x1 #10]` **theme-spike** — CSS variables + Tailwind preset. Render a static grid in light + dark + 3 density modes. No JS. **Effort**: 2-3 days.
 
 ### Phase 4 — Foundation impls (weeks 5-9)
 
@@ -50,7 +50,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 ### Documentation & examples (parallel throughout Q1)
 
-- `[review: x1]` **docs-app-skeleton** — `apps/docs/` Astro or Next.js site. Just the shell, navigation, syntax highlighting. **Branch**: `agent/x1/docs-app-skeleton`. **Effort**: 2-3 days.
+- `[done: x1 #6]` **docs-app-skeleton** — `apps/docs/` Astro or Next.js site. Just the shell, navigation, syntax highlighting. **Effort**: 2-3 days.
 - `[done: x1 #4]` **examples-app-skeleton** — `apps/examples/` Vite app. Renders example components live. **Effort**: 2 days.
 - `[blocked: depends on react-impl-v0]` **docs-q1-content** — write API reference for v0.1: every public type, every prop, every event. **Effort**: 1 week.
 

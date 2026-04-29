@@ -10,9 +10,11 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./styles.css": "./src/styles.css"
   },
-  "files": ["dist"],
+  "files": ["dist", "src/styles.css"],
+  "sideEffects": ["./src/styles.css"],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
     "dev": "tsup src/index.ts --format esm --dts --sourcemap --watch",
