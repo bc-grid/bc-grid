@@ -147,10 +147,10 @@ Spec pending: `docs/design/range-rfc.md` (c2 to author).
 Spec already exists: `docs/design/server-query-rfc.md` (PR #2). No new RFC needed.
 
 - `[done: x2 #60]` **server-paged-impl** — `BcServerGrid rowModel="paged"` with the `LoadServerPage` contract. AbortSignal handling, request dedup. **Branch**: `agent/x2/server-paged-impl`. **Effort**: M.
-- `[blocked: depends on server-paged-impl]` **infinite-mode-block-cache** — `rowModel="infinite"`: `ServerBlockCache` with LRU eviction; `LoadServerBlock` integration; viewport-driven block fetching with prefetch ahead. **Effort**: L (3-5 hours).
+- `[ready]` **infinite-mode-block-cache** — `rowModel="infinite"`: `ServerBlockCache` with LRU eviction; `LoadServerBlock` integration; viewport-driven block fetching with prefetch ahead. **Effort**: L (3-5 hours).
 - `[blocked: depends on infinite-mode-block-cache]` **server-tree-mode** — `rowModel="tree"`: lazy children fetching via `LoadServerTreeChildren`; expand/collapse triggers fetch; `ServerTreeRow` rendering. **Effort**: L.
-- `[blocked: depends on server-paged-impl]` **mutation-pipeline** — `ServerRowPatch` apply path; optimistic UI with `pendingMutations` map; `ServerMutationResult` settle handling. Integrates with Track 1's `bc-edit-grid-complete`. **Effort**: M.
-- `[blocked: depends on server-paged-impl]` **invalidation-impl** — `ServerInvalidation` scopes (all / view / blocks / rows / tree). Refetch + cache eviction logic. **Effort**: M.
+- `[ready]` **mutation-pipeline** — `ServerRowPatch` apply path; optimistic UI with `pendingMutations` map; `ServerMutationResult` settle handling. Integrates with Track 1's `bc-edit-grid-complete`. **Effort**: M.
+- `[ready]` **invalidation-impl** — `ServerInvalidation` scopes (all / view / blocks / rows / tree). Refetch + cache eviction logic. **Effort**: M.
 - `[blocked: depends on infinite-mode-block-cache + mutation-pipeline]` **server-row-model-perf-tuning** — measure block fetch latency, debounce settings, cache hit rate at 100k+ rows. Add to nightly perf harness. **Effort**: M.
 
 #### Track 4 — Aggregations + Pivots (Q5 pulled forward)
@@ -191,8 +191,8 @@ Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 - `[blocked: depends on filter-registry-rfc]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
 - `[done: x2 #72]` **export-csv-impl** — `@bc-grid/export.toCsv(rows, columns)` per `api.md §9`. No external deps; pure serializer. **Branch**: `agent/x2/export-csv-impl`. **Effort**: S.
 - `[done: x2 #75]` **export-xlsx-impl** — peer-dep on **ExcelJS** (confirmed in coordination plan). `toExcel(rows, columns)`. **Branch**: `agent/x2/export-xlsx-impl`. **Effort**: M.
-- `[ready]` **export-pdf-impl** — peer-dep on **jsPDF** (confirmed in coordination plan; alternative `react-pdf` if jsPDF doesn't fit; first PR picks the winner). `toPdf(rows, columns)`. **Effort**: M.
-- `[blocked: depends on Track 3 server-paged-impl + export-csv-impl]` **export-server-mode** — wire `ServerExportQuery` (already declared in core) to a server-mode export flow: blob / url / job response handling. **Effort**: S.
+- `[review: x2 #77]` **export-pdf-impl** — peer-dep on **jsPDF** (confirmed in coordination plan; alternative `react-pdf` if jsPDF doesn't fit; first PR picks the winner). `toPdf(rows, columns)`. **Branch**: `agent/x2/export-pdf-impl`. **Effort**: M.
+- `[ready]` **export-server-mode** — wire `ServerExportQuery` (already declared in core) to a server-mode export flow: blob / url / job response handling. **Effort**: S.
 
 #### Track 7 — Polish + Charts (NEW) + Mobile (Q7 pulled forward + new)
 

@@ -22,9 +22,11 @@
     "@bc-grid/core": "workspace:*"
   },
   "peerDependencies": {
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "jspdf": "^4.2.1"
   },
   "devDependencies": {
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "jspdf": "^4.2.1"
   }
 }

@@ -105,14 +105,6 @@ describe("@bc-grid/export toCsv", () => {
   })
 })
 
-describe("@bc-grid/export reserved serializers", () => {
-  test("keeps PDF export reserved for its follow-up task", () => {
-    expect(() => toPdf()).toThrow(
-      "@bc-grid/export.toPdf is reserved for export-pdf-impl and is not implemented yet",
-    )
-  })
-})
-
 describe("@bc-grid/export toExcel", () => {
   test("serializes an XLSX workbook with headers, typed cells, and format metadata", async () => {
     const columns: BcGridColumn<InvoiceRow>[] = [
@@ -176,13 +168,57 @@ describe("@bc-grid/export toExcel", () => {
   })
 })
 
-async function loadWorkbook(content: string | Uint8Array) {
-  if (typeof content === "string") {
-    throw new Error("Expected binary XLSX content")
-  }
+describe("@bc-grid/export toPdf", () => {
+  test("serializes a PDF document with table content", async () => {
+    const columns: BcGridColumn<InvoiceRow>[] = [
+      { columnId: "customer", header: "Customer", field: "customer" },
+      {
+        columnId: "amount",
+        header: "Amount",
+        field: "amount",
+        valueFormatter: (value) => `$${Number(value).toFixed(2)}`,
+      },
+      { columnId: "internalCode", header: "Internal Code", field: "internalCode", hidden: true },
+    ]
 
+    const result = await toPdf(rows.slice(0, 1), columns, {
+      title: "Invoice export",
+      pageOrientation: "portrait",
+    })
+    const content = expectBinaryContent(result.content)
+    const header = Buffer.from(content.subarray(0, 5)).toString("latin1")
+
+    expect(result.mimeType).toBe("application/pdf")
+    expect(result.extension).toBe("pdf")
+    expect(header).toBe("%PDF-")
+    expect(content.byteLength).toBeGreaterThan(1000)
+  })
+
+  test("supports hidden-column opt-in for PDFs", async () => {
+    const columns: BcGridColumn<InvoiceRow>[] = [
+      { columnId: "customer", header: "Customer", field: "customer" },
+      { columnId: "internalCode", header: "Internal Code", field: "internalCode", hidden: true },
+    ]
+
+    const visibleOnly = await toPdf(rows.slice(0, 1), columns)
+    const withHidden = await toPdf(rows.slice(0, 1), columns, { includeHiddenColumns: true })
+
+    expect(expectBinaryContent(withHidden.content).byteLength).toBeGreaterThan(
+      expectBinaryContent(visibleOnly.content).byteLength,
+    )
+  })
+})
+
+async function loadWorkbook(content: string | Uint8Array) {
   const ExcelJS = await import("exceljs")
   const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(Buffer.from(content))
+  await workbook.xlsx.load(Buffer.from(expectBinaryContent(content)))
   return workbook
+}
+
+function expectBinaryContent(content: string | Uint8Array): Uint8Array {
+  if (typeof content === "string") {
+    throw new Error("Expected binary export content")
+  }
+  return content
 }
