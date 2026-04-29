@@ -212,7 +212,15 @@ export interface BcAggregation {
 export type BcValidationResult =
   | { valid: true }
   | { valid: false; error: string }
+
+export type BcScrollAlign = "start" | "center" | "end" | "nearest"
+
+export interface BcScrollOptions {
+  align?: BcScrollAlign
+}
 ```
+
+`BcScrollAlign` and `BcScrollOptions` are the named alias for the `opts` shape on `BcGridApi.scrollToRow` / `scrollToCell` (§6.1). They live in `@bc-grid/core` so that consumers writing their own scroll helpers can type the options without redeclaring the union.
 
 ### 1.3 React column extension (frozen at v0.1 in `@bc-grid/react`)
 
@@ -770,8 +778,8 @@ For things that callbacks can't express. `apiRef` is provided by the consumer; b
 ```ts
 export interface BcGridApi<TRow = unknown> {
   // Scroll / focus
-  scrollToRow(rowId: RowId, opts?: { align?: "start" | "center" | "end" | "nearest" }): void
-  scrollToCell(position: BcCellPosition, opts?: { align?: "start" | "center" | "end" | "nearest" }): void
+  scrollToRow(rowId: RowId, opts?: BcScrollOptions): void
+  scrollToCell(position: BcCellPosition, opts?: BcScrollOptions): void
   focusCell(position: BcCellPosition): void
   isCellVisible(position: BcCellPosition): boolean
 
@@ -854,7 +862,9 @@ The `<BcEditGrid>` and (Q2) editing variant of `<BcGrid>` consume this protocol;
 
 Per `server-query-rfc §Public Types`, the server-row-model types are:
 
-`RowId`, `ColumnId`, `ServerRowModelMode`, `ServerSort`, `ServerFilter`, `ServerFilterGroup`, `ServerColumnFilter`, `ServerGroup`, `ServerViewState`, `ServerLoadContext`, `ServerPagedQuery/Result`, `ServerBlockQuery/Result`, `ServerTreeQuery/Result`, `ServerTreeRow`, `ServerGroupKey`, `ServerSelection`, `ServerSelectionSnapshot`, `ServerRowPatch`, `ServerMutationResult`, `ServerInvalidation`, `ServerCacheBlock`, `ServerBlockKey`, `ServerBlockCacheOptions`, `ServerExportQuery`, `ServerExportResult`, `ServerRowUpdate` (reserved), `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowModelState`, `ServerRowModelEvent`.
+`RowId`, `ColumnId`, `ServerRowModelMode`, `ServerSort`, `ServerFilter`, `ServerFilterGroup`, `ServerColumnFilter`, `ServerGroup`, `ServerViewState`, `ServerQueryBase`, `ServerLoadContext`, `ServerPagedQuery/Result`, `ServerBlockQuery/Result`, `ServerTreeQuery/Result`, `ServerTreeRow`, `ServerGroupKey`, `ServerRowIdentity`, `ServerSelection`, `ServerSelectionSnapshot`, `ServerRowPatch`, `ServerMutationResult`, `ServerInvalidation`, `ServerCacheBlock`, `ServerBlockKey`, `ServerBlockCacheOptions`, `ServerExportQuery`, `ServerExportResult`, `ServerRowUpdate` (reserved), `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowModelState`, `ServerRowModelEvent`.
+
+`ServerQueryBase` is the shared shape every `ServerPagedQuery` / `ServerBlockQuery` / `ServerTreeQuery` extends (carries `view`, `requestId`, optional `viewKey`). `ServerRowIdentity` is the row-id contract (`rowId(row)` + optional `groupRowId`) the server-row-model passes to the React layer.
 
 ### 8.1 Decision: types live in `@bc-grid/core`; behaviour lives in `@bc-grid/server-row-model`
 
@@ -891,10 +901,13 @@ Every export listed here is the v0.1 public API. CI runs `tools/api-surface-diff
 ```ts
 // Types only (no runtime exports).
 // Framework-agnostic column/state/API types (§1.1-1.2, §3, §4, §6).
-// All Server* types from server-query-rfc.
-// Helpers: ColumnId, RowId, BcCellPosition, BcRange (Q3-reserved).
+// All Server* types from server-query-rfc (§8).
+// Helpers: ColumnId, RowId, BcCellPosition, BcRange (Q3-reserved),
+//   BcScrollAlign, BcScrollOptions, BcAggregation, BcGridIdentity, BcRowState.
 // Excludes React component props, React renderers, refs, DOM events, and editor components.
 ```
+
+The machine-checkable manifest for this package lives in `tools/api-surface/src/manifest.ts`. The manifest is the binding enforcement surface; this prose section is for reading.
 
 ### `@bc-grid/react`
 
@@ -905,29 +918,94 @@ export { BcGrid, BcEditGrid, BcServerGrid }
 // Hooks
 export { useBcGridApi }
 
-// React-aware types plus selected @bc-grid/core re-exports for convenience.
-export type { BcReactGridColumn as BcGridColumn, BcGridProps, BcEditGridProps, BcServerGridProps, BcGridStateProps, BcPaginationState, BcGridApi, BcServerGridApi, BcCellPosition, BcSelection, BcGridSort, BcGridFilter, BcColumnStateEntry, BcCellRendererParams, BcCellEditor, BcCellEditorProps, BcCellEditCommitEvent, BcValidationResult, BcReactFilterDefinition, BcFilterEditorProps }
+// React-aware types plus @bc-grid/core re-exports for consumer convenience.
+// (Re-exports let consumers import every column / state / loader type from one place.)
+export type {
+  // React-specific
+  BcReactGridColumn as BcGridColumn,
+  BcGridProps, BcEditGridProps, BcServerGridProps,
+  BcGridStateProps, BcPaginationState,
+  BcGridApi, BcServerGridApi,
+  BcCellRendererParams, BcGridMessages,
+  BcCellEditor, BcCellEditorProps, BcCellEditorPrepareParams, BcCellEditCommitEvent,
+  BcEditGridAction,
+  BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
 
-// Server row model loaders (re-exports)
-export type { LoadServerPage, LoadServerBlock, LoadServerTreeChildren, ServerLoadContext }
+  // Re-exports from @bc-grid/core
+  BcCellPosition, BcSelection, BcGridSort, BcGridFilter,
+  BcColumnFilter, BcColumnFormat, BcColumnStateEntry,
+  BcValidationResult, ColumnId, RowId,
+
+  // Re-exports from @bc-grid/theming
+  BcGridDensity,
+
+  // Server row model types (re-exported from @bc-grid/core)
+  LoadServerPage, LoadServerBlock, LoadServerTreeChildren,
+  ServerLoadContext,
+  ServerPagedQuery, ServerPagedResult,
+  ServerBlockQuery, ServerBlockResult,
+  ServerTreeQuery, ServerTreeResult,
+}
 
 // Reserved Q2 runtime exports, not shipped at v0.1:
 // BcGridProvider, useBcGridContext, useCellEditor
 ```
 
+The full enforced surface is in `tools/api-surface/src/manifest.ts`.
+
 ### `@bc-grid/virtualizer`
+
+The consumer-facing core surface — what `@bc-grid/react` consumes and what every other package boundary respects:
 
 ```ts
 export { Virtualizer }
-export type { VirtualItem, VirtualOptions, VirtualizerA11yInput, VirtualRowA11yMeta, VirtualColumnA11yMeta }
+export type {
+  VirtualItem, VirtualOptions,
+  VirtualizerA11yInput, VirtualRowA11yMeta, VirtualColumnA11yMeta,
+}
 ```
 
+Plus a small additional surface used by the React layer's renderer wiring (these are public so `@bc-grid/react` can import them without reaching into `dist/internals`, but consumers should treat them as engine-internals unless they're building their own renderer):
+
+```ts
+export { DOMRenderer }
+export type {
+  DOMRendererOptions, RenderCellParams,
+  InFlightHandle, ScrollAlign,
+  VirtualRow, VirtualCol, VirtualWindow,
+  VirtualizerOptions, // @deprecated alias for VirtualOptions
+}
+```
+
+The full enforced surface is in `tools/api-surface/src/manifest.ts`.
+
 ### `@bc-grid/animations`
+
+The consumer-facing primitives — what the React layer wires up for sort / filter / row-flash:
 
 ```ts
 export { flip, flash, slide, AnimationBudget }
 export type { AnimationOptions, MotionPolicy }
 ```
+
+The package additionally exports the FLIP building blocks (used by the React layer's sort animation and by anyone composing their own animations), the keyframe factories, and the budget constants. These are public so the React layer can avoid duplicating them, but the four primitives + two types above are the v0.1 consumer-facing API:
+
+```ts
+// Primitive helpers + budget constants
+export {
+  playFlip, calculateFlipDelta, readFlipRect, shouldAnimateDelta,
+  createFlipKeyframes, createFlashKeyframes, createSlideKeyframes,
+  resolveMotionPolicy, prefersReducedMotion,
+  DEFAULT_ANIMATION_MAX_IN_FLIGHT, HARD_ANIMATION_MAX_IN_FLIGHT,
+}
+export type {
+  FlipTarget, FlipOptions, FlipRect, FlipDelta,
+  SlideOptions, SlideDirection,
+  AnimationBudgetOptions,
+}
+```
+
+The full enforced surface is in `tools/api-surface/src/manifest.ts`.
 
 ### `@bc-grid/theming`
 
