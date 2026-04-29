@@ -10,6 +10,7 @@
     "build": "bun run --filter './packages/*' build && bun run --filter './apps/*' build",
     "test": "bun test packages tools tests",
     "test:e2e": "bunx playwright test",
+    "test:perf": "bunx playwright test --config playwright.perf.config.ts",
     "type-check": "tsc -b",
     "type-check:watch": "tsc -b --watch",
     "lint": "biome check .",
