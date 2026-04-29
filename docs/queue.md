@@ -38,7 +38,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: x1 #14]` **core-types** — write all public types in `@bc-grid/core` from `api.md`. **Effort**: 4-5 days.
 - `[done: c1 #20+#21+#22+#23+#24]` **virtualizer-impl** — production virtualizer based on the spike. Plan in `docs/design/virtualizer-impl-plan.md`; impl report in `docs/design/virtualizer-impl-report.md`. Six PRs: surface alignment (#20), Fenwick tree (#21), in-flight retention (#22), RO RAF throttling (#23), pinned-row support (#24), impl report (this PR). 96 unit + 35 e2e tests. **Effort**: 2-3 weeks (delivered).
 - `[done: x1 #16]` **animations-impl** — production animation system based on the spike. **Branch**: `agent/x1/animations-impl`. **Effort**: 1-2 weeks.
-- `[review: x1 #15]` **theming-impl** — production theming layer. Class-name convention aligned to kebab-case per `design.md §13` (#18). **Branch**: `agent/x1/theming-impl`. **Effort**: 3-5 days.
+- `[done: x1 #15]` **theming-impl** — production theming layer. Class-name convention aligned to kebab-case per `design.md §13` (#18). **Branch**: `agent/x1/theming-impl`. **Effort**: 3-5 days.
 
 ### Phase 5 — Vertical slice (weeks 9-12)
 
@@ -52,6 +52,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 - `[done: x1 #6]` **docs-app-skeleton** — `apps/docs/` Astro or Next.js site. Just the shell, navigation, syntax highlighting. **Effort**: 2-3 days.
 - `[done: x1 #4]` **examples-app-skeleton** — `apps/examples/` Vite app. Renders example components live. **Effort**: 2 days.
+- `[in-flight: x1]` **examples-demo** — mount the real React `<BcGrid>` in `apps/examples` with deterministic ERP-shaped data, production theme CSS, light/dark and density controls, pinned columns, custom cell renderer, and an imperative API exercise. **Branch**: `agent/x1/examples-demo`. **Effort**: half day.
 - `[blocked: depends on react-impl-v0]` **docs-q1-content** — write API reference for v0.1: every public type, every prop, every event. **Effort**: 1 week.
 
 ### Quality + infra (parallel throughout Q1)
