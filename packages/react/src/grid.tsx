@@ -79,6 +79,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     height,
     rowHeight,
     rowIsInactive,
+    rowIsDisabled,
     locale,
     toolbar,
     footer,
@@ -247,6 +248,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       selectionState,
       setSelectionState,
       visibleRowIds,
+      rowIsDisabled,
     })
     return resolveColumns([synthetic, ...columns], columnState)
   }, [
@@ -254,6 +256,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     columnState,
     consumerResolvedColumns,
     props.checkboxSelection,
+    rowIsDisabled,
     selectionState,
     setSelectionState,
     visibleRowIds,
@@ -511,8 +514,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         // Plain Space on the focused row toggles its selection. Anchor
         // updates so a subsequent Shift-click range starts here. The
         // active cell stays put — Space is selection-only, not movement.
+        // Disabled rows skip the toggle (kept focusable so navigation
+        // doesn't get trapped).
         const target = rowEntries[outcome.row]
         if (!target) return
+        if (rowIsDisabled?.(target.row)) return
         setSelectionState(toggleRow(selectionState, target.rowId))
         selectionAnchorRef.current = target.rowId
         return
@@ -531,6 +537,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       resolvedColumns,
       rowEntries,
       rowIndexById,
+      rowIsDisabled,
       selectionState,
       setSelectionState,
     ],
@@ -659,17 +666,31 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             const entry = rowEntries[virtualRow.index]
             if (!entry) return null
             const selected = isRowSelected(selectionState, entry.rowId)
+            const disabled = rowIsDisabled ? rowIsDisabled(entry.row) : false
             return (
               <div
                 key={entry.rowId}
-                className={classNames("bc-grid-row", selected ? "bc-grid-row-selected" : undefined)}
+                className={classNames(
+                  "bc-grid-row",
+                  selected ? "bc-grid-row-selected" : undefined,
+                  disabled ? "bc-grid-row-disabled" : undefined,
+                )}
                 role="row"
                 aria-rowindex={virtualRow.index + 3}
                 aria-selected={selected || undefined}
+                aria-disabled={disabled || undefined}
                 data-row-id={entry.rowId}
                 data-row-index={virtualRow.index}
                 style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
                 onClick={(event) => {
+                  // Disabled rows ignore selection gestures but still pass
+                  // the onRowClick callback to consumers — they may want
+                  // the click for read-only navigation (e.g., open detail
+                  // pane without selecting).
+                  if (disabled) {
+                    onRowClick?.(entry.row, event)
+                    return
+                  }
                   // Selection logic. Shift+click → range from anchor; ctrl/
                   // cmd+click → toggle this row in current selection;
                   // plain click → select only this row.

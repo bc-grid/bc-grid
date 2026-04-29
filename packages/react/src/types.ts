@@ -96,6 +96,15 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onShowInactiveChange?: (next: boolean) => void
   rowIsInactive?: (row: TRow) => boolean
 
+  /**
+   * Predicate marking rows as disabled. Disabled rows render with
+   * `aria-disabled="true"` and the `.bc-grid-row-disabled` class, remain
+   * keyboard-focusable so navigation isn't trapped, but skip selection
+   * gestures (click / ctrl-click / shift-click / Space / checkbox) and
+   * skip future edit activation. Per `accessibility-rfc §VirtualRowA11yMeta.disabled`.
+   */
+  rowIsDisabled?: ((row: TRow) => boolean) | undefined
+
   toolbar?: ReactNode
   footer?: ReactNode
 

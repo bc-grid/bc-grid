@@ -10,7 +10,7 @@ import type { BcReactGridColumn } from "./types"
  */
 export const SELECTION_COLUMN_ID = "__bc_select"
 
-interface CreateSelectionColumnArgs {
+interface CreateSelectionColumnArgs<TRow> {
   selectionState: BcSelection
   setSelectionState: (next: BcSelection) => void
   /**
@@ -18,6 +18,8 @@ interface CreateSelectionColumnArgs {
    * exactly these rows; the body checkboxes operate on the row's id.
    */
   visibleRowIds: readonly RowId[]
+  /** Rows for which this returns true render a disabled checkbox. */
+  rowIsDisabled?: ((row: TRow) => boolean) | undefined
 }
 
 /**
@@ -30,9 +32,9 @@ interface CreateSelectionColumnArgs {
  * always operates on the current selection.
  */
 export function createSelectionCheckboxColumn<TRow>(
-  args: CreateSelectionColumnArgs,
+  args: CreateSelectionColumnArgs<TRow>,
 ): BcReactGridColumn<TRow> {
-  const { selectionState, setSelectionState, visibleRowIds } = args
+  const { selectionState, setSelectionState, visibleRowIds, rowIsDisabled } = args
   const headerState = headerCheckboxState(selectionState, visibleRowIds)
 
   const handleHeaderToggle = (next: boolean): void => {
@@ -49,12 +51,19 @@ export function createSelectionCheckboxColumn<TRow>(
     filter: false,
     align: "center",
     cellRenderer(params) {
-      const { rowId, rowState } = params
+      const { rowId, rowState, row } = params
+      const disabled = rowIsDisabled ? rowIsDisabled(row) : false
       const handleChange = (): void => {
+        if (disabled) return
         setSelectionState(toggleRow(selectionState, rowId))
       }
       return (
-        <SelectionCellCheckbox rowId={rowId} checked={rowState.selected} onChange={handleChange} />
+        <SelectionCellCheckbox
+          rowId={rowId}
+          checked={rowState.selected}
+          disabled={disabled}
+          onChange={handleChange}
+        />
       )
     },
   }
@@ -95,10 +104,11 @@ function SelectionHeaderCheckbox({ state, onChange }: SelectionHeaderCheckboxPro
 interface SelectionCellCheckboxProps {
   rowId: RowId
   checked: boolean
+  disabled: boolean
   onChange: () => void
 }
 
-function SelectionCellCheckbox({ rowId, checked, onChange }: SelectionCellCheckboxProps) {
+function SelectionCellCheckbox({ rowId, checked, disabled, onChange }: SelectionCellCheckboxProps) {
   const handleChange = useCallback(() => onChange(), [onChange])
   // The wrapper fills the cell so clicks anywhere in the synthetic
   // checkbox column don't bubble to the row's selection-by-click handler.
@@ -119,6 +129,7 @@ function SelectionCellCheckbox({ rowId, checked, onChange }: SelectionCellCheckb
         data-bc-grid-selection-row={rowId}
         aria-label={`Select row ${rowId}`}
         checked={checked}
+        disabled={disabled}
         onChange={handleChange}
         onClick={stopPropagation}
         style={checkboxStyle}

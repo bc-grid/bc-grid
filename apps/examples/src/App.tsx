@@ -87,6 +87,22 @@ function checkboxSelectionEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("checkbox") === "1"
 }
 
+/**
+ * `?disabled=1` URL flag marks every other rendered row as disabled (via
+ * `rowIsDisabled`). Used by the `aria-disabled-rows` e2e test to verify
+ * disabled rows skip selection gestures while remaining keyboard-focusable.
+ */
+function disabledRowsEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("disabled") === "1"
+}
+
+function customerRowIsDisabled(row: CustomerRow): boolean {
+  // Every customer with a "Credit Hold" status is treated as disabled —
+  // a realistic ERP scenario (read-only, can't post against this account).
+  return row.status === "Credit Hold"
+}
+
 function CustomerGridDemo({
   density,
   onDensityChange,
@@ -323,6 +339,7 @@ function CustomerGridDemo({
         onRowClick={setActiveCustomer}
         onSelectionChange={handleSelectionChange}
         rowId={(row) => row.id}
+        rowIsDisabled={disabledRowsEnabled() ? customerRowIsDisabled : undefined}
       />
 
       {activeCustomer ? <CustomerDetail row={activeCustomer} /> : null}
