@@ -41,6 +41,7 @@
  * accessibility-rfc.
  */
 
+import type { BcScrollAlign } from "@bc-grid/core"
 import type { Virtualizer } from "./virtualizer"
 
 export interface RenderCellParams {
@@ -123,11 +124,7 @@ export class DOMRenderer {
     this.freeCells = []
   }
 
-  scrollToCell(
-    rowIndex: number,
-    colIndex: number,
-    align: "start" | "center" | "end" | "nearest" = "nearest",
-  ): void {
+  scrollToCell(rowIndex: number, colIndex: number, align: BcScrollAlign = "nearest"): void {
     const top = this.virtualizer.scrollOffsetForRow(rowIndex, align)
     const left = this.virtualizer.scrollOffsetForCol(colIndex, align)
     this.scroller.scrollTo({ top, left })

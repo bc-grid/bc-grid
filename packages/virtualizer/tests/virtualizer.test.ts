@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { Virtualizer } from "../src/virtualizer"
+import {
+  type ScrollAlign,
+  type VirtualItem,
+  type VirtualOptions,
+  Virtualizer,
+  type VirtualizerOptions,
+} from "../src/virtualizer"
 
 const baseOptions = {
   rowCount: 1000,
@@ -288,5 +294,42 @@ describe("Virtualizer isCellVisible", () => {
     v.setScrollTop(0)
     // viewport 0..600; row 19 starts at 608 — just below
     expect(v.isCellVisible(19, 0)).toBe(false)
+  })
+})
+
+describe("Public API surface (api.md §9)", () => {
+  test("VirtualOptions matches the constructor's input shape", () => {
+    // If this compiles, the surface is in sync with the constructor.
+    const opts: VirtualOptions = baseOptions
+    const v = new Virtualizer(opts)
+    expect(v.rowCount).toBe(1000)
+  })
+
+  test("VirtualizerOptions is a back-compat alias for VirtualOptions", () => {
+    // Both names must work; the alias is what spike-era code imports.
+    const opts: VirtualizerOptions = baseOptions
+    const v = new Virtualizer(opts)
+    expect(v.rowCount).toBe(1000)
+  })
+
+  test("VirtualItem accepts a VirtualRow or VirtualCol", () => {
+    const v = new Virtualizer(baseOptions)
+    const window_ = v.computeWindow()
+    const items: VirtualItem[] = [...window_.rows, ...window_.cols]
+    // The discriminator is field shape — rows have `top`/`height`, cols
+    // have `left`/`width`. Pick one of each and assert they typecheck.
+    const firstRow = items.find((it) => "top" in it)
+    const firstCol = items.find((it) => "left" in it)
+    expect(firstRow).toBeDefined()
+    expect(firstCol).toBeDefined()
+  })
+
+  test("ScrollAlign matches BcScrollAlign from @bc-grid/core", () => {
+    // If `align` accepts all four values without error, the alias works.
+    const v = new Virtualizer(baseOptions)
+    const aligns: ScrollAlign[] = ["start", "center", "end", "nearest"]
+    for (const align of aligns) {
+      expect(typeof v.scrollOffsetForRow(0, align)).toBe("number")
+    }
   })
 })

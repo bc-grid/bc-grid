@@ -23,7 +23,13 @@
  * No React. No DOM API usage in this file.
  */
 
-export interface VirtualizerOptions {
+import type { BcScrollAlign } from "@bc-grid/core"
+
+/**
+ * Options for constructing a `Virtualizer`. Matches the `VirtualOptions`
+ * name from `api.md §9`.
+ */
+export interface VirtualOptions {
   rowCount: number
   colCount: number
   defaultRowHeight: number
@@ -44,6 +50,12 @@ export interface VirtualizerOptions {
   pinnedBottomRows?: number
 }
 
+/**
+ * @deprecated Use `VirtualOptions` instead. Kept for back-compat with
+ * spike-era consumers; will be removed in v0.2.
+ */
+export type VirtualizerOptions = VirtualOptions
+
 export interface VirtualRow {
   index: number
   top: number
@@ -59,6 +71,16 @@ export interface VirtualCol {
   retained: boolean
   pinned: "left" | "right" | null
 }
+
+/**
+ * Discriminated union of `VirtualRow | VirtualCol` for axis-agnostic
+ * iteration. Matches the `VirtualItem` name from `api.md §9`. Code that
+ * already knows which axis it's processing should use the specific
+ * `VirtualRow` / `VirtualCol` types directly — they carry axis-appropriate
+ * field names (`top`/`height` vs `left`/`width`) which read cleaner than
+ * abstract `start`/`size`.
+ */
+export type VirtualItem = VirtualRow | VirtualCol
 
 export interface VirtualWindow {
   rows: VirtualRow[]
@@ -77,7 +99,55 @@ export interface VirtualWindow {
   bodyRight: number
 }
 
-export type ScrollAlign = "start" | "center" | "end" | "nearest"
+/**
+ * Re-export of `BcScrollAlign` from `@bc-grid/core` so virtualizer
+ * consumers don't have to import from both packages.
+ */
+export type ScrollAlign = BcScrollAlign
+
+/**
+ * Accessibility input the React layer passes to the virtualizer so it can
+ * stamp correct ARIA attrs on rendered items. From `accessibility-rfc
+ * §Virtualization Contract` and `api.md §9`.
+ *
+ * The retention sets here are *additional* to the active cell's row/col,
+ * which the virtualizer always retains automatically. Callers use these to
+ * keep extra rows / columns in the DOM (e.g., the previously-focused row
+ * during a transition, or a pinned reference row).
+ */
+export interface VirtualizerA11yInput {
+  /** Total dataset rows — surfaces as `aria-rowcount` on the grid root. */
+  rowCount: number
+  /** Total dataset cols — surfaces as `aria-colcount` on the grid root. */
+  colCount: number
+  /** Extra rows the renderer must retain in the DOM. Max 2 per a11y RFC. */
+  retainedRows: readonly number[]
+  /** Extra cols the renderer must retain. */
+  retainedCols: readonly number[]
+}
+
+/**
+ * Per-row metadata the renderer attaches to each rendered row, so the
+ * React layer can stamp `aria-rowindex` and the active highlight without
+ * recomputing.
+ */
+export interface VirtualRowA11yMeta {
+  index: number
+  /** 1-based index into the *full* dataset, per ARIA grid pattern. */
+  ariaRowIndex: number
+  isActive: boolean
+}
+
+/**
+ * Per-column metadata mirroring `VirtualRowA11yMeta` for column-axis
+ * a11y wiring.
+ */
+export interface VirtualColumnA11yMeta {
+  index: number
+  /** 1-based index into the *full* dataset. */
+  ariaColIndex: number
+  isActive: boolean
+}
 
 export class Virtualizer {
   readonly rowCount: number
@@ -110,7 +180,7 @@ export class Virtualizer {
   private rowOffsetsCache: number[] = []
   private colOffsetsCache: number[] = []
 
-  constructor(opts: VirtualizerOptions) {
+  constructor(opts: VirtualOptions) {
     this.rowCount = opts.rowCount
     this.colCount = opts.colCount
     this.defaultRowHeight = opts.defaultRowHeight
@@ -390,7 +460,7 @@ export class Virtualizer {
    * caller can apply it directly without further validation. If the row index
    * is out of range, returns the current scrollTop unchanged.
    */
-  scrollOffsetForRow(index: number, align: ScrollAlign = "nearest"): number {
+  scrollOffsetForRow(index: number, align: BcScrollAlign = "nearest"): number {
     if (index < 0 || index >= this.rowCount) return this.scrollTop
     const top = this.rowOffset(index)
     const height = this.rowHeight(index)
@@ -414,7 +484,7 @@ export class Virtualizer {
     return Math.max(0, Math.min(max, target))
   }
 
-  scrollOffsetForCol(index: number, align: ScrollAlign = "nearest"): number {
+  scrollOffsetForCol(index: number, align: BcScrollAlign = "nearest"): number {
     if (index < 0 || index >= this.colCount) return this.scrollLeft
     const left = this.colOffset(index)
     const width = this.colWidth(index)
