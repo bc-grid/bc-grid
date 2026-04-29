@@ -38,6 +38,17 @@ export interface BcGridMessages {
   actionColumnLabel: string
   editLabel: string
   deleteLabel: string
+
+  /**
+   * Live-region announcement templates. Functions return the localised
+   * string for the given event. Per `accessibility-rfc §Live Regions`.
+   */
+  sortAnnounce: (params: { columnLabel: string; direction: "asc" | "desc" }) => string
+  sortClearedAnnounce: () => string
+  filterAnnounce: (params: { visibleRows: number; totalRows: number }) => string
+  filterClearedAnnounce: (params: { totalRows: number }) => string
+  selectionAnnounce: (params: { count: number }) => string
+  selectionClearedAnnounce: () => string
 }
 
 export type BcReactGridColumn<TRow, TValue = unknown> = Omit<

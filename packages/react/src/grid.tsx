@@ -80,6 +80,14 @@ const defaultMessages: BcGridMessages = {
   actionColumnLabel: "Actions",
   editLabel: "Edit",
   deleteLabel: "Delete",
+  sortAnnounce: ({ columnLabel, direction }) =>
+    `Sorted by ${columnLabel} ${direction === "asc" ? "ascending" : "descending"}.`,
+  sortClearedAnnounce: () => "Sorting cleared.",
+  filterAnnounce: ({ visibleRows, totalRows }) =>
+    `Filter applied. ${visibleRows} of ${totalRows} rows shown.`,
+  filterClearedAnnounce: ({ totalRows }) => `Filter cleared. ${totalRows} rows shown.`,
+  selectionAnnounce: ({ count }) => (count === 1 ? "1 row selected." : `${count} rows selected.`),
+  selectionClearedAnnounce: () => "Selection cleared.",
 }
 
 interface RowEntry<TRow> {
@@ -195,6 +203,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // click; consumed (and reset) by shift-click. Held in a ref so we don't
   // re-render the grid just to update the anchor.
   const selectionAnchorRef = useRef<RowId | null>(null)
+
+  // Live-region announcements. Two visually hidden regions adjacent to
+  // the grid root: polite for state changes (sort, filter, selection),
+  // assertive for errors that need user action (Q2 cell-edit-rejected).
+  // Per accessibility-rfc §Live Regions.
+  const [politeMessage, setPoliteMessage] = useState("")
+  const announcePolite = useCallback((message: string) => {
+    setPoliteMessage(message)
+  }, [])
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
     props.columnState ?? [],
@@ -287,6 +304,65 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     if (activeFilter) setFilterState(activeFilter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilter])
+
+  // ---- Live-region announcements --------------------------------------
+  // Announce sort changes. Compares to a ref of the previous sort state so
+  // we only announce when it actually changes, not on initial mount.
+  const prevSortStateRef = useRef<readonly BcGridSort[]>(sortState)
+  useEffect(() => {
+    const prev = prevSortStateRef.current
+    prevSortStateRef.current = sortState
+    if (prev === sortState) return
+    if (sortState.length === 0 && prev.length > 0) {
+      announcePolite(messages.sortClearedAnnounce())
+      return
+    }
+    const head = sortState[0]
+    if (!head) return
+    const column = resolvedColumns.find((c) => c.columnId === head.columnId)
+    const columnLabel =
+      typeof column?.source.header === "string" ? column.source.header : head.columnId
+    announcePolite(messages.sortAnnounce({ columnLabel, direction: head.direction }))
+  }, [sortState, resolvedColumns, messages, announcePolite])
+
+  // Announce filter changes. Includes visible / total row counts so users
+  // know how aggressively the filter narrowed the dataset.
+  const prevFilterRef = useRef<BcGridFilter | null>(null)
+  useEffect(() => {
+    const prev = prevFilterRef.current
+    prevFilterRef.current = activeFilter
+    if (prev === activeFilter) return
+    if (!activeFilter && prev) {
+      announcePolite(messages.filterClearedAnnounce({ totalRows: data.length }))
+      return
+    }
+    if (activeFilter) {
+      announcePolite(
+        messages.filterAnnounce({ visibleRows: rowEntries.length, totalRows: data.length }),
+      )
+    }
+  }, [activeFilter, rowEntries.length, data.length, messages, announcePolite])
+
+  // Announce selection changes — debounced so rapid Shift-click range
+  // selection doesn't queue a message per row.
+  const prevSelectionSizeRef = useRef<number>(0)
+  const selectionAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const size = selectionState.mode === "explicit" ? selectionState.rowIds.size : -1
+    const prev = prevSelectionSizeRef.current
+    prevSelectionSizeRef.current = size
+    if (size === prev) return
+    if (selectionAnnounceTimerRef.current) clearTimeout(selectionAnnounceTimerRef.current)
+    selectionAnnounceTimerRef.current = setTimeout(() => {
+      if (size === 0) announcePolite(messages.selectionClearedAnnounce())
+      else if (size > 0) announcePolite(messages.selectionAnnounce({ count: size }))
+      // size < 0 means "all" / "filtered" mode — count is consumer-specific;
+      // skip the announce until the consumer wires their own.
+    }, 200)
+    return () => {
+      if (selectionAnnounceTimerRef.current) clearTimeout(selectionAnnounceTimerRef.current)
+    }
+  }, [selectionState, messages, announcePolite])
 
   const rowsById = useMemo(() => {
     const map = new Map<RowId, RowEntry<TRow>>()
@@ -855,8 +931,48 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       </div>
 
       {footer ? <div className="bc-grid-footer">{footer}</div> : null}
+
+      {/*
+       * Live regions per accessibility-rfc §Live Regions. Visually hidden
+       * but exposed to assistive tech. Polite for sort / filter / selection
+       * state changes; assertive for errors that need user action (Q2 cell-
+       * edit-rejected).
+       */}
+      <div
+        data-bc-grid-status="true"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={visuallyHiddenStyle}
+      >
+        {politeMessage}
+      </div>
+      <div
+        data-bc-grid-alert="true"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+        style={visuallyHiddenStyle}
+      />
     </div>
   )
+}
+
+/**
+ * Visually-hidden style for live-region elements. Off-screen but
+ * positioned (not display:none) so screen readers can read updates.
+ * Standard "sr-only" pattern.
+ */
+const visuallyHiddenStyle: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
 }
 
 export function BcEditGrid<TRow>(props: BcEditGridProps<TRow>): ReactNode {
