@@ -186,9 +186,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => resolveColumns(columns, columnState),
     [columns, columnState],
   )
+  // Persist the consumer-supplied column state only — the synthetic
+  // selection-checkbox column (added later when `checkboxSelection` is on)
+  // is runtime-only and must not be written to localStorage.
   const persistedColumnState = useMemo(
-    () => deriveColumnState(resolvedColumns, columnState),
-    [columnState, resolvedColumns],
+    () => deriveColumnState(consumerResolvedColumns, columnState),
+    [columnState, consumerResolvedColumns],
   )
   const persistenceState = useMemo(
     () => ({
