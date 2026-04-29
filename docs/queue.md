@@ -83,37 +83,120 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 ### Phase 6 — v1.0 Parity Sprint (Phase B feature tracks)
 
-Tracks land RFC-by-RFC and feature-by-feature. Each track's tasks live next to the RFC PR that introduces them. The RFC PR itself adds the track's task entries here; this section currently lists the upcoming RFCs that c2 is authoring. As each RFC merges, expect 5-15 new task entries in the corresponding sub-section.
+8 tracks. **Tracks land RFC-by-RFC; impl tasks listed inline below.** Each impl task is sized so a single agent owns one PR; cross-task work claims the next available `[ready]` task per AGENTS.md §5. Convention: when claiming, edit `[ready]` → `[in-flight: <agent>]` in the same commit that creates the branch; transition to `[review: <agent> #N]` when the PR opens; `[done: <agent> #N]` when it merges.
 
-#### Track 1 — Editing (Q2 surface)
-- `[ready]` **editing-rfc** — owned by c2; design doc covering cell-edit lifecycle, keyboard state machine, editor framework contract, validation, dirty tracking, optimistic UI patterns. Lands as a doc-only PR; track 1 implementation tasks land in subsequent PRs that cite this RFC. **Effort**: 1 day.
+**RFCs in flight:** editing-rfc (#45 c2), chrome-rfc (#46 c2). Pending: range-rfc, aggregation-rfc, pivot-rfc, filter-registry-rfc, charts-rfc — c2 to author, ETA each ~30-60 min.
+
+**Track parallelism map.** After each track's RFC merges, all impl tasks in that track run **fully in parallel** unless explicitly marked `[blocked: …]`. Cross-track parallelism is unconstrained — different files, different packages.
+
+#### Track 0 — Read-Only Catch-Up (Q2 features that don't depend on editing)
+
+These tasks are pure `@bc-grid/react` UI on top of existing state shapes. **No RFC needed** — `api.md §1.1` and `§3.2` already declare the supporting types. Anyone can claim these immediately after `grid-tsx-file-split`. Suggested owner: c1 or whoever is between bigger pieces.
+
+- `[ready]` **column-reorder** — drag a column header to reorder. State already supported via `BcColumnStateEntry.position` (`api.md §3.2`). UI: pointer-driven drag with a drop-indicator line; keyboard alternative via column tool panel (Track 5). Honour controlled/uncontrolled `columnState` from `api.md §3.1`. **Effort**: M.
+- `[ready]` **column-visibility-ui** — show/hide affordance per column. State already supported via `BcColumnStateEntry.hidden`. UI: header-cell context-menu item OR via the Columns tool panel in Track 5. (Header context-menu lands here; tool panel lands in `tool-panel-columns`.) **Effort**: S.
+- `[ready]` **column-state-url-persistence** — encode `columnState` (visibility, order, width, sort) into URL search params for shareable links. Pairs with `localstorage-gridid-persistence` (Phase 5.5). Consumer opts in via `BcGridProps.urlStatePersistence?: { searchParam: string }`. **Effort**: S.
+- `[ready]` **search-complete** — apply `searchText` as a row filter (case-insensitive substring across `valueFormatter` results for searchable columns per `api.md §4.3`). Pairs with `search-highlighting` (Phase 5.5) which renders the `<mark>` in cells. **Effort**: S.
+- `[ready]` **group-by-client** — client-side row grouping by one or more columns. Group rows render as a header row with expand/collapse chevron + count. Tree-mode rendering uses `aria-level` + `role="treegrid"` per `accessibility-rfc §grid vs treegrid`. State via `BcGridProps.groupBy` (already declared). **Effort**: M.
+- `[ready]` **pagination-client-ui** — client-side pager controls (first / prev / next / last + page-size dropdown). State already supported via `BcGridProps.page`/`pageSize`/`onPaginationChange`. Renders in `BcGridProps.footer` slot by default; consumer can opt out. **Effort**: S.
+
+#### Track 1 — Editing (Q2 editing surface)
+
+Spec: `docs/design/editing-rfc.md` (PR #45).
+
+- `[review: c2 #45]` **editing-rfc** — design doc; covers lifecycle, keyboard, validation, dirty tracking, server commit, 7 built-in editor specs.
+- `[blocked: depends on editing-rfc]` **editor-framework** — `BcCellEditor` lifecycle + state machine + validation pipeline + DOM focus shift + live region announcements. Single owner. **Effort**: M.
+- `[blocked: depends on editor-framework]` **editor-text** — text input editor. shadcn `Input` primitive. Honours `seedKey`, `pointerHint`. **Effort**: S.
+- `[blocked: depends on editor-framework]` **editor-number** — numeric input with locale-aware decimal separator. shadcn `Input` + `inputMode="decimal"`. **Effort**: S.
+- `[blocked: depends on editor-framework]` **editor-date** — shadcn date-picker primitive + ISO 8601 commit. **Effort**: M.
+- `[blocked: depends on editor-date]` **editor-datetime** — composes `editor-date` + time picker; ISO 8601 commit. **Effort**: M.
+- `[blocked: depends on editor-framework]` **editor-time** — `<input type="time" />` styled with shadcn `Input`; 24h commit. **Effort**: S.
+- `[blocked: depends on editor-framework]` **editor-select** — shadcn `Select`; reads `column.options` (additive prop). Type-to-narrow via `seedKey`. **Effort**: M.
+- `[blocked: depends on editor-select]` **editor-multi-select** — shadcn multi-select; chip input + dropdown. **Effort**: M.
+- `[blocked: depends on editor-framework]` **editor-autocomplete** — shadcn `Combobox`; async via `column.fetchOptions(query, signal)`. Debounced 200ms. **Effort**: M.
+- `[blocked: depends on editor-framework]` **validation-framework** — sync + async validators with `AbortSignal` race semantics; reuses existing `BcValidationResult` from `api.md §1.2`. Can run **concurrently** with `editor-text`. **Effort**: S.
+- `[blocked: depends on validation-framework]` **dirty-tracking** — `BcEditState` map + visual states (`data-bc-grid-cell-state`); cell renderer params extension (`pending`, `editError`, `isDirty`). **Effort**: S.
+- `[blocked: depends on all 7 editors + validation-framework + dirty-tracking]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. **Effort**: M.
+- `[blocked: depends on bc-edit-grid-complete]` **editor-custom-recipe** — docs page in `apps/docs` with a worked custom-editor example (e.g., colour picker). **Effort**: S.
 
 #### Track 2 — Range + master-detail (Q3 surface)
+
+Spec pending: `docs/design/range-rfc.md` (c2 to author).
+
 - `[ready]` **range-rfc** — owned by c2; design doc covering range model, anchor/extend semantics, multi-range, clipboard contract, fill handle. **Effort**: 1 day.
+- `[blocked: depends on range-rfc]` **range-state-machine** — `BcRange` (already declared `api.md §reserved Q3`) state in `core/range.ts`; anchor + extend + multi-range. **Effort**: M.
+- `[blocked: depends on range-state-machine]` **visual-selection-layer** — absolute-positioned overlay rendering range rectangles; works through virtualization. **Effort**: M.
+- `[blocked: depends on range-state-machine]` **clipboard-copy-tsv-html** — Ctrl/Cmd+C serializes range to TSV (text/plain) + HTML (text/html) on the clipboard. **Effort**: S.
+- `[blocked: depends on clipboard-copy-tsv-html]` **clipboard-paste-from-excel** — Ctrl/Cmd+V parses clipboard TSV; applies cell-by-cell with per-column `valueParser` + `validate`; atomic apply (all-or-rollback). **Effort**: M.
+- `[blocked: depends on clipboard-paste-from-excel]` **fill-handle** — drag-square at bottom-right of active range; drag to extend; release to fill (linear / copy / smart-fill). **Effort**: M.
+- `[ready]` **master-detail** — expandable row that mounts a consumer-supplied detail component below the row. State via `expansion: ReadonlySet<RowId>` (already declared). `aria-level` + `role="treegrid"` when active. Independent of range work; can run in parallel. **Effort**: M.
+- `[ready]` **column-groups-multi-row-headers** — multi-row column headers (e.g., parent header "Q1 Sales" with children "Jan / Feb / Mar"). Surface: `BcReactGridColumn.children?: BcReactGridColumn[]` (additive). Renders header rows for each level with `aria-colspan`. Independent; can run in parallel. **Effort**: M.
+- `[ready]` **sticky-header-polish** — refine the existing pinned-top header to maintain scroll-shadow + correct z-index against pinned-left/-right corners. Independent; can run in parallel. **Effort**: S.
 
 #### Track 3 — Server row model (Q4 surface)
-The `server-query-rfc` (PR #2) already designed this surface. Track 3 implementation tasks land as their PRs ship; no new RFC needed. First implementation task ready to claim:
-- `[ready]` **server-paged-impl** — implement `BcServerGrid rowModel="paged"` with the `LoadServerPage` contract from `server-query-rfc`. **Effort**: M.
+
+Spec already exists: `docs/design/server-query-rfc.md` (PR #2). No new RFC needed.
+
+- `[ready]` **server-paged-impl** — `BcServerGrid rowModel="paged"` with the `LoadServerPage` contract. AbortSignal handling, request dedup. **Effort**: M.
+- `[blocked: depends on server-paged-impl]` **infinite-mode-block-cache** — `rowModel="infinite"`: `ServerBlockCache` with LRU eviction; `LoadServerBlock` integration; viewport-driven block fetching with prefetch ahead. **Effort**: L (3-5 hours).
+- `[blocked: depends on infinite-mode-block-cache]` **server-tree-mode** — `rowModel="tree"`: lazy children fetching via `LoadServerTreeChildren`; expand/collapse triggers fetch; `ServerTreeRow` rendering. **Effort**: L.
+- `[blocked: depends on server-paged-impl]` **mutation-pipeline** — `ServerRowPatch` apply path; optimistic UI with `pendingMutations` map; `ServerMutationResult` settle handling. Integrates with Track 1's `bc-edit-grid-complete`. **Effort**: M.
+- `[blocked: depends on server-paged-impl]` **invalidation-impl** — `ServerInvalidation` scopes (all / view / blocks / rows / tree). Refetch + cache eviction logic. **Effort**: M.
+- `[blocked: depends on infinite-mode-block-cache + mutation-pipeline]` **server-row-model-perf-tuning** — measure block fetch latency, debounce settings, cache hit rate at 100k+ rows. Add to nightly perf harness. **Effort**: M.
 
 #### Track 4 — Aggregations + Pivots (Q5 pulled forward)
-- `[ready]` **aggregation-rfc** — owned by c2; engine contract for `@bc-grid/aggregations` (sum/count/avg/min/max + custom factory) and the React adapter (footer + group-row aggregation rendering). **Effort**: 1 day.
-- `[blocked: depends on aggregation-rfc]` **pivot-rfc** — owned by c2; engine vs React split for pivot table; drag-to-pivot UI; row-groups + col-groups + values dimensions. **Effort**: 1 day.
+
+Specs pending: `docs/design/aggregation-rfc.md` then `pivot-rfc.md` (c2 to author).
+
+- `[ready]` **aggregation-rfc** — owned by c2; engine contract for `@bc-grid/aggregations` + React adapter. **Effort**: 1 day.
+- `[blocked: depends on aggregation-rfc]` **aggregation-engine** — `@bc-grid/aggregations` package (currently stub). `sum`, `count`, `avg`, `min`, `max`, `registerAggregation`. Pure functions; no DOM. Per `design.md §4.2`. **Effort**: M.
+- `[blocked: depends on aggregation-engine]` **aggregation-react-adapter** — footer aggregation row + group-row aggregation rendering in `@bc-grid/react`. Wires `column.aggregation` (already declared `api.md §1.1`) to the engine. **Effort**: M.
+- `[blocked: depends on aggregation-rfc]` **pivot-rfc** — owned by c2; engine vs React split; drag-to-pivot UI; row/col/values dimensions. **Effort**: 1 day.
+- `[blocked: depends on pivot-rfc + aggregation-engine]` **pivot-engine** — engine layer in `@bc-grid/aggregations` (or a separate `@bc-grid/pivots` if the RFC decides to split). Computes pivot table from rows + dimensions. **Effort**: L.
+- `[blocked: depends on pivot-engine]` **pivot-ui-drag-zones** — Pivot tool panel in the sidebar (Track 5) with row/col/values drop zones. **Effort**: M.
+- `[blocked: depends on pivot-engine]` **pivot-row-col-groups** — render the pivoted output: row-group axis, col-group axis, value cells. **Effort**: M.
 
 #### Track 5 — Chrome (Q6 pulled forward)
-- `[ready]` **chrome-rfc** — owned by c2; status-bar slot + sidebar (tool panels) framework + context-menu extension protocol. **Effort**: 1 day.
+
+Spec: `docs/design/chrome-rfc.md` (PR #46).
+
+- `[review: c2 #46]` **chrome-rfc** — design doc; covers status-bar / sidebar tablist / context-menu.
+- `[blocked: depends on chrome-rfc]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
+- `[blocked: depends on chrome-rfc]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics; focus trap inside open panel; Esc returns to icon. **Effort**: M.
+- `[blocked: depends on sidebar-impl]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
+- `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
+- `[blocked: depends on chrome-rfc]` **context-menu-impl** — shadcn `ContextMenu` primitive; right-click + long-press (500ms coarse pointer) + Shift+F10. 4 built-in items + custom factory function. **Effort**: M.
+- `[blocked: depends on aggregation-engine + status-bar-impl]` **footer-aggregations** — wire the `aggregations` status-bar segment to the aggregation-engine output. **Effort**: S.
 
 #### Track 6 — Filters + Export (Q6 pulled forward)
-- `[ready]` **filter-registry-rfc** — owned by c2; extension protocol for `BcFilterDefinition` / `BcReactFilterDefinition`; consumer-defined filter types; persistence shape. **Effort**: 1 day.
-- `[ready]` **export-csv-impl** — `@bc-grid/export` is currently a stub (planned package). Add `toCsv(rows, columns)` per `api.md §9`. **Effort**: S.
-- `[ready]` **export-xlsx-impl** — peer-dep on ExcelJS; `toExcel(rows, columns)`. Confirm peer-dep choice with architect before bundling. **Effort**: M.
-- `[ready]` **export-pdf-impl** — peer-dep on jsPDF or react-pdf; `toPdf(rows, columns)`. Confirm peer-dep choice with architect. **Effort**: M.
+
+Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
+
+- `[ready]` **filter-registry-rfc** — owned by c2; extension protocol; `BcFilterDefinition` / `BcReactFilterDefinition`; persistence shape. **Effort**: 1 day.
+- `[blocked: depends on filter-registry-rfc]` **filter-set-impl** — multi-select dropdown of distinct values. Lazy-loaded on first open. **Effort**: M.
+- `[blocked: depends on filter-registry-rfc]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
+- `[blocked: depends on filter-registry-rfc]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
+- `[blocked: depends on filter-registry-rfc]` **filter-number-range-impl** — between two numbers. **Effort**: S.
+- `[blocked: depends on filter-registry-rfc]` **filter-text-impl-extend** — extend the existing inline text filter with operators (contains / starts-with / ends-with / equals / regex toggle / case-sensitivity toggle). **Effort**: S.
+- `[blocked: depends on filter-registry-rfc]` **filter-custom-extension-example** — recipe in `apps/docs` showing how to register a custom filter type. **Effort**: S.
+- `[blocked: depends on filter-registry-rfc]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
+- `[ready]` **export-csv-impl** — `@bc-grid/export.toCsv(rows, columns)` per `api.md §9`. No external deps; pure serializer. **Effort**: S.
+- `[ready]` **export-xlsx-impl** — peer-dep on **ExcelJS** (confirmed in coordination plan). `toExcel(rows, columns)`. **Effort**: M.
+- `[ready]` **export-pdf-impl** — peer-dep on **jsPDF** (confirmed in coordination plan; alternative `react-pdf` if jsPDF doesn't fit; first PR picks the winner). `toPdf(rows, columns)`. **Effort**: M.
+- `[blocked: depends on Track 3 server-paged-impl + export-csv-impl]` **export-server-mode** — wire `ServerExportQuery` (already declared in core) to a server-mode export flow: blob / url / job response handling. **Effort**: S.
 
 #### Track 7 — Polish + Charts (NEW) + Mobile (Q7 pulled forward + new)
-- `[ready]` **charts-rfc** — owned by c2; **NEW track** (was non-goal in `design.md §2`). Peer-dep architecture: consumer brings the chart library (recharts/echarts/visx/apex evaluated in the RFC); we ship adapter + 2-3 worked examples. **Effort**: 1 day.
-- `[ready]` **streaming-row-updates** — server pushes new rows mid-session via the `ServerRowUpdate` types already declared in `core` (PR #2 / `server-query-rfc`). Animated insertion via FLIP. **Effort**: M.
-- `[ready]` **mobile-touch-fallback** — `accessibility-rfc §Pointer and Touch Fallback`: 44px hit targets, double-tap-to-edit, long-press context menu (500ms threshold), pointer selection handles 44px. **Effort**: M.
-- `[ready]` **wcag-deep-pass** — full axe-core audit on every demo; manual NVDA/JAWS/VoiceOver runs; fix any findings. **Effort**: M.
-- `[ready]` **migration-guide** — from AG Grid Community + Enterprise to bc-grid; documented patterns, side-by-side examples; no codemod (out of scope). **Effort**: M.
+
+Spec pending: `docs/design/charts-rfc.md` (c2 to author; user confirmed peer-dep approach with **recharts** as default).
+
+- `[ready]` **charts-rfc** — owned by c2; **NEW track**; peer-dep architecture (consumer brings library); recharts as the documented default; adapter shape; 2-3 worked examples in apps/docs. **Effort**: 1 day.
+- `[blocked: depends on charts-rfc]` **charts-peer-dep-integration** — adapter package (`@bc-grid/charts` or in-react module — RFC decides); `<BcGridChart>` slot or hook; consumer-supplied chart component. **Effort**: M.
+- `[ready]` **streaming-row-updates** — server pushes new rows mid-session via `ServerRowUpdate` types (already in core); animated insertion via FLIP. Consumer subscribes via a hook. **Effort**: M.
+- `[ready]` **mobile-touch-fallback** — `accessibility-rfc §Pointer and Touch Fallback`: 44px hit targets in coarse-pointer mode; double-tap to edit; long-press 500ms for context menu; pointer selection handles 44px. **Effort**: M.
+- `[ready]` **wcag-deep-pass** — full axe-core audit on every demo + manual NVDA / JAWS / VoiceOver runs; fix any findings. Generates a `docs/design/a11y-impl-report.md`. **Effort**: M.
+- `[ready]` **animation-polish** — review every transition (sort / filter / expand / collapse / insert / remove / cell-flash); tune to 60fps; document the motion system. **Effort**: M.
+- `[ready]` **browser-compat-matrix** — full Chromium / FF / WebKit / Safari / Edge pass on the AR Customers demo + standalone tests. Document any known issues. **Effort**: S.
+- `[ready]` **migration-guide** — from AG Grid Community + Enterprise to bc-grid; documented patterns; side-by-side examples; no codemod (out-of-scope). Lives in `apps/docs`. **Effort**: M.
 
 ### Quality + infra (parallel throughout Q1)
 
