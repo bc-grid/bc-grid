@@ -194,6 +194,29 @@ describe("nextKeyboardNav — Q3-reserved keys swallow without moving", () => {
       type: "preventDefault",
     })
   })
+
+  test("Shift+Space and Ctrl/Cmd+Space return preventDefault, no selection toggle", () => {
+    expect(nextKeyboardNav({ ...baseInput, key: " ", shiftKey: true })).toEqual({
+      type: "preventDefault",
+    })
+    expect(nextKeyboardNav({ ...baseInput, key: " ", ctrlOrMeta: true })).toEqual({
+      type: "preventDefault",
+    })
+  })
+})
+
+describe("nextKeyboardNav — row selection", () => {
+  test("Space toggles selection on the active row", () => {
+    expect(nextKeyboardNav({ ...baseInput, key: " " })).toEqual({
+      type: "toggleSelection",
+    })
+  })
+
+  test("legacy Spacebar key name also toggles selection", () => {
+    expect(nextKeyboardNav({ ...baseInput, key: "Spacebar" })).toEqual({
+      type: "toggleSelection",
+    })
+  })
 })
 
 describe("nextKeyboardNav — Q2-reserved keys are noop (caller falls through to editor)", () => {
