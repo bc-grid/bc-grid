@@ -76,6 +76,17 @@ export function App() {
   )
 }
 
+/**
+ * `?checkbox=1` URL flag opts the AR Customers grid into the
+ * `selection-checkbox-column` demo. The flag keeps the existing pinned-cols
+ * / multi-column-sort / live-regions tests untouched (they don't pass the
+ * flag), while the new selection-checkbox-column.pw.ts test sets it.
+ */
+function checkboxSelectionEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("checkbox") === "1"
+}
+
 function CustomerGridDemo({
   density,
   onDensityChange,
@@ -300,6 +311,7 @@ function CustomerGridDemo({
         ariaLabel="Accounts receivable customer ledger"
         apiRef={apiRef}
         columns={columns}
+        checkboxSelection={checkboxSelectionEnabled()}
         data={rows}
         density={density}
         detailPath="/accounts-receivable/customers"

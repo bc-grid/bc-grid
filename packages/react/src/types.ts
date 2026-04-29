@@ -113,6 +113,14 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   ariaLabel?: string
   ariaLabelledBy?: string
+
+  /**
+   * Render a pinned-left checkbox column. The header checkbox toggles all
+   * visible rows on the current page; row checkboxes toggle a single row.
+   * Coexists with the existing click-to-select gestures — clicking a
+   * checkbox does not trigger the row-click selection logic.
+   */
+  checkboxSelection?: boolean
 }
 
 export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {

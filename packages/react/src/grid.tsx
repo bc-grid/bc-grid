@@ -58,6 +58,7 @@ import {
 import { type SortModifiers, renderFilterCell, renderHeaderCell } from "./headerCells"
 import { nextKeyboardNav } from "./keyboard"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
+import { createSelectionCheckboxColumn } from "./selectionColumn"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
 import type { BcGridProps } from "./types"
 import { formatCellValue, getCellValue } from "./value"
@@ -161,16 +162,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.onActiveCellChange,
   )
 
-  const resolvedColumns = useMemo(
+  // Consumer columns resolved for filter / sort lookups. The synthetic
+  // selection-checkbox column (when `checkboxSelection` is on) is added
+  // below into `resolvedColumns` for layout + render; rowEntries doesn't
+  // need to know about it (synthetic column is `sortable: false`,
+  // `filter: false`).
+  const consumerResolvedColumns = useMemo(
     () => resolveColumns(columns, columnState),
     [columns, columnState],
   )
-
-  const columnIndexById = useMemo(() => {
-    const map = new Map<(typeof resolvedColumns)[number]["columnId"], number>()
-    resolvedColumns.forEach((column, index) => map.set(column.columnId, index))
-    return map
-  }, [resolvedColumns])
 
   const activeFilter = useMemo(() => buildGridFilter(columnFilterText), [columnFilterText])
 
@@ -184,7 +184,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     // matcher. We use formatted values (not raw) so the result matches
     // what the user sees in the cell.
     if (activeFilter) {
-      const columnsById = new Map(resolvedColumns.map((c) => [c.columnId, c]))
+      const columnsById = new Map(consumerResolvedColumns.map((c) => [c.columnId, c]))
       visibleRows = visibleRows.filter((row) =>
         matchesGridFilter(activeFilter, (columnId) => {
           const column = columnsById.get(columnId)
@@ -208,7 +208,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     // re-stamp `index` so DOM positioning + virtualizer state line up.
     const sorted = [...built].sort((a, b) => {
       for (const sort of sortState) {
-        const column = resolvedColumns.find((c) => c.columnId === sort.columnId)
+        const column = consumerResolvedColumns.find((c) => c.columnId === sort.columnId)
         if (!column) continue
         const va = getCellValue(a.row, column.source)
         const vb = getCellValue(b.row, column.source)
@@ -226,11 +226,44 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     data,
     locale,
     props.showInactive,
-    resolvedColumns,
+    consumerResolvedColumns,
     rowId,
     rowIsInactive,
     sortState,
   ])
+
+  // Visible row IDs in display order (post-filter, post-sort). Used by the
+  // synthetic selection-checkbox column's header to compute the tri-state
+  // "all / some / none" master toggle.
+  const visibleRowIds = useMemo(() => rowEntries.map((entry) => entry.rowId), [rowEntries])
+
+  // Layout-resolved columns including the synthetic pinned-left checkbox
+  // column when `checkboxSelection` is on. The synthetic column is rebuilt
+  // on every render so its closure captures the live selectionState +
+  // setter; resolveColumns is cheap so the cache miss here is acceptable.
+  const resolvedColumns = useMemo(() => {
+    if (!props.checkboxSelection) return consumerResolvedColumns
+    const synthetic = createSelectionCheckboxColumn<TRow>({
+      selectionState,
+      setSelectionState,
+      visibleRowIds,
+    })
+    return resolveColumns([synthetic, ...columns], columnState)
+  }, [
+    columns,
+    columnState,
+    consumerResolvedColumns,
+    props.checkboxSelection,
+    selectionState,
+    setSelectionState,
+    visibleRowIds,
+  ])
+
+  const columnIndexById = useMemo(() => {
+    const map = new Map<(typeof resolvedColumns)[number]["columnId"], number>()
+    resolvedColumns.forEach((column, index) => map.set(column.columnId, index))
+    return map
+  }, [resolvedColumns])
 
   // Surface activeFilter through the controlled setFilterState contract so
   // consumers using the `filter` prop see the canonical BcGridFilter shape

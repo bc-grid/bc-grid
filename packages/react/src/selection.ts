@@ -80,3 +80,45 @@ export function selectionSize(selection: BcSelection): number | undefined {
   if (selection.mode === "explicit") return selection.rowIds.size
   return undefined
 }
+
+/**
+ * Header-checkbox "select all visible" → an "explicit" selection containing
+ * exactly the supplied rows. Used by the selection-checkbox column when the
+ * user toggles the master checkbox on while it was off / indeterminate.
+ */
+export function selectAllRows(rowIds: readonly RowId[]): BcSelection {
+  return { mode: "explicit", rowIds: new Set(rowIds) }
+}
+
+/**
+ * Empty selection. Used by the selection-checkbox column when the user
+ * toggles the master checkbox off while everything was selected.
+ */
+export function clearSelection(): BcSelection {
+  return { mode: "explicit", rowIds: new Set<RowId>() }
+}
+
+/**
+ * Tri-state of the header checkbox over a set of visible rows:
+ *   - "all"      every row is selected
+ *   - "some"     at least one but not all are selected (indeterminate)
+ *   - "none"     no row is selected
+ *
+ * Operates on "explicit" selections only — "all" / "filtered" modes are
+ * conceptually already "select-all" and don't fit the visible-page tri-state
+ * contract; they collapse to "all".
+ */
+export function headerCheckboxState(
+  selection: BcSelection,
+  visibleRowIds: readonly RowId[],
+): "all" | "some" | "none" {
+  if (visibleRowIds.length === 0) return "none"
+  if (selection.mode !== "explicit") return "all"
+  let selectedCount = 0
+  for (const id of visibleRowIds) {
+    if (selection.rowIds.has(id)) selectedCount++
+  }
+  if (selectedCount === 0) return "none"
+  if (selectedCount === visibleRowIds.length) return "all"
+  return "some"
+}
