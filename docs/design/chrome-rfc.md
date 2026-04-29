@@ -90,8 +90,14 @@ export interface BcStatusBarContext<TRow = unknown> {
   totalRowCount: number | "unknown"  // "unknown" for server-row-model with rowcount=-1
   filteredRowCount: number
   selectedRowCount: number
-  /** Aggregation results when @bc-grid/aggregations is configured; empty array otherwise. */
-  aggregations: readonly BcAggregationResult[]
+  /**
+   * Aggregation results when `@bc-grid/aggregations` is configured; empty array otherwise.
+   * Type sourced from `aggregation-rfc` (#51): `readonly AggregationResult[]` from
+   * `@bc-grid/aggregations`. The chrome RFC keeps this typed as `readonly unknown[]`
+   * until Track 4 lands so the chrome implementation does not block on the aggregation
+   * engine; the React adapter re-exports the concrete `AggregationResult` type.
+   */
+  aggregations: readonly unknown[]
   /** Pass-through to consumer for custom rendering. */
   api: BcGridApi<TRow>
 }
@@ -135,19 +141,17 @@ Forced-colors rules ship in `packages/theming/src/styles.css` — segment text u
 
 ### Footer aggregations integration
 
-When Track 4 lands `@bc-grid/aggregations`, the `aggregations` segment consumes:
+When Track 4 lands `@bc-grid/aggregations`, the `aggregations` segment consumes the React adapter from #51:
 
 ```ts
-import { computeFooterAggregations } from "@bc-grid/aggregations"
+import { useAggregations } from "@bc-grid/react"
+// (re-exports `AggregationResult` from `@bc-grid/aggregations`)
 
 // inside BcGrid:
-const aggregations = useMemo(
-  () => computeFooterAggregations(rows, columns, { selectionScope }),
-  [rows, columns, selectionScope]
-)
+const aggregations = useAggregations({ rows, columns, scope: aggregationScope })
 ```
 
-The `selectionScope` defaults to "filtered" (aggregate over filtered rows only); consumers can opt to "all" or "selected" via `BcGridProps.aggregationScope?: "filtered" | "all" | "selected"`. Track 4 RFC pins the engine contract.
+The `aggregationScope` defaults to `"filtered"` (aggregate over filtered rows only); consumers can opt to `"all"` or `"selected"` via `BcGridProps.aggregationScope?: "filtered" | "all" | "selected"`. The exact engine entry points (`aggregate` / `aggregateColumns` / `aggregateGroups`) and the `AggregationResult` shape are pinned in `aggregation-rfc` (#51) — the chrome RFC defers to that contract and only consumes the React adapter.
 
 ---
 
@@ -225,7 +229,7 @@ UI elements:
 - Drag-handle for each column → reorder.
 - Visibility checkbox.
 - Pin dropdown: none / left / right.
-- Group-by drop zone at the bottom (drag a column here to add to `groupBy`; drag out to remove). Reserved for Track 4 group-by — the drop zone exists at v1 but is "coming-soon" labelled until aggregation ships.
+- Group-by drop zone at the bottom (drag a column here to add to `groupBy`; drag out to remove). Reserved for Track 0 `group-by-client` — the drop zone exists at v1 but is "coming-soon" labelled until grouping ships. Aggregations (Track 4) consume the same `groupBy` state once the engine lands.
 
 State: reads + writes `columnState` via `BcGridApi.setColumnState`. Honours the controlled/uncontrolled distinction from `api.md §3`.
 
