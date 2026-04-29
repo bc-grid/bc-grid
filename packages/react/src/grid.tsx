@@ -5,6 +5,7 @@ import type {
   BcGridFilter,
   BcGridSort,
   BcSelection,
+  ColumnId,
   RowId,
 } from "@bc-grid/core"
 import { Virtualizer } from "@bc-grid/virtualizer"
@@ -57,6 +58,7 @@ import {
 } from "./gridInternals"
 import { renderFilterCell, renderHeaderCell } from "./headerCells"
 import { nextKeyboardNav } from "./keyboard"
+import { readPersistedGridState, usePersistedGridStateWriter } from "./persistence"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { defaultCompareValues, toggleSortFor } from "./sort"
 import type { BcGridProps } from "./types"
@@ -74,7 +76,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     columns,
     rowId,
     apiRef,
-    density = "normal",
     height,
     rowHeight,
     rowIsInactive,
@@ -91,6 +92,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   } = props
 
   const messages = useMemo(() => ({ ...defaultMessages, ...props.messages }), [props.messages])
+  const persistedGridState = useMemo(() => readPersistedGridState(props.gridId), [props.gridId])
+  const density = props.density ?? persistedGridState.density ?? "normal"
   const instanceId = useId()
   const domBaseId = useMemo(
     () => `bc-grid-${domToken(props.gridId ?? instanceId)}`,
@@ -151,8 +154,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
     props.columnState ?? [],
-    props.defaultColumnState ?? [],
+    props.defaultColumnState ?? persistedGridState.columnState ?? [],
     props.onColumnStateChange,
+  )
+  const [groupByState] = useControlledState<readonly ColumnId[]>(
+    hasProp(props, "groupBy"),
+    props.groupBy ?? [],
+    props.defaultGroupBy ?? persistedGridState.groupBy ?? [],
+    props.onGroupByChange,
+  )
+  const [pageSizeState] = useControlledState<number | undefined>(
+    hasProp(props, "pageSize"),
+    props.pageSize,
+    props.defaultPageSize ?? persistedGridState.pageSize,
+    undefined,
   )
   const [activeCell, setActiveCell] = useControlledState<BcCellPosition | null>(
     hasProp(props, "activeCell"),
@@ -165,6 +180,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => resolveColumns(columns, columnState),
     [columns, columnState],
   )
+  const persistedColumnState = useMemo(
+    () => deriveColumnState(resolvedColumns, columnState),
+    [columnState, resolvedColumns],
+  )
+  const persistenceState = useMemo(
+    () => ({
+      columnState: persistedColumnState,
+      density,
+      groupBy: groupByState,
+      pageSize: pageSizeState,
+    }),
+    [density, groupByState, pageSizeState, persistedColumnState],
+  )
+  usePersistedGridStateWriter(props.gridId, persistenceState)
 
   const columnIndexById = useMemo(() => {
     const map = new Map<(typeof resolvedColumns)[number]["columnId"], number>()
