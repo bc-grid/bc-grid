@@ -142,6 +142,57 @@
   text-align: right;
 }
 
+/*
+ * Pinned-region scroll shadows. Active when body content has scrolled
+ * under a pinned region — signals to the user that the pinned columns
+ * are anchored and there's content moving beneath them.
+ *
+ * The grid root sets `data-scrolled-left` / `data-scrolled-right` based
+ * on scroll position; the shadows are pseudo-elements on the leftmost
+ * pinned-left cell and rightmost pinned-right cell respectively. They
+ * fade in/out on the data-attr toggle.
+ */
+.bc-grid-cell-pinned-left::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -8px;
+  width: 8px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(to right, rgb(0 0 0 / 8%), transparent);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.bc-grid-cell-pinned-right::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -8px;
+  width: 8px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(to left, rgb(0 0 0 / 8%), transparent);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.bc-grid[data-scrolled-left="true"] .bc-grid-cell-pinned-left::after {
+  opacity: 1;
+}
+
+.bc-grid[data-scrolled-right="true"] .bc-grid-cell-pinned-right::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bc-grid-cell-pinned-left::after,
+  .bc-grid-cell-pinned-right::before {
+    transition: none;
+  }
+}
+
 .bc-grid-status {
   display: inline-flex;
   align-items: center;
