@@ -41,6 +41,7 @@ import {
   useState,
 } from "react"
 import { type ColumnResizeSession, computeResizedWidth } from "./columnResize"
+import { type ColumnFilterText, buildGridFilter, matchesGridFilter } from "./filter"
 import { nextKeyboardNav } from "./keyboard"
 import { defaultCompareValues, toggleSortFor } from "./sort"
 import type {
@@ -177,6 +178,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         }
       : undefined,
   )
+
+  // Per-column text-filter inputs. Internal state — we project this into
+  // the `BcGridFilter` shape via `buildGridFilter` whenever it changes,
+  // and surface the result through the controlled `setFilterState` callback.
+  const [columnFilterText, setColumnFilterText] = useState<ColumnFilterText>({})
   const [selectionState] = useControlledState<BcSelection>(
     hasProp(props, "selection"),
     props.selection ?? createEmptySelection(),
@@ -207,11 +213,28 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     return map
   }, [resolvedColumns])
 
+  const activeFilter = useMemo(() => buildGridFilter(columnFilterText), [columnFilterText])
+
   const rowEntries = useMemo(() => {
-    const visibleRows =
+    let visibleRows: TRow[] =
       props.showInactive === false && rowIsInactive
         ? data.filter((row) => !rowIsInactive(row))
         : [...data]
+
+    // Filter step: pass the row's per-column formatted values to the
+    // matcher. We use formatted values (not raw) so the result matches
+    // what the user sees in the cell.
+    if (activeFilter) {
+      const columnsById = new Map(resolvedColumns.map((c) => [c.columnId, c]))
+      visibleRows = visibleRows.filter((row) =>
+        matchesGridFilter(activeFilter, (columnId) => {
+          const column = columnsById.get(columnId)
+          if (!column) return ""
+          const value = getCellValue(row, column.source)
+          return formatCellValue(value, row, column.source, locale)
+        }),
+      )
+    }
 
     const built = visibleRows.map((row, index) => ({
       row,
@@ -239,7 +262,25 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     })
 
     return sorted.map((entry, index) => ({ ...entry, index }))
-  }, [data, props.showInactive, resolvedColumns, rowId, rowIsInactive, sortState])
+  }, [
+    activeFilter,
+    data,
+    locale,
+    props.showInactive,
+    resolvedColumns,
+    rowId,
+    rowIsInactive,
+    sortState,
+  ])
+
+  // Surface activeFilter through the controlled setFilterState contract so
+  // consumers using the `filter` prop see the canonical BcGridFilter shape
+  // when the user types.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: setFilterState identity isn't useful here
+  useEffect(() => {
+    if (activeFilter) setFilterState(activeFilter)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilter])
 
   const rowsById = useMemo(() => {
     const map = new Map<RowId, RowEntry<TRow>>()
@@ -654,7 +695,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       role="grid"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
-      aria-rowcount={rowEntries.length + 1}
+      aria-rowcount={rowEntries.length + 2}
       aria-colcount={resolvedColumns.length}
       aria-activedescendant={activeCellId}
       tabIndex={0}
@@ -688,6 +729,27 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             }),
           )}
         </div>
+        <div
+          className="bc-grid-filter-row"
+          role="row"
+          aria-rowindex={2}
+          style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
+        >
+          {resolvedColumns.map((column, index) =>
+            renderFilterCell({
+              column,
+              domBaseId,
+              filterText: columnFilterText[column.columnId] ?? "",
+              headerHeight,
+              index,
+              onFilterChange: (next) =>
+                setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
+              scrollLeft: scrollOffset.left,
+              totalWidth: virtualWindow.totalWidth,
+              viewportWidth: viewport.width,
+            }),
+          )}
+        </div>
       </div>
 
       <div
@@ -710,7 +772,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 key={entry.rowId}
                 className="bc-grid-row"
                 role="row"
-                aria-rowindex={virtualRow.index + 2}
+                aria-rowindex={virtualRow.index + 3}
                 aria-selected={selected || undefined}
                 data-row-id={entry.rowId}
                 data-row-index={virtualRow.index}
@@ -1037,6 +1099,89 @@ const resizeHandleStyle: CSSProperties = {
   // Prevent the click from bubbling to the parent header cell, which
   // would trigger sort. We also stopPropagation in the click handler.
   userSelect: "none",
+}
+
+interface RenderFilterCellParams<TRow> {
+  column: ResolvedColumn<TRow>
+  domBaseId: string
+  filterText: string
+  headerHeight: number
+  index: number
+  onFilterChange: (next: string) => void
+  scrollLeft: number
+  totalWidth: number
+  viewportWidth: number
+}
+
+function renderFilterCell<TRow>({
+  column,
+  domBaseId,
+  filterText,
+  headerHeight,
+  index,
+  onFilterChange,
+  scrollLeft,
+  totalWidth,
+  viewportWidth,
+}: RenderFilterCellParams<TRow>) {
+  const filterDisabled = column.source.filter === false
+  return (
+    <div
+      key={`filter-${column.columnId}`}
+      className={classNames(
+        "bc-grid-cell",
+        "bc-grid-filter-cell",
+        column.align === "right" ? "bc-grid-cell-right" : undefined,
+      )}
+      role="cell"
+      aria-colindex={index + 1}
+      style={cellStyle({
+        align: column.align,
+        height: headerHeight,
+        left: column.left,
+        pinned: column.pinned,
+        scrollLeft,
+        totalWidth,
+        viewportWidth,
+        width: column.width,
+      })}
+      data-column-id={column.columnId}
+      onClick={(event) => {
+        // Clicks on the filter cell shouldn't bubble to the header (which
+        // would toggle sort).
+        event.stopPropagation()
+      }}
+    >
+      {filterDisabled ? null : (
+        <input
+          aria-label={`Filter ${typeof column.source.header === "string" ? column.source.header : column.columnId}`}
+          className="bc-grid-filter-input"
+          type="text"
+          value={filterText}
+          onChange={(event) => onFilterChange(event.currentTarget.value)}
+          // Prevent the grid's keyboard handler from claiming arrow keys
+          // while the user is typing in the filter input.
+          onKeyDown={(event) => event.stopPropagation()}
+          id={`${domBaseId}-filter-${domToken(column.columnId)}`}
+          placeholder="Filter"
+          style={filterInputStyle}
+        />
+      )}
+    </div>
+  )
+}
+
+const filterInputStyle: CSSProperties = {
+  width: "100%",
+  height: "70%",
+  border: "1px solid hsl(var(--border, 220 13% 91%))",
+  borderRadius: "calc(var(--radius, 0.375rem) - 2px)",
+  background: "hsl(var(--background, 0 0% 100%))",
+  color: "inherit",
+  padding: "0 0.5rem",
+  font: "inherit",
+  fontSize: "0.8125rem",
+  outline: "none",
 }
 
 interface RenderBodyCellParams<TRow> {
