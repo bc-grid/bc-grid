@@ -11,12 +11,12 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./styles.css": "./src/styles.css"
+    "./styles.css": "./dist/styles.css"
   },
-  "files": ["dist", "src/styles.css"],
-  "sideEffects": ["./src/styles.css"],
+  "files": ["dist"],
+  "sideEffects": ["./dist/styles.css"],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean && cp src/styles.css dist/styles.css",
     "dev": "tsup src/index.ts --format esm --dts --sourcemap --watch",
     "type-check": "tsc -b"
   },
