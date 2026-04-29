@@ -10,6 +10,16 @@
         "typescript": "^5.7.0",
       },
     },
+    "apps/animation-benchmarks": {
+      "name": "@bc-grid/app-animation-benchmarks",
+      "version": "0.0.0",
+      "dependencies": {
+        "@bc-grid/animations": "workspace:*",
+      },
+      "devDependencies": {
+        "vite": "^6.0.0",
+      },
+    },
     "apps/benchmarks": {
       "name": "@bc-grid/app-benchmarks",
       "version": "0.0.0",
@@ -187,6 +197,8 @@
     "@bc-grid/aggregations": ["@bc-grid/aggregations@workspace:packages/aggregations"],
 
     "@bc-grid/animations": ["@bc-grid/animations@workspace:packages/animations"],
+
+    "@bc-grid/app-animation-benchmarks": ["@bc-grid/app-animation-benchmarks@workspace:apps/animation-benchmarks"],
 
     "@bc-grid/app-benchmarks": ["@bc-grid/app-benchmarks@workspace:apps/benchmarks"],
 

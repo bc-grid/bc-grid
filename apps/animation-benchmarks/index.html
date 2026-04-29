@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bc-grid animation benchmark</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="bench-header">
+      <div>
+        <h1>bc-grid animation spike</h1>
+        <p>1,000-row reorder via Web Animations; use <code>?budget=200</code> for the design cap</p>
+      </div>
+      <button id="sort" type="button">Sort by amount</button>
+      <dl class="metrics" aria-label="Animation metrics">
+        <div><dt>Last FPS</dt><dd id="fps">--</dd></div>
+        <div><dt>Max frame</dt><dd id="maxFrame">--</dd></div>
+        <div><dt>Slow frames</dt><dd id="slowFrames">--</dd></div>
+        <div><dt>Layout</dt><dd id="layout">--</dd></div>
+        <div><dt>Duration</dt><dd id="duration">--</dd></div>
+      </dl>
+    </header>
+    <main>
+      <div class="grid" role="grid" aria-rowcount="1000" aria-colcount="5">
+        <div class="grid-header" role="row">
+          <span role="columnheader">Invoice</span>
+          <span role="columnheader">Customer</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader">Due</span>
+          <span role="columnheader">Amount</span>
+        </div>
+        <div id="rows" class="grid-rows"></div>
+      </div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
