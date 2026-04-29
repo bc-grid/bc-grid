@@ -48,6 +48,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: c1 #33]` **q1-pinned-cols** — pin classes on React-rendered cells, scroll-shadow indicators, multi-app Playwright (5 new tests × 3 browsers = 15 e2e cases). **Effort**: 2-3 days (delivered).
 - `[done: c1 #31]` **column-resize** — drag the right edge of a column header to resize. **Effort**: 1 day (delivered).
 - `[done: c1 #32]` **column-filter** — per-column inline text-filter row. **Effort**: 1-2 days (delivered).
+- `[in-flight: c1]` **row-selection** — plain click selects single row, Ctrl/Cmd-click toggles, Shift-click range. Pure selection algebra in `packages/react/src/selection.ts` (selectOnly, toggleRow, selectRange, isRowSelected, selectionSize). Anchor for Shift held in a ref. Visual via `aria-selected` + `.bc-grid-row-selected` class. Playwright tests for all three click modes + ARIA. **Branch**: `agent/c1/row-selection`. **Effort**: 1 day.
 - `[blocked: depends on q1-sort + q1-keyboard-focus + q1-pinned-cols]` **q1-vertical-slice-demo** — rebuild ONE bc-next screen (e.g., AR Customers list) entirely on bc-grid. Real data, real perf, real a11y. **Effort**: 3-5 days. **This is the Q1 "is the architecture sound?" gate.**
 
 ### Documentation & examples (parallel throughout Q1)

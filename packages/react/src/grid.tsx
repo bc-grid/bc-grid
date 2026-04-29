@@ -43,6 +43,7 @@ import {
 import { type ColumnResizeSession, computeResizedWidth } from "./columnResize"
 import { type ColumnFilterText, buildGridFilter, matchesGridFilter } from "./filter"
 import { nextKeyboardNav } from "./keyboard"
+import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { defaultCompareValues, toggleSortFor } from "./sort"
 import type {
   BcCellRendererParams,
@@ -183,12 +184,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // the `BcGridFilter` shape via `buildGridFilter` whenever it changes,
   // and surface the result through the controlled `setFilterState` callback.
   const [columnFilterText, setColumnFilterText] = useState<ColumnFilterText>({})
-  const [selectionState] = useControlledState<BcSelection>(
+  const [selectionState, setSelectionState] = useControlledState<BcSelection>(
     hasProp(props, "selection"),
     props.selection ?? createEmptySelection(),
     props.defaultSelection ?? createEmptySelection(),
     props.onSelectionChange,
   )
+
+  // Anchor for shift-click range selection. Set on plain click + ctrl/cmd
+  // click; consumed (and reset) by shift-click. Held in a ref so we don't
+  // re-render the grid just to update the anchor.
+  const selectionAnchorRef = useRef<RowId | null>(null)
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
     props.columnState ?? [],
@@ -782,14 +788,34 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             return (
               <div
                 key={entry.rowId}
-                className="bc-grid-row"
+                className={classNames("bc-grid-row", selected ? "bc-grid-row-selected" : undefined)}
                 role="row"
                 aria-rowindex={virtualRow.index + 3}
                 aria-selected={selected || undefined}
                 data-row-id={entry.rowId}
                 data-row-index={virtualRow.index}
                 style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
-                onClick={(event) => onRowClick?.(entry.row, event)}
+                onClick={(event) => {
+                  // Selection logic. Shift+click → range from anchor; ctrl/
+                  // cmd+click → toggle this row in current selection;
+                  // plain click → select only this row.
+                  if (event.shiftKey && selectionAnchorRef.current) {
+                    setSelectionState(
+                      selectRange(
+                        rowEntries.map((e) => e.rowId),
+                        selectionAnchorRef.current,
+                        entry.rowId,
+                      ),
+                    )
+                  } else if (event.ctrlKey || event.metaKey) {
+                    setSelectionState(toggleRow(selectionState, entry.rowId))
+                    selectionAnchorRef.current = entry.rowId
+                  } else {
+                    setSelectionState(selectOnly(entry.rowId))
+                    selectionAnchorRef.current = entry.rowId
+                  }
+                  onRowClick?.(entry.row, event)
+                }}
                 onDoubleClick={(event) => onRowDoubleClick?.(entry.row, event)}
               >
                 {virtualWindow.cols.map((virtualCol) =>
@@ -1681,11 +1707,6 @@ function assignRef<T>(ref: RefObject<T | null> | undefined, value: T): () => voi
 
 function createEmptySelection(): BcSelection {
   return { mode: "explicit", rowIds: new Set<RowId>() }
-}
-
-function isRowSelected(selection: BcSelection, rowId: RowId): boolean {
-  if (selection.mode === "explicit") return selection.rowIds.has(rowId)
-  return !selection.except.has(rowId)
 }
 
 function classNames(...values: Array<string | undefined>): string {
