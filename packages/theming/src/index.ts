@@ -76,6 +76,7 @@ export function getBcGridDensityVars(density: BcGridDensity): BcGridCssVars {
   }
 }
 
+/** Type-only helper for authoring checked bc-grid CSS variable override maps. */
 export function createBcGridThemeVars(vars: BcGridCssVars): BcGridCssVars {
   return { ...vars }
 }

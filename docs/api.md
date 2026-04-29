@@ -932,8 +932,25 @@ export type { AnimationOptions, MotionPolicy }
 ### `@bc-grid/theming`
 
 ```ts
-// Tailwind preset
-export { bcGridPreset }
+export {
+  bcGridDensities,
+  bcGridDensityClasses,
+  bcGridThemeClasses,
+  bcGridThemeVars,
+  bcGridPreset,
+  getBcGridDensityClass,
+  getBcGridThemeClass,
+  getBcGridDensityVars,
+  createBcGridThemeVars,
+}
+
+export type {
+  BcGridDensity,
+  BcGridThemeMode,
+  BcGridCssVar,
+  BcGridCssVars,
+}
+
 // CSS file (imported as side-effect)
 import "@bc-grid/theming/styles.css"
 ```

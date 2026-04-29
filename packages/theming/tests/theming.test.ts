@@ -57,6 +57,14 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain('[data-bc-grid-active-cell="true"]')
   })
 
+  test("CSS uses the kebab-case class convention from design.md", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    expect(css).toContain(".bc-grid-row")
+    expect(css).toContain(".bc-grid-cell")
+    expect(css).toContain(".bc-grid-status-open")
+    expect(css).not.toContain("bc-grid__")
+  })
+
   test("package exports built CSS, not source CSS", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
       exports: Record<string, unknown>

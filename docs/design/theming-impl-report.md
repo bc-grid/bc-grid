@@ -12,6 +12,7 @@
 - `@bc-grid/theming/styles.css` is a production export copied into `dist/styles.css` during package build. The package no longer exports source CSS.
 - The CSS contract now covers focus rings, selected rows/cells, dirty/invalid markers, coarse-pointer hit targets, `prefers-reduced-motion`, and forced-colors system colors.
 - Light and dark theme classes are opt-in (`bc-grid-theme-light`, `bc-grid-theme-dark`) while the base `.bc-grid` still consumes app-level shadcn tokens by default.
+- Element selectors follow the kebab-case convention from `design.md §13` (`.bc-grid-row`, `.bc-grid-cell`, `.bc-grid-status-*`) so the production theme CSS matches the virtualizer DOM.
 - The examples app uses the production theme classes in its static preview.
 
 ## Public Surface

@@ -82,14 +82,14 @@
   --bc-grid-font-size: 0.9375rem;
 }
 
-.bc-grid__header,
-.bc-grid__row {
+.bc-grid-header,
+.bc-grid-row {
   display: grid;
   grid-template-columns: var(--bc-grid-columns);
   min-width: 45rem;
 }
 
-.bc-grid__header {
+.bc-grid-header {
   min-height: var(--bc-grid-header-height);
   border-bottom: 1px solid var(--bc-grid-border);
   background: var(--bc-grid-header-bg);
@@ -98,26 +98,26 @@
   font-weight: 700;
 }
 
-.bc-grid__row {
+.bc-grid-row {
   min-height: var(--bc-grid-row-height);
   border-bottom: 1px solid var(--bc-grid-border);
 }
 
-.bc-grid__row:last-child {
+.bc-grid-row:last-child {
   border-bottom: 0;
 }
 
-.bc-grid__row:hover {
+.bc-grid-row:hover {
   background: var(--bc-grid-row-hover);
 }
 
-.bc-grid__row[aria-selected="true"],
-.bc-grid__cell[aria-selected="true"] {
+.bc-grid-row[aria-selected="true"],
+.bc-grid-cell[aria-selected="true"] {
   background: var(--bc-grid-row-selected);
   color: var(--bc-grid-row-selected-fg);
 }
 
-.bc-grid__cell {
+.bc-grid-cell {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -127,29 +127,29 @@
   white-space: nowrap;
 }
 
-.bc-grid__cell:focus-visible,
-.bc-grid__cell[data-bc-grid-active-cell="true"],
+.bc-grid-cell:focus-visible,
+.bc-grid-cell[data-bc-grid-active-cell="true"],
 .bc-grid [data-bc-grid-active-cell="true"] {
   outline: 2px solid var(--bc-grid-focus-ring);
   outline-offset: -2px;
 }
 
-.bc-grid__cell[aria-invalid="true"],
+.bc-grid-cell[aria-invalid="true"],
 .bc-grid [aria-invalid="true"] {
   box-shadow: inset 3px 0 0 var(--bc-grid-invalid);
 }
 
-.bc-grid__cell[data-bc-grid-dirty="true"],
+.bc-grid-cell[data-bc-grid-dirty="true"],
 .bc-grid [data-bc-grid-dirty="true"] {
   box-shadow: inset 3px 0 0 var(--bc-grid-dirty);
 }
 
-.bc-grid__cell--right {
+.bc-grid-cell-right {
   justify-content: flex-end;
   text-align: right;
 }
 
-.bc-grid__status {
+.bc-grid-status {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
@@ -159,17 +159,17 @@
   line-height: 1;
 }
 
-.bc-grid__status--open {
+.bc-grid-status-open {
   background: var(--bc-grid-status-open-bg);
   color: var(--bc-grid-status-open-fg);
 }
 
-.bc-grid__status--posted {
+.bc-grid-status-posted {
   background: var(--bc-grid-status-posted-bg);
   color: var(--bc-grid-status-posted-fg);
 }
 
-.bc-grid__status--held {
+.bc-grid-status-held {
   background: var(--bc-grid-status-held-bg);
   color: var(--bc-grid-status-held-fg);
 }
@@ -192,9 +192,9 @@
     --bc-grid-hit-target-min: 44px;
   }
 
-  .bc-grid__cell [role="button"],
-  .bc-grid__cell button,
-  .bc-grid__cell a {
+  .bc-grid-cell [role="button"],
+  .bc-grid-cell button,
+  .bc-grid-cell a {
     min-width: var(--bc-grid-hit-target-min);
     min-height: var(--bc-grid-hit-target-min);
   }
@@ -224,20 +224,20 @@
   }
 
   .bc-grid,
-  .bc-grid__header,
-  .bc-grid__row,
-  .bc-grid__cell {
+  .bc-grid-header,
+  .bc-grid-row,
+  .bc-grid-cell {
     border-color: CanvasText;
   }
 
-  .bc-grid__cell:focus-visible,
-  .bc-grid__cell[data-bc-grid-active-cell="true"],
+  .bc-grid-cell:focus-visible,
+  .bc-grid-cell[data-bc-grid-active-cell="true"],
   .bc-grid [data-bc-grid-active-cell="true"] {
     outline: 2px solid Highlight;
     outline-offset: -2px;
   }
 
-  .bc-grid__status {
+  .bc-grid-status {
     border: 1px solid CanvasText;
   }
 }

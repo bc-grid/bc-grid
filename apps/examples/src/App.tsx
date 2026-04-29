@@ -141,14 +141,14 @@ function ThemeSpikePreview({ example }: { example: ExampleDefinition }) {
                 className={`bc-grid bc-grid-theme-${theme.id} bc-grid--${density.id}`}
                 style={{ "--bc-grid-columns": gridTemplateColumns } as CSSProperties}
               >
-                <div className="bc-grid__header">
+                <div className="bc-grid-header">
                   {example.columns.map((column) => (
                     <div
                       key={column.key}
                       className={
                         column.align === "right"
-                          ? "bc-grid__cell bc-grid__cell--right"
-                          : "bc-grid__cell"
+                          ? "bc-grid-cell bc-grid-cell-right"
+                          : "bc-grid-cell"
                       }
                     >
                       {column.label}
@@ -156,14 +156,14 @@ function ThemeSpikePreview({ example }: { example: ExampleDefinition }) {
                   ))}
                 </div>
                 {example.rows.slice(0, 3).map((row) => (
-                  <div key={row.id} className="bc-grid__row">
+                  <div key={row.id} className="bc-grid-row">
                     {example.columns.map((column) => (
                       <div
                         key={column.key}
                         className={
                           column.align === "right"
-                            ? "bc-grid__cell bc-grid__cell--right"
-                            : "bc-grid__cell"
+                            ? "bc-grid-cell bc-grid-cell-right"
+                            : "bc-grid-cell"
                         }
                       >
                         {renderThemedCell(row, column.key)}
@@ -215,7 +215,7 @@ function renderCell(row: InvoiceRow, key: string) {
 function renderThemedCell(row: InvoiceRow, key: string) {
   if (key === "status") {
     return (
-      <span className={`bc-grid__status bc-grid__status--${row.status.toLowerCase()}`}>
+      <span className={`bc-grid-status bc-grid-status-${row.status.toLowerCase()}`}>
         {row.status}
       </span>
     )
