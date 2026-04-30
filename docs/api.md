@@ -1075,12 +1075,28 @@ export interface BcCellEditor<TRow, TValue = unknown> {
   kind?: string
 }
 
+/**
+ * Active-cell move directive applied after the editor unmounts. Mirrors
+ * the keyboard model in `editing-rfc §Keyboard model in edit mode`.
+ */
+export type BcEditMove = "stay" | "down" | "up" | "right" | "left"
+
 export interface BcCellEditorProps<TRow, TValue = unknown> {
   initialValue: TValue
   row: TRow
   rowId: RowId
   column: BcReactGridColumn<TRow, TValue>
-  commit(newValue: TValue): void
+  /**
+   * Commit the candidate value. Optional `opts.moveOnSettle` overrides
+   * the framework's default `"down"` next-active-cell directive — pass
+   * `"right"` from a Tab handler, `"up"` from Shift+Enter, `"stay"`
+   * from a click-outside, etc. Editors that internally parse to typed
+   * values (number, date, select) can take ownership of keystroke
+   * interception and pass the resolved move directly; editors that
+   * defer to the wrapper's onKeyDown should call `commit(value)` with
+   * no opts.
+   */
+  commit(newValue: TValue, opts?: { moveOnSettle?: BcEditMove }): void
   cancel(): void
   /** True after a `validate` call returned an error; the editor surfaces it. */
   error?: string

@@ -21,6 +21,7 @@ export type {
   BcDetailPanelParams,
   BcEditGridAction,
   BcEditGridProps,
+  BcEditMove,
   BcFilterDefinition,
   BcFilterEditorProps,
   BcGridApi,

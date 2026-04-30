@@ -414,12 +414,41 @@ export interface BcCellEditorPrepareParams<TRow> {
   columnId: ColumnId
 }
 
+/**
+ * Active-cell move directive applied after the editor unmounts. Mirrors
+ * the keyboard model in `editing-rfc §Keyboard model in edit mode`:
+ *   - `down` / `up`: advance one row, clamped at extents
+ *   - `right`: next column; at last column wraps to next row's first
+ *   - `left`: previous column; at first column wraps to prior row's last
+ *   - `stay`: no movement (used for click-outside, Esc-aware paths)
+ *
+ * Editors that internally parse to typed values can pass `moveOnSettle`
+ * via `BcCellEditorProps.commit(value, { moveOnSettle })` to honour
+ * the user's keystroke (Enter → "down", Tab → "right", etc.) while
+ * bypassing the framework's wrapper key handler. Editors that defer
+ * keystroke handling to the wrapper should call `commit(value)` and
+ * let the wrapper choose the move directive — the default is "down".
+ */
+export type BcEditMove = "stay" | "down" | "up" | "right" | "left"
+
 export interface BcCellEditorProps<TRow, TValue = unknown> {
   initialValue: TValue
   row: TRow
   rowId: RowId
   column: BcReactGridColumn<TRow, TValue>
-  commit(newValue: TValue): void
+  /**
+   * Commit the candidate value. Optional `opts.moveOnSettle` overrides
+   * the framework's default `"down"` next-active-cell directive — pass
+   * `"right"` from a Tab handler, `"up"` from Shift+Enter, `"stay"`
+   * from a click-outside, etc. Editors that internally parse to typed
+   * values (number, date, select) own their own keypress interception
+   * and should pass the resolved move directly; editors that defer to
+   * the wrapper's onKeyDown should call `commit(value)` and let the
+   * wrapper compute the move from the captured keystroke.
+   *
+   * Per `editing-rfc §editor-typed-commit` follow-up.
+   */
+  commit(newValue: TValue, opts?: { moveOnSettle?: BcEditMove }): void
   cancel(): void
   error?: string
   focusRef?: RefObject<HTMLElement | null>

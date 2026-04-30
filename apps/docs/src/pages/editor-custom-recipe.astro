@@ -110,6 +110,47 @@ function ColourEditor(props: BcCellEditorProps<unknown, string>) {
   )
 }`
 
+const typedCommitSnippet = `import type { BcCellEditorProps } from "@bc-grid/react"
+
+// A numeric editor that owns its own keystroke interception and
+// commits a typed \`number\` straight to the framework, bypassing
+// \`column.valueParser\`. The opts.moveOnSettle override mirrors the
+// keyboard model the wrapper would otherwise apply (Enter -> down,
+// Tab -> right, Shift+Enter -> up, Shift+Tab -> left).
+function TypedNumberEditor(props: BcCellEditorProps<unknown, number>) {
+  const { initialValue, focusRef, seedKey, commit, cancel } = props
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  // ...focusRef + select-all wiring elided for brevity...
+
+  const tryCommit = (move: BcEditMove) => {
+    const raw = inputRef.current?.value ?? ""
+    const parsed = parseFloat(raw.replace(/,/g, ""))
+    if (Number.isNaN(parsed)) return  // built-in validate; framework owns the error UI
+    commit(parsed, { moveOnSettle: move })
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "Enter") {
+      event.preventDefault()
+      event.stopPropagation()  // bypass the wrapper's onKeyDown
+      tryCommit(event.shiftKey ? "up" : "down")
+    } else if (event.key === "Tab") {
+      event.preventDefault()
+      event.stopPropagation()
+      tryCommit(event.shiftKey ? "left" : "right")
+    } else if (event.key === "Escape") {
+      event.preventDefault()
+      cancel()
+    }
+  }
+
+  return (
+    <input ref={inputRef} type="text" inputMode="decimal"
+      defaultValue={seedKey ?? (initialValue == null ? "" : String(initialValue))}
+      onKeyDown={onKeyDown} />
+  )
+}`
+
 const wireSnippet = `import { BcEditGrid, type BcGridColumn } from "@bc-grid/react"
 import { colourEditor } from "./colour-editor"
 
@@ -149,6 +190,7 @@ const checklist = [
   "Component sets aria-label from column.header so AT announces the column context.",
   "Component sets aria-describedby pointing at a hidden span when error is present.",
   "Component calls commit(value) exactly once on user confirmation, or cancel() to abort.",
+  "Typed-value editors call event.stopPropagation() in their own onKeyDown and pass { moveOnSettle } to commit so the wrapper doesn't fire a duplicate string commit.",
   "Component uses prepareResult when the editor needs async setup (palettes, options, etc.).",
   "Popovered editors mark portaled content with data-bc-grid-editor-portal so click-outside doesn't fire inside the popover.",
   "Column wires the editor via column.cellEditor; validate runs at commit before the overlay updates.",
@@ -232,7 +274,45 @@ const checklist = [
   </section>
 
   <section class="section">
-    <h2>3. Portal-aware click-outside</h2>
+    <h2>3. Typed commit and custom move directives</h2>
+    <p>
+      The wrapper's keyboard handler reads the editor input's <code>value</code> string
+      on Enter / Tab / Shift+Enter / Shift+Tab and commits it. That works for text
+      editors, but numeric / date / select-style editors that already know their typed
+      value would otherwise round-trip through <code>column.valueParser</code> just to
+      reach the overlay. <code>commit</code> takes an optional second argument so an
+      editor can pass a parsed value <em>and</em> the move directive directly:
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>typed-number-editor.tsx</span>
+        <span>typed commit</span>
+      </div>
+      <Code code={typedCommitSnippet} lang="tsx" theme="github-dark" />
+    </div>
+    <p>
+      <code>BcEditMove</code> is exported from <code>@bc-grid/react</code> and covers
+      <code>"stay" | "down" | "up" | "right" | "left"</code>. Two rules to keep the
+      handoff clean:
+    </p>
+    <ul>
+      <li>
+        Call <code>event.stopPropagation()</code> in the editor's
+        <code>onKeyDown</code> so the wrapper's own Enter / Tab handler doesn't fire
+        a second commit with the raw string value.
+      </li>
+      <li>
+        When the editor commits a non-string value, the framework bypasses
+        <code>column.valueParser</code> automatically — it's only invoked when
+        <code>typeof value === "string"</code>. Editors that want to keep using
+        <code>valueParser</code> should commit a string and rely on the wrapper.
+      </li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>4. Portal-aware click-outside</h2>
+
     <p>
       The framework commits the current value on any document-level
       <code>pointerdown</code> outside the editor. If your editor renders a popover into a
@@ -251,7 +331,7 @@ const checklist = [
   </section>
 
   <section class="section">
-    <h2>4. Wiring into a column</h2>
+    <h2>5. Wiring into a column</h2>
     <p>
       Attach the factory via <code>column.cellEditor</code>. <code>validate</code> runs
       after <code>valueParser</code> (string editors only) and before the overlay
@@ -269,7 +349,7 @@ const checklist = [
   </section>
 
   <section class="section">
-    <h2>5. Consumer-side commit</h2>
+    <h2>6. Consumer-side commit</h2>
     <p>
       <code>onCellEditCommit</code> fires after the optimistic overlay update lands.
       Returning a Promise marks the cell <code>pending: true</code> until it settles; on

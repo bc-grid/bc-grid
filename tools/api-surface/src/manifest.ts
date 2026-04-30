@@ -148,6 +148,7 @@ export const apiSurfaceManifest = [
       "BcEditGrid",
       "BcEditGridAction",
       "BcEditGridProps",
+      "BcEditMove",
       "BcFilterDefinition",
       "BcFilterEditorProps",
       "BcGrid",
