@@ -1,4 +1,12 @@
-import type { BcColumnFormat, BcGridColumn } from "@bc-grid/core"
+import type {
+  BcColumnFormat,
+  BcGridColumn,
+  ColumnId,
+  ServerExportQuery,
+  ServerExportResult,
+} from "@bc-grid/core"
+
+const DEFAULT_SERVER_EXPORT_MAX_ROWS = 50_000
 
 export interface ExportOptions {
   /** Include a first row of column headers. Default true. */
@@ -25,6 +33,44 @@ export interface ExportResult {
   mimeType: string
   extension: string
   content: string | Uint8Array
+}
+
+export interface ServerExportContext {
+  signal?: AbortSignal
+}
+
+export type ServerExportHandler = (
+  query: ServerExportQuery,
+  context: ServerExportContext,
+) => Promise<ServerExportResult>
+
+export type ServerExportRowsResult<TRow> =
+  | readonly TRow[]
+  | {
+      rows: readonly TRow[]
+      totalRows?: number
+    }
+
+export type LoadAllServerExportRows<TRow> = (
+  query: ServerExportQuery,
+  context: ServerExportContext,
+) => Promise<ServerExportRowsResult<TRow>>
+
+export interface ServerExportFlowOptions<TRow> extends ExportOptions {
+  /**
+   * Preferred server-owned export path. The server can return a blob,
+   * signed URL, or async job id without loading the full dataset in the client.
+   */
+  exportRows?: ServerExportHandler
+  /**
+   * Bounded fallback path. The client loads every matching row up to maxRows
+   * and serializes it through toCsv / toExcel / toPdf.
+   */
+  loadAllRows?: LoadAllServerExportRows<TRow>
+  /** Abort signal forwarded to either export path. */
+  signal?: AbortSignal
+  /** Default fallback row cap when query.maxRows is not set. Default 50,000. */
+  maxRows?: number
 }
 
 export function toCsv<TRow>(
@@ -58,6 +104,40 @@ export function toCsv<TRow>(
     .map((row) => row.map((cell) => escapeCsvCell(cell, delimiter)).join(delimiter))
     .join(lineEnding)
   return options.bom ? `\uFEFF${csv}` : csv
+}
+
+export async function exportServerRows<TRow>(
+  query: ServerExportQuery,
+  columns: readonly BcGridColumn<TRow>[],
+  options: ServerExportFlowOptions<TRow> = {},
+): Promise<ServerExportResult> {
+  const context: ServerExportContext = options.signal ? { signal: options.signal } : {}
+  if (options.exportRows) {
+    const serverQuery =
+      query.maxRows == null && options.maxRows != null
+        ? { ...query, maxRows: options.maxRows }
+        : query
+    return validateServerExportResult(await options.exportRows(serverQuery, context))
+  }
+
+  if (!options.loadAllRows) {
+    throw new Error(
+      "@bc-grid/export.exportServerRows requires either exportRows or loadAllRows for server-mode exports",
+    )
+  }
+
+  const maxRows = query.maxRows ?? options.maxRows ?? DEFAULT_SERVER_EXPORT_MAX_ROWS
+  const rowsResult = normaliseServerExportRows(
+    await options.loadAllRows({ ...query, maxRows }, context),
+  )
+  assertWithinMaxRows(rowsResult, maxRows)
+
+  return serializeServerExportRows(
+    rowsResult.rows,
+    columnsForServerExport(query.columns, columns),
+    query,
+    options,
+  )
 }
 
 export async function toExcel<TRow>(
@@ -167,6 +247,107 @@ export async function toPdf<TRow>(
     extension: "pdf",
     content: new Uint8Array(document.output("arraybuffer")),
   }
+}
+
+function validateServerExportResult(result: ServerExportResult): ServerExportResult {
+  if (result.kind === "blob") {
+    if (!result.blob) {
+      throw new Error('@bc-grid/export.exportServerRows expected a "blob" result with blob')
+    }
+    return result
+  }
+  if (result.kind === "url") {
+    if (!result.url) {
+      throw new Error('@bc-grid/export.exportServerRows expected a "url" result with url')
+    }
+    return result
+  }
+  if (result.kind === "job") {
+    if (!result.jobId) {
+      throw new Error('@bc-grid/export.exportServerRows expected a "job" result with jobId')
+    }
+    return result
+  }
+  throw new Error("@bc-grid/export.exportServerRows expected a blob, url, or job result")
+}
+
+function normaliseServerExportRows<TRow>(result: ServerExportRowsResult<TRow>): {
+  rows: readonly TRow[]
+  totalRows?: number
+} {
+  if (Array.isArray(result)) return { rows: result }
+  const structured = result as { rows: readonly TRow[]; totalRows?: number }
+  if (structured.totalRows == null) return { rows: structured.rows }
+  return { rows: structured.rows, totalRows: structured.totalRows }
+}
+
+function assertWithinMaxRows<TRow>(
+  result: { rows: readonly TRow[]; totalRows?: number },
+  maxRows: number,
+) {
+  if (result.totalRows != null && result.totalRows > maxRows) {
+    throw new Error(
+      `@bc-grid/export.exportServerRows cannot fallback-export ${result.totalRows.toLocaleString()} rows because maxRows is ${maxRows.toLocaleString()}`,
+    )
+  }
+  if (result.rows.length > maxRows) {
+    throw new Error(
+      `@bc-grid/export.exportServerRows loadAllRows returned ${result.rows.length.toLocaleString()} rows, exceeding maxRows ${maxRows.toLocaleString()}`,
+    )
+  }
+}
+
+async function serializeServerExportRows<TRow>(
+  rows: readonly TRow[],
+  columns: readonly BcGridColumn<TRow>[],
+  query: ServerExportQuery,
+  options: ExportOptions,
+): Promise<ServerExportResult> {
+  if (query.format === "csv") {
+    return exportResultToServerBlob({
+      mimeType: "text/csv;charset=utf-8",
+      extension: "csv",
+      content: toCsv(rows, columns, options),
+    })
+  }
+  if (query.format === "xlsx") {
+    return exportResultToServerBlob(await toExcel(rows, columns, options))
+  }
+  return exportResultToServerBlob(await toPdf(rows, columns, options))
+}
+
+function exportResultToServerBlob(result: ExportResult): ServerExportResult {
+  return {
+    kind: "blob",
+    blob: new Blob([exportContentBlobPart(result.content)], { type: result.mimeType }),
+  }
+}
+
+function exportContentBlobPart(content: string | Uint8Array): BlobPart {
+  if (typeof content === "string") return content
+  const copy = new ArrayBuffer(content.byteLength)
+  new Uint8Array(copy).set(content)
+  return copy
+}
+
+function columnsForServerExport<TRow>(
+  columnIds: readonly ColumnId[],
+  columns: readonly BcGridColumn<TRow>[],
+): BcGridColumn<TRow>[] {
+  const byId = new Map<ColumnId, BcGridColumn<TRow>>()
+  columns.forEach((column, index) => byId.set(exportColumnId(column, index), column))
+
+  return columnIds.map((columnId) => {
+    const column = byId.get(columnId)
+    if (!column) {
+      throw new Error(`@bc-grid/export.exportServerRows could not find column "${columnId}"`)
+    }
+    return column
+  })
+}
+
+function exportColumnId<TRow>(column: BcGridColumn<TRow>, index: number): ColumnId {
+  return column.columnId ?? column.field ?? String(index)
 }
 
 function getCellValue<TRow>(row: TRow, column: BcGridColumn<TRow>): unknown {

@@ -1084,8 +1084,16 @@ export type { BcFilterDefinition }
 ### `@bc-grid/export`
 
 ```ts
-export { toCsv, toExcel, toPdf }
-export type { ExportOptions, ExportResult }
+export { exportServerRows, toCsv, toExcel, toPdf }
+export type {
+  ExportOptions,
+  ExportResult,
+  LoadAllServerExportRows,
+  ServerExportContext,
+  ServerExportFlowOptions,
+  ServerExportHandler,
+  ServerExportRowsResult,
+}
 ```
 
 ### `@bc-grid/server-row-model`
