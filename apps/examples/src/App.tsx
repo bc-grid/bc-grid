@@ -1,4 +1,6 @@
+import { textEditor } from "@bc-grid/editors"
 import {
+  type BcCellEditor,
   BcEditGrid,
   type BcGridColumn,
   type BcGridDensity,
@@ -146,12 +148,23 @@ function CustomerGridDemo({
         header: "Trading Name",
         width: 220,
         filter: { type: "text" },
-        // ?edit=1: editable + validate (rejects empty). Activates the
-        // editor-framework default text editor.
+        // ?edit=1: editable + validate (rejects empty). Uses the proper
+        // editor-text factory (kind: "text") from @bc-grid/editors with
+        // mount-time select-all + theme-aware styling.
         editable: editorFrameworkEnabled(),
+        // `textEditor` is exported as `BcCellEditor<unknown, unknown>` for
+        // assignability across all row/value shapes. Casting to the column's
+        // typed shape is safe here — the editor doesn't read `row` fields.
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: textEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        // valueParser bridges the editor's string output → typed TValue.
+        // For trading names we trim whitespace at commit time — a typical
+        // ERP normalization (no leading/trailing spaces in stored codes).
+        valueParser: (input: string) => input.trim(),
         validate: (next: unknown) => {
           const stringValue = typeof next === "string" ? next : String(next ?? "")
-          return stringValue.trim().length === 0
+          return stringValue.length === 0
             ? { valid: false as const, error: "Trading name is required." }
             : { valid: true as const }
         },

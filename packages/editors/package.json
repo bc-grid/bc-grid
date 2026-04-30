@@ -14,8 +14,8 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
-    "dev": "tsup src/index.ts --format esm --dts --sourcemap --watch",
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --tsconfig tsconfig.build.json",
+    "dev": "tsup src/index.ts --format esm --dts --sourcemap --watch --tsconfig tsconfig.build.json",
     "type-check": "tsc -b"
   },
   "dependencies": {
@@ -24,5 +24,8 @@
   },
   "peerDependencies": {
     "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0"
   }
 }
