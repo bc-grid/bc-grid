@@ -138,8 +138,8 @@ These tasks are pure `@bc-grid/react` UI on top of existing state shapes. **No R
 Spec: `docs/design/editing-rfc.md` (PR #45).
 
 - `[done: c2 #45]` **editing-rfc** — design doc; covers lifecycle, keyboard, validation, dirty tracking, server commit, 7 built-in editor specs. **Editor framework + 8 editors + validation + dirty tracking + bc-edit-grid-complete now claimable.**
-- `[review: worker4 #148]` **editor-framework** — `BcCellEditor` lifecycle + state machine + validation pipeline + DOM focus shift. **Note:** assertive live region plumbing (audit-c2-002 §F1) already landed; this task closes the remaining RFC gaps — `editor.prepare()` wiring, async-validate signal in `column.validate`, portal-aware click-outside, `aria-activedescendant` suspension during edit, `aria-current` / `aria-describedby` on the editing cell, polite-region 250ms debounce, Tab/Shift+Tab wrap at last/first cell. Single owner. **Effort**: M. **Unblocked: editing-rfc merged in #45.**
-- `[blocked: depends on editor-framework]` **editor-text** — text input editor. shadcn `Input` primitive. Honours `seedKey`, `pointerHint`. **Effort**: S.
+- `[done: worker4 #148]` **editor-framework** — `BcCellEditor` lifecycle + state machine + validation pipeline + DOM focus shift. **Note:** assertive live region plumbing (audit-c2-002 §F1) already landed; this task closes the remaining RFC gaps — `editor.prepare()` wiring, async-validate signal in `column.validate`, portal-aware click-outside, `aria-activedescendant` suspension during edit, `aria-current` / `aria-describedby` on the editing cell, polite-region 250ms debounce, Tab/Shift+Tab wrap at last/first cell. Single owner. **Effort**: M. **Unblocked: editing-rfc merged in #45.**
+- `[review: worker4 #155]` **editor-text** — text input editor. Native `<input type="text">` (deviation from RFC's shadcn `Input`, matching the salvage-via-#135 decision for `editor-select`). Honours `seedKey`, `pointerHint`. The `textEditor` factory landed via integrator #112; this PR closes RFC-fidelity gaps (focusRef timing, AT name on input, aria-describedby for errors) and unit-tests the seed-value path. **Effort**: S.
 - `[blocked: depends on editor-framework]` **editor-number** — numeric input with locale-aware decimal separator. shadcn `Input` + `inputMode="decimal"`. **Effort**: S.
 - `[done: c1 #121]` **editor-date** — shadcn date-picker primitive + ISO 8601 commit. **Effort**: M.
 - `[done: c1 #126]` **editor-datetime** — composes `editor-date` + time picker; ISO 8601 commit. **Effort**: M.
@@ -199,7 +199,7 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 - `[blocked: depends on sidebar-impl]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
 - `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
 - `[ready]` **context-menu-impl** — shadcn `ContextMenu` primitive; right-click + long-press (500ms coarse pointer) + Shift+F10. 4 built-in items + custom factory function. **Effort**: M.
-- `[blocked: depends on aggregation-engine + status-bar-impl]` **footer-aggregations** — wire the `aggregations` status-bar segment to the aggregation-engine output. **Effort**: S.
+- `[done: worker2 #154]` **footer-aggregations** — wire the `aggregations` status-bar segment to the aggregation-engine output. **Effort**: S.
 
 #### Track 6 — Filters + Export (Q6 pulled forward)
 
@@ -207,7 +207,7 @@ Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 
 - `[done: c2 #48]` **filter-registry-rfc** — extension protocol; `BcFilterDefinition` / `BcReactFilterDefinition`; persistence shape; 7 built-in filter specs. **Effort**: 1 day.
 - `[done: c1 #145]` **filter-popup-variant** ⭐ — When `column.filter.variant === "popup"`, render a header-icon (funnel) that opens a shadcn `Popover` with the existing text/number/date/boolean filter editor inside, instead of the inline-row input. Active state: solid/blue funnel + underline on the header, cleared by an `×` in the popover footer. The inline row collapses for that column when popup is active; if every column is popup-variant the row disappears entirely. AG-Grid-feel. Reuses existing filter editors — no logic duplication. **Demo-critical** (week 2). **Effort**: M.
-- `[ready]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
+- `[review: worker1 #156]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
 - `[ready]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
 - `[ready]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
 - `[ready]` **filter-number-range-impl** — between two numbers. **Effort**: S.
