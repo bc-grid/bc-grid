@@ -816,18 +816,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   useEffect(() => assignRef(apiRef, api), [apiRef, api])
 
-  // Status-bar render context per `chrome-rfc §Status bar`. Aggregations
-  // are intentionally empty here; `footer-aggregations` (Track 5) is the
-  // task that wires `aggregationResults` through.
+  // Status-bar render context per `chrome-rfc §Status bar`. The
+  // `aggregations` segment consumes the same `useAggregations` output
+  // already feeding the in-grid aggregation footer row, so the segment
+  // and the row stay in sync at zero extra cost.
   const statusBarContext = useMemo(
     () => ({
       api,
       totalRowCount: data.length,
       filteredRowCount: allRowEntries.length,
       selectedRowCount: computeSelectedRowCount(selectionState, data.length, allRowEntries.length),
-      aggregations: [] as const,
+      aggregations: aggregationResults,
     }),
-    [api, allRowEntries.length, data.length, selectionState],
+    [api, aggregationResults, allRowEntries.length, data.length, selectionState],
   )
 
   const handlePaginationChange = useCallback(
