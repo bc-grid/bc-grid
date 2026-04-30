@@ -35,8 +35,9 @@ describe("@bc-grid/animations FLIP helpers", () => {
   test("builds transform-only keyframes", () => {
     const keyframes = createFlipKeyframes({ x: 10, y: -20, scaleX: 1, scaleY: 1 })
 
-    expect(keyframes[0]?.transform).toBe("translate(10px, -20px)")
-    expect(keyframes[1]?.transform).toBe("translate(0, 0) scale(1, 1)")
+    expect(keyframes[0]?.transform).toBe("translate3d(10px, -20px, 0)")
+    expect(keyframes[1]?.transform).toBe("translate3d(0, 0, 0) scale(1, 1)")
+    expectCompositorOnly(keyframes)
   })
 
   test("skips no-op deltas", () => {
@@ -47,9 +48,11 @@ describe("@bc-grid/animations FLIP helpers", () => {
   test("builds flash and slide keyframes with transform and opacity only", () => {
     expect(createFlashKeyframes()).toEqual([{ opacity: 0.72 }, { opacity: 1 }])
     expect(createSlideKeyframes("up", 16)).toEqual([
-      { transform: "translateY(16px)", opacity: 0 },
-      { transform: "translate(0, 0)", opacity: 1 },
+      { transform: "translate3d(0, 16px, 0)", opacity: 0 },
+      { transform: "translate3d(0, 0, 0)", opacity: 1 },
     ])
+    expectCompositorOnly(createFlashKeyframes())
+    expectCompositorOnly(createSlideKeyframes("left", 16))
   })
 })
 
@@ -123,7 +126,59 @@ describe("animation primitives", () => {
     expect(resolveMotionPolicy("normal")).toBe("normal")
     expect(resolveMotionPolicy("reduced")).toBe("reduced")
   })
+
+  test("default primitive calls are still capped by the production budget", async () => {
+    const elements = Array.from({ length: 101 }, () =>
+      createFakeElement({ top: 0, left: 0, width: 100, height: 32 }),
+    )
+
+    const animations = elements.map((element) => flash(element))
+
+    expect(animations.filter(Boolean)).toHaveLength(100)
+    expect(animations.at(-1)).toBeNull()
+    const started = animations.filter((animation): animation is Animation => animation != null)
+    await Promise.all(started.map((animation) => animation.finished))
+    await Promise.resolve()
+  })
+
+  test("explicit normal motion policy overrides a reduced media query", async () => {
+    const restoreMatchMedia = mockMatchMedia(true)
+    try {
+      expect(resolveMotionPolicy()).toBe("reduced")
+      const element = createFakeElement({ top: 40, left: 0, width: 100, height: 32 })
+      const animations = flip([{ element, first: { top: 0, left: 0, width: 100, height: 32 } }], {
+        motionPolicy: "normal",
+      })
+
+      expect(animations).toHaveLength(1)
+      await animations[0]?.finished
+    } finally {
+      restoreMatchMedia()
+    }
+  })
 })
+
+function expectCompositorOnly(keyframes: Keyframe[]): void {
+  for (const keyframe of keyframes) {
+    for (const property of Object.keys(keyframe)) {
+      expect(["opacity", "transform"]).toContain(property)
+    }
+  }
+}
+
+function mockMatchMedia(matches: boolean): () => void {
+  const original = globalThis.matchMedia
+  Object.defineProperty(globalThis, "matchMedia", {
+    configurable: true,
+    value: () => ({ matches }) as MediaQueryList,
+  })
+  return () => {
+    Object.defineProperty(globalThis, "matchMedia", {
+      configurable: true,
+      value: original,
+    })
+  }
+}
 
 function createFakeElement(rect: DOMRectInit): HTMLElement {
   const animation: Animation = {

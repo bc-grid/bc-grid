@@ -46,7 +46,7 @@ export const DEFAULT_ANIMATION_MAX_IN_FLIGHT = 100
 export const HARD_ANIMATION_MAX_IN_FLIGHT = 200
 
 const defaultAnimationOptions = {
-  duration: 250,
+  duration: 200,
   easing: "cubic-bezier(0.2, 0, 0, 1)",
 } as const
 
@@ -95,6 +95,8 @@ export class AnimationBudget {
   }
 }
 
+const defaultAnimationBudget = new AnimationBudget()
+
 export function readFlipRect(element: Element): FlipRect {
   const rect = element.getBoundingClientRect()
   return {
@@ -124,12 +126,10 @@ export function createFlipKeyframes(delta: FlipDelta): Keyframe[] {
 
   return [
     {
-      transform: `translate(${delta.x}px, ${delta.y}px)${fromScale}`,
-      opacity: 0.98,
+      transform: `translate3d(${delta.x}px, ${delta.y}px, 0)${fromScale}`,
     },
     {
-      transform: "translate(0, 0) scale(1, 1)",
-      opacity: 1,
+      transform: "translate3d(0, 0, 0) scale(1, 1)",
     },
   ]
 }
@@ -141,22 +141,22 @@ export function createFlashKeyframes(): Keyframe[] {
 export function createSlideKeyframes(direction: SlideDirection, distance = 12): Keyframe[] {
   const offset = Math.max(0, distance)
   const from = {
-    up: `translateY(${offset}px)`,
-    down: `translateY(-${offset}px)`,
-    left: `translateX(${offset}px)`,
-    right: `translateX(-${offset}px)`,
+    up: `translate3d(0, ${offset}px, 0)`,
+    down: `translate3d(0, -${offset}px, 0)`,
+    left: `translate3d(${offset}px, 0, 0)`,
+    right: `translate3d(-${offset}px, 0, 0)`,
   } satisfies Record<SlideDirection, string>
 
   return [
     { transform: from[direction], opacity: 0 },
-    { transform: "translate(0, 0)", opacity: 1 },
+    { transform: "translate3d(0, 0, 0)", opacity: 1 },
   ]
 }
 
 export function flip(targets: Iterable<FlipTarget>, options: FlipOptions = {}): Animation[] {
   if (shouldReduceMotion(options)) return []
 
-  const budget = options.budget ?? new AnimationBudget()
+  const budget = options.budget ?? defaultAnimationBudget
   const targetList = Array.from(targets)
   const maxAnimations = Math.max(
     0,
@@ -169,10 +169,9 @@ export function flip(targets: Iterable<FlipTarget>, options: FlipOptions = {}): 
     const last = target.last ?? readFlipRect(target.element)
     const delta = calculateFlipDelta(target.first, last)
     if (!shouldAnimateDelta(delta)) continue
-    if (!budget.reserve(1)) break
 
-    const animation = target.element.animate(createFlipKeyframes(delta), timing(options))
-    trackBudget(animation, budget)
+    const animation = animateWithBudget(target.element, createFlipKeyframes(delta), options, budget)
+    if (!animation) break
     animations.push(animation)
   }
 
@@ -181,11 +180,8 @@ export function flip(targets: Iterable<FlipTarget>, options: FlipOptions = {}): 
 
 export function flash(element: HTMLElement, options: AnimationOptions = {}): Animation | null {
   if (shouldReduceMotion(options)) return null
-  if (!reserveOne(options.budget)) return null
 
-  const animation = element.animate(createFlashKeyframes(), timing({ duration: 160, ...options }))
-  trackBudget(animation, options.budget)
-  return animation
+  return animateWithBudget(element, createFlashKeyframes(), { duration: 140, ...options })
 }
 
 export function slide(
@@ -194,14 +190,11 @@ export function slide(
   options: SlideOptions = {},
 ): Animation | null {
   if (shouldReduceMotion(options)) return null
-  if (!reserveOne(options.budget)) return null
 
-  const animation = element.animate(
-    createSlideKeyframes(direction, options.distance),
-    timing({ duration: 180, ...options }),
-  )
-  trackBudget(animation, options.budget)
-  return animation
+  return animateWithBudget(element, createSlideKeyframes(direction, options.distance), {
+    duration: 160,
+    ...options,
+  })
 }
 
 export function playFlip(
@@ -224,8 +217,21 @@ function shouldReduceMotion(options: AnimationOptions): boolean {
   return options.reducedMotion === true || resolveMotionPolicy(options.motionPolicy) === "reduced"
 }
 
-function reserveOne(budget: AnimationBudget | undefined): boolean {
-  return budget?.reserve(1) ?? true
+function animateWithBudget(
+  element: HTMLElement,
+  keyframes: Keyframe[],
+  options: AnimationOptions,
+  budget = options.budget ?? defaultAnimationBudget,
+): Animation | null {
+  if (!budget.reserve(1)) return null
+  try {
+    const animation = element.animate(keyframes, timing(options))
+    trackBudget(animation, budget)
+    return animation
+  } catch (error) {
+    budget.release(1)
+    throw error
+  }
 }
 
 function trackBudget(animation: Animation, budget: AnimationBudget | undefined): void {

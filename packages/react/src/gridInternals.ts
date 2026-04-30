@@ -2,8 +2,11 @@ import {
   AnimationBudget,
   type FlipRect,
   type FlipTarget,
+  calculateFlipDelta,
   flip,
   readFlipRect,
+  shouldAnimateDelta,
+  slide,
 } from "@bc-grid/animations"
 import type {
   BcCellPosition,
@@ -1025,6 +1028,14 @@ export interface UseFlipOnSortParams {
   virtualizer: Virtualizer
 }
 
+interface RowFlipCandidate extends FlipTarget {
+  rowIndex: number
+}
+
+const ROW_FLIP_DURATION_MS = 200
+const ROW_ENTER_DURATION_MS = 140
+const ROW_ENTER_DISTANCE_PX = 8
+
 export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOnSortParams): {
   /**
    * Capture current visible row rects before a sort is committed. The next
@@ -1067,8 +1078,7 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
     const scroller = scrollerRef.current
     if (!scroller) return
 
-    const targets: FlipTarget[] = []
-    const handles: { release(): void }[] = []
+    const candidates: RowFlipCandidate[] = []
     const visibleRows = visibleBodyRows(scroller)
     if (visibleRows.length !== captured.size) return
 
@@ -1080,116 +1090,146 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
       const last = readFlipRect(rowEl)
       const maxDelta = Math.max(1, last.height * 1.5)
       if (Math.abs(first.top - last.top) > maxDelta) return
-      targets.push({ element: rowEl, first, last })
-      const rowIndexAttr = rowEl.dataset.rowIndex
-      if (rowIndexAttr) {
-        const rowIndex = Number(rowIndexAttr)
-        if (Number.isFinite(rowIndex)) {
-          handles.push(virtualizer.beginInFlightRow(rowIndex))
-        }
-      }
+      const candidate = rowFlipCandidate(rowEl, first, last)
+      if (candidate) candidates.push(candidate)
     }
 
-    if (targets.length === 0) {
-      for (const h of handles) h.release()
-      return
-    }
-
-    const animations = flip(targets, { budget: flipBudget })
-    if (animations.length === 0) {
-      for (const h of handles) h.release()
-      return
-    }
-    for (const [i, animation] of animations.entries()) {
-      const handle = handles[i]
-      if (!handle) continue
-      animation.finished.finally(() => handle.release())
-    }
+    playRowFlipCandidates(candidates, flipBudget, virtualizer)
   }, [flipBudget, sortState, virtualizer, scrollerRef])
 
   return { prepareSortAnimation }
 }
 
 // ---------------------------------------------------------------------------
-// FLIP animation when visible row IDs are inserted.
+// FLIP animation when the visible row model changes.
 // ---------------------------------------------------------------------------
 
 export interface UseFlipOnRowInsertionParams<TRow> {
+  motionKey?: unknown
   rowEntries: readonly RowEntry<TRow>[]
   scrollerRef: RefObject<HTMLDivElement | null>
   virtualizer: Virtualizer
 }
 
 export function useFlipOnRowInsertion<TRow>({
+  motionKey,
   rowEntries,
   scrollerRef,
   virtualizer,
 }: UseFlipOnRowInsertionParams<TRow>): void {
   const flipBudget = useMemo(() => new AnimationBudget(), [])
   const previousRowRectsRef = useRef<Map<RowId, FlipRect>>(new Map())
+  const previousRowOrderRef = useRef<readonly RowId[]>([])
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rowEntries is the render-change trigger.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rowEntries/motionKey are render-change triggers.
   useLayoutEffect(() => {
     const scroller = scrollerRef.current
     if (!scroller) {
       previousRowRectsRef.current = new Map()
+      previousRowOrderRef.current = []
       return
     }
 
     const rows = visibleBodyRows(scroller)
     const currentRects = new Map<RowId, FlipRect>()
+    const currentOrder: RowId[] = []
     for (const row of rows) {
       const rowId = row.dataset.rowId as RowId | undefined
       if (!rowId) continue
+      currentOrder.push(rowId)
       currentRects.set(rowId, readFlipRect(row))
     }
 
     const previousRects = previousRowRectsRef.current
+    const previousOrder = previousRowOrderRef.current
     previousRowRectsRef.current = currentRects
+    previousRowOrderRef.current = currentOrder
     if (previousRects.size === 0 || currentRects.size === 0) return
 
-    let hasVisibleInsertion = false
-    for (const rowId of currentRects.keys()) {
-      if (!previousRects.has(rowId)) {
-        hasVisibleInsertion = true
-        break
-      }
+    if (sameRowIdSet(previousOrder, currentOrder) && !sameRowOrder(previousOrder, currentOrder)) {
+      return
     }
-    if (!hasVisibleInsertion) return
 
-    const targets: FlipTarget[] = []
-    const handles: { release(): void }[] = []
+    const candidates: RowFlipCandidate[] = []
+    const enteringRows: HTMLElement[] = []
     for (const rowEl of rows) {
       const rowId = rowEl.dataset.rowId as RowId | undefined
       if (!rowId) continue
       const first = previousRects.get(rowId)
-      if (!first) continue
+      if (!first) {
+        enteringRows.push(rowEl)
+        continue
+      }
       const last = currentRects.get(rowId)
       if (!last) continue
-      targets.push({ element: rowEl, first, last })
-      const rowIndexAttr = rowEl.dataset.rowIndex
-      if (rowIndexAttr) {
-        const rowIndex = Number(rowIndexAttr)
-        if (Number.isFinite(rowIndex)) handles.push(virtualizer.beginInFlightRow(rowIndex))
-      }
+      const candidate = rowFlipCandidate(rowEl, first, last)
+      if (candidate) candidates.push(candidate)
     }
 
-    if (targets.length === 0) {
-      for (const handle of handles) handle.release()
-      return
-    }
+    playRowFlipCandidates(candidates, flipBudget, virtualizer)
+    playRowEnterAnimations(enteringRows, flipBudget)
+  }, [flipBudget, motionKey, rowEntries, scrollerRef, virtualizer])
+}
 
-    const animations = flip(targets, { budget: flipBudget })
-    if (animations.length === 0) {
-      for (const handle of handles) handle.release()
-      return
-    }
-    for (const [index, animation] of animations.entries()) {
-      const handle = handles[index]
-      if (!handle) continue
-      animation.finished.finally(() => handle.release())
-    }
-  }, [flipBudget, rowEntries, scrollerRef, virtualizer])
+function rowFlipCandidate(
+  rowEl: HTMLElement,
+  first: FlipRect,
+  last: FlipRect,
+): RowFlipCandidate | null {
+  const rowIndexAttr = rowEl.dataset.rowIndex
+  if (!rowIndexAttr) return null
+  const rowIndex = Number(rowIndexAttr)
+  if (!Number.isFinite(rowIndex)) return null
+  if (!shouldAnimateDelta(calculateFlipDelta(first, last))) return null
+  return { element: rowEl, first, last, rowIndex }
+}
+
+function playRowFlipCandidates(
+  candidates: readonly RowFlipCandidate[],
+  budget: AnimationBudget,
+  virtualizer: Virtualizer,
+): void {
+  if (candidates.length === 0) return
+
+  const limitedCandidates = budget.limit(candidates, candidates.length)
+  const handles = limitedCandidates.map((candidate) =>
+    virtualizer.beginInFlightRow(candidate.rowIndex),
+  )
+  let animations: Animation[]
+  try {
+    animations = flip(limitedCandidates, { budget, duration: ROW_FLIP_DURATION_MS })
+  } catch (error) {
+    for (const handle of handles) handle.release()
+    throw error
+  }
+  for (let index = animations.length; index < handles.length; index += 1) {
+    handles[index]?.release()
+  }
+  for (const [index, animation] of animations.entries()) {
+    const handle = handles[index]
+    if (!handle) continue
+    void animation.finished.finally(() => handle.release())
+  }
+}
+
+function playRowEnterAnimations(rows: readonly HTMLElement[], budget: AnimationBudget): void {
+  for (const row of budget.limit(rows, rows.length)) {
+    slide(row, "up", { budget, distance: ROW_ENTER_DISTANCE_PX, duration: ROW_ENTER_DURATION_MS })
+  }
+}
+
+function sameRowIdSet(previousOrder: readonly RowId[], currentOrder: readonly RowId[]): boolean {
+  if (previousOrder.length !== currentOrder.length) return false
+  const previous = new Set(previousOrder)
+  if (previous.size !== currentOrder.length) return false
+  return currentOrder.every((rowId) => previous.has(rowId))
+}
+
+function sameRowOrder(previousOrder: readonly RowId[], currentOrder: readonly RowId[]): boolean {
+  return (
+    previousOrder.length === currentOrder.length &&
+    previousOrder.every((rowId, index) => rowId === currentOrder[index])
+  )
 }
 
 // ---------------------------------------------------------------------------

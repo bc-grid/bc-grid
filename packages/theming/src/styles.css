@@ -32,6 +32,9 @@
   --bc-grid-statusbar-bg: var(--bc-grid-muted);
   --bc-grid-statusbar-fg: var(--bc-grid-muted-fg);
   --bc-grid-statusbar-border-top: var(--bc-grid-border);
+  --bc-grid-motion-duration-fast: 120ms;
+  --bc-grid-motion-duration-medium: 160ms;
+  --bc-grid-motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
 
   overflow: hidden;
   border: 1px solid var(--bc-grid-border);
@@ -138,7 +141,7 @@
 .bc-grid-group-toggle-icon {
   display: inline-block;
   transform: rotate(0deg);
-  transition: transform 120ms ease-out;
+  transition: transform var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
 }
 
 .bc-grid-group-toggle[aria-expanded="true"] .bc-grid-group-toggle-icon {
@@ -517,7 +520,8 @@
 }
 
 .bc-grid-tooltip-content[data-state="open"] {
-  animation: bc-grid-tooltip-in 120ms ease-out;
+  animation: bc-grid-tooltip-in var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
   opacity: 1;
   transform: translateY(0);
 }
@@ -573,7 +577,7 @@
   background: var(--bc-grid-sidebar-bg);
   color: var(--bc-grid-fg);
   overflow: hidden;
-  transition: width 140ms ease-out;
+  transition: none;
 }
 
 .bc-grid-sidebar[data-state="open"] {
@@ -902,7 +906,7 @@
 .bc-grid-detail-toggle-icon {
   display: inline-block;
   transform: rotate(0deg);
-  transition: transform 120ms ease-out;
+  transition: transform var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
 }
 
 .bc-grid-detail-toggle[aria-expanded="true"] .bc-grid-detail-toggle-icon {
@@ -936,7 +940,7 @@
   pointer-events: none;
   background: linear-gradient(to right, rgb(0 0 0 / 8%), transparent);
   opacity: 0;
-  transition: opacity 150ms ease-out;
+  transition: opacity var(--bc-grid-motion-duration-medium) var(--bc-grid-motion-ease-standard);
 }
 
 .bc-grid-cell-pinned-right-edge::before {
@@ -949,7 +953,7 @@
   pointer-events: none;
   background: linear-gradient(to left, rgb(0 0 0 / 8%), transparent);
   opacity: 0;
-  transition: opacity 150ms ease-out;
+  transition: opacity var(--bc-grid-motion-duration-medium) var(--bc-grid-motion-ease-standard);
 }
 
 .bc-grid[data-scrolled-left="true"] .bc-grid-cell-pinned-left-edge::after {

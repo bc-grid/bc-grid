@@ -1,4 +1,4 @@
-import { flash } from "@bc-grid/animations"
+import { AnimationBudget, flash } from "@bc-grid/animations"
 import { emptyBcRangeSelection, rangeClear } from "@bc-grid/core"
 import type {
   BcCellPosition,
@@ -191,6 +191,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   const [scrollOffset, setScrollOffset] = useState({ top: 0, left: 0 })
   const scrollOffsetRef = useRef(scrollOffset)
+  const cellFlashBudget = useMemo(() => new AnimationBudget(), [])
   const [, setRenderVersion] = useState(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
@@ -869,7 +870,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     // cancel paths have `next.committedValue === undefined`.
     if (props.flashOnEdit && next.committedValue !== undefined) {
       const cellEl = document.getElementById(cellDomId(domBaseId, cell.rowId, cell.columnId))
-      if (cellEl) flash(cellEl)
+      if (cellEl) flash(cellEl, { budget: cellFlashBudget })
     }
     const lastRow = rowEntries.length - 1
     const lastCol = resolvedColumns.length - 1
@@ -894,6 +895,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     resolvedColumns,
     rowIndexById,
     columnIndexById,
+    cellFlashBudget,
     props.flashOnEdit,
     domBaseId,
   ])
@@ -1380,7 +1382,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
 
   const { prepareSortAnimation } = useFlipOnSort({ sortState, scrollerRef, virtualizer })
-  useFlipOnRowInsertion({ rowEntries, scrollerRef, virtualizer })
+  useFlipOnRowInsertion({ motionKey: expansionState, rowEntries, scrollerRef, virtualizer })
 
   const handleHeaderSort = useCallback(
     (

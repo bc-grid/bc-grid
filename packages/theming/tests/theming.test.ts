@@ -53,6 +53,10 @@ describe("@bc-grid/theming", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     expect(css).toContain("@media (prefers-reduced-motion: reduce)")
     expect(css).toContain("@media (forced-colors: active)")
+    expect(css).toContain("--bc-grid-motion-duration-fast: 120ms")
+    expect(css).toContain(
+      "transition: transform var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard)",
+    )
     expect(css).toContain("--bc-grid-focus-ring: Highlight")
     expect(css).toContain("--bc-grid-search-match-bg: Highlight")
     expect(css).toContain('[data-bc-grid-active-cell="true"]')
