@@ -31,7 +31,7 @@ interface PagedServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
   error: unknown
   getModelState: () => ServerRowModelState<TRow>
-  handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
+  handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   invalidate: (invalidation: ServerInvalidation) => void
   loading: boolean
@@ -46,7 +46,7 @@ interface InfiniteServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
   error: unknown
   getModelState: () => ServerRowModelState<TRow>
-  handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
+  handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   handleVisibleRowRangeChange: (range: { startIndex: number; endIndex: number }) => void
   invalidate: (invalidation: ServerInvalidation) => void
@@ -59,8 +59,8 @@ interface InfiniteServerState<TRow> {
 }
 
 interface ServerSortFilterState {
-  filterState: BcGridFilter | undefined
-  handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
+  filterState: BcGridFilter | null
+  handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   sortState: readonly BcGridSort[]
 }
@@ -70,7 +70,7 @@ interface TreeServerState<TRow> {
   columns: readonly BcReactGridColumn<TRow>[]
   error: unknown
   getModelState: () => ServerRowModelState<TRow>
-  handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
+  handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   invalidate: (invalidation: ServerInvalidation) => void
   loading: boolean
@@ -296,8 +296,8 @@ function useServerSortFilterState<TRow>(
     () => props.defaultSort ?? [],
   )
   const filterControlled = hasProp(props, "filter")
-  const [uncontrolledFilter, setUncontrolledFilter] = useState<BcGridFilter | undefined>(
-    () => props.defaultFilter,
+  const [uncontrolledFilter, setUncontrolledFilter] = useState<BcGridFilter | null>(
+    () => props.defaultFilter ?? null,
   )
 
   const handleSortChange = useCallback(
@@ -310,7 +310,7 @@ function useServerSortFilterState<TRow>(
   )
 
   const handleFilterChange = useCallback(
-    (next: BcGridFilter, prev: BcGridFilter) => {
+    (next: BcGridFilter | null, prev: BcGridFilter | null) => {
       if (!filterControlled) setUncontrolledFilter(next)
       resetRows()
       props.onFilterChange?.(next, prev)
@@ -319,7 +319,7 @@ function useServerSortFilterState<TRow>(
   )
 
   return {
-    filterState: filterControlled ? props.filter : uncontrolledFilter,
+    filterState: filterControlled ? (props.filter ?? null) : uncontrolledFilter,
     handleFilterChange,
     handleSortChange,
     sortState: sortControlled ? (props.sort ?? []) : uncontrolledSort,
@@ -383,7 +383,7 @@ function usePagedServerState<TRow>(
   const view = useMemo(
     () =>
       modelRef.current.createViewState({
-        filter: filterState,
+        filter: filterState ?? undefined,
         groupBy,
         locale: props.locale,
         searchText,
@@ -557,7 +557,7 @@ function useInfiniteServerState<TRow>(
   const view = useMemo(
     () =>
       modelRef.current.createViewState({
-        filter: filterState,
+        filter: filterState ?? undefined,
         groupBy,
         locale: props.locale,
         searchText,
@@ -777,7 +777,7 @@ function useTreeServerState<TRow>(
   const view = useMemo(
     () =>
       modelRef.current.createViewState({
-        filter: filterState,
+        filter: filterState ?? undefined,
         groupBy,
         locale: props.locale,
         searchText,

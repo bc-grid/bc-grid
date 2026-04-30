@@ -44,6 +44,7 @@ import {
   type ColumnFilterTypeByColumnId,
   type SetFilterOption,
   buildGridFilter,
+  columnFilterTextEqual,
   columnFilterTextFromGridFilter,
   matchesGridFilter,
   setFilterValueKeys,
@@ -215,22 +216,41 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
   const defaultFilterState =
     props.defaultFilter ?? urlPersistedGridState.filter ?? persistedGridState.filter ?? null
+  const filterControlled = hasProp(props, "filter")
   const [filterState, setFilterState] = useControlledState<BcGridFilter | null>(
-    hasProp(props, "filter"),
+    filterControlled,
     props.filter ?? null,
     defaultFilterState,
-    props.onFilterChange
-      ? (next, prev) => {
-          if (next) props.onFilterChange?.(next, prev ?? next)
-        }
-      : undefined,
+    props.onFilterChange,
   )
 
   // Per-column text-filter inputs. Internal state — projected into the
   // canonical `BcGridFilter` shape via `buildGridFilter` and surfaced
   // through `setFilterState` whenever it changes.
   const [columnFilterText, setColumnFilterText] = useState<ColumnFilterText>(() =>
-    columnFilterTextFromGridFilter(hasProp(props, "filter") ? props.filter : defaultFilterState),
+    columnFilterTextFromGridFilter(filterControlled ? props.filter : defaultFilterState),
+  )
+  // External filter writes also project into editor text; avoid echoing that
+  // projection back through `onFilterChange` as a duplicate user edit.
+  const suppressNextInlineFilterCommitRef = useRef(false)
+  const syncColumnFilterTextFromFilter = useCallback((nextFilter: BcGridFilter | null) => {
+    const nextColumnFilterText = columnFilterTextFromGridFilter(nextFilter)
+    setColumnFilterText((prev) => {
+      if (columnFilterTextEqual(prev, nextColumnFilterText)) return prev
+      suppressNextInlineFilterCommitRef.current = true
+      return nextColumnFilterText
+    })
+  }, [])
+  useEffect(() => {
+    if (!filterControlled) return
+    syncColumnFilterTextFromFilter(props.filter ?? null)
+  }, [filterControlled, props.filter, syncColumnFilterTextFromFilter])
+  const applyFilterState = useCallback(
+    (next: BcGridFilter | null) => {
+      syncColumnFilterTextFromFilter(next)
+      setFilterState(next)
+    },
+    [setFilterState, syncColumnFilterTextFromFilter],
   )
   // Filter-popup anchor + columnId for `column.filter.variant === "popup"`
   // columns per `filter-popup-variant`. Null when no popup is open.
@@ -708,6 +728,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       filterTextHydratedRef.current = true
       return
     }
+    if (suppressNextInlineFilterCommitRef.current) {
+      suppressNextInlineFilterCommitRef.current = false
+      return
+    }
     setFilterState(inlineFilter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inlineFilter])
@@ -1072,7 +1096,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         setSortState(next)
       },
       setFilter(next) {
-        setFilterState(next)
+        applyFilterState(next)
       },
       setRangeSelection(next) {
         setRangeSelectionState(next)
@@ -1113,7 +1137,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     selectionState,
     setColumnState,
     setExpansionState,
-    setFilterState,
+    applyFilterState,
     setRangeSelectionState,
     setSortState,
     virtualizer,
@@ -1531,7 +1555,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       groupableColumns: props.groupableColumns ?? [],
       groupBy: groupByState,
       setColumnState,
-      setFilterState,
+      setFilterState: applyFilterState,
       setGroupBy: setGroupByState,
     }),
     [
@@ -1541,8 +1565,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       columns,
       groupByState,
       props.groupableColumns,
+      applyFilterState,
       setColumnState,
-      setFilterState,
       setGroupByState,
     ],
   )
