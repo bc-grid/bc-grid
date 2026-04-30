@@ -1,5 +1,5 @@
 import type { BcCellPosition, ColumnId, RowId } from "@bc-grid/core"
-import type { ReactNode } from "react"
+import type { CSSProperties, ReactNode } from "react"
 import {
   type ResolvedColumn,
   type RowEntry,
@@ -32,6 +32,13 @@ interface RenderBodyCellParams<TRow> {
   selected: boolean
   disabled: boolean
   expanded: boolean
+  /**
+   * Position of the cell currently hosting an editor, or `null` when no
+   * cell is being edited. The cell at this position emits
+   * `aria-current="true"` per `editing-rfc §ARIA states on the cell` so
+   * AT can locate the edit target while the editor input owns DOM focus.
+   */
+  editingCell?: BcCellPosition | null
   setActiveCell: (next: BcCellPosition | null) => void
   totalWidth: number
   viewportWidth: number
@@ -72,6 +79,7 @@ export function renderBodyCell<TRow>({
   selected,
   disabled,
   expanded,
+  editingCell,
   setActiveCell,
   totalWidth,
   viewportWidth,
@@ -116,6 +124,8 @@ export function renderBodyCell<TRow>({
         ? "dirty"
         : undefined
 
+  const isEditingThisCell =
+    editingCell?.rowId === entry.rowId && editingCell?.columnId === column.columnId
   const params = {
     value,
     formattedValue,
@@ -124,7 +134,7 @@ export function renderBodyCell<TRow>({
     column: column.source,
     searchText,
     rowState,
-    editing: false,
+    editing: isEditingThisCell,
     pending: editPending,
     ...(editError != null ? { editError } : {}),
     isDirty,
@@ -150,6 +160,12 @@ export function renderBodyCell<TRow>({
       ? column.source.tooltip(entry.row)
       : column.source.tooltip
 
+  // Hidden error description, referenced via `aria-describedby` so AT
+  // reads "{column header} {error}" when the cell is announced. Kept
+  // adjacent to the cell so the relationship is preserved across
+  // virtualization. Per `editing-rfc §ARIA states on the cell`.
+  const errorId = editError ? `${cellId}-error` : undefined
+
   return (
     <BcGridTooltip key={column.columnId} content={tooltip} id={`${cellId}-tooltip`}>
       <div
@@ -168,6 +184,8 @@ export function renderBodyCell<TRow>({
         aria-labelledby={`${headerDomId(domBaseId, column.columnId)} ${cellId}`}
         aria-selected={selected || undefined}
         aria-invalid={editError ? true : undefined}
+        aria-describedby={errorId}
+        aria-current={isEditingThisCell ? "true" : undefined}
         data-bc-grid-active-cell={active || undefined}
         data-bc-grid-cell-state={cellEditState}
         data-column-id={column.columnId}
@@ -194,9 +212,26 @@ export function renderBodyCell<TRow>({
           : searchText
             ? highlightSearchText(formattedValue, searchText)
             : formattedValue}
+        {errorId ? (
+          <span id={errorId} style={visuallyHiddenCellErrorStyle}>
+            {editError}
+          </span>
+        ) : null}
       </div>
     </BcGridTooltip>
   )
+}
+
+const visuallyHiddenCellErrorStyle: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0,
 }
 
 export function splitSearchText(value: string, searchText: string): SearchTextPart[] {

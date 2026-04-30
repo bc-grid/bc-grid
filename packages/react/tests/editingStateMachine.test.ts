@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import type { BcCellPosition, RowId } from "@bc-grid/core"
-import { type EditState, reduceEditState } from "../src/editingStateMachine"
+import {
+  type EditState,
+  nextActiveCellAfterEdit,
+  reduceEditState,
+} from "../src/editingStateMachine"
 
 const cell: BcCellPosition = { rowId: "row-1" as RowId, columnId: "name" }
 const initial: EditState<string> = { mode: "navigation" }
@@ -163,5 +167,85 @@ describe("reduceEditState — moveOnSettle preserved across async boundary", () 
     s = reduceEditState(s, { type: "unmounted" })
     expect(s.mode).toBe("unmounting")
     if (s.mode === "unmounting") expect(s.next.move).toBe("right")
+  })
+})
+
+describe("reduceEditState — prepare lifecycle", () => {
+  test("prepareResolved with prepareResult flows through to editing", () => {
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "f2" })
+    s = reduceEditState(s, { type: "prepareResolved", prepareResult: { meta: 42 } })
+    expect(s.mode).toBe("mounting")
+    if (s.mode === "mounting") expect(s.prepareResult).toEqual({ meta: 42 })
+    s = reduceEditState(s, { type: "mounted" })
+    expect(s.mode).toBe("editing")
+    if (s.mode === "editing") expect(s.prepareResult).toEqual({ meta: 42 })
+  })
+
+  test("cancel during preparing returns straight to navigation (skips cancelling)", () => {
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "f2" })
+    s = reduceEditState(s, { type: "cancel" })
+    expect(s.mode).toBe("navigation")
+  })
+})
+
+describe("reduceEditState — cancel during validating", () => {
+  test("cancel transitions validating → cancelling → unmounting → navigation", () => {
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "v", moveOnSettle: "down" })
+    expect(s.mode).toBe("validating")
+    s = reduceEditState(s, { type: "cancel" })
+    expect(s.mode).toBe("cancelling")
+    s = reduceEditState(s, { type: "unmounted" })
+    expect(s.mode).toBe("unmounting")
+    if (s.mode === "unmounting") {
+      expect(s.next.move).toBe("stay")
+      expect(s.next.committedValue).toBeUndefined()
+    }
+    s = reduceEditState(s, { type: "unmounted" })
+    expect(s.mode).toBe("navigation")
+  })
+})
+
+describe("nextActiveCellAfterEdit — Tab/Shift+Tab wrap per editing-rfc §Keyboard model", () => {
+  test("'right' advances within a row", () => {
+    expect(nextActiveCellAfterEdit(2, 0, 9, 4, "right")).toEqual({ row: 2, col: 1 })
+    expect(nextActiveCellAfterEdit(0, 3, 9, 4, "right")).toEqual({ row: 0, col: 4 })
+  })
+
+  test("'right' at last column wraps to next row's first column", () => {
+    expect(nextActiveCellAfterEdit(2, 4, 9, 4, "right")).toEqual({ row: 3, col: 0 })
+  })
+
+  test("'right' at the absolute last cell stays put", () => {
+    expect(nextActiveCellAfterEdit(9, 4, 9, 4, "right")).toEqual({ row: 9, col: 4 })
+  })
+
+  test("'left' walks within a row", () => {
+    expect(nextActiveCellAfterEdit(2, 4, 9, 4, "left")).toEqual({ row: 2, col: 3 })
+    expect(nextActiveCellAfterEdit(2, 1, 9, 4, "left")).toEqual({ row: 2, col: 0 })
+  })
+
+  test("'left' at first column wraps to previous row's last column", () => {
+    expect(nextActiveCellAfterEdit(2, 0, 9, 4, "left")).toEqual({ row: 1, col: 4 })
+  })
+
+  test("'left' at the absolute first cell stays put", () => {
+    expect(nextActiveCellAfterEdit(0, 0, 9, 4, "left")).toEqual({ row: 0, col: 0 })
+  })
+
+  test("'down' / 'up' clamp at extents and don't wrap", () => {
+    expect(nextActiveCellAfterEdit(0, 2, 9, 4, "up")).toEqual({ row: 0, col: 2 })
+    expect(nextActiveCellAfterEdit(9, 2, 9, 4, "down")).toEqual({ row: 9, col: 2 })
+    expect(nextActiveCellAfterEdit(4, 2, 9, 4, "down")).toEqual({ row: 5, col: 2 })
+    expect(nextActiveCellAfterEdit(4, 2, 9, 4, "up")).toEqual({ row: 3, col: 2 })
+  })
+
+  test("'stay' is a no-op", () => {
+    expect(nextActiveCellAfterEdit(3, 2, 9, 4, "stay")).toEqual({ row: 3, col: 2 })
   })
 })
