@@ -37,3 +37,6 @@ playwright-report/
 playwright/.cache/
 
 # Note: bun.lock IS committed (project state, not artifact).
+
+# Claude Code agent scratch
+.claude/
