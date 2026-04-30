@@ -347,6 +347,7 @@ export const apiSurfaceManifest = [
     runtimeExports: [
       "dateEditor",
       "datetimeEditor",
+      "multiSelectEditor",
       "numberEditor",
       "selectEditor",
       "textEditor",
@@ -355,12 +356,13 @@ export const apiSurfaceManifest = [
     declarationExports: [
       "dateEditor",
       "datetimeEditor",
+      "multiSelectEditor",
       "numberEditor",
       "selectEditor",
       "textEditor",
       "timeEditor",
     ],
-    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select. Other Track 1 editors land alongside their respective PRs.",
+    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select + editor-multi-select. Other Track 1 editors land alongside their respective PRs.",
   },
   {
     packageName: "@bc-grid/enterprise",

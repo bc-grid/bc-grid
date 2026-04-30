@@ -1,6 +1,7 @@
 import {
   dateEditor,
   datetimeEditor,
+  multiSelectEditor,
   numberEditor,
   selectEditor,
   textEditor,
@@ -15,7 +16,13 @@ import {
   useBcGridApi,
 } from "@bc-grid/react"
 import { useCallback, useMemo, useState } from "react"
-import { type CustomerRow, type CustomerStatus, customerRows, packageRows } from "./examples"
+import {
+  type CustomerFlag,
+  type CustomerRow,
+  type CustomerStatus,
+  customerRows,
+  packageRows,
+} from "./examples"
 
 type ThemeMode = "light" | "dark"
 
@@ -43,6 +50,22 @@ const STATUS_OPTIONS: readonly { value: CustomerStatus; label: string }[] = [
   { value: "Past Due", label: "Past Due" },
   { value: "Disputed", label: "Disputed" },
 ]
+
+const FLAG_OPTIONS: readonly { value: CustomerFlag; label: string }[] = [
+  { value: "high-volume", label: "High Volume" },
+  { value: "international", label: "International" },
+  { value: "tax-exempt", label: "Tax Exempt" },
+  { value: "manual-review", label: "Manual Review" },
+  { value: "vip", label: "VIP" },
+]
+
+const FLAG_LABELS: Record<CustomerFlag, string> = {
+  "high-volume": "High Volume",
+  international: "International",
+  "tax-exempt": "Tax Exempt",
+  "manual-review": "Manual Review",
+  vip: "VIP",
+}
 
 export function App() {
   const [theme, setTheme] = useState<ThemeMode>("light")
@@ -444,6 +467,43 @@ function CustomerGridDemo({
           const date = new Date(next)
           if (Number.isNaN(date.valueOf())) {
             return { valid: false as const, error: "Invalid datetime." }
+          }
+          return { valid: true as const }
+        },
+      },
+      {
+        columnId: "flags",
+        field: "flags",
+        header: "Flags",
+        width: 220,
+        // Render reads `params.value` (overlayed when committed) — not
+        // `params.row.flags` — so a committed edit reflects in the cell
+        // immediately. Empty rows render an em-dash so the cell isn't
+        // ambiguous with a loading state.
+        cellRenderer(params) {
+          const flags = (Array.isArray(params.value) ? params.value : []) as readonly CustomerFlag[]
+          if (flags.length === 0) return <span style={{ opacity: 0.5 }}>—</span>
+          return flags.map((flag) => FLAG_LABELS[flag]).join(", ")
+        },
+        // ?edit=1: editable many-of-many field. Native <select multiple>
+        // via editor-multi-select; options enumerate every CustomerFlag.
+        // validate enforces the realistic ERP rule that VIP and Manual
+        // Review can't both be set on the same customer (treat one as a
+        // contradiction of the other).
+        editable: editorFrameworkEnabled(),
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: multiSelectEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        options: FLAG_OPTIONS,
+        validate: (next: unknown) => {
+          if (!Array.isArray(next)) {
+            return { valid: false as const, error: "Flags must be an array." }
+          }
+          if (next.includes("vip") && next.includes("manual-review")) {
+            return {
+              valid: false as const,
+              error: "VIP and Manual Review can't both be set.",
+            }
           }
           return { valid: true as const }
         },
