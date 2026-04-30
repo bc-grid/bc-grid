@@ -213,7 +213,7 @@ Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 - `[review: worker2 #159]` **filter-number-range-impl** — between two numbers. **Effort**: S.
 - `[ready]` **filter-text-impl-extend** — extend the existing inline text filter with operators (contains / starts-with / ends-with / equals / regex toggle / case-sensitivity toggle). **Effort**: S.
 - `[ready]` **filter-custom-extension-example** — recipe in `apps/docs` showing how to register a custom filter type. **Effort**: S.
-- `[ready]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
+- `[in-flight: worker1]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
 - `[done: x2 #72]` **export-csv-impl** — `@bc-grid/export.toCsv(rows, columns)` per `api.md §9`. No external deps; pure serializer. **Branch**: `agent/x2/export-csv-impl`. **Effort**: S.
 - `[done: x2 #75]` **export-xlsx-impl** — peer-dep on **ExcelJS** (confirmed in coordination plan). `toExcel(rows, columns)`. **Branch**: `agent/x2/export-xlsx-impl`. **Effort**: M.
 - `[review: x2 #77]` **export-pdf-impl** — peer-dep on **jsPDF** (confirmed in coordination plan; alternative `react-pdf` if jsPDF doesn't fit; first PR picks the winner). `toPdf(rows, columns)`. **Branch**: `agent/x2/export-pdf-impl`. **Effort**: M.
