@@ -209,7 +209,7 @@ Each track has one suggested owner; agents are free to swap based on availabilit
 
 ## Cross-cutting concerns (continuous, not per-track)
 
-- **Coordinator / worker split** — Codex in `~/work/bc-grid` coordinates the sprint, reviews PRs, fixes merge-train issues, merges PRs, cuts releases, and runs Playwright. Worker agents should spend their cycles coding, unit tests, type-checks, builds, and concise PR handoffs. Broad Playwright runs are coordinator-owned unless explicitly delegated for a focused reproduction.
+- **Coordinator / worker split** — Codex in `~/work/bc-grid` coordinates the sprint, reviews PRs, fixes merge-train issues, merges PRs, cuts releases, and runs Playwright / smoke-perf / benchmarks. Worker agents should spend their cycles coding, unit tests, type-checks, builds, and concise PR handoffs. Workers must not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs.
 - **Reviews** — every PR gets a non-author review. The Codex coordinator is default reviewer; agents rotate as backup when explicitly assigned. Self-merge prohibited for worker PRs per `AGENTS.md §3.7`.
 - **Smoke perf on every PR** — once `smoke-perf-ci` lands in Phase A, every PR runs cold-mount/sort-10k/scroll-10k locally + in CI.
 - **Bundle size budget** — `core+virtualizer+animations+react` < 60KB gzipped per `design.md §3.2`. Once `bundle-size-ci-gate` lands, drift fails the build.

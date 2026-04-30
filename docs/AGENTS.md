@@ -56,16 +56,19 @@ Before requesting review:
 - [ ] Branch is up to date with `main` (rebase or merge)
 - [ ] Tests added or updated (coverage gates met)
 - [ ] Type-check passes locally (`bun run type-check`)
-- [ ] Perf benchmarks pass (`bun run bench`)
+- [ ] Lint + unit/package tests pass locally (`bun run lint`, `bun run test`, plus any focused package test)
+- [ ] Playwright / smoke-perf / benchmark validation is left for the Codex coordinator
 - [ ] Public API diff is intentional (or empty)
 - [ ] Linked to the task in `queue.md`
 - [ ] Updated relevant design docs if the architecture shifted
 
 ### Test budget per PR
 
-Default to **1 happy-path e2e + unit tests for edges**, not 4-9 e2e tests per feature. Unit tests are 0.5s; e2e tests are 5-30s × 6 browser projects. Cover one happy-path flow end-to-end, then verify validation, error states, edge cases via `bun test` against the editor / column / hook in isolation. The goal is fast feedback for the author and fast review for the next agent.
+Default to **unit tests for edges and at most 1 happy-path Playwright spec added/updated when browser behavior truly needs it**. Unit tests are 0.5s; e2e tests are 5-30s × 6 browser projects. Cover validation, error states, and edge cases via `bun test` against the editor / column / hook in isolation. The goal is fast feedback for the author and fast review for the next agent.
 
-`bun run test:e2e` runs **chromium-only** by default (matches CI). For cross-browser validation before merging UI-sensitive changes, run `bun run test:e2e:full`. The full 3-browser × 2-app matrix runs nightly via `.github/workflows/e2e-nightly.yml` regardless.
+**Worker rule for the 5-worker sprint:** workers do **not** run Playwright or perf commands locally. Do not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs. If you add or update a `.pw.ts` file, note in the PR that it was not run locally and the Codex coordinator in `~/work/bc-grid` will run it during review/merge.
+
+If an RFC or design doc says a feature needs Playwright/e2e acceptance, workers should read that as "add or update the coverage if needed"; execution remains coordinator-owned.
 
 ## 7. PR review
 

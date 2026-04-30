@@ -35,7 +35,7 @@ Layout on disk:
 | `~/work/bcg-worker4` | Claude | worker4 implementer |
 | `~/work/bcg-worker5` | Codex | worker5 implementer |
 
-**Coordinator:** Codex in `~/work/bc-grid` owns PR review, merge train, queue hygiene, release cuts, and Playwright runs. Worker agents should focus on implementation, unit/type/build validation, and PR handoff notes. They should not spend time running the broad Playwright matrix unless the coordinator explicitly asks for a focused reproduction.
+**Coordinator:** Codex in `~/work/bc-grid` owns PR review, merge train, queue hygiene, release cuts, Playwright, smoke-perf, and benchmark runs. Worker agents should focus on implementation, unit/type/build validation, and PR handoff notes. Workers must not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs.
 
 **Naming convention:** worktrees are assigned by worker slot, and the agent's identity goes in the **branch name** (`agent/worker1/<task-slug>` or an existing historical id such as `agent/c1/<task-slug>`). Branches and PR bodies must include the task slug from `docs/queue.md` so the coordinator can trace ownership.
 
@@ -119,7 +119,7 @@ After the editor framework lands (architect-driven, day 1 morning), parallel age
 - **Agent C2**: text + number editors (`editors/text`, `editors/number`)
 - **Agent X1**: date + datetime + time editors (`editors/date`, `editors/datetime`, `editors/time`)
 - **Agent X2**: select + multi-select + autocomplete editors (`editors/select`, `editors/multi-select`, `editors/autocomplete`)
-- **Agent X3**: validation framework + dirty tracking + e2e edit tests
+- **Agent X3**: validation framework + dirty tracking + unit/integration edit tests; coordinator runs any e2e edit tests
 
 Each agent owns a leaf package or two; PRs land independently; reviewer agent rotates.
 

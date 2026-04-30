@@ -9,9 +9,11 @@
 
 ## Operating Model
 
-The five workers are implementers. They claim one task at a time, code, run focused local validation, open a PR, and move back to their parking branch after merge. The Codex coordinator reviews PRs, resolves merge-train issues, merges, cuts releases, updates the queue if needed, and runs Playwright / smoke-perf validation.
+The five workers are implementers. They claim one task at a time, code, run focused local validation, open a PR, and move back to their parking branch after merge. The Codex coordinator reviews PRs, resolves merge-train issues, merges, cuts releases, updates the queue if needed, and runs Playwright / smoke-perf / benchmark validation.
 
-Workers should not spend time running the broad Playwright matrix. They may add Playwright tests when the task needs a user-flow assertion, but the coordinator owns broad runs and cross-browser validation.
+Workers must not run Playwright, smoke-perf, or broad benchmark commands. Do not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs from worker worktrees. Workers may add or update `.pw.ts` specs when the task needs browser coverage, but they must leave execution to the coordinator and say so in the PR.
+
+If a design doc or RFC says "E2E (Playwright)" under acceptance, that describes required coverage, not a worker-run command. The coordinator runs those specs.
 
 Each worker starts from:
 
@@ -107,7 +109,7 @@ Every PR should include:
 - Files intentionally owned by the PR.
 - What is done, what is deferred, and what task it unlocks.
 - Local validation output: usually `bun run type-check`, `bun run lint`, `bun run test`, and package-specific tests. Add `bun run build` when public exports or package wiring changed.
-- Playwright note: "not run locally; coordinator owns broad Playwright" unless the worker added a focused e2e spec and ran that exact spec.
+- Playwright note: "not run locally; coordinator owns all Playwright / smoke-perf validation." This applies even if the worker added or updated a `.pw.ts` spec.
 
 Before opening a PR, update `docs/queue.md` from `[in-flight: workerN]` to `[review: workerN #PR]` in the same branch.
 
@@ -126,4 +128,3 @@ Repeat while workers are active:
 7. Cut releases after demo-critical merges as required by the bsncraft integration.
 
 The coordinator should avoid assigning two workers to tasks that both primarily edit `grid.tsx` or `headerCells.tsx` unless one is already in review.
-
