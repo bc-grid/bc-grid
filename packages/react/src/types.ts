@@ -329,6 +329,32 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * respects `prefers-reduced-motion`.
    */
   flashOnEdit?: boolean
+
+  /**
+   * Per-row tree ARIA metadata. When present, the grid switches its
+   * root role to `"treegrid"` and emits `aria-level` /
+   * `aria-posinset` / `aria-setsize` on the matching rows per
+   * `accessibility-rfc §grid vs treegrid` and §Group and Tree Rows.
+   *
+   * Returns `undefined` for rows that should remain plain `role="row"`
+   * with no level annotation (e.g., a flat row alongside a tree
+   * region — uncommon, but supported). `level` uses 1-based depth so
+   * roots are level 1, children level 2, and so on.
+   *
+   * `<BcServerGrid rowModel="tree">` populates this automatically from
+   * the server-row-model's tree snapshot. Custom client tree rendering
+   * can pass it directly.
+   */
+  treeRowAria?: (rowId: RowId) => BcTreeRowAria | undefined
+}
+
+export interface BcTreeRowAria {
+  /** 1-based depth in the tree (roots = 1). */
+  level: number
+  /** 1-based sibling position when cheaply computable; omit otherwise. */
+  posinset?: number
+  /** Total siblings in this row's group when known; omit otherwise. */
+  setsize?: number
 }
 
 export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {

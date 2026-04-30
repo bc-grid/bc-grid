@@ -185,6 +185,7 @@ export const apiSurfaceManifest = [
       "BcStatusBarContext",
       "BcStatusBarCustomSegment",
       "BcStatusBarSegment",
+      "BcTreeRowAria",
       "BcValidationResult",
       "ColumnId",
       "LoadServerBlock",

@@ -52,6 +52,7 @@ export type {
   BcStatusBarContext,
   BcStatusBarCustomSegment,
   BcStatusBarSegment,
+  BcTreeRowAria,
   BcValidationResult,
   ColumnId,
   LoadServerBlock,

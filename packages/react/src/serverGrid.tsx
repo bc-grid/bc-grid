@@ -22,7 +22,7 @@ import { createServerRowModel } from "@bc-grid/server-row-model"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { BcGrid, useBcGridApi } from "./grid"
 import { assignRef, createEmptySelection, hasProp } from "./gridInternals"
-import type { BcGridProps, BcReactGridColumn, BcServerGridProps } from "./types"
+import type { BcGridProps, BcReactGridColumn, BcServerGridProps, BcTreeRowAria } from "./types"
 
 const DEFAULT_SERVER_PAGE_SIZE = 100
 const DEFAULT_SERVER_BLOCK_SIZE = 100
@@ -80,6 +80,12 @@ interface TreeServerState<TRow> {
   rows: readonly TRow[]
   rowCount: number | "unknown"
   view: ServerViewState
+  /**
+   * Lookup that resolves `{ level, posinset?, setsize? }` for a tree
+   * row id. Driven by the model's tree snapshot. Per
+   * `accessibility-rfc §grid vs treegrid` and §Group and Tree Rows.
+   */
+  treeRowAria: (rowId: RowId) => BcTreeRowAria | undefined
 }
 
 interface TreeNode<TRow> {
@@ -280,6 +286,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
             : paged.handleSortChange
       }
       rowId={props.rowModel === "tree" ? tree.rowId : gridProps.rowId}
+      {...(props.rowModel === "tree" ? { treeRowAria: tree.treeRowAria } : {})}
       {...(props.rowModel === "infinite"
         ? { onVisibleRowRangeChange: infinite.handleVisibleRowRangeChange }
         : {})}
@@ -966,6 +973,17 @@ function useTreeServerState<TRow>(
     [props.rowModel, rows.length, view, viewKey],
   )
 
+  // Per-row tree ARIA lookup driven off the snapshot. Roots are
+  // level 1 (1-based per accessibility-rfc §Group and Tree Rows);
+  // children inherit `node.level + 1` since the model stores level
+  // as 0-based depth. Sibling counts (posinset/setsize) are emitted
+  // when the parent's children are loaded — for not-yet-loaded
+  // descendants we omit them rather than guessing.
+  const treeRowAria = useCallback(
+    (queriedRowId: RowId): BcTreeRowAria | undefined => computeTreeRowAria(tree, queriedRowId),
+    [tree],
+  )
+
   return {
     applyRowUpdate,
     columns,
@@ -980,8 +998,36 @@ function useTreeServerState<TRow>(
     rowCount: props.rowModel === "tree" ? rows.length : "unknown",
     rowId,
     rows,
+    treeRowAria,
     view,
   }
+}
+
+/**
+ * Pure helper resolving a tree row's ARIA metadata from a snapshot.
+ * Returns `undefined` when the rowId is unknown so callers can skip
+ * emission. Per `accessibility-rfc §Group and Tree Rows`:
+ *
+ *   - level: 1-based depth (roots = 1).
+ *   - posinset / setsize: 1-based sibling position when the parent's
+ *     children are loaded; omitted otherwise to avoid guessing.
+ *
+ * Exported for unit tests; not re-exported from the package index.
+ */
+export function computeTreeRowAria<TRow>(
+  snapshot: TreeSnapshot<TRow>,
+  rowId: RowId,
+): BcTreeRowAria | undefined {
+  const node = snapshot.nodes.get(rowId)
+  if (!node) return undefined
+  const level = node.level + 1
+  const siblings: readonly RowId[] =
+    node.parentRowId == null
+      ? snapshot.rootIds
+      : (snapshot.nodes.get(node.parentRowId)?.childIds ?? [])
+  const posinset = siblings.indexOf(rowId)
+  if (posinset < 0) return { level }
+  return { level, posinset: posinset + 1, setsize: siblings.length }
 }
 
 function createTreeColumns<TRow>(input: {

@@ -160,6 +160,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     onBeforeCopy,
     onCopy,
     onVisibleRowRangeChange,
+    treeRowAria,
   } = props
 
   // The spread preserves all defaultMessages required fields; cast back
@@ -1528,7 +1529,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       data-bc-grid-grouped={groupingActive || undefined}
       data-scrolled-left={isScrolledLeft || undefined}
       data-scrolled-right={isScrolledRight || undefined}
-      role={groupingActive ? "treegrid" : "grid"}
+      role={groupingActive || treeRowAria ? "treegrid" : "grid"}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-rowcount={
@@ -1674,6 +1675,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 const cellVirtualRow = expanded
                   ? { ...virtualRow, height: defaultRowHeight }
                   : virtualRow
+                // Tree ARIA per `accessibility-rfc §grid vs treegrid`. The
+                // server-tree path passes `treeRowAria(rowId)` returning
+                // `{ level, posinset?, setsize? }`; client-grouping rows
+                // already carry `entry.level` and take precedence.
+                const treeAria = treeRowAria?.(entry.rowId)
+                const rowAriaLevel = groupingActive ? entry.level : (treeAria?.level ?? undefined)
                 return (
                   <div
                     key={entry.rowId}
@@ -1684,7 +1691,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     )}
                     role="row"
                     aria-rowindex={virtualRow.index + bodyAriaRowOffset}
-                    aria-level={groupingActive ? entry.level : undefined}
+                    aria-level={rowAriaLevel}
+                    aria-posinset={treeAria?.posinset}
+                    aria-setsize={treeAria?.setsize}
                     aria-selected={selected || undefined}
                     aria-disabled={disabled || undefined}
                     data-row-id={entry.rowId}
