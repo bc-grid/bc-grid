@@ -1,8 +1,11 @@
 import type { BcGridSort } from "@bc-grid/core"
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react"
 import {
+  type DateFilterOperator,
   type NumberFilterOperator,
+  decodeDateFilterInput,
   decodeNumberFilterInput,
+  encodeDateFilterInput,
   encodeNumberFilterInput,
 } from "./filter"
 import {
@@ -255,6 +258,13 @@ export function renderFilterCell<TRow>({
           filterText={filterText}
           onFilterChange={onFilterChange}
         />
+      ) : filterType === "date" ? (
+        <DateFilterControl
+          filterId={filterId}
+          filterLabel={filterLabel}
+          filterText={filterText}
+          onFilterChange={onFilterChange}
+        />
       ) : (
         <input
           aria-label={filterLabel}
@@ -270,6 +280,63 @@ export function renderFilterCell<TRow>({
           style={filterControlStyle}
         />
       )}
+    </div>
+  )
+}
+
+function DateFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+}): ReactNode {
+  const input = decodeDateFilterInput(filterText)
+  const update = (next: Partial<typeof input>) => {
+    const merged = { ...input, ...next }
+    onFilterChange(encodeDateFilterInput(merged))
+  }
+
+  return (
+    <div className="bc-grid-filter-date" style={dateFilterStyle}>
+      <select
+        aria-label={`${filterLabel} operator`}
+        className="bc-grid-filter-select"
+        value={input.op}
+        onChange={(event) => update({ op: event.currentTarget.value as DateFilterOperator })}
+        onKeyDown={(event) => event.stopPropagation()}
+        style={dateFilterOperatorStyle}
+      >
+        <option value="is">Is</option>
+        <option value="before">Before</option>
+        <option value="after">After</option>
+        <option value="between">Between</option>
+      </select>
+      <input
+        aria-label={filterLabel}
+        className="bc-grid-filter-input"
+        id={filterId}
+        type="date"
+        value={input.value}
+        onChange={(event) => update({ value: event.currentTarget.value })}
+        onKeyDown={(event) => event.stopPropagation()}
+        style={dateFilterInputStyle}
+      />
+      {input.op === "between" ? (
+        <input
+          aria-label={`${filterLabel} end date`}
+          className="bc-grid-filter-input"
+          type="date"
+          value={input.valueTo ?? ""}
+          onChange={(event) => update({ valueTo: event.currentTarget.value })}
+          onKeyDown={(event) => event.stopPropagation()}
+          style={dateFilterInputStyle}
+        />
+      ) : null}
     </div>
   )
 }
@@ -357,6 +424,22 @@ const numberFilterStyle: CSSProperties = {
   gap: 4,
   width: "100%",
   height: "70%",
+}
+
+const dateFilterStyle: CSSProperties = numberFilterStyle
+
+const dateFilterOperatorStyle: CSSProperties = {
+  ...filterControlStyle,
+  width: 82,
+  flex: "0 0 82px",
+  padding: "0 0.25rem",
+}
+
+const dateFilterInputStyle: CSSProperties = {
+  ...filterControlStyle,
+  minWidth: 0,
+  flex: "1 1 0",
+  padding: "0 0.25rem",
 }
 
 const numberFilterOperatorStyle: CSSProperties = {

@@ -16,7 +16,14 @@ import type {
  */
 export type ColumnFilterText = Readonly<Record<ColumnId, string>>
 export type ColumnFilterTypeByColumnId = Readonly<Record<ColumnId, BcColumnFilter["type"]>>
+export type DateFilterOperator = "is" | "before" | "after" | "between"
 export type NumberFilterOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "between"
+
+export interface DateFilterInput {
+  op: DateFilterOperator
+  value: string
+  valueTo?: string
+}
 
 export interface NumberFilterInput {
   op: NumberFilterOperator
@@ -24,6 +31,7 @@ export interface NumberFilterInput {
   valueTo?: string
 }
 
+type DateColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "date" }
 type NumberColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "number" }
 
 /**
@@ -53,6 +61,12 @@ export function buildGridFilter(
       filters.push({ ...parsed, columnId })
       continue
     }
+    if (filterType === "date") {
+      const parsed = parseDateFilterInput(value)
+      if (!parsed) continue
+      filters.push({ ...parsed, columnId })
+      continue
+    }
     filters.push({ kind: "column", columnId, type: "text", op: "contains", value })
   }
   if (filters.length === 0) return null
@@ -73,6 +87,9 @@ function matchesColumnFilter(formattedValue: string, filter: ServerColumnFilter)
   }
   if (filter.type === "number") {
     return matchesNumberFilter(formattedValue, filter)
+  }
+  if (filter.type === "date") {
+    return matchesDateFilter(formattedValue, filter)
   }
   if (filter.type !== "text") return false
   if (filter.op !== "contains") return false
@@ -115,12 +132,51 @@ export function encodeNumberFilterInput(input: NumberFilterInput): string {
   return JSON.stringify(input)
 }
 
+export function encodeDateFilterInput(input: DateFilterInput): string {
+  return JSON.stringify(input)
+}
+
+export function decodeDateFilterInput(raw: string): DateFilterInput {
+  try {
+    const parsed = JSON.parse(raw) as Partial<DateFilterInput>
+    return normaliseDateFilterInput(parsed)
+  } catch {
+    return { op: "is", value: "" }
+  }
+}
+
 export function decodeNumberFilterInput(raw: string): NumberFilterInput {
   try {
     const parsed = JSON.parse(raw) as Partial<NumberFilterInput>
     return normaliseNumberFilterInput(parsed)
   } catch {
     return { op: "=", value: "" }
+  }
+}
+
+function parseDateFilterInput(raw: string): DateColumnFilterDraft | null {
+  const input = decodeDateFilterInput(raw)
+  const value = parseFilterDate(input.value)
+  if (!value) return null
+
+  if (input.op === "between") {
+    const valueTo = parseFilterDate(input.valueTo ?? "")
+    if (!valueTo) return null
+    const min = value <= valueTo ? value : valueTo
+    const max = value <= valueTo ? valueTo : value
+    return {
+      kind: "column",
+      type: "date",
+      op: "between",
+      values: [min, max],
+    }
+  }
+
+  return {
+    kind: "column",
+    type: "date",
+    op: input.op,
+    value,
   }
 }
 
@@ -150,6 +206,17 @@ function parseNumberFilterInput(raw: string): NumberColumnFilterDraft | null {
   }
 }
 
+function normaliseDateFilterInput(input: Partial<DateFilterInput>): DateFilterInput {
+  const op = isDateFilterOperator(input.op) ? input.op : "is"
+  return {
+    op,
+    value: typeof input.value === "string" ? input.value : "",
+    ...(op === "between"
+      ? { valueTo: typeof input.valueTo === "string" ? input.valueTo : "" }
+      : {}),
+  }
+}
+
 function normaliseNumberFilterInput(input: Partial<NumberFilterInput>): NumberFilterInput {
   const op = isNumberFilterOperator(input.op) ? input.op : "="
   return {
@@ -159,6 +226,28 @@ function normaliseNumberFilterInput(input: Partial<NumberFilterInput>): NumberFi
       ? { valueTo: typeof input.valueTo === "string" ? input.valueTo : "" }
       : {}),
   }
+}
+
+function matchesDateFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
+  const actual = parseFormattedDate(formattedValue)
+  if (!actual) return false
+
+  if (filter.op === "between") {
+    const values = filter.values?.map((value) => parseFilterDate(String(value ?? ""))) ?? []
+    const valid = values.filter((value): value is string => Boolean(value))
+    if (valid.length < 2) return false
+    const [first, second] = valid as [string, string, ...string[]]
+    const min = first <= second ? first : second
+    const max = first <= second ? second : first
+    return actual >= min && actual <= max
+  }
+
+  const expected = parseFilterDate(String(filter.value ?? ""))
+  if (!expected) return false
+  if (filter.op === "is") return actual === expected
+  if (filter.op === "before") return actual < expected
+  if (filter.op === "after") return actual > expected
+  return false
 }
 
 function matchesNumberFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
@@ -189,11 +278,55 @@ function parseFormattedNumber(value: string): number | null {
   return parseFilterNumber(cleaned)
 }
 
+function parseFormattedDate(value: string): string | null {
+  const trimmed = value.trim()
+  const isoDate = parseFilterDate(trimmed)
+  if (isoDate) return isoDate
+  const parsed = new Date(trimmed)
+  if (Number.isNaN(parsed.valueOf())) return null
+  return toDateInputValue(parsed)
+}
+
+function parseFilterDate(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
+  if (dateOnly) {
+    const year = Number(dateOnly[1])
+    const month = Number(dateOnly[2])
+    const day = Number(dateOnly[3])
+    const parsed = new Date(Date.UTC(year, month - 1, day))
+    if (
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day
+    ) {
+      return trimmed
+    }
+    return null
+  }
+
+  const parsed = new Date(trimmed)
+  if (Number.isNaN(parsed.valueOf())) return null
+  return toDateInputValue(parsed)
+}
+
 function parseFilterNumber(value: string): number | null {
   const trimmed = value.trim()
   if (!trimmed) return null
   const numeric = Number(trimmed)
   return Number.isFinite(numeric) ? numeric : null
+}
+
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function isDateFilterOperator(value: unknown): value is DateFilterOperator {
+  return value === "is" || value === "before" || value === "after" || value === "between"
 }
 
 function isNumberFilterOperator(value: unknown): value is NumberFilterOperator {
