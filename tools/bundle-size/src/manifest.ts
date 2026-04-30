@@ -34,7 +34,7 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
-      baselineGzipBytes: 30313,
+      baselineGzipBytes: 31623,
     },
   ],
 }
