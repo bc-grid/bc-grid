@@ -10,6 +10,7 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
+    "@bc-grid/editors": "workspace:*",
     "@bc-grid/react": "workspace:*",
     "@bc-grid/theming": "workspace:*",
     "react": "^19.0.0",
