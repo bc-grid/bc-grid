@@ -2,6 +2,7 @@ export { useAggregations } from "./aggregations"
 export { BcEditGrid } from "./editGrid"
 export { BcGrid, useBcGridApi } from "./grid"
 export { BcServerGrid } from "./serverGrid"
+export { BcStatusBar, resolveVisibleSegments } from "./statusBar"
 
 export type {
   BcAggregationFormatterParams,
@@ -39,6 +40,9 @@ export type {
   BcSidebarContext,
   BcSidebarCustomPanel,
   BcSidebarPanel,
+  BcStatusBarContext,
+  BcStatusBarCustomSegment,
+  BcStatusBarSegment,
   BcValidationResult,
   ColumnId,
   LoadServerBlock,
