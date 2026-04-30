@@ -686,7 +686,7 @@ export interface BcFilterEditorProps<TValue = unknown> {
   defaultSort={[{ columnId: "code", direction: "asc" }]}
 
   // Pagination
-  pagination={true}        // false to disable; default true if data > pageSize threshold
+  pagination={true}        // false → never paginate; undefined → auto when rows > pageSize
   pageSizeOptions={[25, 50, 100, 250]}
 
   // Aggregations
@@ -771,6 +771,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   rowHeight?: number   // override the density default
 
   // Pagination
+  /**
+   * `true` — force the built-in pager on, even for small datasets.
+   * `false` — never paginate, regardless of dataset size.
+   * `undefined` (default) — auto-enable when row count exceeds the
+   *   effective page size (pageSize / defaultPageSize / first
+   *   pageSizeOption / `100` fallback).
+   */
   pagination?: boolean
   pageSizeOptions?: number[]
 

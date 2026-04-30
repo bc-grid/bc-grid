@@ -718,7 +718,7 @@ function CustomerGridDemo({
         onSelectionChange={handleSelectionChange}
         {...(paginationDemo
           ? { pagination: true, defaultPageSize: 100, pageSizeOptions: [50, 100, 250] }
-          : {})}
+          : { pagination: false })}
         rowIsDisabled={rowIsDisabled}
         rowId={(row: CustomerRow) => row.id}
         searchText={searchText}

@@ -21,6 +21,28 @@ interface BcGridPaginationProps {
   onChange: (next: BcPaginationState) => void
 }
 
+/**
+ * Resolve `BcGridProps.pagination` per `api.md §5.1`. Convention over
+ * config:
+ * - `true` — force the built-in pager on, even for small datasets.
+ * - `false` — never paginate, regardless of dataset size.
+ * - `undefined` — auto-enable when `rowCount > pageSize`. Below the
+ *   threshold the row set fits without paging, so the pager UI is
+ *   suppressed to avoid the empty-pager footer churn.
+ *
+ * Pure function so the threshold is straightforward to unit-test
+ * without rendering a grid.
+ */
+export function isPaginationEnabled(
+  pagination: boolean | undefined,
+  rowCount: number,
+  pageSize: number,
+): boolean {
+  if (pagination === true) return true
+  if (pagination === false) return false
+  return rowCount > pageSize
+}
+
 export function normalisePageSizeOptions(options: readonly number[] | undefined): number[] {
   const values = options
     ?.map((value) => Math.floor(value))
