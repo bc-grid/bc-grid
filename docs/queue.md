@@ -160,7 +160,7 @@ Spec pending: `docs/design/range-rfc.md` (c2 to author).
 
 - `[done: c2 #49]` **range-rfc** — design doc covering range model, anchor/extend semantics, multi-range, clipboard contract, fill handle. **Effort**: 1 day.
 - `[review: worker1 #146]` **range-state-machine** — `BcRange` (already declared `api.md §reserved Q3`) state in `core/range.ts`; anchor + extend + multi-range. **Effort**: M.
-- `[in-flight: worker1]` **visual-selection-layer** — v0.2 rescue scope: active-range visual overlay only, no range state semantics changes. Compatible with fill-handle rescue #207 with no runtime dependency; if #207 lands later, its handle can render above this overlay. **Branch**: `agent/worker1/range-selection-overlay-rescue-v020`. **Effort**: S.
+- `[review: worker1 #212]` **visual-selection-layer** — v0.2 rescue scope: active-range visual overlay only, no range state semantics changes. Compatible with fill-handle rescue #207 with no runtime dependency; if #207 lands later, its handle can render above this overlay. **Branch**: `agent/worker1/range-selection-overlay-rescue-v020`. **Effort**: S.
 - `[review: worker1 #162]` **clipboard-copy-tsv-html** — Ctrl/Cmd+C serializes range to TSV (text/plain) + HTML (text/html) on the clipboard. **Effort**: S.
 - `[blocked: depends on clipboard-copy-tsv-html]` **clipboard-paste-from-excel** — Ctrl/Cmd+V parses clipboard TSV; applies cell-by-cell with per-column `valueParser` + `validate`; atomic apply (all-or-rollback). **Effort**: M.
 - `[blocked: depends on clipboard-paste-from-excel]` **fill-handle** — drag-square at bottom-right of active range; drag to extend; release to fill (linear / copy / smart-fill). **Effort**: M.
