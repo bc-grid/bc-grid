@@ -296,9 +296,9 @@ const columnProps = [
   ],
   [
     "validate",
-    "(newValue, row, signal?) => BcValidationResult | Promise<BcValidationResult>",
+    "(newValue, row) => BcValidationResult",
     "implemented",
-    "Sync or async per-cell validation at commit time. The optional AbortSignal lets long-running validators cancel when superseded.",
+    "Synchronous per-cell validation at commit time. Async validators and AbortSignal cancellation are reserved until the public column type is widened.",
   ],
   ["aggregation", "BcAggregation", "reserved", "Reserved Q5 aggregation work."],
   [
@@ -364,7 +364,12 @@ const editGridProps = [
     "reserved",
     "Type is present; current action rendering does not use it.",
   ],
-  ["onCellEditCommit", "BcCellEditCommitEvent", "reserved", "Reserved Q2 in-grid editing."],
+  [
+    "onCellEditCommit",
+    "BcCellEditCommitEvent",
+    "implemented",
+    "Post-commit event for in-grid editing. Promise returns are observed by the runtime for pending/rollback handling.",
+  ],
 ]
 
 const serverGridProps = [
@@ -561,7 +566,7 @@ const editingProtocol = [
   [
     "BcCellEditor",
     "Component, optional prepare(params), optional kind.",
-    "reserved",
+    "implemented",
     "Editor factories consume this protocol. Built-in factories ship in @bc-grid/editors.",
   ],
   [
@@ -586,7 +591,7 @@ const editingProtocol = [
     "BcValidationResult",
     "{ valid: true } or { valid: false; error }.",
     "implemented",
-    "Column validate() result. Sync or async (Promise<BcValidationResult>) supported.",
+    "Column validate() result object.",
   ],
 ]
 
