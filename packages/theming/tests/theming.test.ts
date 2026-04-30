@@ -114,6 +114,15 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain("bc-grid__")
   })
 
+  test("CSS includes the visual-only fill handle contract", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain("--bc-grid-fill-handle-size: 8px")
+    expect(css).toContain(".bc-grid-fill-handle")
+    expect(css).toContain("pointer-events: none")
+    expect(css).toContain("background: var(--bc-grid-focus-ring)")
+  })
+
   test("package exports built CSS, not source CSS", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
       exports: Record<string, unknown>

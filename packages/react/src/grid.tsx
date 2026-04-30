@@ -39,6 +39,7 @@ import {
 import { createDetailToggleColumn } from "./detailColumn"
 import { nextActiveCellAfterEdit } from "./editingStateMachine"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
+import { resolveActiveRangeFillHandle } from "./fillHandle"
 import {
   type ColumnFilterText,
   type ColumnFilterTypeByColumnId,
@@ -826,6 +827,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   }, [activeColIndex, activeRowIndex, requestRender, virtualizer])
 
   const virtualWindow = virtualizer.computeWindow()
+  const activeRange = rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]
+  const activeRangeFillHandle = resolveActiveRangeFillHandle({
+    range: activeRange,
+    columns: resolvedColumns,
+    rowIds: rangeRowIds,
+    virtualRows: virtualWindow.rows,
+    virtualCols: virtualWindow.cols,
+    scrollLeft: scrollOffset.left,
+    totalWidth: virtualWindow.totalWidth,
+    viewportWidth: viewport.width,
+  })
   const firstVirtualRow = virtualWindow.rows.reduce(
     (first, row) => Math.min(first, row.index),
     Number.POSITIVE_INFINITY,
@@ -1855,6 +1867,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   </div>
                 )
               })}
+              {activeRangeFillHandle ? (
+                <div
+                  aria-hidden="true"
+                  className="bc-grid-fill-handle"
+                  data-bc-grid-fill-handle="visual-only"
+                  data-row-index={activeRangeFillHandle.rowIndex}
+                  data-col-index={activeRangeFillHandle.colIndex}
+                  style={activeRangeFillHandle.style}
+                />
+              ) : null}
             </div>
 
             <EditorPortal

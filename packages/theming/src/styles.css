@@ -28,6 +28,7 @@
   --bc-grid-row-height: 36px;
   --bc-grid-header-height: 40px;
   --bc-grid-cell-padding-x: 12px;
+  --bc-grid-fill-handle-size: 8px;
   --bc-grid-radius: 6px;
   --bc-grid-font-size: 0.875rem;
   --bc-grid-header-font-size: 0.75rem;
@@ -284,6 +285,18 @@
 .bc-grid-cell[data-bc-grid-cell-state="pending"],
 .bc-grid [data-bc-grid-cell-state="pending"] {
   box-shadow: inset 3px 0 0 var(--bc-grid-dirty);
+}
+
+.bc-grid-fill-handle {
+  position: absolute;
+  z-index: 6;
+  width: var(--bc-grid-fill-handle-size);
+  height: var(--bc-grid-fill-handle-size);
+  border: 1px solid var(--bc-grid-bg);
+  border-radius: 2px;
+  background: var(--bc-grid-focus-ring);
+  box-shadow: 0 0 0 1px var(--bc-grid-focus-ring);
+  pointer-events: none;
 }
 
 .bc-grid-cell-right {
@@ -1196,6 +1209,12 @@
   .bc-grid [data-bc-grid-active-cell="true"] {
     outline: 2px solid Highlight;
     outline-offset: -2px;
+  }
+
+  .bc-grid-fill-handle {
+    border-color: Canvas;
+    background: Highlight;
+    box-shadow: 0 0 0 1px Highlight;
   }
 
   .bc-grid-status {
