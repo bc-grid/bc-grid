@@ -100,7 +100,7 @@ export function resolveColumns<TRow>(
 ): ResolvedColumn<TRow>[] {
   const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
   const resolved = columns.flatMap((column, originalIndex) => {
-    const columnId = column.columnId ?? column.field ?? `column-${originalIndex}`
+    const columnId = columnIdFor(column, originalIndex)
     const state = stateById.get(columnId)
     if (state?.hidden ?? column.hidden) return []
 
@@ -135,6 +135,13 @@ export function resolveColumns<TRow>(
     left += column.width
     return next
   })
+}
+
+export function columnIdFor<TRow>(
+  column: BcReactGridColumn<TRow>,
+  originalIndex: number,
+): ColumnId {
+  return column.columnId ?? column.field ?? `column-${originalIndex}`
 }
 
 export function deriveColumnState<TRow>(
