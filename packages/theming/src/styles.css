@@ -24,6 +24,8 @@
     var(--bc-grid-focus-ring) 58%,
     var(--bc-grid-column-separator)
   );
+  --bc-grid-range-border: var(--bc-grid-focus-ring);
+  --bc-grid-range-bg: hsl(var(--ring, 221 83% 53%) / 0.08);
   --bc-grid-focus-ring: hsl(var(--ring, 221 83% 53%));
   --bc-grid-invalid: hsl(var(--destructive, 0 84% 60%));
   --bc-grid-dirty: hsl(37 92% 50%);
@@ -327,6 +329,20 @@
 .bc-grid-cell[data-bc-grid-cell-state="pending"],
 .bc-grid [data-bc-grid-cell-state="pending"] {
   box-shadow: inset 3px 0 0 var(--bc-grid-dirty);
+}
+
+.bc-grid-range-overlay {
+  position: absolute;
+  inset: 0 auto auto 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.bc-grid-range-rect {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--bc-grid-range-border);
+  background: var(--bc-grid-range-bg);
 }
 
 .bc-grid-cell-right {
@@ -1395,6 +1411,8 @@
     --bc-grid-column-separator: CanvasText;
     --bc-grid-column-resize-affordance: CanvasText;
     --bc-grid-column-resize-affordance-hover: Highlight;
+    --bc-grid-range-border: Highlight;
+    --bc-grid-range-bg: transparent;
     --bc-grid-focus-ring: Highlight;
     --bc-grid-invalid: ButtonText;
     --bc-grid-dirty: ButtonText;

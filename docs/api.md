@@ -555,7 +555,7 @@ export interface BcGridStateProps {
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
 
-Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); visual overlay, paste, and fill handle behavior remain separate Track 2 implementation tasks.
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React renders a visual overlay for the active range and clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); paste and fill behavior remain separate Track 2 implementation tasks.
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 

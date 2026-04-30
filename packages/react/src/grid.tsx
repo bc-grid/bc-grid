@@ -119,6 +119,7 @@ import {
   normaliseClipboardPayload,
   writeClipboardPayload,
 } from "./rangeClipboard"
+import { BcGridRangeOverlay } from "./rangeOverlay"
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
@@ -1888,6 +1889,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   </div>
                 )
               })}
+              <BcGridRangeOverlay
+                columns={resolvedColumns}
+                rowIds={rangeRowIds}
+                scrollLeft={scrollOffset.left}
+                selection={rangeSelectionState}
+                totalHeight={virtualWindow.totalHeight}
+                totalWidth={virtualWindow.totalWidth}
+                viewportWidth={viewport.width}
+                virtualCols={virtualWindow.cols}
+                virtualRows={virtualWindow.rows}
+              />
             </div>
 
             <EditorPortal

@@ -72,6 +72,16 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain(".bc-grid-header-resize-handle::before")
   })
 
+  test("CSS includes the active range overlay contract", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain("--bc-grid-range-border")
+    expect(css).toContain("--bc-grid-range-bg")
+    expect(css).toContain(".bc-grid-range-overlay")
+    expect(css).toContain(".bc-grid-range-rect")
+    expect(css).toContain("pointer-events: none")
+  })
+
   test("prefers-reduced-motion block zeroes out motion per accessibility-rfc §Reduced Motion", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     // Locate the last reduced-motion block (the catch-all override) and
