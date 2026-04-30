@@ -76,14 +76,14 @@ function DatetimeEditor(props: BcCellEditorProps<unknown, unknown>) {
  * Coerce arbitrary cell values to `YYYY-MM-DDTHH:mm` for
  * `<input type="datetime-local">`.
  */
-function normalizeDatetimeValue(value: unknown): string {
+export function normalizeDatetimeValue(value: unknown): string {
   if (value == null) return ""
   if (value instanceof Date && !Number.isNaN(value.valueOf())) {
     return toIsoDatetimeLocal(value)
   }
   if (typeof value === "string") {
-    // Already-formatted YYYY-MM-DDTHH:mm — return as-is.
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return value
+    const isoDatetime = normalizeIsoDatetimeLocalString(value)
+    if (isoDatetime) return isoDatetime
     const parsed = new Date(value)
     if (!Number.isNaN(parsed.valueOf())) return toIsoDatetimeLocal(parsed)
   }
@@ -92,6 +92,31 @@ function normalizeDatetimeValue(value: unknown): string {
     if (!Number.isNaN(parsed.valueOf())) return toIsoDatetimeLocal(parsed)
   }
   return ""
+}
+
+function normalizeIsoDatetimeLocalString(value: string): string | null {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(
+      value.trim(),
+    )
+  if (!match) return null
+  const [, yearPart, monthPart, dayPart, hourPart, minutePart] = match
+  const year = Number(yearPart)
+  const month = Number(monthPart)
+  const day = Number(dayPart)
+  const hour = Number(hourPart)
+  const minute = Number(minutePart)
+  const parsed = new Date(Date.UTC(year, month - 1, day, hour, minute))
+  if (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day &&
+    parsed.getUTCHours() === hour &&
+    parsed.getUTCMinutes() === minute
+  ) {
+    return `${yearPart}-${monthPart}-${dayPart}T${hourPart}:${minutePart}`
+  }
+  return null
 }
 
 function toIsoDatetimeLocal(date: Date): string {
