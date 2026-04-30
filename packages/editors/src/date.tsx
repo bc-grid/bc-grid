@@ -81,8 +81,8 @@ function normalizeDateValue(value: unknown): string {
     return toIsoDate(value)
   }
   if (typeof value === "string") {
-    // Already-formatted YYYY-MM-DD string — return as-is.
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+    const isoDate = normaliseIsoDateString(value)
+    if (isoDate) return isoDate
     // Parse other date-shaped strings (ISO with time, RFC2822, etc.).
     const parsed = new Date(value)
     if (!Number.isNaN(parsed.valueOf())) return toIsoDate(parsed)
@@ -92,6 +92,24 @@ function normalizeDateValue(value: unknown): string {
     if (!Number.isNaN(parsed.valueOf())) return toIsoDate(parsed)
   }
   return ""
+}
+
+function normaliseIsoDateString(value: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/.exec(value.trim())
+  if (!match) return null
+  const [, yearPart, monthPart, dayPart] = match
+  const year = Number(yearPart)
+  const month = Number(monthPart)
+  const day = Number(dayPart)
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  if (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  ) {
+    return `${yearPart}-${monthPart}-${dayPart}`
+  }
+  return null
 }
 
 function toIsoDate(date: Date): string {
