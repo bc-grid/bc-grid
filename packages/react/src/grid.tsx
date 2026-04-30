@@ -303,7 +303,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           const column = columnsById.get(columnId)
           if (!column) return ""
           const value = getCellValue(row, column.source)
-          return formatCellValue(value, row, column.source, locale)
+          return {
+            formattedValue: formatCellValue(value, row, column.source, locale),
+            rawValue: value,
+          }
         }),
       )
     }
