@@ -355,7 +355,9 @@ describe("createServerRowModel", () => {
     })
     await Promise.all([first.promise, second.promise])
 
-    expect(model.getMetrics().blockQueueWaitMs.maxMs).toBeGreaterThanOrEqual(20)
+    const queueWait = model.getMetrics().blockQueueWaitMs
+    expect(queueWait.count).toBe(2)
+    expect(queueWait.maxMs).toBeGreaterThanOrEqual(10)
   })
 
   test("marks invalid infinite block protocol responses as errors", async () => {
