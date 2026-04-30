@@ -48,6 +48,39 @@ Consumers import from `@bc-grid/react` and types from `@bc-grid/core`. Engine pa
 
 See `docs/design.md` for the architecture in depth.
 
+## Install (from private GitHub Packages)
+
+bc-grid is published privately to GitHub Packages. The repo and packages are private — only accounts with explicit access can install.
+
+### One-time setup (per consuming app)
+
+1. **Create a Classic Personal Access Token** at https://github.com/settings/tokens (Tokens classic — *not* fine-grained; the cross-repo private package read path is unreliable on fine-grained tokens):
+   - Scopes: `read:packages` **and** `repo` (the `repo` scope is required because the package lives in a private repo).
+   - Set "no expiration" or a long expiration; rotate annually.
+
+2. **Add `.npmrc` to your consuming app** (use [`.npmrc.example`](./.npmrc.example) as a starting point):
+
+   ```
+   @bc-grid:registry=https://npm.pkg.github.com
+   //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+   ```
+
+3. **Make `GITHUB_TOKEN` available**:
+   - **Locally**: export it in your shell or store it as a literal token in `~/.npmrc` (gitignored, never committed).
+   - **In CI**: add the PAT as a repo secret (e.g., `BC_GRID_READ_TOKEN`); reference it in your project `.npmrc`.
+
+4. **Install**:
+   ```bash
+   bun add @bc-grid/react @bc-grid/theming
+   ```
+
+5. **Wire the CSS** at your app entry:
+   ```ts
+   import "@bc-grid/theming/styles.css"
+   ```
+
+The auth model is documented in detail in [`docs/design/publish-rfc.md`](./docs/design/publish-rfc.md).
+
 ## Roadmap
 
 **2-week sprint to v1.0** with 4 max-tier parallel agents — covers the original 8-quarter scope plus charts integration. See `docs/roadmap.md` for the day-by-day plan and `docs/coordination/v1-parity-sprint.md` for the active orchestration. Q1 vertical-slice gate cleared on day 0 (PR #42).
@@ -60,4 +93,4 @@ Multi-agent parallel development on git worktrees. See `docs/AGENTS.md` for the 
 
 ## Licence
 
-Undecided. Treat as proprietary for now. See `docs/LICENCE_TBD.md`.
+UNLICENSED — proprietary. See [`LICENSE`](./LICENSE) for the full text. Distribution is limited to John Cottrell and accounts explicitly granted GitHub Packages access tokens.

@@ -1,0 +1,16 @@
+# Copy this file to .npmrc in your consuming app (NOT this repo) to install
+# bc-grid from the private GitHub Packages registry.
+#
+# Set GITHUB_TOKEN in your env (locally or in CI). The token must be a Classic
+# Personal Access Token with `read:packages` + `repo` scopes.
+#
+# In your consuming app:
+#   1. Copy this file as `.npmrc` at the project root.
+#   2. Locally: export GITHUB_TOKEN=ghp_xxx in your shell, or store it in
+#      your ~/.npmrc as a literal token.
+#   3. In CI: add the PAT as a repo secret (e.g., BC_GRID_READ_TOKEN), then
+#      replace ${GITHUB_TOKEN} below with ${BC_GRID_READ_TOKEN}.
+#   4. Run `bun add @bc-grid/react @bc-grid/theming`.
+
+@bc-grid:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
