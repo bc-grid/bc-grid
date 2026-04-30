@@ -1,4 +1,5 @@
 export { dateEditor } from "./date"
+export { datetimeEditor } from "./datetime"
 export { numberEditor } from "./number"
 export { textEditor } from "./text"
 export { timeEditor } from "./time"

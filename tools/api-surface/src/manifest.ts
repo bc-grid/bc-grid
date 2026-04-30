@@ -344,9 +344,15 @@ export const apiSurfaceManifest = [
     declarationPath: "packages/editors/dist/index.d.ts",
     runtimePath: "packages/editors/dist/index.js",
     mode: "enforced",
-    runtimeExports: ["dateEditor", "numberEditor", "textEditor", "timeEditor"],
-    declarationExports: ["dateEditor", "numberEditor", "textEditor", "timeEditor"],
-    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time. Other 3 editors land alongside their respective Track 1 PRs.",
+    runtimeExports: ["dateEditor", "datetimeEditor", "numberEditor", "textEditor", "timeEditor"],
+    declarationExports: [
+      "dateEditor",
+      "datetimeEditor",
+      "numberEditor",
+      "textEditor",
+      "timeEditor",
+    ],
+    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime. Other 2 editors land alongside their respective Track 1 PRs.",
   },
   {
     packageName: "@bc-grid/enterprise",

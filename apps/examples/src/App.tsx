@@ -1,4 +1,4 @@
-import { dateEditor, numberEditor, textEditor, timeEditor } from "@bc-grid/editors"
+import { dateEditor, datetimeEditor, numberEditor, textEditor, timeEditor } from "@bc-grid/editors"
 import {
   type BcCellEditor,
   BcEditGrid,
@@ -398,6 +398,31 @@ function CustomerGridDemo({
           const minutes = hh * 60 + mm
           if (minutes < 8 * 60 || minutes > 22 * 60) {
             return { valid: false as const, error: "Cutoff must be between 08:00 and 22:00." }
+          }
+          return { valid: true as const }
+        },
+      },
+      {
+        columnId: "nextScheduledCall",
+        field: "nextScheduledCall",
+        header: "Next Call",
+        width: 180,
+        // ?edit=1: editable datetime field. Native <input type="datetime-local">
+        // emits YYYY-MM-DDTHH:mm; valueParser keeps the value as-is. validate
+        // enforces a future-only constraint — scheduled follow-ups should be
+        // dated forward.
+        editable: editorFrameworkEnabled(),
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: datetimeEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        valueParser: (input: string) => input,
+        validate: (next: unknown) => {
+          if (typeof next !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(next)) {
+            return { valid: false as const, error: "Datetime must be YYYY-MM-DDTHH:mm." }
+          }
+          const date = new Date(next)
+          if (Number.isNaN(date.valueOf())) {
+            return { valid: false as const, error: "Invalid datetime." }
           }
           return { valid: true as const }
         },
