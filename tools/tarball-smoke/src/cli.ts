@@ -17,7 +17,7 @@
  *   bun run tarball-smoke
  */
 
-import { execSync } from "node:child_process"
+import { execFileSync, execSync } from "node:child_process"
 import {
   existsSync,
   mkdirSync,
@@ -37,6 +37,7 @@ interface PackageManifest {
   name: string
   version: string
   private?: boolean
+  dependencies?: Record<string, string>
 }
 
 function readManifest(packageDir: string): PackageManifest {
@@ -75,6 +76,31 @@ function packTarball(packageDir: string, outDir: string): string {
     throw new Error(`bun pm pack did not produce a usable tarball; output was:\n${result}`)
   }
   return tarballPath
+}
+
+function readPackedManifest(tarballPath: string): PackageManifest {
+  const raw = execFileSync("tar", ["-xOf", tarballPath, "package/package.json"], {
+    encoding: "utf-8",
+  })
+  return JSON.parse(raw) as PackageManifest
+}
+
+function assertPackedInternalDependencies(
+  packages: { name: string }[],
+  packedManifests: Record<string, PackageManifest>,
+): void {
+  const internalNames = new Set(packages.map((pkg) => pkg.name))
+
+  for (const manifest of Object.values(packedManifests)) {
+    const deps = manifest.dependencies ?? {}
+    for (const [depName, depVersion] of Object.entries(deps)) {
+      if (!internalNames.has(depName)) continue
+      if (depVersion === manifest.version) continue
+      throw new Error(
+        `[tarball-smoke] ${manifest.name}@${manifest.version} packs ${depName}@${depVersion}; expected ${manifest.version}`,
+      )
+    }
+  }
 }
 
 function setupConsumerProject(workdir: string, tarballs: Record<string, string>): void {
@@ -191,10 +217,13 @@ function main(): void {
   mkdirSync(tarballsDir, { recursive: true })
 
   const tarballs: Record<string, string> = {}
+  const packedManifests: Record<string, PackageManifest> = {}
   for (const pkg of packages) {
     console.log(`[tarball-smoke] Packing ${pkg.name}…`)
     tarballs[pkg.name] = packTarball(pkg.dir, tarballsDir)
+    packedManifests[pkg.name] = readPackedManifest(tarballs[pkg.name])
   }
+  assertPackedInternalDependencies(packages, packedManifests)
 
   const consumer = join(workdir, "consumer")
   console.log(`[tarball-smoke] Setting up consumer project at ${consumer}`)

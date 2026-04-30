@@ -1,5 +1,11 @@
 # @bc-grid/theming
 
+## 0.1.0-alpha.3
+
+### Patch Changes
+
+- Correct published internal @bc-grid dependency metadata so alpha.3 consumers install a single coherent package graph.
+
 ## 0.1.0-alpha.2
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/react",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "React layer for bc-grid — high-performance shadcn-native data grid",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
@@ -34,14 +34,14 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
-    "@bc-grid/core": "workspace:*",
-    "@bc-grid/virtualizer": "workspace:*",
-    "@bc-grid/animations": "workspace:*",
-    "@bc-grid/theming": "workspace:*",
-    "@bc-grid/aggregations": "workspace:*",
-    "@bc-grid/filters": "workspace:*",
-    "@bc-grid/export": "workspace:*",
-    "@bc-grid/server-row-model": "workspace:*"
+    "@bc-grid/core": "0.1.0-alpha.3",
+    "@bc-grid/virtualizer": "0.1.0-alpha.3",
+    "@bc-grid/animations": "0.1.0-alpha.3",
+    "@bc-grid/theming": "0.1.0-alpha.3",
+    "@bc-grid/aggregations": "0.1.0-alpha.3",
+    "@bc-grid/filters": "0.1.0-alpha.3",
+    "@bc-grid/export": "0.1.0-alpha.3",
+    "@bc-grid/server-row-model": "0.1.0-alpha.3"
   },
   "peerDependencies": {
     "react": "^19.0.0",

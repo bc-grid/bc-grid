@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/aggregations",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Pure aggregation and pivot-table engine for bc-grid",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
@@ -34,6 +34,6 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
-    "@bc-grid/core": "workspace:*"
+    "@bc-grid/core": "0.1.0-alpha.3"
   }
 }
