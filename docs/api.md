@@ -711,6 +711,14 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   // Slots
   toolbar?: React.ReactNode
   footer?: React.ReactNode
+  /**
+   * Footer status-bar segments rendered below the body and above any
+   * `footer` slot. Built-in IDs (`total`, `filtered`, `selected`,
+   * `aggregations`) opt in to the standard renderers; objects matching
+   * `BcStatusBarCustomSegment` render consumer-supplied content. Per
+   * `docs/design/chrome-rfc.md §Status bar`.
+   */
+  statusBar?: readonly BcStatusBarSegment<TRow>[]
 
   // Master-detail
   renderDetailPanel?: (params: BcDetailPanelParams<TRow>) => React.ReactNode
@@ -745,6 +753,35 @@ disclosure column. Expanding a row mounts the returned React node below that
 row, using the existing `expansion` state pair. Detail panels are fixed-height
 by default (`144px`) or per-row via `detailPanelHeight`; auto-measured detail
 height is deferred so virtualization remains deterministic.
+
+The `statusBar` slot accepts an array of segment descriptors. Built-in IDs hide
+themselves when their content is irrelevant: `filtered` only appears once a
+filter narrows the row count, `selected` only when a selection is active, and
+`aggregations` only when at least one aggregation result is available. Custom
+segments render unconditionally — visibility is the consumer's responsibility.
+
+```ts
+type BcStatusBarSegment<TRow = unknown> =
+  | "total"
+  | "filtered"
+  | "selected"
+  | "aggregations"
+  | BcStatusBarCustomSegment<TRow>
+
+interface BcStatusBarCustomSegment<TRow = unknown> {
+  id: string
+  render: (ctx: BcStatusBarContext<TRow>) => React.ReactNode
+  align?: "left" | "right"
+}
+
+interface BcStatusBarContext<TRow = unknown> {
+  totalRowCount: number | "unknown"
+  filteredRowCount: number
+  selectedRowCount: number
+  aggregations: readonly AggregationResult[]
+  api: BcGridApi<TRow>
+}
+```
 
 ### 5.2 `<BcEditGrid>` (frozen at v0.1 surface; editing is Q2)
 
@@ -1025,10 +1062,13 @@ The machine-checkable manifest for this package lives in `tools/api-surface/src/
 
 ```ts
 // Components
-export { BcGrid, BcEditGrid, BcServerGrid }
+export { BcGrid, BcEditGrid, BcServerGrid, BcStatusBar }
 
 // Hooks
 export { useBcGridApi, useAggregations }
+
+// Helpers
+export { resolveVisibleSegments }
 
 // React-aware types plus @bc-grid/core re-exports for consumer convenience.
 // (Re-exports let consumers import every column / state / loader type from one place.)
