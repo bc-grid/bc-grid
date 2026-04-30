@@ -4,6 +4,7 @@ const FPS_BAR = 58
 const LATENCY_BAR_MS = 100
 const MEMORY_BAR_BYTES = 30 * 1024 * 1024
 const RUN_COUNT = 3
+const SERVER_ROW_MODEL_BAR_MS = 3000
 
 declare global {
   interface Window {
@@ -12,6 +13,7 @@ declare global {
       mountGrid(): Promise<PerfMetric>
       sortRows(): Promise<PerfMetric>
       filterRows(): Promise<PerfMetric>
+      serverRowModelBlocks(input?: ServerRowModelPerfInput): Promise<ServerRowModelPerfMetric>
       rawRowCount: number
     }
     __fps__: number[]
@@ -22,6 +24,33 @@ declare global {
 interface PerfMetric {
   durationMs: number
   rowCount: number
+}
+
+interface ServerRowModelPerfInput {
+  blockSize?: number
+  debounceMs?: number
+  fetchDelayMs?: number
+  maxBlocks?: number
+  maxConcurrentRequests?: number
+  rowCount?: number
+}
+
+interface ServerRowModelPerfMetric extends PerfMetric {
+  avgFetchLatencyMs: number
+  avgQueueWaitMs: number
+  blockFetches: number
+  blockSize: number
+  cacheHitRate: number
+  debounceMs: number
+  dedupedRequests: number
+  hotCacheHitRate: number
+  loadedBlocks: number
+  maxBlocks: number
+  maxConcurrentRequests: number
+  maxFetchLatencyMs: number
+  maxQueueDepth: number
+  maxQueueWaitMs: number
+  queuedRequests: number
 }
 
 test(`scroll FPS at 100k x 30 stays >=${FPS_BAR} (median of ${RUN_COUNT})`, async ({ page }) => {
@@ -83,6 +112,47 @@ test(`grid overhead memory stays under ${formatBytes(MEMORY_BAR_BYTES)}`, async 
     `perf memory baseline=${formatBytes(baseline)} mounted=${formatBytes(mounted)} overhead=${formatBytes(overhead)} bar=${formatBytes(MEMORY_BAR_BYTES)}`,
   )
   expect(overhead).toBeLessThan(MEMORY_BAR_BYTES)
+})
+
+test(`server row model loads and re-hits 100k cached rows under ${SERVER_ROW_MODEL_BAR_MS}ms`, async ({
+  page,
+}) => {
+  await page.goto("/?rawData=1&mount=false&rows=100000&cols=10")
+  await page.waitForFunction(() => window.__bcGridPerf.rawRowCount === 100_000)
+
+  const metric = await page.evaluate(() =>
+    window.__bcGridPerf.serverRowModelBlocks({
+      blockSize: 100,
+      debounceMs: 16,
+      fetchDelayMs: 1,
+      maxBlocks: 1000,
+      maxConcurrentRequests: 4,
+      rowCount: 100_000,
+    }),
+  )
+
+  console.log(
+    [
+      `perf server-row-model rows=${metric.rowCount}`,
+      `blocks=${metric.loadedBlocks}`,
+      `duration=${metric.durationMs.toFixed(2)}ms`,
+      `bar=${SERVER_ROW_MODEL_BAR_MS}ms`,
+      `hotCacheHitRate=${metric.hotCacheHitRate.toFixed(3)}`,
+      `overallHitRate=${metric.cacheHitRate.toFixed(3)}`,
+      `fetchAvg=${metric.avgFetchLatencyMs.toFixed(2)}ms`,
+      `fetchMax=${metric.maxFetchLatencyMs.toFixed(2)}ms`,
+      `queueAvg=${metric.avgQueueWaitMs.toFixed(2)}ms`,
+      `queueMax=${metric.maxQueueWaitMs.toFixed(2)}ms`,
+      `queued=${metric.queuedRequests}`,
+      `maxQueueDepth=${metric.maxQueueDepth}`,
+      `debounce=${metric.debounceMs}ms`,
+      `concurrency=${metric.maxConcurrentRequests}`,
+    ].join(" "),
+  )
+  expect(metric.loadedBlocks).toBe(1000)
+  expect(metric.blockFetches).toBe(1000)
+  expect(metric.hotCacheHitRate).toBeGreaterThanOrEqual(0.99)
+  expect(metric.durationMs).toBeLessThan(SERVER_ROW_MODEL_BAR_MS)
 })
 
 async function measureHeapBytes(page: Page): Promise<number> {

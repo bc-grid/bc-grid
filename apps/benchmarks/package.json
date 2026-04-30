@@ -10,6 +10,8 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
+    "@bc-grid/core": "workspace:*",
+    "@bc-grid/server-row-model": "workspace:*",
     "@bc-grid/virtualizer": "workspace:*"
   },
   "devDependencies": {

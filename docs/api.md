@@ -1095,6 +1095,8 @@ export { createServerRowModel, ServerBlockCache, defaultBlockKey }
 // Types come from @bc-grid/core; not re-exported here.
 ```
 
+`createServerRowModel({ onEvent })` emits `ServerRowModelEvent` values for diagnostics. The returned controller also exposes `getMetrics()` / `resetMetrics()` for benchmark instrumentation: cache hit rate, deduped requests, block fetch latency, queue wait time, queued request count, max queue depth, and eviction count. These metrics are diagnostic only; the public server query types still live in `@bc-grid/core`.
+
 ### `@bc-grid/editors`
 
 ```ts

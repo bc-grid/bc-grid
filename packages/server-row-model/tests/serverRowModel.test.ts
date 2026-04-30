@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import type { ServerBlockResult, ServerPagedResult, ServerViewState } from "@bc-grid/core"
+import type {
+  ServerBlockResult,
+  ServerPagedResult,
+  ServerRowModelEvent,
+  ServerViewState,
+} from "@bc-grid/core"
 import { ServerBlockCache, createServerRowModel, defaultBlockKey } from "../src"
 
 interface Row {
@@ -261,6 +266,96 @@ describe("createServerRowModel", () => {
     expect(model.cache.get(first.blockKey)?.state).toBe("loaded")
     expect(model.cache.get(second.blockKey)).toBeUndefined()
     expect(model.cache.get(third.blockKey)?.state).toBe("loaded")
+  })
+
+  test("records cache hit rate, fetch latency, queue wait, and row-model events", async () => {
+    const events: Array<ServerRowModelEvent<Row>["type"]> = []
+    const model = createServerRowModel<Row>({
+      onEvent: (event) => events.push(event.type),
+    })
+    const loadBlock = (query: { blockStart: number; blockSize: number }) =>
+      Promise.resolve({
+        blockSize: query.blockSize,
+        blockStart: query.blockStart,
+        hasMore: false,
+        rows: [{ id: "a" }, { id: "b" }],
+      })
+
+    const first = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      cacheOptions: { blockLoadDebounceMs: 0 },
+      loadBlock,
+      view,
+    })
+    await first.promise
+
+    const second = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      cacheOptions: { blockLoadDebounceMs: 0 },
+      loadBlock,
+      view,
+    })
+    await second.promise
+
+    const metrics = model.getMetrics()
+    expect(second.cached).toBe(true)
+    expect(metrics.cacheHits).toBe(1)
+    expect(metrics.cacheMisses).toBe(1)
+    expect(metrics.cacheHitRate).toBe(0.5)
+    expect(metrics.blockFetches).toBe(1)
+    expect(metrics.blockFetchLatencyMs.count).toBe(1)
+    expect(metrics.blockQueueWaitMs.count).toBe(1)
+    expect(events).toContain("blockFetching")
+    expect(events).toContain("blockLoaded")
+  })
+
+  test("debounces extra infinite block starts while a request is active", async () => {
+    const model = createServerRowModel<Row>()
+    const resolvers: Array<(value: ServerBlockResult<Row>) => void> = []
+    const loadBlock = () =>
+      new Promise<ServerBlockResult<Row>>((resolve) => {
+        resolvers.push(resolve)
+      })
+
+    const first = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      cacheOptions: { blockLoadDebounceMs: 20, maxConcurrentRequests: 2 },
+      loadBlock,
+      view,
+    })
+    const second = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 2,
+      cacheOptions: { blockLoadDebounceMs: 20, maxConcurrentRequests: 2 },
+      loadBlock,
+      view,
+    })
+
+    expect(resolvers.length).toBe(1)
+    expect(model.cache.get(second.blockKey)?.state).toBe("queued")
+    expect(model.getMetrics().queuedRequests).toBe(1)
+
+    await sleep(30)
+    expect(resolvers.length).toBe(2)
+
+    resolvers[0]?.({
+      blockSize: 2,
+      blockStart: 0,
+      hasMore: true,
+      rows: [{ id: "a" }, { id: "b" }],
+    })
+    resolvers[1]?.({
+      blockSize: 2,
+      blockStart: 2,
+      hasMore: false,
+      rows: [{ id: "c" }, { id: "d" }],
+    })
+    await Promise.all([first.promise, second.promise])
+
+    expect(model.getMetrics().blockQueueWaitMs.maxMs).toBeGreaterThanOrEqual(20)
   })
 
   test("marks invalid infinite block protocol responses as errors", async () => {
@@ -673,3 +768,7 @@ describe("createServerRowModel", () => {
     expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([{ id: "a", name: "server" }])
   })
 })
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}

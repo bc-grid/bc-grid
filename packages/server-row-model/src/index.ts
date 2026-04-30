@@ -14,6 +14,7 @@ import type {
   ServerMutationResult,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerRowModelEvent,
   ServerRowModelMode,
   ServerRowModelState,
   ServerRowPatch,
@@ -166,6 +167,7 @@ type InFlightPagedRequest<TRow> = {
 type InFlightInfiniteRequest<TRow> = {
   controller: AbortController
   promise: Promise<ServerBlockResult<TRow>>
+  queuedAt: number
   query: ServerBlockQuery
   reject: (error: unknown) => void
   start: () => void
@@ -207,6 +209,53 @@ type ViewStateInput = {
   searchText: string | undefined
   sort: readonly BcGridSort[]
   visibleColumns: readonly ColumnId[]
+}
+
+type ServerRowModelControllerOptions<TRow> = {
+  onEvent?: (event: ServerRowModelEvent<TRow>) => void
+}
+
+type TimingState = {
+  count: number
+  lastMs: number
+  maxMs: number
+  minMs: number
+  totalMs: number
+}
+
+type TimingSnapshot = {
+  avgMs: number
+  count: number
+  lastMs: number
+  maxMs: number
+  minMs: number
+}
+
+type ServerRowModelMetricsState = {
+  blockFetchErrors: number
+  blockFetches: number
+  blockFetchLatencyMs: TimingState
+  blockQueueWaitMs: TimingState
+  cacheHits: number
+  cacheMisses: number
+  dedupedRequests: number
+  evictedBlocks: number
+  maxQueueDepth: number
+  queuedRequests: number
+}
+
+type ServerRowModelMetricsSnapshot = {
+  blockFetchErrors: number
+  blockFetches: number
+  blockFetchLatencyMs: TimingSnapshot
+  blockQueueWaitMs: TimingSnapshot
+  cacheHitRate: number
+  cacheHits: number
+  cacheMisses: number
+  dedupedRequests: number
+  evictedBlocks: number
+  maxQueueDepth: number
+  queuedRequests: number
 }
 
 const DEFAULT_BLOCK_CACHE_OPTIONS: ServerBlockCacheOptions = {
@@ -408,8 +457,8 @@ export class ServerBlockCache<TRow> {
   }
 }
 
-export function createServerRowModel<TRow>() {
-  return new ServerRowModelController<TRow>()
+export function createServerRowModel<TRow>(options: ServerRowModelControllerOptions<TRow> = {}) {
+  return new ServerRowModelController<TRow>(options)
 }
 
 class ServerRowModelController<TRow> {
@@ -420,6 +469,9 @@ class ServerRowModelController<TRow> {
   #inFlightInfinite = new Map<ServerBlockKey, InFlightInfiniteRequest<TRow>>()
   #inFlightPaged = new Map<ServerBlockKey, InFlightPagedRequest<TRow>>()
   #inFlightTree = new Map<ServerBlockKey, InFlightTreeRequest<TRow>>()
+  #infiniteQueueTimer: ReturnType<typeof setTimeout> | null = null
+  #metrics = createMetricsState()
+  #onEvent: ((event: ServerRowModelEvent<TRow>) => void) | null = null
   #pendingMutations = new Map<string, ServerRowPatch>()
   #requestSequence = 0
   #mutationRowIdGetter: RowIdGetter<TRow> | null = null
@@ -427,6 +479,10 @@ class ServerRowModelController<TRow> {
   #treeChildRowIdsByBlock = new Map<ServerBlockKey, Set<RowId>>()
   #treeChildRowIdsByParent = new Map<RowId | null, Set<RowId>>()
   #treeParentByBlock = new Map<ServerBlockKey, RowId | null>()
+
+  constructor(options: ServerRowModelControllerOptions<TRow> = {}) {
+    this.#onEvent = options.onEvent ?? null
+  }
 
   createViewKey(view: ServerViewState): string {
     return `view:${stableStringify(view)}`
@@ -448,6 +504,14 @@ class ServerRowModelController<TRow> {
 
   isAbortError(error: unknown): boolean {
     return isAbortError(error)
+  }
+
+  getMetrics(): ServerRowModelMetricsSnapshot {
+    return snapshotMetrics(this.#metrics)
+  }
+
+  resetMetrics(): void {
+    this.#metrics = createMetricsState()
   }
 
   loadPagedPage(input: LoadPagedPageInput<TRow>): LoadPagedPageResult<TRow> {
@@ -481,6 +545,7 @@ class ServerRowModelController<TRow> {
       start: input.pageIndex * input.pageSize,
       viewKey,
     })
+    this.emit({ type: "blockFetching", blockKey, requestId: query.requestId })
 
     const promise = input
       .loadPage(query, { signal: controller.signal })
@@ -494,6 +559,7 @@ class ServerRowModelController<TRow> {
           viewKey: result.viewKey ?? viewKey,
           ...(result.revision ? { revision: result.revision } : {}),
         })
+        this.emit({ type: "blockLoaded", blockKey, rowCount: result.totalRows })
         return rows === result.rows ? result : { ...result, rows }
       })
       .catch((error: unknown) => {
@@ -505,6 +571,7 @@ class ServerRowModelController<TRow> {
             start: input.pageIndex * input.pageSize,
             viewKey,
           })
+          this.emit({ type: "blockError", blockKey, error })
         }
         throw error
       })
@@ -535,6 +602,7 @@ class ServerRowModelController<TRow> {
     })
 
     if (cached?.state === "loaded" && !isStale(cached, options.staleTimeMs)) {
+      this.#metrics.cacheHits += 1
       return {
         blockKey,
         cached: true,
@@ -550,8 +618,10 @@ class ServerRowModelController<TRow> {
       }
     }
 
+    this.#metrics.cacheMisses += 1
     const existing = this.#inFlightInfinite.get(blockKey)
     if (existing) {
+      this.#metrics.dedupedRequests += 1
       return {
         blockKey,
         cached: false,
@@ -566,6 +636,7 @@ class ServerRowModelController<TRow> {
     const request: InFlightInfiniteRequest<TRow> = {
       controller,
       promise: deferred.promise,
+      queuedAt: nowMs(),
       query,
       reject: deferred.reject,
       start: () => {
@@ -583,7 +654,7 @@ class ServerRowModelController<TRow> {
     }
 
     this.#inFlightInfinite.set(blockKey, request)
-    if (this.#activeInfiniteRequests < options.maxConcurrentRequests) {
+    if (this.shouldStartInfiniteRequestImmediately(options)) {
       request.start()
     } else {
       this.cache.markQueued({
@@ -592,6 +663,10 @@ class ServerRowModelController<TRow> {
         start: blockStart,
         viewKey,
       })
+      this.#metrics.queuedRequests += 1
+      this.observeQueueDepth()
+      this.emit({ type: "blockQueued", blockKey })
+      this.scheduleInfinitePump(options)
     }
 
     return { blockKey, cached: false, deduped: false, promise: deferred.promise, query }
@@ -708,24 +783,31 @@ class ServerRowModelController<TRow> {
     this.#inFlightInfinite.clear()
     for (const request of this.#inFlightTree.values()) request.controller.abort()
     this.#inFlightTree.clear()
+    this.clearInfiniteQueueTimer()
   }
 
   invalidate(
     invalidation: ServerInvalidation,
     input: InvalidateInput<TRow> = {},
   ): InvalidateResult {
+    let affectedBlockKeys: ServerBlockKey[]
     if (invalidation.scope === "rows") {
-      return { affectedBlockKeys: this.invalidateRows(invalidation.rowIds, input.rowId) }
-    }
-    if (invalidation.scope === "tree") {
-      return {
-        affectedBlockKeys: this.invalidateTree(invalidation.parentRowId, !!invalidation.recursive),
-      }
+      affectedBlockKeys = this.invalidateRows(invalidation.rowIds, input.rowId)
+      this.emit({ type: "rowsInvalidated", rowIds: invalidation.rowIds })
+    } else if (invalidation.scope === "tree") {
+      affectedBlockKeys = this.invalidateTree(invalidation.parentRowId, !!invalidation.recursive)
+    } else {
+      affectedBlockKeys = this.cache.invalidate(invalidation)
+      if (invalidation.scope === "all") this.clearTreeIndex()
+      else this.forgetTreeBlocks(affectedBlockKeys)
     }
 
-    const affectedBlockKeys = this.cache.invalidate(invalidation)
-    if (invalidation.scope === "all") this.clearTreeIndex()
-    else this.forgetTreeBlocks(affectedBlockKeys)
+    if (invalidation.scope !== "rows") {
+      for (const blockKey of affectedBlockKeys) {
+        this.#metrics.evictedBlocks += 1
+        this.emit({ type: "blockEvicted", blockKey, reason: "invalidate" })
+      }
+    }
     return { affectedBlockKeys }
   }
 
@@ -738,6 +820,11 @@ class ServerRowModelController<TRow> {
     this.captureCanonicalMutationRow(input.patch.rowId, input.rowId)
     this.#pendingMutations.set(input.patch.mutationId, input.patch)
     const updatedRows = this.reconcileMutatedRow(input.patch.rowId, input.rowId)
+    this.emit({
+      type: "mutationQueued",
+      mutationId: input.patch.mutationId,
+      rowId: input.patch.rowId,
+    })
 
     return {
       mutationId: input.patch.mutationId,
@@ -775,11 +862,13 @@ class ServerRowModelController<TRow> {
           })
         : this.reconcileMutatedRow(targetRowId, input.rowId)
 
-      return {
+      const settled = {
         pending: this.hasPendingRowMutations(nextRowId),
         result: input.result,
         updatedRows,
       }
+      this.emit({ type: "mutationSettled", result: input.result })
+      return settled
     }
 
     if (input.result.status === "conflict" && input.result.row) {
@@ -791,19 +880,23 @@ class ServerRowModelController<TRow> {
         targetRowId: nextRowId,
       })
 
-      return {
+      const settled = {
         pending: this.hasPendingRowMutations(nextRowId),
         result: input.result,
         updatedRows,
       }
+      this.emit({ type: "mutationSettled", result: input.result })
+      return settled
     }
 
     const updatedRows = this.reconcileMutatedRow(targetRowId, input.rowId)
-    return {
+    const settled = {
       pending: this.hasPendingRowMutations(targetRowId),
       result: input.result,
       updatedRows,
     }
+    this.emit({ type: "mutationSettled", result: input.result })
+    return settled
   }
 
   getState(input: StateSnapshotInput): ServerRowModelState<TRow> {
@@ -1149,18 +1242,30 @@ class ServerRowModelController<TRow> {
       return
     }
 
+    const fetchStartedAt = nowMs()
+    let fetchDurationObserved = false
+    const observeFetchDuration = () => {
+      if (fetchDurationObserved) return
+      fetchDurationObserved = true
+      observeTiming(this.#metrics.blockFetchLatencyMs, nowMs() - fetchStartedAt)
+    }
+
     input.request.state = "fetching"
     this.#activeInfiniteRequests += 1
+    this.#metrics.blockFetches += 1
+    observeTiming(this.#metrics.blockQueueWaitMs, fetchStartedAt - input.request.queuedAt)
     this.cache.markFetching({
       blockKey: input.blockKey,
       size: input.options.blockSize,
       start: input.query.blockStart,
       viewKey: input.viewKey,
     })
+    this.emit({ type: "blockFetching", blockKey: input.blockKey, requestId: input.query.requestId })
 
     input.input
       .loadBlock(input.query, { signal: input.request.controller.signal })
       .then((result) => {
+        observeFetchDuration()
         validateInfiniteResult(result, input.query)
         const rows = this.applyPendingMutationsToRows(result.rows)
         this.cache.markLoaded({
@@ -1171,11 +1276,22 @@ class ServerRowModelController<TRow> {
           viewKey: result.viewKey ?? input.viewKey,
           ...(result.revision ? { revision: result.revision } : {}),
         })
-        this.cache.evictLoadedBlocks(input.options.maxBlocks)
+        this.emit({
+          type: "blockLoaded",
+          blockKey: input.blockKey,
+          rowCount: getInfiniteRowCount(result),
+        })
+        const evicted = this.cache.evictLoadedBlocks(input.options.maxBlocks)
+        for (const blockKey of evicted) {
+          this.#metrics.evictedBlocks += 1
+          this.emit({ type: "blockEvicted", blockKey, reason: "lru" })
+        }
         input.deferred.resolve(rows === result.rows ? result : { ...result, rows })
       })
       .catch((error: unknown) => {
+        observeFetchDuration()
         if (!isAbortError(error)) {
+          this.#metrics.blockFetchErrors += 1
           this.cache.markError({
             blockKey: input.blockKey,
             error,
@@ -1183,6 +1299,7 @@ class ServerRowModelController<TRow> {
             start: input.query.blockStart,
             viewKey: input.viewKey,
           })
+          this.emit({ type: "blockError", blockKey: input.blockKey, error })
         }
         input.deferred.reject(error)
       })
@@ -1200,6 +1317,51 @@ class ServerRowModelController<TRow> {
       request.start()
       if (this.#activeInfiniteRequests >= options.maxConcurrentRequests) return
     }
+  }
+
+  private shouldStartInfiniteRequestImmediately(options: ServerBlockCacheOptions): boolean {
+    if (this.#activeInfiniteRequests >= options.maxConcurrentRequests) return false
+    if (options.blockLoadDebounceMs <= 0) return true
+    return this.#activeInfiniteRequests === 0 && this.queuedInfiniteRequestCount() === 1
+  }
+
+  private queuedInfiniteRequestCount(): number {
+    let count = 0
+    for (const request of this.#inFlightInfinite.values()) {
+      if (request.state === "queued") count += 1
+    }
+    return count
+  }
+
+  private scheduleInfinitePump(options: ServerBlockCacheOptions): void {
+    if (this.#activeInfiniteRequests >= options.maxConcurrentRequests) return
+    if (options.blockLoadDebounceMs <= 0) {
+      this.pumpInfiniteQueue(options)
+      return
+    }
+    if (this.#infiniteQueueTimer !== null) return
+    this.#infiniteQueueTimer = setTimeout(() => {
+      this.#infiniteQueueTimer = null
+      this.pumpInfiniteQueue(options)
+    }, options.blockLoadDebounceMs)
+  }
+
+  private clearInfiniteQueueTimer(): void {
+    if (this.#infiniteQueueTimer === null) return
+    clearTimeout(this.#infiniteQueueTimer)
+    this.#infiniteQueueTimer = null
+  }
+
+  private observeQueueDepth(): void {
+    let queued = 0
+    for (const request of this.#inFlightInfinite.values()) {
+      if (request.state === "queued") queued += 1
+    }
+    this.#metrics.maxQueueDepth = Math.max(this.#metrics.maxQueueDepth, queued)
+  }
+
+  private emit(event: ServerRowModelEvent<TRow>): void {
+    this.#onEvent?.(event)
   }
 
   private captureCanonicalMutationRow(rowId: RowId, rowIdGetter: RowIdGetter<TRow>): void {
@@ -1401,9 +1563,80 @@ function validateTreeResult<TRow>(result: ServerTreeResult<TRow>, query: ServerT
   }
 }
 
+function getInfiniteRowCount<TRow>(result: ServerBlockResult<TRow>): number | "unknown" {
+  if (result.totalRows != null) return result.totalRows
+  if (result.hasMore === false) return result.blockStart + result.rows.length
+  return "unknown"
+}
+
 function applyPatchChanges<TRow>(row: TRow | undefined, patch: ServerRowPatch): TRow | undefined {
   if (!row) return undefined
   return { ...(row as object), ...patch.changes } as TRow
+}
+
+function createMetricsState(): ServerRowModelMetricsState {
+  return {
+    blockFetchErrors: 0,
+    blockFetches: 0,
+    blockFetchLatencyMs: createTimingState(),
+    blockQueueWaitMs: createTimingState(),
+    cacheHits: 0,
+    cacheMisses: 0,
+    dedupedRequests: 0,
+    evictedBlocks: 0,
+    maxQueueDepth: 0,
+    queuedRequests: 0,
+  }
+}
+
+function createTimingState(): TimingState {
+  return {
+    count: 0,
+    lastMs: 0,
+    maxMs: 0,
+    minMs: Number.POSITIVE_INFINITY,
+    totalMs: 0,
+  }
+}
+
+function observeTiming(state: TimingState, durationMs: number): void {
+  const normalized = Math.max(0, durationMs)
+  state.count += 1
+  state.lastMs = normalized
+  state.totalMs += normalized
+  state.minMs = Math.min(state.minMs, normalized)
+  state.maxMs = Math.max(state.maxMs, normalized)
+}
+
+function snapshotMetrics(state: ServerRowModelMetricsState): ServerRowModelMetricsSnapshot {
+  const cacheAttempts = state.cacheHits + state.cacheMisses
+  return {
+    blockFetchErrors: state.blockFetchErrors,
+    blockFetches: state.blockFetches,
+    blockFetchLatencyMs: snapshotTiming(state.blockFetchLatencyMs),
+    blockQueueWaitMs: snapshotTiming(state.blockQueueWaitMs),
+    cacheHitRate: cacheAttempts === 0 ? 1 : state.cacheHits / cacheAttempts,
+    cacheHits: state.cacheHits,
+    cacheMisses: state.cacheMisses,
+    dedupedRequests: state.dedupedRequests,
+    evictedBlocks: state.evictedBlocks,
+    maxQueueDepth: state.maxQueueDepth,
+    queuedRequests: state.queuedRequests,
+  }
+}
+
+function snapshotTiming(state: TimingState): TimingSnapshot {
+  return {
+    avgMs: state.count === 0 ? 0 : state.totalMs / state.count,
+    count: state.count,
+    lastMs: state.lastMs,
+    maxMs: state.maxMs,
+    minMs: state.count === 0 ? 0 : state.minMs,
+  }
+}
+
+function nowMs(): number {
+  return globalThis.performance?.now() ?? Date.now()
 }
 
 function stableStringify(value: unknown): string {
