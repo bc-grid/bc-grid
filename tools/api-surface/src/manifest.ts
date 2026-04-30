@@ -149,7 +149,6 @@ export const apiSurfaceManifest = [
       "BcContextMenuCustomItem",
       "BcContextMenuItem",
       "BcContextMenuItems",
-      "BcContextMenuSelectionMode",
       "BcDetailPanelParams",
       "BcEditGrid",
       "BcEditGridAction",

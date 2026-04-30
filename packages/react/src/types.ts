@@ -235,7 +235,6 @@ export type BcContextMenuBuiltinItem =
   | "copy-with-headers"
   | "export-csv"
   | "export-xlsx"
-  | "paste"
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {
@@ -265,8 +264,6 @@ export type BcContextMenuItems<TRow = unknown> =
   | ((
       ctx: BcContextMenuContext<TRow>,
     ) => readonly (BcContextMenuItem<TRow> | false | null | undefined)[])
-
-export type BcContextMenuSelectionMode = "extend" | "preserve"
 
 export interface BcDetailPanelParams<TRow> {
   row: TRow
@@ -335,7 +332,6 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onSidebarPanelChange?: (next: string | null, prev: string | null) => void
   sidebarWidth?: number
   contextMenuItems?: BcContextMenuItems<TRow>
-  contextMenuSelectionMode?: BcContextMenuSelectionMode
 
   /**
    * Master-detail render hook. When supplied, the grid renders a pinned-left

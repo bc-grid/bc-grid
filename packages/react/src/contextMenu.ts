@@ -9,10 +9,21 @@ import type {
 export const DEFAULT_CONTEXT_MENU_ITEMS: readonly BcContextMenuBuiltinItem[] = [
   "copy",
   "copy-with-headers",
-  "separator",
   "export-csv",
   "export-xlsx",
 ]
+
+const builtInLabels: Partial<Record<BcContextMenuBuiltinItem, string>> = {
+  copy: "Copy",
+  "copy-with-headers": "Copy with Headers",
+  "export-csv": "Export CSV",
+  "export-xlsx": "Export Excel",
+}
+
+const builtInShortcuts: Partial<Record<BcContextMenuBuiltinItem, string>> = {
+  copy: "Ctrl+C",
+  "copy-with-headers": "Ctrl+Shift+C",
+}
 
 export function resolveContextMenuItems<TRow>(
   items: BcContextMenuItems<TRow> | undefined,
@@ -39,28 +50,14 @@ export function isCustomContextMenuItem<TRow>(
   return typeof item === "object"
 }
 
-export function contextMenuItemKey<TRow>(item: BcContextMenuItem<TRow>, index: number): string {
-  if (isCustomContextMenuItem(item)) return item.id
-  if (isContextMenuSeparator(item)) return `separator-${index}`
-  return item
-}
-
 export function contextMenuItemLabel<TRow>(item: BcContextMenuItem<TRow>): string {
   if (isCustomContextMenuItem(item)) return item.label
-  if (item === "copy") return "Copy"
-  if (item === "copy-with-headers") return "Copy with Headers"
-  if (item === "export-csv") return "Export CSV"
-  if (item === "export-xlsx") return "Export Excel"
-  if (item === "paste") return "Paste"
-  return ""
+  return builtInLabels[item] ?? ""
 }
 
 export function contextMenuItemShortcut<TRow>(item: BcContextMenuItem<TRow>): string | undefined {
   if (isCustomContextMenuItem(item)) return item.shortcut
-  if (item === "copy") return "Ctrl+C"
-  if (item === "copy-with-headers") return "Ctrl+Shift+C"
-  if (item === "paste") return "Ctrl+V"
-  return undefined
+  return builtInShortcuts[item]
 }
 
 export function contextMenuItemDisabled<TRow>(
@@ -76,8 +73,4 @@ export function contextMenuItemDisabled<TRow>(
     return context.cell == null || context.row == null || context.column == null
   }
   return true
-}
-
-export function contextMenuItemDestructive<TRow>(item: BcContextMenuItem<TRow>): boolean {
-  return isCustomContextMenuItem(item) && item.destructive === true
 }

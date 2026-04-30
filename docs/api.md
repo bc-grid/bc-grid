@@ -764,7 +764,6 @@ export type BcContextMenuBuiltinItem =
   | "copy-with-headers"
   | "export-csv"
   | "export-xlsx"
-  | "paste"
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {
@@ -794,8 +793,6 @@ export type BcContextMenuItems<TRow = unknown> =
   | ((
       ctx: BcContextMenuContext<TRow>,
     ) => readonly (BcContextMenuItem<TRow> | false | null | undefined)[])
-
-export type BcContextMenuSelectionMode = "extend" | "preserve"
 
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   /** Row data (client-side). For server-side, use BcServerGrid. */
@@ -849,7 +846,6 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onSidebarPanelChange?: (next: string | null, prev: string | null) => void
   sidebarWidth?: number
   contextMenuItems?: BcContextMenuItems<TRow>
-  contextMenuSelectionMode?: BcContextMenuSelectionMode
 
   // Master-detail
   renderDetailPanel?: (params: BcDetailPanelParams<TRow>) => React.ReactNode
@@ -1263,7 +1259,7 @@ export type {
   BcRangeBeforeCopyEvent, BcRangeBeforeCopyHook, BcRangeCopyEvent, BcRangeCopyHook,
   BcServerRowUpdateHandler, BcServerRowUpdateSubscribe, BcServerRowUpdateUnsubscribe,
   BcContextMenuBuiltinItem, BcContextMenuContext, BcContextMenuCustomItem,
-  BcContextMenuItem, BcContextMenuItems, BcContextMenuSelectionMode,
+  BcContextMenuItem, BcContextMenuItems,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
   BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarCustomPanel, BcSidebarPanel,
 

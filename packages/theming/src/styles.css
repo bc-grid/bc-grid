@@ -545,16 +545,21 @@
   width: 100%;
   min-height: 2rem;
   align-items: center;
+  border: 0;
   border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: inherit;
   cursor: pointer;
+  font: inherit;
   gap: 0.5rem;
   outline: none;
   padding: 0 0.5rem;
+  text-align: left;
   user-select: none;
 }
 
 .bc-grid-context-menu-item:hover,
-.bc-grid-context-menu-item[data-active="true"] {
+.bc-grid-context-menu-item:focus-visible {
   background: var(--bc-grid-row-hover);
 }
 

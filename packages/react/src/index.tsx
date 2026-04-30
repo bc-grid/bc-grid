@@ -23,7 +23,6 @@ export type {
   BcContextMenuCustomItem,
   BcContextMenuItem,
   BcContextMenuItems,
-  BcContextMenuSelectionMode,
   BcDetailPanelParams,
   BcEditGridAction,
   BcEditGridProps,
