@@ -21,7 +21,7 @@ export interface BcCellEditEntry {
   error?: string
   /** Original value before this edit cycle; used for rollback on server reject. */
   previousValue?: unknown
-  /** Server-side mutation id once the consumer assigns one. */
+  /** Client-side commit id used to ignore stale async settle paths. */
   mutationId?: string
 }
 
@@ -449,14 +449,11 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
  * the source of truth there). Mutates the maps in place; returns
  * `{ changed }` so the caller knows whether to bump the render counter.
  */
-export function pruneOverlayPatches<TRow>(
+export function pruneOverlayPatches(
   patches: Map<RowId, Map<ColumnId, unknown>>,
   entries: Map<RowId, Map<ColumnId, BcCellEditEntry>>,
   getCanonicalValue: (rowId: RowId, columnId: ColumnId) => unknown,
 ): { changed: boolean; cleared: number } {
-  // Track unused TRow generic for symmetry with the rest of the controller's
-  // typing; the helper itself only needs the maps.
-  void (null as TRow | null)
   let changed = false
   let cleared = 0
   for (const [rowId, rowPatches] of patches) {
