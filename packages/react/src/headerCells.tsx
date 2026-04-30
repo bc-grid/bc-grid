@@ -1,6 +1,11 @@
 import type { BcGridSort } from "@bc-grid/core"
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react"
 import {
+  type NumberFilterOperator,
+  decodeNumberFilterInput,
+  encodeNumberFilterInput,
+} from "./filter"
+import {
   type ResolvedColumn,
   cellStyle,
   classNames,
@@ -191,6 +196,7 @@ export function renderFilterCell<TRow>({
   const filterDisabled = column.source.filter === false
   const filterType = column.source.filter ? column.source.filter.type : "text"
   const filterLabel = `Filter ${typeof column.source.header === "string" ? column.source.header : column.columnId}`
+  const filterId = `${domBaseId}-filter-${domToken(column.columnId)}`
   return (
     <div
       key={`filter-${column.columnId}`}
@@ -226,13 +232,20 @@ export function renderFilterCell<TRow>({
           value={filterText}
           onChange={(event) => onFilterChange(event.currentTarget.value)}
           onKeyDown={(event) => event.stopPropagation()}
-          id={`${domBaseId}-filter-${domToken(column.columnId)}`}
+          id={filterId}
           style={filterControlStyle}
         >
           <option value="">Any</option>
           <option value="true">Yes</option>
           <option value="false">No</option>
         </select>
+      ) : filterType === "number" ? (
+        <NumberFilterControl
+          filterId={filterId}
+          filterLabel={filterLabel}
+          filterText={filterText}
+          onFilterChange={onFilterChange}
+        />
       ) : (
         <input
           aria-label={filterLabel}
@@ -243,11 +256,75 @@ export function renderFilterCell<TRow>({
           // Prevent the grid's keyboard handler from claiming arrow keys
           // while the user is typing in the filter input.
           onKeyDown={(event) => event.stopPropagation()}
-          id={`${domBaseId}-filter-${domToken(column.columnId)}`}
+          id={filterId}
           placeholder="Filter"
           style={filterControlStyle}
         />
       )}
+    </div>
+  )
+}
+
+function NumberFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+}): ReactNode {
+  const input = decodeNumberFilterInput(filterText)
+  const update = (next: Partial<typeof input>) => {
+    const merged = { ...input, ...next }
+    onFilterChange(encodeNumberFilterInput(merged))
+  }
+
+  return (
+    <div className="bc-grid-filter-number" style={numberFilterStyle}>
+      <select
+        aria-label={`${filterLabel} operator`}
+        className="bc-grid-filter-select"
+        value={input.op}
+        onChange={(event) => update({ op: event.currentTarget.value as NumberFilterOperator })}
+        onKeyDown={(event) => event.stopPropagation()}
+        style={numberFilterOperatorStyle}
+      >
+        <option value="=">=</option>
+        <option value="!=">!=</option>
+        <option value="<">&lt;</option>
+        <option value="<=">&lt;=</option>
+        <option value=">">&gt;</option>
+        <option value=">=">&gt;=</option>
+        <option value="between">Between</option>
+      </select>
+      <input
+        aria-label={filterLabel}
+        className="bc-grid-filter-input"
+        id={filterId}
+        type="number"
+        inputMode="decimal"
+        value={input.value}
+        onChange={(event) => update({ value: event.currentTarget.value })}
+        onKeyDown={(event) => event.stopPropagation()}
+        placeholder={input.op === "between" ? "Min" : "Value"}
+        style={numberFilterInputStyle}
+      />
+      {input.op === "between" ? (
+        <input
+          aria-label={`${filterLabel} maximum`}
+          className="bc-grid-filter-input"
+          type="number"
+          inputMode="decimal"
+          value={input.valueTo ?? ""}
+          onChange={(event) => update({ valueTo: event.currentTarget.value })}
+          onKeyDown={(event) => event.stopPropagation()}
+          placeholder="Max"
+          style={numberFilterInputStyle}
+        />
+      ) : null}
     </div>
   )
 }
@@ -263,4 +340,25 @@ const filterControlStyle: CSSProperties = {
   font: "inherit",
   fontSize: "0.8125rem",
   outline: "none",
+}
+
+const numberFilterStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  width: "100%",
+  height: "70%",
+}
+
+const numberFilterOperatorStyle: CSSProperties = {
+  ...filterControlStyle,
+  width: 58,
+  flex: "0 0 58px",
+  padding: "0 0.25rem",
+}
+
+const numberFilterInputStyle: CSSProperties = {
+  ...filterControlStyle,
+  minWidth: 0,
+  flex: "1 1 0",
 }

@@ -16,17 +16,22 @@ import type {
  */
 export type ColumnFilterText = Readonly<Record<ColumnId, string>>
 export type ColumnFilterTypeByColumnId = Readonly<Record<ColumnId, BcColumnFilter["type"]>>
+export type NumberFilterOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "between"
+
+export interface NumberFilterInput {
+  op: NumberFilterOperator
+  value: string
+  valueTo?: string
+}
+
+type NumberColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "number" }
 
 /**
- * Convert per-column text inputs into the canonical `BcGridFilter`
+ * Convert per-column filter-control values into the canonical `BcGridFilter`
  * (= `ServerFilter`) shape from `@bc-grid/core`. Returns `null` when
  * every input is empty (no filter active). Single non-empty input
  * returns a bare `ServerColumnFilter`; multiple inputs AND together
  * inside a `ServerFilterGroup`.
- *
- * Op: `"contains"` for v0 — case-insensitive substring match. The op
- * label is informative; the runtime matcher (`matchesColumnFilter`)
- * owns the actual semantics.
  */
 export function buildGridFilter(
   text: ColumnFilterText,
@@ -42,6 +47,12 @@ export function buildGridFilter(
       filters.push({ kind: "column", columnId, type: "boolean", op: "is", value: value === "true" })
       continue
     }
+    if (filterType === "number") {
+      const parsed = parseNumberFilterInput(value)
+      if (!parsed) continue
+      filters.push({ ...parsed, columnId })
+      continue
+    }
     filters.push({ kind: "column", columnId, type: "text", op: "contains", value })
   }
   if (filters.length === 0) return null
@@ -51,14 +62,17 @@ export function buildGridFilter(
 
 /**
  * Test whether a single formatted cell value matches a column filter.
- * v0 supports only `type: "text"` with `op: "contains"`; other ops fall
- * through to "no match" (Q2 will fill them in).
+ * Unsupported types / ops fall through to "no match" so new public API
+ * shapes can be introduced intentionally.
  */
 function matchesColumnFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
   if (filter.type === "boolean") {
     if (filter.op !== "is") return false
     const actual = parseFormattedBoolean(formattedValue)
     return actual != null && actual === Boolean(filter.value)
+  }
+  if (filter.type === "number") {
+    return matchesNumberFilter(formattedValue, filter)
   }
   if (filter.type !== "text") return false
   if (filter.op !== "contains") return false
@@ -95,4 +109,101 @@ function parseFormattedBoolean(value: string): boolean | null {
   if (normalised === "yes" || normalised === "true" || normalised === "1") return true
   if (normalised === "no" || normalised === "false" || normalised === "0") return false
   return null
+}
+
+export function encodeNumberFilterInput(input: NumberFilterInput): string {
+  return JSON.stringify(input)
+}
+
+export function decodeNumberFilterInput(raw: string): NumberFilterInput {
+  try {
+    const parsed = JSON.parse(raw) as Partial<NumberFilterInput>
+    return normaliseNumberFilterInput(parsed)
+  } catch {
+    return { op: "=", value: "" }
+  }
+}
+
+function parseNumberFilterInput(raw: string): NumberColumnFilterDraft | null {
+  const input = decodeNumberFilterInput(raw)
+  const value = parseFilterNumber(input.value)
+  if (value == null) return null
+
+  if (input.op === "between") {
+    const valueTo = parseFilterNumber(input.valueTo ?? "")
+    if (valueTo == null) return null
+    const min = Math.min(value, valueTo)
+    const max = Math.max(value, valueTo)
+    return {
+      kind: "column",
+      type: "number",
+      op: "between",
+      values: [min, max],
+    }
+  }
+
+  return {
+    kind: "column",
+    type: "number",
+    op: input.op,
+    value,
+  }
+}
+
+function normaliseNumberFilterInput(input: Partial<NumberFilterInput>): NumberFilterInput {
+  const op = isNumberFilterOperator(input.op) ? input.op : "="
+  return {
+    op,
+    value: typeof input.value === "string" ? input.value : "",
+    ...(op === "between"
+      ? { valueTo: typeof input.valueTo === "string" ? input.valueTo : "" }
+      : {}),
+  }
+}
+
+function matchesNumberFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
+  const actual = parseFormattedNumber(formattedValue)
+  if (actual == null) return false
+
+  if (filter.op === "between") {
+    const values = filter.values?.map((value) => Number(value)).filter(Number.isFinite) ?? []
+    if (values.length < 2) return false
+    const min = Math.min(values[0] ?? 0, values[1] ?? 0)
+    const max = Math.max(values[0] ?? 0, values[1] ?? 0)
+    return actual >= min && actual <= max
+  }
+
+  const expected = Number(filter.value)
+  if (!Number.isFinite(expected)) return false
+  if (filter.op === "=") return actual === expected
+  if (filter.op === "!=") return actual !== expected
+  if (filter.op === "<") return actual < expected
+  if (filter.op === "<=") return actual <= expected
+  if (filter.op === ">") return actual > expected
+  if (filter.op === ">=") return actual >= expected
+  return false
+}
+
+function parseFormattedNumber(value: string): number | null {
+  const cleaned = value.trim().replace(/[^0-9.+\-Ee]/g, "")
+  return parseFilterNumber(cleaned)
+}
+
+function parseFilterNumber(value: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const numeric = Number(trimmed)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function isNumberFilterOperator(value: unknown): value is NumberFilterOperator {
+  return (
+    value === "=" ||
+    value === "!=" ||
+    value === "<" ||
+    value === "<=" ||
+    value === ">" ||
+    value === ">=" ||
+    value === "between"
+  )
 }
