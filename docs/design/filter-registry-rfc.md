@@ -3,7 +3,7 @@
 **Status:** Draft for review
 **Owner:** c2 (auditor + coordinator)
 **Reviewer:** fresh agent (target: x1 or c1)
-**Blocks:** `filter-set-impl`, `filter-date-range-impl`, `filter-number-range-impl`, `filter-text-impl-extend`, `filter-custom-extension-example`, `filter-persistence`, `tool-panel-filters` (Track 5), `set-filter-ui` (Phase 5.5). The earlier draft listed a `filter-multi-impl` task; that's been folded into `filter-set-impl` (set is multi-select).
+**Blocks:** `filter-set-impl`, `filter-multi-impl`, `filter-date-range-impl`, `filter-number-range-impl`, `filter-text-impl-extend`, `filter-custom-extension-example`, `filter-persistence`, `tool-panel-filters` (Track 5), `set-filter-ui` (Phase 5.5). `filter-multi-impl` extends the set filter to array-valued cells; it does not add a separate public filter type.
 **Informed by:** `docs/api.md §1.1` (`BcColumnFilter`), `docs/api.md §3.2` (`BcGridFilter` = `ServerFilter`), `docs/api.md §4.4` (`BcFilterDefinition` / `BcReactFilterDefinition` / `BcFilterEditorProps`), `docs/design/server-query-rfc.md` (server-side `ServerFilter` / `ServerColumnFilter` / `ServerFilterGroup` shapes), `docs/design/accessibility-rfc.md` (focus + live regions)
 **Sprint context:** Track 6 of the v1 parity sprint (`docs/coordination/v1-parity-sprint.md`)
 
@@ -283,19 +283,19 @@ Serialize: JSON with typed-date payload via the `@kind: "date"` reviver conventi
 
 ### `set` (multi-select discrete; matches the AG Grid convention)
 
-The v1 incarnation of AG Grid's "set filter". Multi-select dropdown of distinct **scalar** cell values from the column. The user picks zero, one, or many values; the row passes if its value is in (or not in) the chosen set.
+The v1 incarnation of AG Grid's "set filter". Multi-select dropdown of distinct cell values from the column. The user picks zero, one, or many values; the row passes if its scalar value is in (or not in) the chosen set. When the cell value is an array, each item is indexed and matched independently.
 
 Operators:
 - `in` (default) — `criteria.values.includes(value)`
 - `not-in` — `!criteria.values.includes(value)`
 
-Inline UI: bc-grid's internal combobox primitive (shadcn-compatible per `chrome-rfc`'s source-standards note) with checkbox per option + chip display of selected values. Lazy-loaded on first open (computes `distinctValues = new Set(rows.map(r => column.valueGetter(r)))`).
+Inline UI: bc-grid's internal combobox primitive (shadcn-compatible per `chrome-rfc`'s source-standards note) with checkbox per option + chip display of selected values. Lazy-loaded on first open (computes distinct values from each scalar value, or from each array item for array-valued columns).
 
-Predicate: `criteria.values.includes(value)` for `in`; negation for `not-in`. Empty `values` array means "no filter active" (treat as match-all).
+Predicate: `criteria.values.includes(value)` for scalar values, or `value.some(item => criteria.values.includes(item))` for array values; negation for `not-in`. Empty `values` array means "no filter active" (treat as match-all).
 
 Serialize: JSON-encoded `{"op":"in","values":["Open","Past Due"]}`. Numeric values preserved as numbers; strings as strings; dates serialised via the typed-payload pattern from `BcFilterDefinition.serialize` (e.g. `{"op":"in","values":[{"@kind":"date","iso":"2026-01-01"}, ...]}`).
 
-**Array-valued cell columns** (e.g. a `tags: string[]` column) are **out of scope at v1**. Consumers wanting "row's tags array contains any of these tags" register a custom filter type — recipe in `filter-custom-extension-example`. Detection: this RFC's `set` predicate evaluates against `value` (scalar); if the column's `valueGetter` returns an array, the result is `criteria.values.includes(theArray)` which is almost certainly false. Document the limitation in the consumer-facing API page.
+Array-valued cell columns (e.g. a `tags: string[]` column) use the same `set` filter type. The option list flattens array items, `in` matches when any item is selected, and `not-in` rejects rows containing a selected item.
 
 ### `boolean`
 

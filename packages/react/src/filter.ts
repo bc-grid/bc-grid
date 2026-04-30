@@ -424,7 +424,7 @@ function normaliseNumberFilterInput(input: Partial<NumberFilterInput>): NumberFi
 function normaliseSetFilterInput(input: Partial<SetFilterInput>): SetFilterInput {
   const op = isSetFilterOperator(input.op) ? input.op : "in"
   const values = Array.isArray(input.values)
-    ? Array.from(new Set(input.values.map(setFilterValueKey).filter((value) => value.length > 0)))
+    ? Array.from(new Set(input.values.flatMap(setFilterValueKeys)))
     : []
   return { op, values }
 }
@@ -460,9 +460,7 @@ function matchesSetFilter(
 ): boolean {
   if (filter.op === "blank") return isBlankSetFilterCellValue(cellValue)
 
-  const selected = new Set(
-    (filter.values ?? []).map(setFilterValueKey).filter((value) => value.length > 0),
-  )
+  const selected = new Set((filter.values ?? []).flatMap(setFilterValueKeys))
   if (selected.size === 0) return true
 
   const candidates = setFilterCandidateValues(cellValue)
@@ -508,7 +506,18 @@ export function setFilterValueKey(value: unknown): string {
   return String(value ?? "")
 }
 
+export function setFilterValueKeys(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.flatMap(setFilterValueKeys)))
+  }
+  if (typeof value === "string" && value.trim().length === 0) return []
+
+  const key = setFilterValueKey(value)
+  return key.length > 0 ? [key] : []
+}
+
 export function isBlankSetFilterValue(value: unknown): boolean {
+  if (Array.isArray(value)) return setFilterValueKeys(value).length === 0
   if (value == null) return true
   if (typeof value === "string") return value.trim().length === 0
   return false
@@ -522,8 +531,10 @@ function isBlankSetFilterCellValue(value: { formattedValue: string; rawValue?: u
 function setFilterCandidateValues(value: { formattedValue: string; rawValue?: unknown }): string[] {
   const candidates: string[] = []
   if ("rawValue" in value) {
-    const rawKey = setFilterValueKey(value.rawValue)
-    if (rawKey.length > 0) candidates.push(rawKey)
+    for (const rawKey of setFilterValueKeys(value.rawValue)) {
+      if (!candidates.includes(rawKey)) candidates.push(rawKey)
+    }
+    if (Array.isArray(value.rawValue)) return candidates
   }
 
   const formattedKey = setFilterValueKey(value.formattedValue)

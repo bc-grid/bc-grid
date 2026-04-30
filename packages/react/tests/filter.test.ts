@@ -10,6 +10,7 @@ import {
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
   matchesGridFilter,
+  setFilterValueKeys,
 } from "../src/filter"
 
 describe("buildGridFilter", () => {
@@ -606,6 +607,53 @@ describe("matchesGridFilter — column", () => {
     ).toBe(true)
     expect(matchesGridFilter(filter, lookup({ status: "" }))).toBe(true)
     expect(matchesGridFilter(filter, lookup({ status: "Open" }))).toBe(false)
+  })
+
+  test("set filters match any raw array item for multi-value columns", () => {
+    const filter = buildGridFilter(
+      { tags: encodeSetFilterInput({ op: "in", values: ["erp"] }) },
+      { tags: "set" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "Ops, ERP",
+        rawValue: ["ops", "erp"],
+      })),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "CRM",
+        rawValue: ["crm"],
+      })),
+    ).toBe(false)
+  })
+
+  test("not-in set filters reject selected raw array items", () => {
+    const filter = buildGridFilter(
+      { tags: encodeSetFilterInput({ op: "not-in", values: ["blocked"] }) },
+      { tags: "set" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "Ops, ERP",
+        rawValue: ["ops", "erp"],
+      })),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "Blocked, ERP",
+        rawValue: ["blocked", "erp"],
+      })),
+    ).toBe(false)
+  })
+
+  test("set filter value keys flatten array values for option loading", () => {
+    expect(setFilterValueKeys(["erp", "", " ", "ops", "erp", null])).toEqual(["erp", "ops"])
+    expect(setFilterValueKeys([["nested"], "flat"])).toEqual(["nested", "flat"])
   })
 
   test("unknown op is rejected (Q2 follow-up)", () => {
