@@ -64,10 +64,10 @@ jobs:
         run: bun run build:packages
 
       - name: Install Playwright browsers
-        run: bunx playwright install chromium firefox webkit --with-deps
+        run: bunx playwright install chromium --with-deps
 
-      - name: Run Playwright tests (Chromium + Firefox + WebKit)
-        run: bunx playwright test
+      - name: Run Playwright tests (Chromium only — full 3-browser matrix runs nightly via e2e-nightly.yml)
+        run: bunx playwright test --project=spike-chromium --project=examples-chromium
 
   smoke-perf:
     name: smoke perf (Chromium)
