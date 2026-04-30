@@ -94,6 +94,61 @@
   color: var(--bc-grid-row-selected-fg);
 }
 
+.bc-grid-row-group {
+  background: var(--bc-grid-muted);
+  color: var(--bc-grid-fg);
+  font-weight: 700;
+}
+
+.bc-grid-group-cell {
+  background: var(--bc-grid-muted);
+}
+
+.bc-grid-group-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  padding: 0;
+}
+
+.bc-grid-group-toggle:hover,
+.bc-grid-group-toggle:focus-visible {
+  border-color: var(--bc-grid-border);
+  background: var(--bc-grid-row-hover);
+  outline: none;
+}
+
+.bc-grid-group-toggle-icon {
+  display: inline-block;
+  transform: rotate(0deg);
+  transition: transform 120ms ease-out;
+}
+
+.bc-grid-group-toggle[aria-expanded="true"] .bc-grid-group-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.bc-grid-group-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bc-grid-group-count {
+  flex: 0 0 auto;
+  color: var(--bc-grid-muted-fg);
+  font-weight: 600;
+}
+
 .bc-grid-row-disabled {
   color: var(--bc-grid-muted-fg);
 }

@@ -75,10 +75,38 @@ export const defaultMessages: BcGridMessages = {
 // Internal types shared by the rendering layer.
 // ---------------------------------------------------------------------------
 
-export interface RowEntry<TRow> {
+export interface DataRowEntry<TRow> {
+  kind: "data"
   row: TRow
   rowId: RowId
   index: number
+  level?: number
+}
+
+export interface GroupPathEntry {
+  columnId: ColumnId
+  formattedValue: string
+  value: unknown
+}
+
+export interface GroupRowEntry {
+  kind: "group"
+  rowId: RowId
+  index: number
+  level: number
+  groupColumnId: ColumnId
+  groupColumnHeader: string
+  formattedValue: string
+  childCount: number
+  childRowIds: readonly RowId[]
+  expanded: boolean
+  path: readonly GroupPathEntry[]
+}
+
+export type RowEntry<TRow> = DataRowEntry<TRow> | GroupRowEntry
+
+export function isDataRowEntry<TRow>(entry: RowEntry<TRow>): entry is DataRowEntry<TRow> {
+  return entry.kind === "data"
 }
 
 export interface ResolvedColumn<TRow> {
