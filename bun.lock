@@ -26,6 +26,8 @@
       "name": "@bc-grid/app-benchmarks",
       "version": "0.0.0",
       "dependencies": {
+        "@bc-grid/core": "workspace:*",
+        "@bc-grid/server-row-model": "workspace:*",
         "@bc-grid/virtualizer": "workspace:*",
       },
       "devDependencies": {
@@ -43,6 +45,7 @@
       "name": "@bc-grid/app-examples",
       "version": "0.0.0",
       "dependencies": {
+        "@bc-grid/editors": "workspace:*",
         "@bc-grid/react": "workspace:*",
         "@bc-grid/theming": "workspace:*",
         "react": "^19.0.0",
@@ -79,6 +82,9 @@
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/react": "^19.0.0",
       },
       "peerDependencies": {
         "react": "^19.0.0",

@@ -16,6 +16,8 @@
  * Pure DOM, no React.
  */
 
+import type { ServerBlockResult, ServerViewState } from "@bc-grid/core"
+import { createServerRowModel } from "@bc-grid/server-row-model"
 import { DOMRenderer, type RenderCellParams, Virtualizer } from "@bc-grid/virtualizer"
 
 interface PerfMetric {
@@ -26,6 +28,33 @@ interface PerfMetric {
 interface ScrollPerfMetric extends PerfMetric {
   fps: number
   frameCount: number
+}
+
+interface ServerRowModelPerfInput {
+  blockSize?: number
+  debounceMs?: number
+  fetchDelayMs?: number
+  maxBlocks?: number
+  maxConcurrentRequests?: number
+  rowCount?: number
+}
+
+interface ServerRowModelPerfMetric extends PerfMetric {
+  avgFetchLatencyMs: number
+  avgQueueWaitMs: number
+  blockFetches: number
+  blockSize: number
+  cacheHitRate: number
+  debounceMs: number
+  dedupedRequests: number
+  hotCacheHitRate: number
+  loadedBlocks: number
+  maxBlocks: number
+  maxConcurrentRequests: number
+  maxFetchLatencyMs: number
+  maxQueueDepth: number
+  maxQueueWaitMs: number
+  queuedRequests: number
 }
 
 interface PerfRow {
@@ -44,6 +73,7 @@ declare global {
       sortRows(): Promise<PerfMetric>
       filterRows(): Promise<PerfMetric>
       scrollForFps(durationMs?: number): Promise<ScrollPerfMetric>
+      serverRowModelBlocks(input?: ServerRowModelPerfInput): Promise<ServerRowModelPerfMetric>
       rawRowCount: number
     }
     __fps__: number[]
@@ -436,6 +466,96 @@ window.__bcGridPerf = {
     return rawRows.length
   },
   scrollForFps,
+  serverRowModelBlocks,
+}
+
+async function serverRowModelBlocks(
+  input: ServerRowModelPerfInput = {},
+): Promise<ServerRowModelPerfMetric> {
+  const rowCount = input.rowCount ?? 100_000
+  const blockSize = input.blockSize ?? 100
+  const maxBlocks = input.maxBlocks ?? Math.ceil(rowCount / blockSize)
+  const debounceMs = input.debounceMs ?? 16
+  const maxConcurrentRequests = input.maxConcurrentRequests ?? 4
+  const fetchDelayMs = input.fetchDelayMs ?? 1
+  const blockCount = Math.ceil(rowCount / blockSize)
+  const view: ServerViewState = {
+    groupBy: [],
+    sort: [{ columnId: "amount", direction: "asc" }],
+    visibleColumns: ["customer", "status", "amount"],
+  }
+  const model = createServerRowModel<PerfRow>()
+  const rows = rawRows.length >= rowCount ? rawRows : createPerfRows(rowCount, 10)
+  const loadBlock = async (query: { blockStart: number; blockSize: number }): Promise<
+    ServerBlockResult<PerfRow>
+  > => {
+    if (fetchDelayMs > 0) await wait(fetchDelayMs)
+    const resultRows = rows.slice(query.blockStart, query.blockStart + query.blockSize)
+    return {
+      blockSize: query.blockSize,
+      blockStart: query.blockStart,
+      hasMore: query.blockStart + resultRows.length < rowCount,
+      rows: resultRows,
+      totalRows: rowCount,
+    }
+  }
+
+  const blockStarts = Array.from({ length: blockCount }, (_, index) => index * blockSize)
+  const startedAt = performance.now()
+  const firstPass = blockStarts.map((blockStart) =>
+    model.loadInfiniteBlock({
+      blockSize,
+      blockStart,
+      cacheOptions: {
+        blockLoadDebounceMs: debounceMs,
+        maxBlocks,
+        maxConcurrentRequests,
+        staleTimeMs: 60_000,
+      },
+      loadBlock,
+      view,
+    }),
+  )
+  await Promise.all(firstPass.map((request) => request.promise))
+
+  let hotCacheHits = 0
+  for (const blockStart of blockStarts) {
+    const request = model.loadInfiniteBlock({
+      blockSize,
+      blockStart,
+      cacheOptions: {
+        blockLoadDebounceMs: debounceMs,
+        maxBlocks,
+        maxConcurrentRequests,
+        staleTimeMs: 60_000,
+      },
+      loadBlock,
+      view,
+    })
+    if (request.cached) hotCacheHits += 1
+    await request.promise
+  }
+
+  const metrics = model.getMetrics()
+  return {
+    avgFetchLatencyMs: metrics.blockFetchLatencyMs.avgMs,
+    avgQueueWaitMs: metrics.blockQueueWaitMs.avgMs,
+    blockFetches: metrics.blockFetches,
+    blockSize,
+    cacheHitRate: metrics.cacheHitRate,
+    debounceMs,
+    dedupedRequests: metrics.dedupedRequests,
+    durationMs: performance.now() - startedAt,
+    hotCacheHitRate: hotCacheHits / blockCount,
+    loadedBlocks: firstPass.length,
+    maxBlocks,
+    maxConcurrentRequests,
+    maxFetchLatencyMs: metrics.blockFetchLatencyMs.maxMs,
+    maxQueueDepth: metrics.maxQueueDepth,
+    maxQueueWaitMs: metrics.blockQueueWaitMs.maxMs,
+    queuedRequests: metrics.queuedRequests,
+    rowCount,
+  }
 }
 
 function createPerfRows(rowCount: number, colCount: number): PerfRow[] {
@@ -454,4 +574,8 @@ function createPerfRows(rowCount: number, colCount: number): PerfRow[] {
 
 function nextPaint(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()))
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

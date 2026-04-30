@@ -1,4 +1,6 @@
+import { numberEditor, textEditor } from "@bc-grid/editors"
 import {
+  type BcCellEditor,
   BcEditGrid,
   type BcGridColumn,
   type BcGridDensity,
@@ -109,6 +111,11 @@ function editorFrameworkEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("edit") === "1"
 }
 
+function paginationEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("pagination") === "1"
+}
+
 function CustomerGridDemo({
   density,
   onDensityChange,
@@ -128,6 +135,7 @@ function CustomerGridDemo({
   const rows = customerRows
   const urlStateEnabled = urlStatePersistenceEnabled()
   const disabledRows = disabledRowsEnabled()
+  const paginationDemo = paginationEnabled()
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
   const urlStatePersistence = useMemo(
@@ -167,12 +175,23 @@ function CustomerGridDemo({
         header: "Trading Name",
         width: 220,
         filter: { type: "text" },
-        // ?edit=1: editable + validate (rejects empty). Activates the
-        // editor-framework default text editor.
+        // ?edit=1: editable + validate (rejects empty). Uses the proper
+        // editor-text factory (kind: "text") from @bc-grid/editors with
+        // mount-time select-all + theme-aware styling.
         editable: editorFrameworkEnabled(),
+        // `textEditor` is exported as `BcCellEditor<unknown, unknown>` for
+        // assignability across all row/value shapes. Casting to the column's
+        // typed shape is safe here — the editor doesn't read `row` fields.
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: textEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        // valueParser bridges the editor's string output → typed TValue.
+        // For trading names we trim whitespace at commit time — a typical
+        // ERP normalization (no leading/trailing spaces in stored codes).
+        valueParser: (input: string) => input.trim(),
         validate: (next: unknown) => {
           const stringValue = typeof next === "string" ? next : String(next ?? "")
-          return stringValue.trim().length === 0
+          return stringValue.length === 0
             ? { valid: false as const, error: "Trading name is required." }
             : { valid: true as const }
         },
@@ -217,6 +236,25 @@ function CustomerGridDemo({
         align: "right",
         width: 140,
         format: { type: "currency", currency: "USD", precision: 0 },
+        // ?edit=1: editable numeric column. valueParser strips locale
+        // thousands separators (commas, spaces) and runs parseFloat.
+        // validate enforces a non-negative bound (credit limits can't
+        // be negative — realistic ERP constraint).
+        editable: editorFrameworkEnabled(),
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: numberEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        valueParser: (input: string) => {
+          const cleaned = input.replace(/[\s,]/g, "")
+          const parsed = Number.parseFloat(cleaned)
+          return Number.isFinite(parsed) ? parsed : Number.NaN
+        },
+        validate: (next: unknown) => {
+          if (typeof next !== "number" || !Number.isFinite(next))
+            return { valid: false as const, error: "Credit limit must be a number." }
+          if (next < 0) return { valid: false as const, error: "Credit limit can't be negative." }
+          return { valid: true as const }
+        },
       },
       {
         columnId: "balance",
@@ -390,6 +428,9 @@ function CustomerGridDemo({
         onEdit={handleEdit}
         onRowClick={setActiveCustomer}
         onSelectionChange={handleSelectionChange}
+        {...(paginationDemo
+          ? { pagination: true, defaultPageSize: 100, pageSizeOptions: [50, 100, 250] }
+          : {})}
         rowIsDisabled={rowIsDisabled}
         rowId={(row: CustomerRow) => row.id}
         searchText={searchText}

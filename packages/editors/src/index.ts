@@ -1,1 +1,2 @@
-// @bc-grid/editors — placeholder
+export { numberEditor } from "./number"
+export { textEditor } from "./text"

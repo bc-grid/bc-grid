@@ -1,9 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import type { ServerBlockResult, ServerPagedResult, ServerViewState } from "@bc-grid/core"
+import type {
+  ServerBlockResult,
+  ServerPagedResult,
+  ServerRowModelEvent,
+  ServerViewState,
+} from "@bc-grid/core"
 import { ServerBlockCache, createServerRowModel, defaultBlockKey } from "../src"
 
 interface Row {
   id: string
+  amount?: number
+  name?: string
 }
 
 const view: ServerViewState = {
@@ -11,6 +18,7 @@ const view: ServerViewState = {
   sort: [{ columnId: "name", direction: "asc" }],
   visibleColumns: ["name", "balance"],
 }
+const emptySelection = { mode: "explicit", rowIds: new Set<string>() } as const
 
 describe("defaultBlockKey", () => {
   test("formats paged, infinite, and tree block keys", () => {
@@ -66,6 +74,21 @@ describe("ServerBlockCache", () => {
     })
     cache.invalidate({ scope: "all" })
     expect(cache.toMap().size).toBe(0)
+  })
+
+  test("marks stale blocks without dropping rows", () => {
+    const cache = new ServerBlockCache<Row>()
+    cache.markLoaded({
+      blockKey: "infinite:v1:start:0:size:2",
+      rows: [{ id: "a" }],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+
+    expect(cache.markStale("infinite:v1:start:0:size:2")).toBe(true)
+    expect(cache.get("infinite:v1:start:0:size:2")?.state).toBe("stale")
+    expect(cache.get("infinite:v1:start:0:size:2")?.rows).toEqual([{ id: "a" }])
   })
 })
 
@@ -245,6 +268,96 @@ describe("createServerRowModel", () => {
     expect(model.cache.get(third.blockKey)?.state).toBe("loaded")
   })
 
+  test("records cache hit rate, fetch latency, queue wait, and row-model events", async () => {
+    const events: Array<ServerRowModelEvent<Row>["type"]> = []
+    const model = createServerRowModel<Row>({
+      onEvent: (event) => events.push(event.type),
+    })
+    const loadBlock = (query: { blockStart: number; blockSize: number }) =>
+      Promise.resolve({
+        blockSize: query.blockSize,
+        blockStart: query.blockStart,
+        hasMore: false,
+        rows: [{ id: "a" }, { id: "b" }],
+      })
+
+    const first = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      cacheOptions: { blockLoadDebounceMs: 0 },
+      loadBlock,
+      view,
+    })
+    await first.promise
+
+    const second = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      cacheOptions: { blockLoadDebounceMs: 0 },
+      loadBlock,
+      view,
+    })
+    await second.promise
+
+    const metrics = model.getMetrics()
+    expect(second.cached).toBe(true)
+    expect(metrics.cacheHits).toBe(1)
+    expect(metrics.cacheMisses).toBe(1)
+    expect(metrics.cacheHitRate).toBe(0.5)
+    expect(metrics.blockFetches).toBe(1)
+    expect(metrics.blockFetchLatencyMs.count).toBe(1)
+    expect(metrics.blockQueueWaitMs.count).toBe(1)
+    expect(events).toContain("blockFetching")
+    expect(events).toContain("blockLoaded")
+  })
+
+  test("debounces extra infinite block starts while a request is active", async () => {
+    const model = createServerRowModel<Row>()
+    const resolvers: Array<(value: ServerBlockResult<Row>) => void> = []
+    const loadBlock = () =>
+      new Promise<ServerBlockResult<Row>>((resolve) => {
+        resolvers.push(resolve)
+      })
+
+    const first = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      cacheOptions: { blockLoadDebounceMs: 20, maxConcurrentRequests: 2 },
+      loadBlock,
+      view,
+    })
+    const second = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 2,
+      cacheOptions: { blockLoadDebounceMs: 20, maxConcurrentRequests: 2 },
+      loadBlock,
+      view,
+    })
+
+    expect(resolvers.length).toBe(1)
+    expect(model.cache.get(second.blockKey)?.state).toBe("queued")
+    expect(model.getMetrics().queuedRequests).toBe(1)
+
+    await sleep(30)
+    expect(resolvers.length).toBe(2)
+
+    resolvers[0]?.({
+      blockSize: 2,
+      blockStart: 0,
+      hasMore: true,
+      rows: [{ id: "a" }, { id: "b" }],
+    })
+    resolvers[1]?.({
+      blockSize: 2,
+      blockStart: 2,
+      hasMore: false,
+      rows: [{ id: "c" }, { id: "d" }],
+    })
+    await Promise.all([first.promise, second.promise])
+
+    expect(model.getMetrics().blockQueueWaitMs.maxMs).toBeGreaterThanOrEqual(20)
+  })
+
   test("marks invalid infinite block protocol responses as errors", async () => {
     const model = createServerRowModel<Row>()
     const request = model.loadInfiniteBlock({
@@ -265,4 +378,397 @@ describe("createServerRowModel", () => {
     )
     expect(model.cache.get(request.blockKey)?.state).toBe("error")
   })
+
+  test("dedupes concurrent tree children requests", async () => {
+    const model = createServerRowModel<Row>()
+    let calls = 0
+    let resolveTree: (value: {
+      childCount: number
+      childStart: number
+      groupPath: []
+      parentRowId: string | null
+      rows: Array<{ data: Row; kind: "leaf" }>
+    }) => void = () => {}
+    const loadChildren = () => {
+      calls += 1
+      return new Promise<{
+        childCount: number
+        childStart: number
+        groupPath: []
+        parentRowId: string | null
+        rows: Array<{ data: Row; kind: "leaf" }>
+      }>((resolve) => {
+        resolveTree = resolve
+      })
+    }
+
+    const first = model.loadTreeChildren({
+      childCount: 2,
+      childStart: 0,
+      loadChildren,
+      parentRowId: null,
+      view,
+    })
+    const second = model.loadTreeChildren({
+      childCount: 2,
+      childStart: 0,
+      loadChildren,
+      parentRowId: null,
+      view,
+    })
+
+    expect(calls).toBe(1)
+    expect(second.deduped).toBe(true)
+    expect(second.promise).toBe(first.promise)
+    expect(second.query.requestId).toBe(first.query.requestId)
+
+    resolveTree({
+      childCount: 2,
+      childStart: 0,
+      groupPath: [],
+      parentRowId: null,
+      rows: [{ data: { id: "a" }, kind: "leaf" }],
+    })
+    await first.promise
+
+    expect(model.cache.get(first.blockKey)?.state).toBe("loaded")
+    expect(model.cache.get(first.blockKey)?.rows).toEqual([{ id: "a" }])
+  })
+
+  test("marks invalid tree protocol responses as errors", async () => {
+    const model = createServerRowModel<Row>()
+    const request = model.loadTreeChildren({
+      childCount: 2,
+      childStart: 0,
+      loadChildren: () =>
+        Promise.resolve({
+          childCount: 2,
+          childStart: 2,
+          groupPath: [],
+          parentRowId: null,
+          rows: [],
+        }),
+      parentRowId: null,
+      view,
+    })
+
+    await expect(request.promise).rejects.toThrow(
+      "ServerTreeResult.childStart 2 does not match query childStart 0",
+    )
+    expect(model.cache.get(request.blockKey)?.state).toBe("error")
+  })
+
+  test("marks blocks containing invalidated rows as stale", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:2",
+      rows: [{ id: "a" }, { id: "b" }],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:2:size:2",
+      rows: [{ id: "c" }, { id: "d" }],
+      size: 2,
+      start: 2,
+      viewKey: "v1",
+    })
+
+    const result = model.invalidate({ scope: "rows", rowIds: ["b"] }, { rowId: (row) => row.id })
+
+    expect(result.affectedBlockKeys).toEqual(["paged:v1:page:0:size:2"])
+    expect(model.cache.get("paged:v1:page:0:size:2")?.state).toBe("stale")
+    expect(model.cache.get("infinite:v1:start:2:size:2")?.state).toBe("loaded")
+  })
+
+  test("evicts tree blocks for a parent recursively", async () => {
+    const model = createServerRowModel<Row>()
+    const loadRoot = model.loadTreeChildren({
+      childCount: 1,
+      childStart: 0,
+      loadChildren: () =>
+        Promise.resolve({
+          childCount: 1,
+          childStart: 0,
+          groupPath: [],
+          parentRowId: null,
+          rows: [
+            {
+              data: { id: "sales" },
+              groupKey: { columnId: "department", rowId: "group:sales", value: "Sales" },
+              hasChildren: true,
+              kind: "group",
+            },
+          ],
+        }),
+      parentRowId: null,
+      rowId: (row) => row.id,
+      view,
+      viewKey: "v1",
+    })
+    await loadRoot.promise
+    const loadChild = model.loadTreeChildren({
+      childCount: 1,
+      childStart: 0,
+      groupPath: [{ columnId: "department", rowId: "group:sales", value: "Sales" }],
+      loadChildren: () =>
+        Promise.resolve({
+          childCount: 1,
+          childStart: 0,
+          groupPath: [{ columnId: "department", rowId: "group:sales", value: "Sales" }],
+          parentRowId: "group:sales",
+          rows: [{ data: { id: "child" }, kind: "leaf" }],
+        }),
+      parentRowId: "group:sales",
+      rowId: (row) => row.id,
+      view,
+      viewKey: "v1",
+    })
+    await loadChild.promise
+
+    const result = model.invalidate({ scope: "tree", parentRowId: null, recursive: true })
+
+    expect(result.affectedBlockKeys).toEqual([loadRoot.blockKey, loadChild.blockKey])
+    expect(model.cache.get(loadRoot.blockKey)).toBeUndefined()
+    expect(model.cache.get(loadChild.blockKey)).toBeUndefined()
+  })
+
+  test("merges and flattens tree snapshots by expansion", () => {
+    const model = createServerRowModel<Row>()
+    const salesGroup = { columnId: "department", rowId: "group:sales", value: "Sales" }
+    let snapshot = model.createTreeSnapshot()
+
+    snapshot = model.mergeTreeResult({
+      getRowId: (row) => row.id,
+      parentNode: null,
+      result: {
+        childCount: 2,
+        childStart: 0,
+        groupPath: [],
+        parentRowId: null,
+        rows: [
+          {
+            data: { id: "sales" },
+            groupKey: salesGroup,
+            hasChildren: true,
+            kind: "group",
+          },
+          { data: { id: "root-leaf" }, kind: "leaf" },
+        ],
+      },
+      snapshot,
+      viewKey: "v1",
+    })
+
+    expect(model.flattenTreeSnapshot(snapshot, new Set()).map((node) => node.rowId)).toEqual([
+      "group:sales",
+      "root-leaf",
+    ])
+
+    const groupNode = snapshot.nodes.get("group:sales")
+    expect(groupNode).toBeDefined()
+    snapshot = model.mergeTreeResult({
+      getRowId: (row) => row.id,
+      parentNode: groupNode ?? null,
+      result: {
+        childCount: 1,
+        childStart: 0,
+        groupPath: [salesGroup],
+        parentRowId: "group:sales",
+        rows: [{ data: { id: "child" }, kind: "leaf" }],
+      },
+      snapshot,
+      viewKey: "v1",
+    })
+
+    expect(snapshot.nodes.get("group:sales")?.childrenLoaded).toBe(true)
+    expect(
+      model.flattenTreeSnapshot(snapshot, new Set(["group:sales"])).map((node) => node.rowId),
+    ).toEqual(["group:sales", "child", "root-leaf"])
+  })
+
+  test("queues mutations and overlays every cached copy of a row", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:2",
+      rows: [
+        { id: "a", name: "old" },
+        { id: "b", name: "stable" },
+      ],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:0:size:2",
+      rows: [{ id: "a", name: "old" }],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+
+    const result = model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.updatedRows).toBe(2)
+    expect(model.cache.get("paged:v1:page:0:size:2")?.rows).toEqual([
+      { id: "a", name: "optimistic" },
+      { id: "b", name: "stable" },
+    ])
+    expect(model.cache.get("infinite:v1:start:0:size:2")?.rows).toEqual([
+      { id: "a", name: "optimistic" },
+    ])
+    expect(
+      model.getState({ mode: "paged", rowCount: 2, selection: emptySelection, view, viewKey: "v1" })
+        .pendingMutations,
+    ).toEqual(new Map([["m1", { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" }]]))
+  })
+
+  test("applies pending mutations to rows loaded after the mutation was queued", async () => {
+    const model = createServerRowModel<Row>()
+    const queued = model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    expect(queued.updatedRows).toBe(0)
+
+    const page = model.loadPagedPage({
+      loadPage: () =>
+        Promise.resolve({
+          pageIndex: 0,
+          pageSize: 1,
+          rows: [{ id: "a", name: "old" }],
+          totalRows: 1,
+        }),
+      pageIndex: 0,
+      pageSize: 1,
+      view,
+      viewKey: "v1",
+    })
+    const result = await page.promise
+
+    expect(result.rows).toEqual([{ id: "a", name: "optimistic" }])
+    expect(model.cache.get(page.blockKey)?.rows).toEqual([{ id: "a", name: "optimistic" }])
+
+    model.settleMutation({
+      result: { mutationId: "m1", reason: "validation", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+    expect(model.cache.get(page.blockKey)?.rows).toEqual([{ id: "a", name: "old" }])
+  })
+
+  test("settles accepted mutations with the server canonical row", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "m1", row: { id: "a", name: "server" }, status: "accepted" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(false)
+    expect(result.updatedRows).toBe(1)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([{ id: "a", name: "server" }])
+    expect(
+      model.getState({ mode: "paged", rowCount: 1, selection: emptySelection, view, viewKey: "v1" })
+        .pendingMutations.size,
+    ).toBe(0)
+  })
+
+  test("rolls back rejected mutations", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "m1", reason: "validation", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(false)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([{ id: "a", name: "old" }])
+  })
+
+  test("recomputes later optimistic mutations when an earlier mutation rejects", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ amount: 1, id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "first" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    model.queueMutation({
+      patch: { changes: { amount: 2 }, mutationId: "m2", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "m1", reason: "validation", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(true)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([
+      { amount: 2, id: "a", name: "old" },
+    ])
+    expect(
+      model.getState({ mode: "paged", rowCount: 1, selection: emptySelection, view, viewKey: "v1" })
+        .pendingMutations,
+    ).toEqual(new Map([["m2", { changes: { amount: 2 }, mutationId: "m2", rowId: "a" }]]))
+  })
+
+  test("settles conflicts with the server canonical row", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "m1", row: { id: "a", name: "server" }, status: "conflict" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(false)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([{ id: "a", name: "server" }])
+  })
 })
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}

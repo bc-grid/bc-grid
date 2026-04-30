@@ -8,7 +8,7 @@ import type {
   RowId,
   ServerBlockKey,
   ServerBlockResult,
-  ServerCacheBlock,
+  ServerGroupKey,
   ServerInvalidation,
   ServerPagedResult,
   ServerRowModelMode,
@@ -20,7 +20,7 @@ import { createServerRowModel } from "@bc-grid/server-row-model"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { BcGrid, useBcGridApi } from "./grid"
 import { assignRef, createEmptySelection, hasProp } from "./gridInternals"
-import type { BcGridProps, BcServerGridProps } from "./types"
+import type { BcGridProps, BcReactGridColumn, BcServerGridProps } from "./types"
 
 const DEFAULT_SERVER_PAGE_SIZE = 100
 const DEFAULT_SERVER_BLOCK_SIZE = 100
@@ -54,6 +54,49 @@ interface InfiniteServerState<TRow> {
   view: ServerViewState
 }
 
+interface ServerSortFilterState {
+  filterState: BcGridFilter | undefined
+  handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
+  handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
+  sortState: readonly BcGridSort[]
+}
+
+interface TreeServerState<TRow> {
+  columns: readonly BcReactGridColumn<TRow>[]
+  error: unknown
+  getModelState: () => ServerRowModelState<TRow>
+  handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
+  handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
+  invalidate: (invalidation: ServerInvalidation) => void
+  loading: boolean
+  refresh: (opts?: { purge?: boolean }) => void
+  retryBlock: (blockKey: ServerBlockKey) => void
+  rowId: (row: TRow, index: number) => RowId
+  rows: readonly TRow[]
+  rowCount: number | "unknown"
+  view: ServerViewState
+}
+
+interface TreeNode<TRow> {
+  childIds: RowId[]
+  childCount: number | "unknown"
+  childrenLoaded: boolean
+  error: unknown
+  groupPath: ServerGroupKey[]
+  hasChildren: boolean
+  kind: "leaf" | "group"
+  level: number
+  loading: boolean
+  parentRowId: RowId | null
+  row: TRow
+  rowId: RowId
+}
+
+interface TreeSnapshot<TRow> {
+  nodes: Map<RowId, TreeNode<TRow>>
+  rootIds: RowId[]
+}
+
 export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   const gridApiRef = useBcGridApi<TRow>()
   const externalApiRef = props.apiRef
@@ -66,6 +109,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   )
   const paged = usePagedServerState(props, visibleColumns)
   const infinite = useInfiniteServerState(props, visibleColumns)
+  const tree = useTreeServerState(props, visibleColumns)
 
   const serverApi = useMemo<BcServerGridApi<TRow>>(() => {
     const mode = props.rowModel
@@ -116,15 +160,18 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       refreshServerRows(opts) {
         if (mode === "paged") paged.refresh(opts)
         else if (mode === "infinite") infinite.refresh(opts)
+        else if (mode === "tree") tree.refresh(opts)
         else gridApiRef.current?.refresh()
       },
       invalidateServerRows(invalidation) {
         if (mode === "paged") paged.invalidate(invalidation)
         else if (mode === "infinite") infinite.invalidate(invalidation)
+        else if (mode === "tree") tree.invalidate(invalidation)
       },
       retryServerBlock(blockKey) {
         if (mode === "paged") paged.retryBlock(blockKey)
         else if (mode === "infinite") infinite.retryBlock(blockKey)
+        else if (mode === "tree") tree.retryBlock(blockKey)
       },
       getServerRowModelState() {
         if (mode === "paged") {
@@ -141,6 +188,13 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
             selection: toServerSelection(gridApiRef.current?.getSelection(), infinite.view),
           }
         }
+        if (mode === "tree") {
+          const state = tree.getModelState()
+          return {
+            ...state,
+            selection: toServerSelection(gridApiRef.current?.getSelection(), tree.view),
+          }
+        }
         return createServerRowModelState({
           mode,
           rowCount: "unknown",
@@ -149,7 +203,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         })
       },
     }
-  }, [gridApiRef, infinite, paged, props.rowModel])
+  }, [gridApiRef, infinite, paged, props.rowModel, tree])
 
   useEffect(() => assignRef(externalApiRef, serverApi), [externalApiRef, serverApi])
 
@@ -160,35 +214,94 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       ? paged.loading
       : props.rowModel === "infinite"
         ? infinite.loading
-        : true)
+        : props.rowModel === "tree"
+          ? tree.loading
+          : true)
   const loadingOverlay =
     props.loadingOverlay ??
     (props.rowModel === "paged" && paged.error
       ? "Failed to load rows"
       : props.rowModel === "infinite" && infinite.error
         ? "Failed to load rows"
-        : undefined)
+        : props.rowModel === "tree" && tree.error
+          ? "Failed to load rows"
+          : undefined)
 
   return (
     <BcGrid
       {...gridProps}
+      columns={props.rowModel === "tree" ? tree.columns : gridProps.columns}
       data={
-        props.rowModel === "paged" ? paged.rows : props.rowModel === "infinite" ? infinite.rows : []
+        props.rowModel === "paged"
+          ? paged.rows
+          : props.rowModel === "infinite"
+            ? infinite.rows
+            : props.rowModel === "tree"
+              ? tree.rows
+              : []
       }
       apiRef={gridApiRef}
       loading={loading}
       loadingOverlay={loadingOverlay}
       onFilterChange={
-        props.rowModel === "infinite" ? infinite.handleFilterChange : paged.handleFilterChange
+        props.rowModel === "tree"
+          ? tree.handleFilterChange
+          : props.rowModel === "infinite"
+            ? infinite.handleFilterChange
+            : paged.handleFilterChange
       }
       onSortChange={
-        props.rowModel === "infinite" ? infinite.handleSortChange : paged.handleSortChange
+        props.rowModel === "tree"
+          ? tree.handleSortChange
+          : props.rowModel === "infinite"
+            ? infinite.handleSortChange
+            : paged.handleSortChange
       }
+      rowId={props.rowModel === "tree" ? tree.rowId : gridProps.rowId}
       {...(props.rowModel === "infinite"
         ? { onVisibleRowRangeChange: infinite.handleVisibleRowRangeChange }
         : {})}
     />
   )
+}
+
+function useServerSortFilterState<TRow>(
+  props: BcServerGridProps<TRow>,
+  resetRows: () => void,
+): ServerSortFilterState {
+  const sortControlled = hasProp(props, "sort")
+  const [uncontrolledSort, setUncontrolledSort] = useState<readonly BcGridSort[]>(
+    () => props.defaultSort ?? [],
+  )
+  const filterControlled = hasProp(props, "filter")
+  const [uncontrolledFilter, setUncontrolledFilter] = useState<BcGridFilter | undefined>(
+    () => props.defaultFilter,
+  )
+
+  const handleSortChange = useCallback(
+    (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => {
+      if (!sortControlled) setUncontrolledSort(next)
+      resetRows()
+      props.onSortChange?.(next, prev)
+    },
+    [props.onSortChange, resetRows, sortControlled],
+  )
+
+  const handleFilterChange = useCallback(
+    (next: BcGridFilter, prev: BcGridFilter) => {
+      if (!filterControlled) setUncontrolledFilter(next)
+      resetRows()
+      props.onFilterChange?.(next, prev)
+    },
+    [filterControlled, props.onFilterChange, resetRows],
+  )
+
+  return {
+    filterState: filterControlled ? props.filter : uncontrolledFilter,
+    handleFilterChange,
+    handleSortChange,
+    sortState: sortControlled ? (props.sort ?? []) : uncontrolledSort,
+  }
 }
 
 function usePagedServerState<TRow>(
@@ -222,35 +335,6 @@ function usePagedServerState<TRow>(
     ? (props.pageSize ?? DEFAULT_SERVER_PAGE_SIZE)
     : uncontrolledPageSize
 
-  const sortControlled = hasProp(props, "sort")
-  const [uncontrolledSort, setUncontrolledSort] = useState<readonly BcGridSort[]>(
-    () => props.defaultSort ?? [],
-  )
-  const sortState = sortControlled ? (props.sort ?? []) : uncontrolledSort
-
-  const filterControlled = hasProp(props, "filter")
-  const [uncontrolledFilter, setUncontrolledFilter] = useState<BcGridFilter | undefined>(
-    () => props.defaultFilter,
-  )
-  const filterState = filterControlled ? props.filter : uncontrolledFilter
-
-  const searchText = props.searchText ?? props.defaultSearchText
-  const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
-  const loadPage = props.rowModel === "paged" ? props.loadPage : undefined
-  const view = useMemo(
-    () =>
-      createServerViewState({
-        filter: filterState,
-        groupBy,
-        locale: props.locale,
-        searchText,
-        sort: sortState,
-        visibleColumns,
-      }),
-    [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
-  )
-  const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
-
   const updatePagination = useCallback(
     (next: BcPaginationState) => {
       const prev = { page: pageIndex, pageSize }
@@ -267,33 +351,39 @@ function usePagedServerState<TRow>(
     updatePagination({ page: 0, pageSize })
   }, [pageIndex, pageSize, updatePagination])
 
-  const handleSortChange = useCallback(
-    (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => {
-      if (!sortControlled) setUncontrolledSort(next)
-      resetUncontrolledPage()
-      props.onSortChange?.(next, prev)
-    },
-    [props.onSortChange, resetUncontrolledPage, sortControlled],
+  const { filterState, handleFilterChange, handleSortChange, sortState } = useServerSortFilterState(
+    props,
+    resetUncontrolledPage,
   )
-
-  const handleFilterChange = useCallback(
-    (next: BcGridFilter, prev: BcGridFilter) => {
-      if (!filterControlled) setUncontrolledFilter(next)
-      resetUncontrolledPage()
-      props.onFilterChange?.(next, prev)
-    },
-    [filterControlled, props.onFilterChange, resetUncontrolledPage],
+  const searchText = props.searchText ?? props.defaultSearchText
+  const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
+  const loadPage = props.rowModel === "paged" ? props.loadPage : undefined
+  const view = useMemo(
+    () =>
+      modelRef.current.createViewState({
+        filter: filterState,
+        groupBy,
+        locale: props.locale,
+        searchText,
+        sort: sortState,
+        visibleColumns,
+      }),
+    [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
   )
+  const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
 
   const refresh = useCallback((opts?: { purge?: boolean }) => {
     if (opts?.purge) modelRef.current.cache.clear()
     setRefreshVersion((version) => version + 1)
   }, [])
 
-  const invalidate = useCallback((invalidation: ServerInvalidation) => {
-    modelRef.current.invalidate(invalidation)
-    setRefreshVersion((version) => version + 1)
-  }, [])
+  const invalidate = useCallback(
+    (invalidation: ServerInvalidation) => {
+      modelRef.current.invalidate(invalidation, { rowId: props.rowId })
+      setRefreshVersion((version) => version + 1)
+    },
+    [props.rowId],
+  )
 
   const retryBlock = useCallback((blockKey: ServerBlockKey) => {
     modelRef.current.cache.delete(blockKey)
@@ -323,7 +413,11 @@ function usePagedServerState<TRow>(
         setLoading(false)
       })
       .catch((nextError: unknown) => {
-        if (latestBlockKeyRef.current !== request.blockKey || isAbortError(nextError)) return
+        if (
+          latestBlockKeyRef.current !== request.blockKey ||
+          modelRef.current.isAbortError(nextError)
+        )
+          return
         setError(nextError)
         setLoading(false)
       })
@@ -367,23 +461,28 @@ function useInfiniteServerState<TRow>(
   const modelRef = useRef(createServerRowModel<TRow>())
   const inFlightCountRef = useRef(0)
   const loadedRowsRef = useRef<TRow[]>([])
+  const visibleRangeRef = useRef({ endIndex: 0, startIndex: 0 })
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [rows, setRows] = useState<readonly TRow[]>([])
   const [rowCount, setRowCount] = useState<number | "unknown">("unknown")
   const [loading, setLoading] = useState(() => props.rowModel === "infinite")
   const [error, setError] = useState<unknown>(null)
 
-  const sortControlled = hasProp(props, "sort")
-  const [uncontrolledSort, setUncontrolledSort] = useState<readonly BcGridSort[]>(
-    () => props.defaultSort ?? [],
-  )
-  const sortState = sortControlled ? (props.sort ?? []) : uncontrolledSort
+  const resetInfiniteRows = useCallback(() => {
+    modelRef.current.abortAll()
+    modelRef.current.cache.clear()
+    inFlightCountRef.current = 0
+    loadedRowsRef.current = []
+    setRows([])
+    setRowCount("unknown")
+    setError(null)
+    setRefreshVersion((version) => version + 1)
+  }, [])
 
-  const filterControlled = hasProp(props, "filter")
-  const [uncontrolledFilter, setUncontrolledFilter] = useState<BcGridFilter | undefined>(
-    () => props.defaultFilter,
+  const { filterState, handleFilterChange, handleSortChange, sortState } = useServerSortFilterState(
+    props,
+    resetInfiniteRows,
   )
-  const filterState = filterControlled ? props.filter : uncontrolledFilter
 
   const blockSize =
     props.rowModel === "infinite"
@@ -398,7 +497,7 @@ function useInfiniteServerState<TRow>(
   const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
   const view = useMemo(
     () =>
-      createServerViewState({
+      modelRef.current.createViewState({
         filter: filterState,
         groupBy,
         locale: props.locale,
@@ -411,21 +510,10 @@ function useInfiniteServerState<TRow>(
   const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
 
   const syncRowsFromCache = useCallback(() => {
-    const nextRows = collectContiguousInfiniteRows(modelRef.current.cache.toMap(), viewKey)
+    const nextRows = modelRef.current.collectContiguousInfiniteRows(viewKey)
     loadedRowsRef.current = nextRows
     setRows(nextRows)
   }, [viewKey])
-
-  const resetInfiniteRows = useCallback(() => {
-    modelRef.current.abortAll()
-    modelRef.current.cache.clear()
-    inFlightCountRef.current = 0
-    loadedRowsRef.current = []
-    setRows([])
-    setRowCount("unknown")
-    setError(null)
-    setRefreshVersion((version) => version + 1)
-  }, [])
 
   const trackPromise = useCallback((promise: Promise<ServerBlockResult<TRow>>) => {
     inFlightCountRef.current += 1
@@ -462,7 +550,7 @@ function useInfiniteServerState<TRow>(
       request.promise
         .then((result) => {
           setError(null)
-          const nextRows = mergeInfiniteRows(loadedRowsRef.current, result)
+          const nextRows = modelRef.current.mergeInfiniteRows(loadedRowsRef.current, result)
           if (nextRows) {
             loadedRowsRef.current = nextRows
             setRows(nextRows)
@@ -474,7 +562,7 @@ function useInfiniteServerState<TRow>(
           else setRowCount("unknown")
         })
         .catch((nextError: unknown) => {
-          if (isAbortError(nextError)) return
+          if (modelRef.current.isAbortError(nextError)) return
           setError(nextError)
         })
     },
@@ -501,6 +589,7 @@ function useInfiniteServerState<TRow>(
 
   const handleVisibleRowRangeChange = useCallback(
     (range: { startIndex: number; endIndex: number }) => {
+      visibleRangeRef.current = range
       if (!loadBlock) return
       ensureBlock(range.startIndex)
       ensureBlock(range.endIndex)
@@ -509,24 +598,6 @@ function useInfiniteServerState<TRow>(
       }
     },
     [blockSize, ensureBlock, loadBlock, rowCount, rows.length],
-  )
-
-  const handleSortChange = useCallback(
-    (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => {
-      if (!sortControlled) setUncontrolledSort(next)
-      resetInfiniteRows()
-      props.onSortChange?.(next, prev)
-    },
-    [props.onSortChange, resetInfiniteRows, sortControlled],
-  )
-
-  const handleFilterChange = useCallback(
-    (next: BcGridFilter, prev: BcGridFilter) => {
-      if (!filterControlled) setUncontrolledFilter(next)
-      resetInfiniteRows()
-      props.onFilterChange?.(next, prev)
-    },
-    [filterControlled, props.onFilterChange, resetInfiniteRows],
   )
 
   const refresh = useCallback((opts?: { purge?: boolean }) => {
@@ -542,11 +613,17 @@ function useInfiniteServerState<TRow>(
 
   const invalidate = useCallback(
     (invalidation: ServerInvalidation) => {
-      modelRef.current.invalidate(invalidation)
+      modelRef.current.invalidate(invalidation, { rowId: props.rowId })
       syncRowsFromCache()
+      const range = visibleRangeRef.current
+      ensureBlock(range.startIndex)
+      ensureBlock(range.endIndex)
+      if (rowCount === "unknown" || rows.length < rowCount) {
+        ensureBlock(range.endIndex + blockSize)
+      }
       setRefreshVersion((version) => version + 1)
     },
-    [syncRowsFromCache],
+    [blockSize, ensureBlock, props.rowId, rowCount, rows.length, syncRowsFromCache],
   )
 
   const retryBlock = useCallback((blockKey: ServerBlockKey) => {
@@ -582,54 +659,271 @@ function useInfiniteServerState<TRow>(
   }
 }
 
-function createServerViewState(input: {
-  filter: BcGridFilter | undefined
-  groupBy: readonly ColumnId[]
-  locale: string | undefined
-  searchText: string | undefined
-  sort: readonly BcGridSort[]
-  visibleColumns: readonly ColumnId[]
-}): ServerViewState {
+function useTreeServerState<TRow>(
+  props: BcServerGridProps<TRow>,
+  visibleColumns: readonly ColumnId[],
+): TreeServerState<TRow> {
+  const modelRef = useRef(createServerRowModel<TRow>())
+  const rootLoadSequenceRef = useRef(0)
+  const [refreshVersion, setRefreshVersion] = useState(0)
+  const [tree, setTree] = useState<TreeSnapshot<TRow>>(() => modelRef.current.createTreeSnapshot())
+  const [error, setError] = useState<unknown>(null)
+  const [rootLoading, setRootLoading] = useState(() => props.rowModel === "tree")
+
+  const resetTreeRows = useCallback(() => {
+    modelRef.current.abortAll()
+    modelRef.current.cache.clear()
+    setTree(modelRef.current.createTreeSnapshot())
+    setError(null)
+    setRootLoading(props.rowModel === "tree")
+    setRefreshVersion((version) => version + 1)
+  }, [props.rowModel])
+
+  const { filterState, handleFilterChange, handleSortChange, sortState } = useServerSortFilterState(
+    props,
+    resetTreeRows,
+  )
+
+  const expansionControlled = hasProp(props, "expansion")
+  const [uncontrolledExpansion, setUncontrolledExpansion] = useState<ReadonlySet<RowId>>(
+    () => props.defaultExpansion ?? new Set<RowId>(),
+  )
+  const expansionState = expansionControlled
+    ? (props.expansion ?? new Set<RowId>())
+    : uncontrolledExpansion
+
+  const childCount = DEFAULT_SERVER_BLOCK_SIZE
+  const loadChildRows = props.rowModel === "tree" ? props.loadChildren : undefined
+  const loadRootRows = props.rowModel === "tree" ? props.loadRoots : undefined
+  const searchText = props.searchText ?? props.defaultSearchText
+  const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
+  const view = useMemo(
+    () =>
+      modelRef.current.createViewState({
+        filter: filterState,
+        groupBy,
+        locale: props.locale,
+        searchText,
+        sort: sortState,
+        visibleColumns,
+      }),
+    [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
+  )
+  const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
+
+  const flatNodes = useMemo(
+    () => modelRef.current.flattenTreeSnapshot(tree, expansionState),
+    [expansionState, tree],
+  )
+  const rows = flatNodes.map((node) => node.row)
+
+  const setExpansion = useCallback(
+    (next: ReadonlySet<RowId>) => {
+      const prev = expansionState
+      if (!expansionControlled) setUncontrolledExpansion(next)
+      props.onExpansionChange?.(next, prev)
+    },
+    [expansionControlled, expansionState, props.onExpansionChange],
+  )
+
+  const loadTreeChildren = useCallback(
+    (node: TreeNode<TRow> | null) => {
+      if (!loadChildRows) return
+      const rootLoadId = node ? null : ++rootLoadSequenceRef.current
+      const loader = node ? loadChildRows : (loadRootRows ?? loadChildRows)
+      const parentRowId = node?.rowId ?? null
+      const groupPath = node?.groupPath ?? []
+      const request = modelRef.current.loadTreeChildren({
+        childCount,
+        childStart: 0,
+        groupPath,
+        loadChildren: loader,
+        parentRowId,
+        rowId: props.rowId,
+        view,
+        viewKey,
+      })
+
+      setError(null)
+      if (node) {
+        setTree((prev) =>
+          modelRef.current.updateTreeNode(prev, node.rowId, { loading: true, error: null }),
+        )
+      } else {
+        setRootLoading(true)
+      }
+
+      request.promise
+        .then((result) => {
+          setTree((prev) =>
+            modelRef.current.mergeTreeResult({
+              getRowId: props.rowId,
+              parentNode: node,
+              result,
+              snapshot: prev,
+              viewKey: result.viewKey ?? viewKey,
+            }),
+          )
+          setError(null)
+        })
+        .catch((nextError: unknown) => {
+          if (modelRef.current.isAbortError(nextError)) return
+          setError(nextError)
+          if (node) {
+            setTree((prev) =>
+              modelRef.current.updateTreeNode(prev, node.rowId, {
+                error: nextError,
+                loading: false,
+              }),
+            )
+          }
+        })
+        .finally(() => {
+          if (rootLoadId != null && rootLoadSequenceRef.current === rootLoadId) {
+            setRootLoading(false)
+          }
+        })
+    },
+    [childCount, loadChildRows, loadRootRows, props.rowId, view, viewKey],
+  )
+
+  useEffect(() => {
+    if (!loadChildRows) return
+    void refreshVersion
+    loadTreeChildren(null)
+  }, [loadChildRows, loadTreeChildren, refreshVersion])
+
+  useEffect(() => () => modelRef.current.abortAll(), [])
+
+  const toggleNode = useCallback(
+    (rowId: RowId) => {
+      const node = tree.nodes.get(rowId)
+      if (!node || !node.hasChildren) return
+      const nextExpansion = new Set(expansionState)
+      if (nextExpansion.has(rowId)) {
+        nextExpansion.delete(rowId)
+        setExpansion(nextExpansion)
+        return
+      }
+      nextExpansion.add(rowId)
+      setExpansion(nextExpansion)
+      if (!node.childrenLoaded && !node.loading) loadTreeChildren(node)
+    },
+    [expansionState, loadTreeChildren, setExpansion, tree.nodes],
+  )
+
+  const columns = useMemo(
+    () =>
+      props.rowModel === "tree"
+        ? createTreeColumns({
+            columns: props.columns,
+            expandedRowIds: expansionState,
+            nodeByRowId: tree.nodes,
+            toggleNode,
+          })
+        : props.columns,
+    [expansionState, props.columns, props.rowModel, toggleNode, tree.nodes],
+  )
+
+  const rowId = useCallback(
+    (row: TRow, index: number) => flatNodes[index]?.rowId ?? props.rowId(row, index),
+    [flatNodes, props.rowId],
+  )
+
+  const refresh = useCallback((opts?: { purge?: boolean }) => {
+    if (opts?.purge) {
+      modelRef.current.cache.clear()
+      setTree(modelRef.current.createTreeSnapshot())
+    }
+    setRefreshVersion((version) => version + 1)
+  }, [])
+
+  const invalidate = useCallback(
+    (invalidation: ServerInvalidation) => {
+      modelRef.current.invalidate(invalidation, { rowId: props.rowId })
+      setTree(modelRef.current.createTreeSnapshot())
+      setRefreshVersion((version) => version + 1)
+    },
+    [props.rowId],
+  )
+
+  const retryBlock = useCallback((blockKey: ServerBlockKey) => {
+    modelRef.current.cache.delete(blockKey)
+    setRefreshVersion((version) => version + 1)
+  }, [])
+
+  const getModelState = useCallback(
+    () =>
+      modelRef.current.getState({
+        mode: props.rowModel,
+        rowCount: rows.length,
+        selection: toServerSelection(undefined, view),
+        view,
+        viewKey,
+      }),
+    [props.rowModel, rows.length, view, viewKey],
+  )
+
   return {
-    groupBy: input.groupBy.map((columnId) => ({ columnId })),
-    sort: input.sort.map((entry) => ({
-      columnId: entry.columnId,
-      direction: entry.direction,
-    })),
-    visibleColumns: [...input.visibleColumns],
-    ...(input.filter ? { filter: input.filter } : {}),
-    ...(input.searchText ? { search: input.searchText } : {}),
-    ...(input.locale ? { locale: input.locale } : {}),
+    columns,
+    error,
+    getModelState,
+    handleFilterChange,
+    handleSortChange,
+    invalidate,
+    loading: props.rowModel === "tree" && rootLoading && rows.length === 0 && !error,
+    refresh,
+    retryBlock,
+    rowCount: props.rowModel === "tree" ? rows.length : "unknown",
+    rowId,
+    rows,
+    view,
   }
 }
 
-function collectContiguousInfiniteRows<TRow>(
-  blocks: Map<ServerBlockKey, ServerCacheBlock<TRow>>,
-  viewKey: string,
-): TRow[] {
-  const loadedBlocks = [...blocks.values()]
-    .filter((block) => block.viewKey === viewKey && block.state === "loaded")
-    .sort((a, b) => a.start - b.start)
-  const rows: TRow[] = []
-  let expectedStart = 0
+function createTreeColumns<TRow>(input: {
+  columns: readonly BcReactGridColumn<TRow>[]
+  expandedRowIds: ReadonlySet<RowId>
+  nodeByRowId: Map<RowId, TreeNode<TRow>>
+  toggleNode: (rowId: RowId) => void
+}): readonly BcReactGridColumn<TRow>[] {
+  const treeColumnIndex = input.columns.findIndex((column) => !column.hidden)
+  if (treeColumnIndex === -1) return input.columns
 
-  for (const block of loadedBlocks) {
-    if (block.start !== expectedStart) break
-    rows.push(...block.rows)
-    expectedStart = block.start + block.size
-  }
-
-  return rows
-}
-
-function mergeInfiniteRows<TRow>(
-  currentRows: readonly TRow[],
-  result: ServerBlockResult<TRow>,
-): TRow[] | null {
-  if (result.blockStart > currentRows.length) return null
-  const nextRows = currentRows.slice()
-  nextRows.splice(result.blockStart, result.blockSize, ...result.rows)
-  return nextRows
+  return input.columns.map((column, index) => {
+    if (index !== treeColumnIndex) return column
+    return {
+      ...column,
+      cellRenderer(params) {
+        const node = input.nodeByRowId.get(params.rowId)
+        const content = column.cellRenderer ? column.cellRenderer(params) : params.formattedValue
+        if (!node) return content
+        const expanded = input.expandedRowIds.has(node.rowId)
+        return (
+          <span className="bc-grid-tree-cell">
+            <span className="bc-grid-tree-indent" style={{ width: `${node.level * 1.25}rem` }} />
+            {node.hasChildren ? (
+              <button
+                type="button"
+                aria-expanded={expanded}
+                aria-label={expanded ? "Collapse row" : "Expand row"}
+                className="bc-grid-tree-toggle"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  input.toggleNode(node.rowId)
+                }}
+              >
+                {expanded ? "v" : ">"}
+              </button>
+            ) : (
+              <span aria-hidden="true" className="bc-grid-tree-spacer" />
+            )}
+            <span>{content}</span>
+          </span>
+        )
+      },
+    } satisfies BcReactGridColumn<TRow>
+  })
 }
 
 function createServerRowModelState<TRow>(input: {
@@ -663,8 +957,4 @@ function toServerSelection(
     }
   }
   return selection
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError"
 }

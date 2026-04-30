@@ -154,14 +154,25 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       const ac = new AbortController()
       validateAbortRef.current = ac
 
-      dispatch({ type: "commit", value: candidate.value, moveOnSettle })
+      // valueParser bridges string editors → typed `TValue` per
+      // `editing-rfc §valueParser placement`. Runs BEFORE validation so
+      // the validator sees the parsed (typed) value, not the raw string.
+      // Only fires when the editor produced a string AND the column
+      // declares a parser. Typed editors (date, select, etc.) bypass.
+      const parser = candidate.column.valueParser
+      const parsedValue =
+        typeof candidate.value === "string" && parser
+          ? (parser(candidate.value, candidate.row) as unknown)
+          : candidate.value
+
+      dispatch({ type: "commit", value: parsedValue, moveOnSettle })
 
       const validator = options.validate
       let result: BcValidationResult
       try {
         result = validator
           ? await Promise.resolve(
-              validator(candidate.value, candidate.row, candidate.columnId, ac.signal),
+              validator(parsedValue, candidate.row, candidate.columnId, ac.signal),
             )
           : { valid: true }
       } catch (err) {
@@ -175,9 +186,9 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
 
       if (!result.valid) return
 
-      // Optimistic overlay update.
+      // Optimistic overlay update — stored as the parsed value.
       const rowPatch = overlayRef.current.patches.get(candidate.rowId) ?? new Map()
-      rowPatch.set(candidate.columnId, candidate.value)
+      rowPatch.set(candidate.columnId, parsedValue)
       overlayRef.current.patches.set(candidate.rowId, rowPatch)
       // Edit entry: clear error, no longer pending unless onCellEditCommit
       // returns a Promise (set below).
@@ -197,7 +208,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           columnId: candidate.columnId,
           column: candidate.column,
           previousValue: candidate.previousValue as never,
-          nextValue: candidate.value as never,
+          nextValue: parsedValue as never,
           source: "keyboard",
         })
         if (settle && typeof (settle as Promise<void>).then === "function") {

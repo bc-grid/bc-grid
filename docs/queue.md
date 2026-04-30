@@ -120,7 +120,7 @@ These tasks are pure `@bc-grid/react` UI on top of existing state shapes. **No R
 - `[review: x1 #97]` **column-state-url-persistence** — encode `columnState` (visibility, order, width, sort) into URL search params for shareable links. Pairs with `localstorage-gridid-persistence` (Phase 5.5). Consumer opts in via `BcGridProps.urlStatePersistence?: { searchParam: string }`. **Effort**: S.
 - `[review: x1 #98]` **search-complete** — apply `searchText` as a row filter (case-insensitive substring across `valueFormatter` results for searchable columns per `api.md §4.3`). Pairs with `search-highlighting` (Phase 5.5) which renders the `<mark>` in cells. **Effort**: S.
 - `[ready]` **group-by-client** — client-side row grouping by one or more columns. Group rows render as a header row with expand/collapse chevron + count. Tree-mode rendering uses `aria-level` + `role="treegrid"` per `accessibility-rfc §grid vs treegrid`. State via `BcGridProps.groupBy` (already declared). **Effort**: M.
-- `[ready]` **pagination-client-ui** — client-side pager controls (first / prev / next / last + page-size dropdown). State already supported via `BcGridProps.page`/`pageSize`/`onPaginationChange`. Renders in `BcGridProps.footer` slot by default; consumer can opt out. **Effort**: S.
+- `[review: x1 #105]` **pagination-client-ui** — client-side pager controls (first / prev / next / last + page-size dropdown). State already supported via `BcGridProps.page`/`pageSize`/`onPaginationChange`. Renders in `BcGridProps.footer` slot by default; consumer can opt out. **Effort**: S.
 
 #### Track 1 — Editing (Q2 editing surface)
 
@@ -160,18 +160,18 @@ Spec pending: `docs/design/range-rfc.md` (c2 to author).
 Spec already exists: `docs/design/server-query-rfc.md` (PR #2). No new RFC needed.
 
 - `[done: x2 #60]` **server-paged-impl** — `BcServerGrid rowModel="paged"` with the `LoadServerPage` contract. AbortSignal handling, request dedup. **Branch**: `agent/x2/server-paged-impl`. **Effort**: M.
-- `[review: x2 #85]` **infinite-mode-block-cache** — `rowModel="infinite"`: `ServerBlockCache` with LRU eviction; `LoadServerBlock` integration; viewport-driven block fetching with prefetch ahead. **Branch**: `agent/x2/infinite-mode-block-cache`. **Effort**: L (3-5 hours).
-- `[blocked: depends on infinite-mode-block-cache]` **server-tree-mode** — `rowModel="tree"`: lazy children fetching via `LoadServerTreeChildren`; expand/collapse triggers fetch; `ServerTreeRow` rendering. **Effort**: L.
-- `[ready]` **mutation-pipeline** — `ServerRowPatch` apply path; optimistic UI with `pendingMutations` map; `ServerMutationResult` settle handling. Integrates with Track 1's `bc-edit-grid-complete`. **Effort**: M.
-- `[ready]` **invalidation-impl** — `ServerInvalidation` scopes (all / view / blocks / rows / tree). Refetch + cache eviction logic. **Effort**: M.
-- `[blocked: depends on infinite-mode-block-cache + mutation-pipeline]` **server-row-model-perf-tuning** — measure block fetch latency, debounce settings, cache hit rate at 100k+ rows. Add to nightly perf harness. **Effort**: M.
+- `[done: x2 #85]` **infinite-mode-block-cache** — `rowModel="infinite"`: `ServerBlockCache` with LRU eviction; `LoadServerBlock` integration; viewport-driven block fetching with prefetch ahead. **Branch**: `agent/x2/infinite-mode-block-cache`. **Effort**: L (3-5 hours).
+- `[review: x2 #90]` **server-tree-mode** — `rowModel="tree"`: lazy children fetching via `LoadServerTreeChildren`; expand/collapse triggers fetch; `ServerTreeRow` rendering. **Branch**: `agent/x2/server-tree-mode`. **Effort**: L.
+- `[review: x2 #89]` **mutation-pipeline** — `ServerRowPatch` apply path; optimistic UI with `pendingMutations` map; `ServerMutationResult` settle handling. Integrates with Track 1's `bc-edit-grid-complete`. **Branch**: `agent/x2/mutation-pipeline`. **Effort**: M.
+- `[review: x2 #92]` **invalidation-impl** — `ServerInvalidation` scopes (all / view / blocks / rows / tree). Refetch + cache eviction logic. **Branch**: `agent/x2/invalidation-impl`. **Effort**: M.
+- `[review: x2 #96]` **server-row-model-perf-tuning** — measure block fetch latency, debounce settings, cache hit rate at 100k+ rows. Add to nightly perf harness. **Branch**: `agent/x2/server-row-model-perf-tuning`. **Effort**: M.
 
 #### Track 4 — Aggregations + Pivots (Q5 pulled forward)
 
 Specs: `docs/design/aggregation-rfc.md` (PR #51) + `pivot-rfc.md` (PR #52).
 
 - `[done: c2 #51]` **aggregation-rfc** — engine contract for `@bc-grid/aggregations` + React adapter. **Effort**: 1 day.
-- `[blocked: depends on aggregation-rfc]` **aggregation-engine** — `@bc-grid/aggregations` package (currently stub). `sum`, `count`, `avg`, `min`, `max`, `registerAggregation`. Pure functions; no DOM. Per `design.md §4.2`. **Effort**: M.
+- `[review: x2 #93]` **aggregation-engine** — `@bc-grid/aggregations` package (currently stub). `sum`, `count`, `avg`, `min`, `max`, `registerAggregation`. Pure functions; no DOM. Per `design.md §4.2`. **Branch**: `agent/x2/aggregation-engine`. **Effort**: M.
 - `[blocked: depends on aggregation-engine]` **aggregation-react-adapter** — footer aggregation row + group-row aggregation rendering in `@bc-grid/react`. Wires `column.aggregation` (already declared `api.md §1.1`) to the engine. **Effort**: M.
 - `[done: c2 #52]` **pivot-rfc** — engine vs React split; drag-to-pivot UI; row/col/values dimensions; treegrid output. **Effort**: 1 day.
 - `[blocked: depends on pivot-rfc + aggregation-engine]` **pivot-engine** — engine layer in `@bc-grid/aggregations` (or a separate `@bc-grid/pivots` if the RFC decides to split). Computes pivot table from rows + dimensions. **Effort**: L.
@@ -218,7 +218,7 @@ Spec pending: `docs/design/charts-rfc.md` (c2 to author; user confirmed peer-dep
 - `[ready]` **wcag-deep-pass** — full axe-core audit on every demo + manual NVDA / JAWS / VoiceOver runs; fix any findings. Generates a `docs/design/a11y-impl-report.md`. **Effort**: M.
 - `[ready]` **animation-polish** — review every transition (sort / filter / expand / collapse / insert / remove / cell-flash); tune to 60fps; document the motion system. **Effort**: M.
 - `[ready]` **browser-compat-matrix** — full Chromium / FF / WebKit / Safari / Edge pass on the AR Customers demo + standalone tests. Document any known issues. **Effort**: S.
-- `[ready]` **migration-guide** — from AG Grid Community + Enterprise to bc-grid; documented patterns; side-by-side examples; no codemod (out-of-scope). Lives in `apps/docs`. **Effort**: M.
+- `[review: x1 #108]` **migration-guide** — from AG Grid Community + Enterprise to bc-grid; documented patterns; side-by-side examples; no codemod (out-of-scope). Lives in `apps/docs`. **Effort**: M.
 
 ### Quality + infra (parallel throughout Q1)
 

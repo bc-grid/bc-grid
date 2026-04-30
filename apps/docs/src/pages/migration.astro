@@ -1,0 +1,367 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const agClientSnippet = `import { AgGridReact } from "ag-grid-react"
+import "ag-grid-community/styles/ag-grid.css"
+import "ag-grid-community/styles/ag-theme-quartz.css"
+
+const columnDefs = [
+  { field: "account", headerName: "Account", pinned: "left", width: 132 },
+  { field: "legalName", headerName: "Customer", filter: "agTextColumnFilter" },
+  {
+    field: "balance",
+    headerName: "Outstanding",
+    type: "rightAligned",
+    valueFormatter: ({ value }) => currency.format(value),
+  },
+]
+
+<div className="ag-theme-quartz">
+  <AgGridReact
+    rowData={customers}
+    columnDefs={columnDefs}
+    getRowId={({ data }) => data.id}
+    onRowClicked={({ data }) => setActiveCustomer(data)}
+  />
+</div>`
+
+const bcClientSnippet = `import { BcGrid, type BcGridColumn } from "@bc-grid/react"
+import "@bc-grid/theming/styles.css"
+
+const columns: BcGridColumn<Customer>[] = [
+  { field: "account", header: "Account", pinned: "left", width: 132, format: "code" },
+  { field: "legalName", header: "Customer", filter: { type: "text" }, rowHeader: true },
+  {
+    field: "balance",
+    header: "Outstanding",
+    align: "right",
+    format: { type: "currency", currency: "USD", precision: 0 },
+  },
+]
+
+<BcGrid
+  data={customers}
+  columns={columns}
+  rowId={(row) => row.id}
+  onRowClick={setActiveCustomer}
+/>`
+
+const agActionsSnippet = `const columnDefs = [
+  { field: "legalName", headerName: "Customer" },
+  {
+    colId: "actions",
+    headerName: "Actions",
+    pinned: "right",
+    cellRenderer: ({ data }) => (
+      <button onClick={() => openAccount(data)}>Edit</button>
+    ),
+  },
+]`
+
+const bcActionsSnippet = `<BcEditGrid
+  data={customers}
+  columns={columns}
+  rowId={(row) => row.id}
+  detailPath="/accounts-receivable/customers"
+  linkField="legalName"
+  onEdit={openAccount}
+  extraActions={(row) => [
+    { label: "Statement", onSelect: () => queueStatement(row) },
+  ]}
+/>`
+
+const agServerSnippet = `const datasource = {
+  getRows(params) {
+    fetchCustomers({
+      startRow: params.request.startRow,
+      endRow: params.request.endRow,
+      sortModel: params.request.sortModel,
+      filterModel: params.request.filterModel,
+    }).then(({ rows, total }) => {
+      params.success({ rowData: rows, rowCount: total })
+    })
+  },
+}
+
+api.setGridOption("serverSideDatasource", datasource)`
+
+const bcServerSnippet = `import { BcServerGrid, type LoadServerPage } from "@bc-grid/react"
+
+const loadPage: LoadServerPage<Customer> = async (query, { signal }) => {
+  const result = await fetchCustomers({
+    pageIndex: query.pageIndex,
+    pageSize: query.pageSize,
+    sort: query.view.sort,
+    filter: query.view.filter,
+    search: query.view.search,
+    signal,
+  })
+
+  return {
+    rows: result.rows,
+    totalRows: result.totalRows,
+    pageIndex: query.pageIndex,
+    pageSize: query.pageSize,
+  }
+}
+
+<BcServerGrid
+  rowModel="paged"
+  columns={columns}
+  rowId={(row) => row.id}
+  loadPage={loadPage}
+/>`
+
+const columnMappings = [
+  ["field", "field", "Same convention. Use stable field names when editable/server-backed."],
+  ["colId", "columnId", "Use when the field is absent, computed, or renamed."],
+  ["headerName", "header", "React nodes are allowed in bc-grid."],
+  ["pinned", "pinned", '"left" / "right" / null semantics match closely.'],
+  ["width / minWidth / maxWidth", "width / minWidth / maxWidth", "Pixel widths are supported."],
+  ["hide", "hidden", "Visibility is also represented in columnState."],
+  ["sortable", "sortable", "Defaults to sortable unless set false."],
+  ["filter", "filter", 'Use typed filter descriptors such as { type: "text" }.'],
+  ["valueGetter", "valueGetter", "Receives the row directly instead of AG Grid params."],
+  ["valueFormatter", "valueFormatter / format", "Prefer format presets for common ERP values."],
+  ["comparator", "comparator", "Used by client-side sort."],
+  ["cellRenderer", "cellRenderer", "Receives BcCellRendererParams instead of AG Grid params."],
+  [
+    "cellClass / cellStyle",
+    "cellClass / cellClassName / cellStyle",
+    "React className callback is available.",
+  ],
+  ["tooltipValueGetter", "tooltip", "String or row callback."],
+  [
+    "editable / cellEditor",
+    "editable / cellEditor",
+    "Editor framework is in the Q2 track; text editor foundation is present.",
+  ],
+]
+
+const gridMappings = [
+  ["rowData", "data", "Client-side array of rows."],
+  ["columnDefs", "columns", "Typed as BcGridColumn<TRow>[] in React apps."],
+  ["getRowId", "rowId", "Required. Do not derive row IDs from visible indexes."],
+  ["api / columnApi", "apiRef", "Imperative scroll/focus/state shortcuts."],
+  [
+    "rowSelection",
+    "selection / onSelectionChange",
+    "Controlled/uncontrolled pair plus mouse and keyboard selection.",
+  ],
+  ["pagination", "pagination / page / pageSize", "Client pagination is opt-in."],
+  ["quickFilterText", "searchText", "Global text search over formatted searchable values."],
+  [
+    "defaultColDef",
+    "local column factory",
+    "Prefer app helpers that return BcGridColumn fragments.",
+  ],
+  [
+    "rowModelType",
+    "BcGrid or BcServerGrid",
+    "Choose client, paged, infinite, or tree row model explicitly.",
+  ],
+  [
+    "theme class",
+    "@bc-grid/theming/styles.css",
+    "The grid consumes shadcn-style CSS variables from the host app.",
+  ],
+]
+---
+
+<DocsLayout
+  title="AG Grid Migration"
+  description="A practical guide for moving bc-next style AG Grid usage to bc-grid without trying to clone AG Grid wholesale."
+  active="migration"
+>
+  <section class="section">
+    <p class="lead">
+      Treat migration as a typed rewrite of each grid surface, not a codemod. bc-grid keeps the
+      ERP patterns that bc-next uses most: stable row identity, pinned columns, controlled state,
+      value formatting, shadcn-native theming, server row models, and explicit package boundaries.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>Migration Order</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>Start With Read-Only Grids</h3>
+        <ul>
+          <li>Inventory AG Grid column definitions and GridApi calls.</li>
+          <li>Move row IDs to a required <code>rowId</code> callback.</li>
+          <li>Replace <code>valueFormatter</code> boilerplate with <code>format</code> presets.</li>
+          <li>Keep custom renderers small and pass domain actions through app callbacks.</li>
+        </ul>
+      </article>
+      <article class="panel">
+        <h3>Then Add Server + Editing</h3>
+        <ul>
+          <li>Use <code>BcServerGrid</code> for paged, infinite, and tree loading.</li>
+          <li>Translate AG filter/sort models to <code>ServerViewState</code>.</li>
+          <li>Move edit semantics into column editors and commit callbacks.</li>
+          <li>Keep AG Enterprise-only workflows behind feature flags until the bc-grid track lands.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Client Grid Example</h2>
+    <div class="grid-two">
+      <div class="code-shell">
+        <div class="code-title">
+          <span>AG Grid</span>
+          <span>before</span>
+        </div>
+        <Code code={agClientSnippet} lang="tsx" theme="github-dark" />
+      </div>
+      <div class="code-shell">
+        <div class="code-title">
+          <span>bc-grid</span>
+          <span>after</span>
+        </div>
+        <Code code={bcClientSnippet} lang="tsx" theme="github-dark" />
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Column Mapping</h2>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>AG Grid</th>
+            <th>bc-grid</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {columnMappings.map(([ag, bc, notes]) => (
+            <tr>
+              <td><code>{ag}</code></td>
+              <td><code>{bc}</code></td>
+              <td>{notes}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Grid Mapping</h2>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th>AG Grid</th>
+            <th>bc-grid</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {gridMappings.map(([ag, bc, notes]) => (
+            <tr>
+              <td><code>{ag}</code></td>
+              <td><code>{bc}</code></td>
+              <td>{notes}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Actions Columns</h2>
+    <div class="grid-two">
+      <div class="code-shell">
+        <div class="code-title">
+          <span>AG Grid renderer column</span>
+          <span>before</span>
+        </div>
+        <Code code={agActionsSnippet} lang="tsx" theme="github-dark" />
+      </div>
+      <div class="code-shell">
+        <div class="code-title">
+          <span>BcEditGrid action surface</span>
+          <span>after</span>
+        </div>
+        <Code code={bcActionsSnippet} lang="tsx" theme="github-dark" />
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Server Row Models</h2>
+    <p class="section-note">
+      AG Grid hides much of the server protocol behind datasource params. bc-grid makes the query
+      object explicit so it can be tested, logged, reused for exports, and shared with non-React
+      packages.
+    </p>
+    <div class="grid-two">
+      <div class="code-shell">
+        <div class="code-title">
+          <span>AG Grid datasource</span>
+          <span>before</span>
+        </div>
+        <Code code={agServerSnippet} lang="tsx" theme="github-dark" />
+      </div>
+      <div class="code-shell">
+        <div class="code-title">
+          <span>BcServerGrid loader</span>
+          <span>after</span>
+        </div>
+        <Code code={bcServerSnippet} lang="tsx" theme="github-dark" />
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Theming</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>AG Grid</h3>
+        <p>
+          Theme classes such as <code>ag-theme-quartz</code> own most visual decisions. App-level
+          overrides usually target AG-specific selectors and variables.
+        </p>
+      </article>
+      <article class="panel">
+        <h3>bc-grid</h3>
+        <p>
+          Import <code>@bc-grid/theming/styles.css</code>. The grid reads the same HSL CSS
+          variables shadcn apps already use: <code>--background</code>, <code>--foreground</code>,
+          <code>--border</code>, <code>--muted</code>, <code>--accent</code>, and <code>--ring</code>.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Behavioral Differences</h2>
+    <div class="compact-list">
+      <p><strong>Row identity is mandatory.</strong> Every grid needs <code>rowId</code>; visible indexes are never stable IDs.</p>
+      <p><strong>State pairs are explicit.</strong> Use either controlled props or defaults for a state pair, never both.</p>
+      <p><strong>Search and filters use formatted values.</strong> Users see the same text that matching logic sees.</p>
+      <p><strong>Tab leaves the grid.</strong> Arrow keys move inside the grid; Tab follows the WAI-ARIA grid pattern.</p>
+      <p><strong>No AG Grid compatibility layer.</strong> Keep a small adapter in the app if a route needs a staged migration.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Checklist</h2>
+    <div class="panel">
+      <ul>
+        <li>Replace <code>AgGridReact</code> imports with <code>BcGrid</code>, <code>BcEditGrid</code>, or <code>BcServerGrid</code>.</li>
+        <li>Convert <code>columnDefs</code> to typed <code>BcGridColumn&lt;TRow&gt;[]</code>.</li>
+        <li>Move <code>getRowId</code> logic into the required <code>rowId</code> prop.</li>
+        <li>Translate GridApi calls to <code>apiRef.current</code> methods or controlled state.</li>
+        <li>Replace AG theme CSS with shadcn tokens plus <code>@bc-grid/theming/styles.css</code>.</li>
+        <li>Write one Playwright smoke test per migrated grid: mount, sort/filter, selection/action path, and server query if used.</li>
+      </ul>
+    </div>
+  </section>
+</DocsLayout>

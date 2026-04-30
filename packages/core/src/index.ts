@@ -60,7 +60,15 @@ export type BcColumnFormat =
 
 export interface BcAggregation {
   type: "sum" | "count" | "avg" | "min" | "max" | "custom"
-  custom?: (rows: unknown[]) => unknown
+  custom?:
+    | ((rows: unknown[]) => unknown)
+    | {
+        id: string
+        init(ctx: unknown): unknown
+        step(acc: unknown, value: unknown, row: unknown, ctx: unknown): unknown
+        merge(a: unknown, b: unknown, ctx: unknown): unknown
+        finalize(acc: unknown, ctx: unknown): unknown
+      }
 }
 
 export type BcValidationResult = { valid: true } | { valid: false; error: string }
