@@ -1,3 +1,4 @@
+import type { BcGridApi, BcRange, BcSelection, ColumnId, RowId } from "@bc-grid/core"
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react"
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
@@ -8,8 +9,10 @@ import {
   contextMenuItemShortcut,
   isContextMenuSeparator,
   isCustomContextMenuItem,
+  resolveContextMenuItems,
 } from "../contextMenu"
-import type { BcContextMenuContext, BcContextMenuItem } from "../types"
+import type { ResolvedColumn, RowEntry } from "../gridInternals"
+import type { BcContextMenuContext, BcContextMenuItem, BcContextMenuItems } from "../types"
 
 export interface BcGridContextMenuAnchor {
   x: number
@@ -17,22 +20,52 @@ export interface BcGridContextMenuAnchor {
 }
 
 export interface BcGridContextMenuProps<TRow> {
+  api: BcGridApi<TRow>
   anchor: BcGridContextMenuAnchor
-  context: BcContextMenuContext<TRow>
-  items: readonly BcContextMenuItem<TRow>[]
+  columnId?: ColumnId | undefined
+  contextMenuItems?: BcContextMenuItems<TRow> | undefined
+  copyRangeToClipboard: (
+    requestedRange: BcRange | undefined,
+    gridApi: BcGridApi<TRow>,
+    options?: { includeHeaders?: boolean },
+  ) => Promise<void>
   onClose: () => void
-  onSelect: (item: BcContextMenuItem<TRow>, context: BcContextMenuContext<TRow>) => void
+  resolvedColumns: readonly ResolvedColumn<TRow>[]
+  rowId: RowId
+  rowsById: ReadonlyMap<RowId, RowEntry<TRow>>
+  selection: BcSelection
 }
 
 export function BcGridContextMenu<TRow>({
+  api,
   anchor,
-  context,
-  items,
+  columnId,
+  contextMenuItems,
+  copyRangeToClipboard,
   onClose,
-  onSelect,
+  resolvedColumns,
+  rowId,
+  rowsById,
+  selection,
 }: BcGridContextMenuProps<TRow>): ReactNode {
   const menuId = useId()
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const context = useMemo<BcContextMenuContext<TRow>>(() => {
+    const entry = rowsById.get(rowId)
+    return {
+      api,
+      cell: columnId ? { rowId, columnId } : null,
+      column: columnId
+        ? (resolvedColumns.find((candidate) => candidate.columnId === columnId)?.source ?? null)
+        : null,
+      row: entry?.kind === "data" ? entry.row : null,
+      selection,
+    }
+  }, [api, columnId, resolvedColumns, rowId, rowsById, selection])
+  const items = useMemo(
+    () => resolveContextMenuItems(contextMenuItems, context),
+    [context, contextMenuItems],
+  )
   const focusableIndexes = useMemo(
     () =>
       items
@@ -42,6 +75,10 @@ export function BcGridContextMenu<TRow>({
   )
   const [activeIndex, setActiveIndex] = useState(() => focusableIndexes[0] ?? -1)
   const [position, setPosition] = useState(() => clampContextMenu(anchor, 240, 48))
+
+  useEffect(() => {
+    if (items.length === 0) onClose()
+  }, [items.length, onClose])
 
   useEffect(() => {
     setActiveIndex(focusableIndexes[0] ?? -1)
@@ -77,7 +114,14 @@ export function BcGridContextMenu<TRow>({
   const activate = (item: BcContextMenuItem<TRow>) => {
     if (isContextMenuSeparator(item)) return
     if (contextMenuItemDisabled(item, context)) return
-    onSelect(item, context)
+    if (isCustomContextMenuItem(item)) {
+      item.onSelect(context)
+    } else if (item === "copy" || item === "copy-with-headers") {
+      if (!context.cell) return
+      void copyRangeToClipboard({ start: context.cell, end: context.cell }, api, {
+        includeHeaders: item === "copy-with-headers",
+      }).catch(() => undefined)
+    }
     onClose()
   }
 
@@ -159,6 +203,8 @@ export function BcGridContextMenu<TRow>({
     </div>
   )
 }
+
+export default BcGridContextMenu
 
 function handleContextMenuKeyDown<TRow>({
   event,

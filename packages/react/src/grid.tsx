@@ -21,7 +21,6 @@ import {
   type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
-  type PointerEvent as ReactPointerEvent,
   type RefObject,
   Suspense,
   type UIEvent,
@@ -40,7 +39,6 @@ import {
   ColumnVisibilityMenu,
   type ColumnVisibilityMenuAnchor,
 } from "./columnVisibility"
-import { isCustomContextMenuItem, resolveContextMenuItems } from "./contextMenu"
 import { createDetailToggleColumn } from "./detailColumn"
 import { nextActiveCellAfterEdit } from "./editingStateMachine"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
@@ -58,7 +56,6 @@ import {
   DEFAULT_COL_WIDTH,
   type DataRowEntry,
   type GroupRowEntry,
-  type RowEntry,
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
@@ -100,7 +97,7 @@ import {
   renderFilterCell,
   renderHeaderCell,
 } from "./headerCells"
-import type { BcGridContextMenuAnchor, BcGridContextMenuProps } from "./internal/context-menu"
+import type { BcGridContextMenuLayerProps } from "./internal/context-menu-layer"
 import { nextKeyboardNav } from "./keyboard"
 import {
   BcGridPagination,
@@ -128,8 +125,6 @@ import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } fro
 import { BcStatusBar } from "./statusBar"
 import type {
   BcCellEditCommitEvent,
-  BcContextMenuContext,
-  BcContextMenuItem,
   BcGridProps,
   BcReactGridColumn,
   BcSidebarContext,
@@ -143,9 +138,7 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
 
 const DEFAULT_DETAIL_HEIGHT = 144
 const editableKeyTargetTags = new Set(["INPUT", "TEXTAREA", "SELECT"])
-const BcGridContextMenu = lazy(() =>
-  import("./internal/context-menu").then((module) => ({ default: module.BcGridContextMenu })),
-)
+const BcGridContextMenuLayer = lazy(() => import("./internal/context-menu-layer"))
 
 export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   assertNoMixedControlledProps(props)
@@ -280,13 +273,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [columnMenu, setColumnMenu] = useState<ColumnVisibilityMenuAnchor | null>(null)
   const sidebarPanels = useMemo(() => resolveSidebarPanels(props.sidebar), [props.sidebar])
   const hasSidebar = sidebarPanels.length > 0
-  const [contextMenu, setContextMenu] = useState<{
-    anchor: BcGridContextMenuAnchor
-    context: BcContextMenuContext<TRow>
-    items: readonly BcContextMenuItem<TRow>[]
-  } | null>(null)
-  const contextMenuLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const contextMenuLongPressOpenedRef = useRef(false)
 
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
@@ -1155,103 +1141,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [api, aggregationResults, allRowEntries.length, data.length, selectionState],
   )
 
-  const closeContextMenu = useCallback(() => setContextMenu(null), [])
-
-  const openContextMenu = useCallback(
-    ({
-      anchor,
-      entry,
-      position,
-    }: {
-      anchor: BcGridContextMenuAnchor
-      entry: RowEntry<TRow> | null
-      position: BcCellPosition | null
-    }) => {
-      if (position) {
-        setActiveCell(position)
-        onCellFocus?.(position)
-      }
-
-      const rowEntry = position ? (rowsById.get(position.rowId) ?? entry) : entry
-      const context = {
-        cell: position,
-        row: rowEntry && isDataRowEntry(rowEntry) ? rowEntry.row : null,
-        column: position
-          ? (resolvedColumns.find((candidate) => candidate.columnId === position.columnId)
-              ?.source ?? null)
-          : null,
-        selection: selectionState,
-        api,
-      }
-      const items = resolveContextMenuItems(props.contextMenuItems, context)
-      if (items.length === 0) {
-        setContextMenu(null)
-        return
-      }
-      setContextMenu({ anchor, context, items })
-    },
-    [
-      api,
-      onCellFocus,
-      props.contextMenuItems,
-      resolvedColumns,
-      selectionState,
-      rowsById,
-      setActiveCell,
-    ],
-  )
-
-  const openContextMenuForEntry = useCallback(
-    (entry: DataRowEntry<TRow>, target: EventTarget | null, anchor: BcGridContextMenuAnchor) => {
-      const targetElement = target instanceof Element ? target : null
-      const cellElement = targetElement?.closest<HTMLElement>("[data-column-id]")
-      const columnId = cellElement?.dataset.columnId
-      openContextMenu({
-        anchor,
-        entry,
-        position: columnId ? { rowId: entry.rowId, columnId } : null,
-      })
-    },
-    [openContextMenu],
-  )
-
-  const openContextMenuForKeyboard = useCallback(() => {
-    const entry = activeCell != null ? rowsById.get(activeCell.rowId) : (rowEntries[0] ?? null)
-    const columnId = activeCell?.columnId ?? resolvedColumns[0]?.columnId
-    if (!entry || !columnId) return
-    const position = { rowId: entry.rowId, columnId }
-    const rect = rootRef.current?.getBoundingClientRect()
-    openContextMenu({
-      anchor: { x: (rect?.left ?? 0) + 8, y: (rect?.top ?? 0) + 8 },
-      entry,
-      position,
-    })
-  }, [activeCell, openContextMenu, resolvedColumns, rowEntries, rowsById])
-
-  const clearContextMenuLongPress = useCallback(() => {
-    if (contextMenuLongPressTimerRef.current == null) return
-    clearTimeout(contextMenuLongPressTimerRef.current)
-    contextMenuLongPressTimerRef.current = null
-  }, [])
-
-  useEffect(() => clearContextMenuLongPress, [clearContextMenuLongPress])
-
-  const handleContextMenuSelect = useCallback(
-    (item: BcContextMenuItem<TRow>, context: BcContextMenuContext<TRow>) => {
-      if (isCustomContextMenuItem(item)) {
-        item.onSelect(context)
-        return
-      }
-      if (item === "copy" || item === "copy-with-headers") {
-        if (!context.cell) return
-        void copyRangeToClipboard({ start: context.cell, end: context.cell }, api, {
-          includeHeaders: item === "copy-with-headers",
-        }).catch(() => undefined)
-      }
-    },
-    [api, copyRangeToClipboard],
-  )
-
   const handlePaginationChange = useCallback(
     (next: BcPaginationState) => {
       const normalized = getPaginationWindow(allRowEntries.length, next.page, next.pageSize)
@@ -1347,7 +1236,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       virtualizer.setScrollTop(target.scrollTop)
       virtualizer.setScrollLeft(target.scrollLeft)
       updateScrollOffset({ top: target.scrollTop, left: target.scrollLeft })
-      setContextMenu(null)
     },
     [updateScrollOffset, virtualizer],
   )
@@ -1410,12 +1298,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       // Shift+Enter / Shift+Tab. The grid stays out of the way.
       if (editController.editState.mode !== "navigation") return
       if (isEditableKeyTarget(event.target)) return
-
-      if (event.shiftKey && event.key === "F10") {
-        event.preventDefault()
-        openContextMenuForKeyboard()
-        return
-      }
 
       const currentRow = activeCell ? (rowIndexById.get(activeCell.rowId) ?? 0) : 0
       const currentCol = activeCell ? (columnIndexById.get(activeCell.columnId) ?? 0) : 0
@@ -1520,7 +1402,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       focusGroupRow,
       focusCell,
       isRowDisabled,
-      openContextMenuForKeyboard,
       pageRowCount,
       rangeSelectionState,
       resolvedColumns,
@@ -1671,7 +1552,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ],
   )
   const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
-  const ContextMenu = BcGridContextMenu as ComponentType<BcGridContextMenuProps<TRow>>
+  const ContextMenuLayer = BcGridContextMenuLayer as ComponentType<
+    BcGridContextMenuLayerProps<TRow>
+  >
 
   return (
     <div
@@ -1693,15 +1576,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       tabIndex={0}
       onFocus={handleFocus}
       onKeyDown={handleKeyDown}
-      onPointerDownCapture={
-        contextMenu
-          ? (event: ReactPointerEvent) => {
-              const target = event.target
-              if (target instanceof Element && target.closest(".bc-grid-context-menu")) return
-              setContextMenu(null)
-            }
-          : undefined
-      }
       style={rootStyle(rootHeight)}
     >
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
@@ -1855,36 +1729,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     data-row-index={virtualRow.index}
                     data-bc-grid-row-kind="data"
                     style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
-                    onContextMenu={(event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      clearContextMenuLongPress()
-                      openContextMenuForEntry(entry, event.target, {
-                        x: event.clientX,
-                        y: event.clientY,
-                      })
-                    }}
-                    onPointerDown={(event) => {
-                      if (!isContextLongPress(event)) return
-                      const target = event.target
-                      const anchor = { x: event.clientX, y: event.clientY }
-                      clearContextMenuLongPress()
-                      contextMenuLongPressTimerRef.current = setTimeout(() => {
-                        contextMenuLongPressTimerRef.current = null
-                        contextMenuLongPressOpenedRef.current = true
-                        openContextMenuForEntry(entry, target, anchor)
-                      }, 500)
-                    }}
-                    onPointerUp={clearContextMenuLongPress}
-                    onPointerCancel={clearContextMenuLongPress}
-                    onPointerLeave={clearContextMenuLongPress}
                     onClick={(event) => {
-                      if (contextMenuLongPressOpenedRef.current) {
-                        contextMenuLongPressOpenedRef.current = false
-                        event.preventDefault()
-                        event.stopPropagation()
-                        return
-                      }
                       // Selection logic. Shift+click → range from anchor; ctrl/
                       // cmd+click → toggle this row in current selection;
                       // plain click → select only this row.
@@ -2053,17 +1898,24 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         />
       ) : null}
 
-      {contextMenu ? (
-        <Suspense fallback={null}>
-          <ContextMenu
-            anchor={contextMenu.anchor}
-            context={contextMenu.context}
-            items={contextMenu.items}
-            onClose={closeContextMenu}
-            onSelect={handleContextMenuSelect}
-          />
-        </Suspense>
-      ) : null}
+      <Suspense fallback={null}>
+        <ContextMenuLayer
+          args={[
+            activeCell,
+            api,
+            props.contextMenuItems,
+            copyRangeToClipboard,
+            editController.editState.mode === "navigation",
+            onCellFocus,
+            resolvedColumns,
+            rowEntries,
+            rowsById,
+            rootRef,
+            selectionState,
+            setActiveCell,
+          ]}
+        />
+      </Suspense>
 
       {renderedFooter ? <div className="bc-grid-footer">{renderedFooter}</div> : null}
 
@@ -2200,8 +2052,4 @@ function detailPanelStyle(top: number, height: number, width: number): CSSProper
     top,
     width: Math.max(width, 1),
   }
-}
-
-function isContextLongPress(event: { button: number; pointerType: string }): boolean {
-  return event.button === 0 && event.pointerType !== "mouse"
 }
