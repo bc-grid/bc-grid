@@ -225,6 +225,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // canonical `BcGridFilter` shape via `buildGridFilter` and surfaced
   // through `setFilterState` whenever it changes.
   const [columnFilterText, setColumnFilterText] = useState<ColumnFilterText>({})
+  const updateColumnFilterText = useCallback((columnId: ColumnId, value: string) => {
+    setColumnFilterText((prev) => {
+      if (value.trim().length > 0) return { ...prev, [columnId]: value }
+      const { [columnId]: _cleared, ...rest } = prev
+      return rest
+    })
+  }, [])
+  const clearColumnFilterText = useCallback((columnId?: ColumnId) => {
+    setColumnFilterText((prev) => {
+      if (!columnId) return {}
+      const { [columnId]: _cleared, ...rest } = prev
+      return rest
+    })
+  }, [])
   // Filter-popup anchor + columnId for `column.filter.variant === "popup"`
   // columns per `filter-popup-variant`. Null when no popup is open.
   const [filterPopupState, setFilterPopupState] = useState<{
@@ -1496,25 +1510,33 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const sidebarContext = useMemo<BcSidebarContext<TRow>>(
     () => ({
       api,
+      clearColumnFilterText,
+      columnFilterText,
       columns,
       columnState,
       filterState: activeFilter,
+      getSetFilterOptions: loadSetFilterOptions,
       groupableColumns: props.groupableColumns ?? [],
       groupBy: groupByState,
       setColumnState,
+      setColumnFilterText: updateColumnFilterText,
       setFilterState,
       setGroupBy: setGroupByState,
     }),
     [
       activeFilter,
       api,
+      clearColumnFilterText,
+      columnFilterText,
       columnState,
       columns,
       groupByState,
+      loadSetFilterOptions,
       props.groupableColumns,
       setColumnState,
       setFilterState,
       setGroupByState,
+      updateColumnFilterText,
     ],
   )
   const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
@@ -1607,8 +1629,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     headerHeight,
                     index,
                     loadSetFilterOptions,
-                    onFilterChange: (next) =>
-                      setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
+                    onFilterChange: (next) => updateColumnFilterText(column.columnId, next),
                     pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
                     scrollLeft: scrollOffset.left,
                     totalWidth: virtualWindow.totalWidth,
@@ -1904,14 +1925,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 filterText={columnFilterText[popupColumnId] ?? ""}
                 filterLabel={popupLabel}
                 getSetFilterOptions={() => loadSetFilterOptions(popupColumnId)}
-                onFilterChange={(next) =>
-                  setColumnFilterText((prev) => ({ ...prev, [popupColumnId]: next }))
-                }
+                onFilterChange={(next) => updateColumnFilterText(popupColumnId, next)}
                 onClear={() => {
-                  setColumnFilterText((prev) => {
-                    const { [popupColumnId]: _drop, ...rest } = prev
-                    return rest
-                  })
+                  clearColumnFilterText(popupColumnId)
                   setFilterPopupState(null)
                 }}
                 onClose={() => setFilterPopupState(null)}

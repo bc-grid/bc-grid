@@ -369,18 +369,21 @@ export function renderFilterCell<TRow>({
 }
 
 type FilterFocusElement = HTMLInputElement | HTMLSelectElement | HTMLButtonElement
+type FilterKeyDownHandler = (event: KeyboardEvent<HTMLElement>) => void
 
 function DateFilterControl({
   filterId,
   filterLabel,
   filterText,
   onFilterChange,
+  onFilterKeyDown,
   primaryRef,
 }: {
   filterId: string
   filterLabel: string
   filterText: string
   onFilterChange: (next: string) => void
+  onFilterKeyDown: FilterKeyDownHandler
   primaryRef?: { current: FilterFocusElement | null }
 }): ReactNode {
   const input = decodeDateFilterInput(filterText)
@@ -396,7 +399,7 @@ function DateFilterControl({
         className="bc-grid-filter-select"
         value={input.op}
         onChange={(event) => update({ op: event.currentTarget.value as DateFilterOperator })}
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={onFilterKeyDown}
       >
         <option value="is">Is</option>
         <option value="before">Before</option>
@@ -413,7 +416,7 @@ function DateFilterControl({
         type="date"
         value={input.value}
         onChange={(event) => update({ value: event.currentTarget.value })}
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={onFilterKeyDown}
       />
       {input.op === "between" ? (
         <input
@@ -422,7 +425,7 @@ function DateFilterControl({
           type="date"
           value={input.valueTo ?? ""}
           onChange={(event) => update({ valueTo: event.currentTarget.value })}
-          onKeyDown={(event) => event.stopPropagation()}
+          onKeyDown={onFilterKeyDown}
         />
       ) : null}
     </div>
@@ -435,6 +438,7 @@ function SetFilterControl({
   filterText,
   getSetFilterOptions,
   onFilterChange,
+  onFilterKeyDown,
   primaryRef,
 }: {
   filterId: string
@@ -442,6 +446,7 @@ function SetFilterControl({
   filterText: string
   getSetFilterOptions?: (() => readonly SetFilterOption[]) | undefined
   onFilterChange: (next: string) => void
+  onFilterKeyDown: FilterKeyDownHandler
   primaryRef?: { current: FilterFocusElement | null }
 }): ReactNode {
   const input = decodeSetFilterInput(filterText)
@@ -529,7 +534,7 @@ function SetFilterControl({
         onChange={(event) =>
           commit({ op: event.currentTarget.value as SetFilterOperator, values: input.values })
         }
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={onFilterKeyDown}
       >
         <option value="in">In</option>
         <option value="not-in">Not in</option>
@@ -555,8 +560,12 @@ function SetFilterControl({
           }
         }}
         onKeyDown={(event) => {
-          event.stopPropagation()
-          if (event.key === "Escape") setOpen(false)
+          if (event.key === "Escape" && open) {
+            event.stopPropagation()
+            setOpen(false)
+            return
+          }
+          onFilterKeyDown(event)
           if (event.key === "ArrowDown" && !open) {
             event.preventDefault()
             openMenu(event.currentTarget)
@@ -598,7 +607,7 @@ function SetFilterControl({
                     type="checkbox"
                     checked={checked}
                     onChange={() => toggleValue(option.value)}
-                    onKeyDown={(event) => event.stopPropagation()}
+                    onKeyDown={onFilterKeyDown}
                   />
                   <span>{option.label}</span>
                 </label>
@@ -610,7 +619,7 @@ function SetFilterControl({
               type="button"
               className="bc-grid-filter-set-clear"
               onClick={() => commit({ op, values: [] })}
-              onKeyDown={(event) => event.stopPropagation()}
+              onKeyDown={onFilterKeyDown}
             >
               Clear selection
             </button>
@@ -672,6 +681,7 @@ export function FilterEditorBody({
   filterLabel,
   getSetFilterOptions,
   onFilterChange,
+  allowEscapeKeyPropagation = false,
   autoFocus,
 }: {
   filterType: BcColumnFilter["type"]
@@ -680,9 +690,15 @@ export function FilterEditorBody({
   filterLabel: string
   getSetFilterOptions?: (() => readonly SetFilterOption[]) | undefined
   onFilterChange: (next: string) => void
+  allowEscapeKeyPropagation?: boolean
   autoFocus?: boolean
 }): ReactNode {
   const focusRef = useRef<FilterFocusElement | null>(null)
+  const onFilterKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (allowEscapeKeyPropagation && event.key === "Escape") return
+    event.stopPropagation()
+  }
+
   useLayoutEffect(() => {
     if (autoFocus) focusRef.current?.focus()
   }, [autoFocus])
@@ -697,7 +713,7 @@ export function FilterEditorBody({
         className="bc-grid-filter-select"
         value={filterText}
         onChange={(event) => onFilterChange(event.currentTarget.value)}
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={onFilterKeyDown}
         id={filterId}
       >
         <option value="">Any</option>
@@ -713,6 +729,7 @@ export function FilterEditorBody({
         filterLabel={filterLabel}
         filterText={filterText}
         onFilterChange={onFilterChange}
+        onFilterKeyDown={onFilterKeyDown}
         primaryRef={focusRef}
       />
     )
@@ -724,6 +741,7 @@ export function FilterEditorBody({
         filterLabel={filterLabel}
         filterText={filterText}
         onFilterChange={onFilterChange}
+        onFilterKeyDown={onFilterKeyDown}
         primaryRef={focusRef}
       />
     )
@@ -735,6 +753,7 @@ export function FilterEditorBody({
         filterLabel={filterLabel}
         filterText={filterText}
         onFilterChange={onFilterChange}
+        onFilterKeyDown={onFilterKeyDown}
         primaryRef={focusRef}
       />
     )
@@ -758,6 +777,7 @@ export function FilterEditorBody({
         filterText={filterText}
         getSetFilterOptions={getSetFilterOptions}
         onFilterChange={onFilterChange}
+        onFilterKeyDown={onFilterKeyDown}
         primaryRef={focusRef}
       />
     )
@@ -772,7 +792,7 @@ export function FilterEditorBody({
       type="text"
       value={filterText}
       onChange={(event) => onFilterChange(event.currentTarget.value)}
-      onKeyDown={(event) => event.stopPropagation()}
+      onKeyDown={onFilterKeyDown}
       id={filterId}
       placeholder="Filter"
     />
@@ -907,12 +927,14 @@ function NumberFilterControl({
   filterLabel,
   filterText,
   onFilterChange,
+  onFilterKeyDown,
   primaryRef,
 }: {
   filterId: string
   filterLabel: string
   filterText: string
   onFilterChange: (next: string) => void
+  onFilterKeyDown: FilterKeyDownHandler
   primaryRef?: { current: FilterFocusElement | null }
 }): ReactNode {
   const input = decodeNumberFilterInput(filterText)
@@ -928,7 +950,7 @@ function NumberFilterControl({
         className="bc-grid-filter-select"
         value={input.op}
         onChange={(event) => update({ op: event.currentTarget.value as NumberFilterOperator })}
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={onFilterKeyDown}
       >
         <option value="=">=</option>
         <option value="!=">!=</option>
@@ -949,7 +971,7 @@ function NumberFilterControl({
         inputMode="decimal"
         value={input.value}
         onChange={(event) => update({ value: event.currentTarget.value })}
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={onFilterKeyDown}
         placeholder={input.op === "between" ? "Min" : "Value"}
       />
       {input.op === "between" ? (
@@ -960,7 +982,7 @@ function NumberFilterControl({
           inputMode="decimal"
           value={input.valueTo ?? ""}
           onChange={(event) => update({ valueTo: event.currentTarget.value })}
-          onKeyDown={(event) => event.stopPropagation()}
+          onKeyDown={onFilterKeyDown}
           placeholder="Max"
         />
       ) : null}
@@ -979,12 +1001,14 @@ function NumberRangeFilterControl({
   filterLabel,
   filterText,
   onFilterChange,
+  onFilterKeyDown,
   primaryRef,
 }: {
   filterId: string
   filterLabel: string
   filterText: string
   onFilterChange: (next: string) => void
+  onFilterKeyDown: FilterKeyDownHandler
   primaryRef?: { current: FilterFocusElement | null }
 }): ReactNode {
   const input = decodeNumberRangeFilterInput(filterText)
@@ -1006,7 +1030,7 @@ function NumberRangeFilterControl({
         inputMode="decimal"
         value={input.value}
         onChange={(event) => update({ value: event.currentTarget.value })}
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={onFilterKeyDown}
         placeholder="Min"
       />
       <span aria-hidden="true" className="bc-grid-filter-number-range-separator">
@@ -1019,7 +1043,7 @@ function NumberRangeFilterControl({
         inputMode="decimal"
         value={input.valueTo}
         onChange={(event) => update({ valueTo: event.currentTarget.value })}
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={onFilterKeyDown}
         placeholder="Max"
       />
     </div>

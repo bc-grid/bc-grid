@@ -1,0 +1,89 @@
+import { describe, expect, test } from "bun:test"
+import {
+  BcFiltersToolPanel,
+  activeFilterToolPanelItems,
+  buildFilterToolPanelItems,
+  isFilterToolPanelDraftActive,
+} from "../src/filterToolPanel"
+import { resolveSidebarPanels } from "../src/sidebar"
+import type { BcReactGridColumn, BcSidebarContext } from "../src/types"
+
+interface Row {
+  account: string
+  approved: boolean
+  balance: number
+  notes: string
+  postedOn: string
+}
+
+const columns: readonly BcReactGridColumn<Row>[] = [
+  { field: "account", header: "Account" },
+  { field: "balance", header: "Balance", filter: { type: "number" } },
+  { columnId: "postedOn", field: "postedOn", header: "Posted", filter: { type: "date" } },
+  { field: "approved", header: "Approved", filter: { type: "boolean" } },
+  { field: "notes", header: "Notes", filter: false },
+]
+
+describe("buildFilterToolPanelItems", () => {
+  test("builds filterable panel items from columns and draft text", () => {
+    const items = buildFilterToolPanelItems(columns, {
+      account: "cash",
+      approved: "",
+    })
+
+    expect(items.map((item) => item.columnId)).toEqual([
+      "account",
+      "balance",
+      "postedOn",
+      "approved",
+    ])
+    expect(items.find((item) => item.columnId === "account")).toMatchObject({
+      active: true,
+      filterText: "cash",
+      label: "Account",
+      type: "text",
+    })
+    expect(items.find((item) => item.columnId === "balance")).toMatchObject({
+      active: false,
+      label: "Balance",
+      type: "number",
+    })
+    expect(items.find((item) => item.columnId === "approved")).toMatchObject({
+      type: "boolean",
+    })
+  })
+
+  test("uses explicit draft ids to keep newly added empty filters visible", () => {
+    const items = buildFilterToolPanelItems(columns, { account: "cash" })
+
+    expect(activeFilterToolPanelItems(items, ["balance"]).map((item) => item.columnId)).toEqual([
+      "account",
+      "balance",
+    ])
+    expect(isFilterToolPanelDraftActive("  ")).toBe(false)
+    expect(isFilterToolPanelDraftActive("  settled  ")).toBe(true)
+  })
+})
+
+describe("filters sidebar slot", () => {
+  test("resolves the built-in filters panel to the filters tool panel", () => {
+    const [panel] = resolveSidebarPanels<Row>(["filters"])
+    const context: BcSidebarContext<Row> = {
+      api: {} as BcSidebarContext<Row>["api"],
+      clearColumnFilterText: () => {},
+      columnFilterText: {},
+      columns,
+      columnState: [],
+      filterState: null,
+      groupableColumns: [],
+      groupBy: [],
+      setColumnFilterText: () => {},
+      setColumnState: () => {},
+      setFilterState: () => {},
+      setGroupBy: () => {},
+    }
+
+    expect(panel?.id).toBe("filters")
+    expect((panel?.render(context) as { type?: unknown }).type).toBe(BcFiltersToolPanel)
+  })
+})
