@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test"
 import type { ColumnId } from "@bc-grid/core"
 import {
   buildGridFilter,
+  decodeDateRangeFilterInput,
   decodeNumberRangeFilterInput,
   encodeDateFilterInput,
+  encodeDateRangeFilterInput,
   encodeNumberFilterInput,
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
@@ -202,6 +204,73 @@ describe("buildGridFilter", () => {
     ).toBeNull()
   })
 
+  test("date-range inputs produce a between ServerColumnFilter with normalised from/to", () => {
+    expect(
+      buildGridFilter(
+        {
+          lastInvoice: encodeDateRangeFilterInput({
+            value: "2026-03-31",
+            valueTo: "2026-03-01",
+          }),
+        },
+        { lastInvoice: "date-range" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "lastInvoice",
+      type: "date-range",
+      op: "between",
+      values: ["2026-03-01", "2026-03-31"],
+    })
+  })
+
+  test("date-range with both bounds equal narrows to a single day", () => {
+    expect(
+      buildGridFilter(
+        {
+          lastInvoice: encodeDateRangeFilterInput({
+            value: "2026-03-15",
+            valueTo: "2026-03-15",
+          }),
+        },
+        { lastInvoice: "date-range" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "lastInvoice",
+      type: "date-range",
+      op: "between",
+      values: ["2026-03-15", "2026-03-15"],
+    })
+  })
+
+  test("incomplete date-range inputs do not activate a filter", () => {
+    expect(
+      buildGridFilter(
+        {
+          lastInvoice: encodeDateRangeFilterInput({ value: "2026-03-01", valueTo: "" }),
+        },
+        { lastInvoice: "date-range" },
+      ),
+    ).toBeNull()
+    expect(
+      buildGridFilter(
+        {
+          lastInvoice: encodeDateRangeFilterInput({ value: "", valueTo: "2026-03-31" }),
+        },
+        { lastInvoice: "date-range" },
+      ),
+    ).toBeNull()
+    expect(
+      buildGridFilter(
+        {
+          lastInvoice: encodeDateRangeFilterInput({ value: "not-a-date", valueTo: "2026-03-31" }),
+        },
+        { lastInvoice: "date-range" },
+      ),
+    ).toBeNull()
+  })
+
   test("set inputs produce set ServerColumnFilter objects", () => {
     expect(
       buildGridFilter(
@@ -287,6 +356,30 @@ describe("encodeNumberRangeFilterInput / decodeNumberRangeFilterInput", () => {
 
   test("normalises non-string fields to empty strings", () => {
     expect(decodeNumberRangeFilterInput(JSON.stringify({ value: 123, valueTo: null }))).toEqual({
+      value: "",
+      valueTo: "",
+    })
+  })
+})
+
+describe("encodeDateRangeFilterInput / decodeDateRangeFilterInput", () => {
+  test("round-trips empty input", () => {
+    expect(
+      decodeDateRangeFilterInput(encodeDateRangeFilterInput({ value: "", valueTo: "" })),
+    ).toEqual({ value: "", valueTo: "" })
+  })
+
+  test("round-trips populated input", () => {
+    const input = { value: "2026-03-01", valueTo: "2026-03-31" }
+    expect(decodeDateRangeFilterInput(encodeDateRangeFilterInput(input))).toEqual(input)
+  })
+
+  test("falls back to empty input on malformed JSON", () => {
+    expect(decodeDateRangeFilterInput("not json")).toEqual({ value: "", valueTo: "" })
+  })
+
+  test("normalises non-string fields to empty strings", () => {
+    expect(decodeDateRangeFilterInput(JSON.stringify({ value: 123, valueTo: null }))).toEqual({
       value: "",
       valueTo: "",
     })
@@ -398,6 +491,51 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(beforeFilter, lookup({ lastInvoice: "Mar 1, 2026" }))).toBe(false)
     expect(matchesGridFilter(betweenFilter, lookup({ lastInvoice: "Mar 31, 2026" }))).toBe(true)
     expect(matchesGridFilter(betweenFilter, lookup({ lastInvoice: "Apr 1, 2026" }))).toBe(false)
+  })
+
+  test("date-range filters apply inclusive between semantics", () => {
+    const filter = buildGridFilter(
+      {
+        lastInvoice: encodeDateRangeFilterInput({
+          value: "2026-03-01",
+          valueTo: "2026-03-31",
+        }),
+      },
+      { lastInvoice: "date-range" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "Mar 1, 2026" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "Mar 15, 2026" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "Mar 31, 2026" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "Feb 28, 2026" }))).toBe(false)
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "Apr 1, 2026" }))).toBe(false)
+  })
+
+  test("date-range filters prefer raw ISO values over locale-formatted display values", () => {
+    const filter = buildGridFilter(
+      {
+        lastInvoice: encodeDateRangeFilterInput({
+          value: "2026-03-01",
+          valueTo: "2026-03-31",
+        }),
+      },
+      { lastInvoice: "date-range" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "31.03.2026",
+        rawValue: "2026-03-31T00:00:00.000Z",
+      })),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "01.03.2026",
+        rawValue: "2026-03-01T00:00:00.000Z",
+      })),
+    ).toBe(true)
   })
 
   test("date filters prefer raw values over locale-formatted display values", () => {
