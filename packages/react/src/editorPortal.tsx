@@ -10,7 +10,7 @@ import {
   useRef,
 } from "react"
 import type { MoveOnSettle } from "./editingStateMachine"
-import type { ResolvedColumn, RowEntry } from "./gridInternals"
+import type { DataRowEntry, ResolvedColumn } from "./gridInternals"
 import type { BcCellEditor } from "./types"
 import type { EditingController } from "./useEditingController"
 
@@ -19,7 +19,7 @@ interface EditorPortalProps<TRow> {
   /** Resolved cell position; null when not editing. */
   activeCell: BcCellPosition | null
   /** Current row entries (for resolving the row from an active cell). */
-  rowEntries: readonly RowEntry<TRow>[]
+  rowEntries: readonly DataRowEntry<TRow>[]
   /** Resolved columns (for resolving the column from a columnId). */
   resolvedColumns: readonly ResolvedColumn<TRow>[]
   /** Pixel position of the cell being edited. */
@@ -112,7 +112,7 @@ interface EditorMountProps<TRow> {
   cell: BcCellPosition
   cellRect: { top: number; left: number; width: number; height: number }
   column: ResolvedColumn<TRow>
-  rowEntry: RowEntry<TRow>
+  rowEntry: DataRowEntry<TRow>
   editor: BcCellEditor<TRow>
   virtualizer?: Virtualizer
   rowIndex?: number

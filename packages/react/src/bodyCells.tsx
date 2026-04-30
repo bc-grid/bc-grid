@@ -1,8 +1,9 @@
 import type { BcCellPosition, ColumnId, RowId } from "@bc-grid/core"
 import type { CSSProperties, ReactNode } from "react"
 import {
+  type DataRowEntry,
+  type GroupRowEntry,
   type ResolvedColumn,
-  type RowEntry,
   cellDomId,
   cellStyle,
   classNames,
@@ -23,7 +24,7 @@ interface RenderBodyCellParams<TRow> {
   activeCell: BcCellPosition | null
   column: ResolvedColumn<TRow> | undefined
   domBaseId: string
-  entry: RowEntry<TRow>
+  entry: DataRowEntry<TRow>
   locale: string | undefined
   onCellFocus: ((position: BcCellPosition) => void) | undefined
   pinnedEdge: "left" | "right" | null
@@ -66,6 +67,17 @@ interface RenderBodyCellParams<TRow> {
   ) => { pending: boolean; error?: string } | undefined
 }
 
+interface RenderGroupRowCellParams<TRow> {
+  activeCell: BcCellPosition | null
+  colCount: number
+  column: ResolvedColumn<TRow> | undefined
+  domBaseId: string
+  entry: GroupRowEntry
+  onToggle: (entry: GroupRowEntry) => void
+  totalWidth: number
+  virtualRow: { height: number }
+}
+
 export function renderBodyCell<TRow>({
   activeCell,
   column,
@@ -102,6 +114,7 @@ export function renderBodyCell<TRow>({
     selected,
     disabled,
     expanded,
+    ...(entry.level != null ? { level: entry.level } : {}),
   }
 
   // Editing state per `editing-rfc §Dirty Tracking`. Order of precedence:
@@ -220,6 +233,82 @@ export function renderBodyCell<TRow>({
       </div>
     </BcGridTooltip>
   )
+}
+
+export function renderGroupRowCell<TRow>({
+  activeCell,
+  colCount,
+  column,
+  domBaseId,
+  entry,
+  onToggle,
+  totalWidth,
+  virtualRow,
+}: RenderGroupRowCellParams<TRow>): ReactNode {
+  if (!column) return null
+
+  const label = entry.label
+  const cellId = cellDomId(domBaseId, entry.rowId, column.columnId)
+  const active = activeCell?.rowId === entry.rowId
+
+  return (
+    <div
+      id={cellId}
+      className={classNames(
+        "bc-grid-cell",
+        "bc-grid-group-cell",
+        active ? "bc-grid-cell-active" : undefined,
+      )}
+      role="rowheader"
+      aria-colindex={1}
+      aria-colspan={Math.max(1, colCount)}
+      data-column-id={column.columnId}
+      data-bc-grid-active-cell={active || undefined}
+      style={groupCellStyle(entry.level, virtualRow.height, totalWidth)}
+    >
+      <button
+        type="button"
+        className="bc-grid-group-toggle"
+        aria-expanded={entry.expanded}
+        aria-label={entry.expanded ? `Collapse ${label}` : `Expand ${label}`}
+        onClick={(event) => {
+          event.stopPropagation()
+          onToggle(entry)
+        }}
+        onKeyDown={stopGridKeyboardNav}
+      >
+        <span aria-hidden="true" className="bc-grid-group-toggle-icon">
+          &gt;
+        </span>
+      </button>
+      <span className="bc-grid-group-label">{label}</span>
+      <span className="bc-grid-group-count">({entry.childCount})</span>
+    </div>
+  )
+}
+
+function groupCellStyle(level: number, height: number, width: number): CSSProperties {
+  return {
+    alignItems: "center",
+    display: "flex",
+    gap: "0.375rem",
+    height,
+    left: 0,
+    minWidth: 0,
+    overflow: "hidden",
+    paddingInline: "var(--bc-grid-cell-padding-x, 12px)",
+    paddingLeft: `calc(var(--bc-grid-cell-padding-x, 12px) + ${(level - 1) * 1.25}rem)`,
+    position: "absolute",
+    textOverflow: "ellipsis",
+    top: 0,
+    whiteSpace: "nowrap",
+    width: Math.max(width, 1),
+    zIndex: 1,
+  }
+}
+
+function stopGridKeyboardNav(event: { key: string; stopPropagation: () => void }): void {
+  if (event.key === " " || event.key === "Enter") event.stopPropagation()
 }
 
 const visuallyHiddenCellErrorStyle: CSSProperties = {
