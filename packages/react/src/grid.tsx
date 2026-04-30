@@ -1,5 +1,6 @@
 import type {
   BcCellPosition,
+  BcColumnFilter,
   BcColumnStateEntry,
   BcGridApi,
   BcGridFilter,
@@ -24,7 +25,12 @@ import {
 } from "react"
 import { renderBodyCell } from "./bodyCells"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
-import { type ColumnFilterText, buildGridFilter, matchesGridFilter } from "./filter"
+import {
+  type ColumnFilterText,
+  type ColumnFilterTypeByColumnId,
+  buildGridFilter,
+  matchesGridFilter,
+} from "./filter"
 import {
   DEFAULT_BODY_HEIGHT,
   DEFAULT_COL_WIDTH,
@@ -207,7 +213,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
   usePersistedGridStateWriter(props.gridId, persistenceState)
 
-  const activeFilter = useMemo(() => buildGridFilter(columnFilterText), [columnFilterText])
+  const columnFilterTypes = useMemo<ColumnFilterTypeByColumnId>(() => {
+    const next: Record<ColumnId, BcColumnFilter["type"]> = {}
+    for (const column of consumerResolvedColumns) {
+      const filter = column.source.filter
+      if (filter) next[column.columnId] = filter.type
+    }
+    return next
+  }, [consumerResolvedColumns])
+
+  const activeFilter = useMemo(
+    () => buildGridFilter(columnFilterText, columnFilterTypes),
+    [columnFilterText, columnFilterTypes],
+  )
 
   const rowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
     let visibleRows: TRow[] =

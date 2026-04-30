@@ -77,7 +77,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[ready]` **number-filter-ui** — operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `between`. Inline UI per the existing text-filter pattern. Q2-reserved → pulled forward. **Effort**: S.
 - `[ready]` **date-filter-ui** — operators: `is`, `before`, `after`, `between`. Use shadcn date picker primitive. Q2-reserved → pulled forward. **Effort**: S.
 - `[blocked: depends on filter-registry-rfc]` **set-filter-ui** — multi-select dropdown of distinct values from the column. Lazy-loaded (computed on first open from current row model). Q2-reserved → pulled forward. **Effort**: M.
-- `[ready]` **boolean-filter-ui** — three-state: any / yes / no. Q2-reserved → pulled forward. **Effort**: XS.
+- `[review: x1 #91]` **boolean-filter-ui** — three-state: any / yes / no. Q2-reserved → pulled forward. **Effort**: XS.
 
 **Phase 5.5 health metrics (not blocking gates beyond `grid-tsx-file-split`):** `grid.tsx` split → unblocks parallel Phase 6 React-layer work. Smoke perf + bundle size CI → keeps quality bars enforced on every Phase 6 PR. Q1 vertical-slice gate **already cleared as of PR #42** (AR Customers ledger in `apps/examples`); a real bc-next integration cutover is a separate post-1.0 follow-up. Tooltip / persistence / filter-UI items are independent and land any time.
 
