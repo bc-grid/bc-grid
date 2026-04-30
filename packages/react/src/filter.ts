@@ -32,6 +32,17 @@ export interface NumberFilterInput {
   valueTo?: string
 }
 
+/**
+ * Two-input min/max filter for `BcColumnFilter.type === "number-range"`.
+ * Convenience over `number` `between` per `filter-registry-rfc §number-range`:
+ * always emits `op: "between"` so the predicate path collapses into the
+ * existing `matchesNumberFilter` between branch.
+ */
+export interface NumberRangeFilterInput {
+  value: string
+  valueTo: string
+}
+
 export interface SetFilterInput {
   op: SetFilterOperator
   values: readonly string[]
@@ -51,6 +62,9 @@ export type FilterCellValue =
 
 type DateColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "date" }
 type NumberColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "number" }
+type NumberRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
+  type: "number-range"
+}
 type SetColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "set" }
 
 /**
@@ -76,6 +90,12 @@ export function buildGridFilter(
     }
     if (filterType === "number") {
       const parsed = parseNumberFilterInput(value)
+      if (!parsed) continue
+      filters.push({ ...parsed, columnId })
+      continue
+    }
+    if (filterType === "number-range") {
+      const parsed = parseNumberRangeFilterInput(value)
       if (!parsed) continue
       filters.push({ ...parsed, columnId })
       continue
@@ -112,6 +132,11 @@ function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFil
     return actual != null && actual === Boolean(filter.value)
   }
   if (filter.type === "number") {
+    return matchesNumberFilter(value.formattedValue, filter)
+  }
+  if (filter.type === "number-range") {
+    // The number-range filter always emits op="between"; the predicate
+    // path is identical to `number`'s between branch.
     return matchesNumberFilter(value.formattedValue, filter)
   }
   if (filter.type === "date") {
@@ -165,6 +190,22 @@ export function encodeNumberFilterInput(input: NumberFilterInput): string {
 }
 
 export const encodeDateFilterInput = encodeNumberFilterInput as (input: DateFilterInput) => string
+
+export function encodeNumberRangeFilterInput(input: NumberRangeFilterInput): string {
+  return JSON.stringify(input)
+}
+
+export function decodeNumberRangeFilterInput(raw: string): NumberRangeFilterInput {
+  try {
+    const parsed = JSON.parse(raw) as Partial<NumberRangeFilterInput>
+    return {
+      value: typeof parsed.value === "string" ? parsed.value : "",
+      valueTo: typeof parsed.valueTo === "string" ? parsed.valueTo : "",
+    }
+  } catch {
+    return { value: "", valueTo: "" }
+  }
+}
 
 export function encodeSetFilterInput(input: SetFilterInput): string {
   return JSON.stringify(input)
@@ -246,6 +287,29 @@ function parseNumberFilterInput(raw: string): NumberColumnFilterDraft | null {
     type: "number",
     op: input.op,
     value,
+  }
+}
+
+/**
+ * Parse a `number-range` filter draft into the canonical `between`
+ * `ServerColumnFilter` shape. Both inputs must be finite numbers; if
+ * either is missing or unparseable, the filter is dropped (treated as
+ * "not yet active") so partial typing doesn't narrow the row set.
+ * Swapped min/max are normalised so consumers can type either edge
+ * first.
+ */
+function parseNumberRangeFilterInput(raw: string): NumberRangeColumnFilterDraft | null {
+  const input = decodeNumberRangeFilterInput(raw)
+  const lo = parseFilterNumber(input.value)
+  const hi = parseFilterNumber(input.valueTo)
+  if (lo == null || hi == null) return null
+  const min = Math.min(lo, hi)
+  const max = Math.max(lo, hi)
+  return {
+    kind: "column",
+    type: "number-range",
+    op: "between",
+    values: [min, max],
   }
 }
 

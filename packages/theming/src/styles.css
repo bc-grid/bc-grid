@@ -279,6 +279,7 @@
 }
 
 .bc-grid-filter-number,
+.bc-grid-filter-number-range,
 .bc-grid-filter-date,
 .bc-grid-filter-set {
   display: flex;
@@ -290,6 +291,7 @@
 
 .bc-grid-filter-number > .bc-grid-filter-input,
 .bc-grid-filter-number > .bc-grid-filter-select,
+.bc-grid-filter-number-range > .bc-grid-filter-input,
 .bc-grid-filter-date > .bc-grid-filter-input,
 .bc-grid-filter-date > .bc-grid-filter-select,
 .bc-grid-filter-set > .bc-grid-filter-select,
@@ -314,10 +316,17 @@
 }
 
 .bc-grid-filter-number > .bc-grid-filter-input,
+.bc-grid-filter-number-range > .bc-grid-filter-input,
 .bc-grid-filter-date > .bc-grid-filter-input,
 .bc-grid-filter-set > .bc-grid-filter-set-button {
   min-width: 0;
   flex: 1 1 0;
+}
+
+.bc-grid-filter-number-range-separator {
+  flex: 0 0 auto;
+  color: var(--bc-grid-muted-fg);
+  font-variant-numeric: tabular-nums;
 }
 
 .bc-grid-filter-input:focus-visible,
