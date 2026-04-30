@@ -223,6 +223,10 @@ export interface BcGridStateProps {
   defaultRangeSelection?: BcRangeSelection
   onRangeSelectionChange?: (next: BcRangeSelection, prev: BcRangeSelection) => void
 
+  pivotState?: BcPivotState
+  defaultPivotState?: BcPivotState
+  onPivotStateChange?: (next: BcPivotState, prev: BcPivotState) => void
+
   expansion?: ReadonlySet<RowId>
   defaultExpansion?: ReadonlySet<RowId>
   onExpansionChange?: (next: ReadonlySet<RowId>, prev: ReadonlySet<RowId>) => void
@@ -269,12 +273,14 @@ export interface BcGridApi<TRow = unknown> {
   getActiveCell(): BcCellPosition | null
   getSelection(): BcSelection
   getRangeSelection(): BcRangeSelection
+  getPivotState(): BcPivotState
   getColumnState(): BcColumnStateEntry[]
 
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter): void
   setRangeSelection(selection: BcRangeSelection): void
+  setPivotState(state: BcPivotState): void
   copyRange(range?: BcRange): Promise<void>
   clearRangeSelection(): void
   expandAll(): void

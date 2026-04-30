@@ -1,13 +1,16 @@
+import { pivot } from "@bc-grid/aggregations"
 import { flash } from "@bc-grid/animations"
-import { emptyBcRangeSelection, rangeClear } from "@bc-grid/core"
+import { emptyBcPivotState, emptyBcRangeSelection, rangeClear } from "@bc-grid/core"
 import type {
   BcCellPosition,
   BcColumnFilter,
   BcColumnStateEntry,
+  BcGridColumn as BcCoreGridColumn,
   BcGridApi,
   BcGridFilter,
   BcGridSort,
   BcPaginationState,
+  BcPivotState,
   BcRange,
   BcRangeSelection,
   BcSelection,
@@ -106,6 +109,7 @@ import {
   usePersistedGridStateWriter,
   useUrlPersistedGridStateWriter,
 } from "./persistence"
+import { BcGridPivotView, buildPivotViewModel } from "./pivotGrid"
 import {
   buildRangeClipboard,
   normaliseClipboardPayload,
@@ -242,6 +246,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.rangeSelection ?? emptyBcRangeSelection,
     props.defaultRangeSelection ?? emptyBcRangeSelection,
     props.onRangeSelectionChange,
+  )
+  const [pivotState, setPivotState] = useControlledState<BcPivotState>(
+    hasProp(props, "pivotState"),
+    props.pivotState ?? emptyBcPivotState,
+    props.defaultPivotState ?? emptyBcPivotState,
+    props.onPivotStateChange,
   )
   const emptyExpansion = useMemo(() => new Set<RowId>(), [])
   const expansionControlled = hasProp(props, "expansion")
@@ -579,6 +589,27 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     selection: selectionState,
   })
   const hasAggregationFooter = aggregationResults.length > 0
+  const pivotMode = props.pivotMode === true
+  const pivotRows = useMemo(() => {
+    if (!pivotMode) return []
+    if (props.pivotScope === "all") return data
+    return allRowEntries.map((entry) => entry.row)
+  }, [allRowEntries, data, pivotMode, props.pivotScope])
+  const pivotModel = useMemo(() => {
+    if (!pivotMode) return null
+    const pivoted = pivot(
+      pivotRows,
+      columns as readonly BcCoreGridColumn<TRow>[],
+      pivotState,
+      locale ? { locale } : {},
+    )
+    return buildPivotViewModel({
+      columns,
+      locale,
+      pivoted,
+      state: pivotState,
+    })
+  }, [columns, locale, pivotMode, pivotRows, pivotState])
 
   // Whether the inline filter row should render at all. Per
   // `filter-popup-variant`: when every filterable column is variant="popup"
@@ -1033,6 +1064,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       getRangeSelection() {
         return rangeSelectionState
       },
+      getPivotState() {
+        return pivotState
+      },
       getColumnState() {
         return deriveColumnState(resolvedColumns, columnState)
       },
@@ -1047,6 +1081,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       },
       setRangeSelection(next) {
         setRangeSelectionState(next)
+      },
+      setPivotState(next) {
+        setPivotState(next)
       },
       copyRange(range) {
         return copyRangeToClipboard(range, nextApi)
@@ -1074,6 +1111,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     columnState,
     copyRangeToClipboard,
     focusCell,
+    pivotState,
     rangeSelectionState,
     requestRender,
     resolvedColumns,
@@ -1085,6 +1123,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setColumnState,
     setExpansionState,
     setFilterState,
+    setPivotState,
     setRangeSelectionState,
     setSortState,
     virtualizer,
@@ -1195,6 +1234,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const rootHeight = typeof height === "number" ? height : undefined
   const bodyHeight =
     height === "auto" ? Math.min(virtualWindow.totalHeight, DEFAULT_BODY_HEIGHT) : undefined
+  const pivotBodyHeight =
+    pivotMode && pivotModel && height === "auto"
+      ? Math.min(pivotModel.rows.length * defaultRowHeight, DEFAULT_BODY_HEIGHT)
+      : bodyHeight
 
   const handleScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -1501,6 +1544,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       filterState: activeFilter,
       groupableColumns: props.groupableColumns ?? [],
       groupBy: groupByState,
+      pivot: { mode: pivotMode, state: pivotState, setState: setPivotState },
       setColumnState,
       setFilterState,
       setGroupBy: setGroupByState,
@@ -1512,9 +1556,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       columns,
       groupByState,
       props.groupableColumns,
+      pivotMode,
+      pivotState,
       setColumnState,
       setFilterState,
       setGroupByState,
+      setPivotState,
     ],
   )
   const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
@@ -1525,299 +1572,342 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       className={classNames("bc-grid", `bc-grid--${density}`)}
       data-density={density}
       data-bc-grid-react="v0"
+      data-bc-grid-pivot={pivotMode || undefined}
       data-bc-grid-grouped={groupingActive || undefined}
       data-scrolled-left={isScrolledLeft || undefined}
       data-scrolled-right={isScrolledRight || undefined}
-      role={groupingActive ? "treegrid" : "grid"}
+      role={pivotMode || groupingActive ? "treegrid" : "grid"}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-rowcount={
-        rowEntries.length + (hasInlineFilters ? 2 : 1) + (hasAggregationFooter ? 1 : 0)
+        pivotMode && pivotModel
+          ? pivotModel.rows.length + pivotModel.headerRowCount
+          : rowEntries.length + (hasInlineFilters ? 2 : 1) + (hasAggregationFooter ? 1 : 0)
       }
-      aria-colcount={resolvedColumns.length}
-      aria-activedescendant={activeCellId}
+      aria-colcount={pivotMode && pivotModel ? pivotModel.columns.length : resolvedColumns.length}
+      aria-activedescendant={pivotMode ? undefined : activeCellId}
       tabIndex={0}
-      onFocus={handleFocus}
-      onKeyDown={handleKeyDown}
+      onFocus={pivotMode ? undefined : handleFocus}
+      onKeyDown={pivotMode ? undefined : handleKeyDown}
       style={rootStyle(rootHeight)}
     >
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
 
       <div className="bc-grid-main">
         <div className="bc-grid-table">
-          <div className="bc-grid-header-viewport" role="rowgroup" style={headerViewportStyle}>
-            <div
-              className="bc-grid-header"
-              role="row"
-              aria-rowindex={1}
-              style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
-            >
-              {resolvedColumns.map((column, index) =>
-                renderHeaderCell({
-                  column,
-                  domBaseId,
-                  headerHeight,
-                  index,
-                  onColumnMenu: openColumnMenu,
-                  onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
-                  onReorderEnd: endReorder,
-                  onReorderMove: handleReorderPointerMove,
-                  onReorderStart: handleReorderPointerDown,
-                  onResizeEnd: endResize,
-                  onResizeMove: handleResizePointerMove,
-                  onResizeStart: handleResizePointerDown,
-                  onSort: handleHeaderSort,
-                  pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
-                  reorderingColumnId: columnReorderPreview?.sourceColumnId,
-                  scrollLeft: scrollOffset.left,
-                  sortState,
-                  totalWidth: virtualWindow.totalWidth,
-                  viewportWidth: viewport.width,
-                  filterText: columnFilterText[column.columnId] ?? "",
-                  filterPopupOpen: filterPopupState?.columnId === column.columnId,
-                  onOpenFilterPopup: (col, anchor) =>
-                    setFilterPopupState((prev) =>
-                      prev?.columnId === col.columnId ? null : { columnId: col.columnId, anchor },
-                    ),
-                }),
-              )}
-            </div>
-            {columnReorderPreview ? (
-              <div
-                aria-hidden="true"
-                className="bc-grid-column-drop-indicator"
-                style={{
-                  height: headerHeight * 2,
-                  left: columnReorderPreview.indicatorLeft,
-                }}
+          {pivotMode && pivotModel ? (
+            <>
+              <BcGridPivotView
+                model={pivotModel}
+                bodyHeight={pivotBodyHeight}
+                defaultRowHeight={defaultRowHeight}
+                headerHeight={headerHeight}
+                {...(locale !== undefined ? { locale } : {})}
+                {...(onVisibleRowRangeChange !== undefined ? { onVisibleRowRangeChange } : {})}
               />
-            ) : null}
-            {hasInlineFilters ? (
-              <div
-                className="bc-grid-filter-row"
-                role="row"
-                aria-rowindex={2}
-                style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
-              >
-                {resolvedColumns.map((column, index) =>
-                  renderFilterCell({
-                    column,
-                    domBaseId,
-                    filterText: columnFilterText[column.columnId] ?? "",
-                    headerHeight,
-                    index,
-                    loadSetFilterOptions,
-                    onFilterChange: (next) =>
-                      setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
-                    pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
-                    scrollLeft: scrollOffset.left,
-                    totalWidth: virtualWindow.totalWidth,
-                    viewportWidth: viewport.width,
-                  }),
-                )}
-              </div>
-            ) : null}
-          </div>
-
-          <div
-            ref={scrollerRef}
-            className="bc-grid-scroller"
-            role="rowgroup"
-            onScroll={handleScroll}
-            style={scrollerStyle(bodyHeight)}
-          >
-            <div
-              className="bc-grid-canvas"
-              style={canvasStyle(virtualWindow.totalHeight, virtualWindow.totalWidth)}
-            >
-              {virtualWindow.rows.map((virtualRow) => {
-                const entry = rowEntries[virtualRow.index]
-                if (!entry) return null
-                if (!isDataRowEntry(entry)) {
-                  return (
-                    <div
-                      key={entry.rowId}
-                      className={classNames("bc-grid-row", "bc-grid-row-group")}
-                      role="row"
-                      aria-rowindex={virtualRow.index + bodyAriaRowOffset}
-                      aria-level={entry.level}
-                      aria-expanded={entry.expanded}
-                      data-row-id={entry.rowId}
-                      data-row-index={virtualRow.index}
-                      data-bc-grid-row-kind="group"
-                      style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
-                      onClick={() => {
-                        focusGroupRow(entry)
-                        toggleGroupRow(entry)
-                      }}
-                    >
-                      {renderGroupRowCell({
-                        activeCell,
-                        colCount: resolvedColumns.length,
-                        column: resolvedColumns[0],
-                        domBaseId,
-                        entry,
-                        onToggle: (groupEntry) => {
-                          focusGroupRow(groupEntry)
-                          toggleGroupRow(groupEntry)
-                        },
-                        totalWidth: virtualWindow.totalWidth,
-                        virtualRow,
-                      })}
-                    </div>
-                  )
-                }
-                const disabled = isRowDisabled(entry.row)
-                const selected = !disabled && isRowSelected(selectionState, entry.rowId)
-                const expanded = hasDetail && expansionState.has(entry.rowId)
-                const detailHeight = expanded ? getDetailHeight(entry) : 0
-                const cellVirtualRow = expanded
-                  ? { ...virtualRow, height: defaultRowHeight }
-                  : virtualRow
-                return (
+              {loading ? (
+                <div className="bc-grid-overlay" role="status" style={overlayStyle}>
+                  {loadingOverlay ?? messages.loadingLabel}
+                </div>
+              ) : null}
+              {!loading && pivotModel.rows.length === 0 ? (
+                <div className="bc-grid-overlay" role="status" style={overlayStyle}>
+                  {messages.noRowsLabel}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div className="bc-grid-header-viewport" role="rowgroup" style={headerViewportStyle}>
+                <div
+                  className="bc-grid-header"
+                  role="row"
+                  aria-rowindex={1}
+                  style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
+                >
+                  {resolvedColumns.map((column, index) =>
+                    renderHeaderCell({
+                      column,
+                      domBaseId,
+                      headerHeight,
+                      index,
+                      onColumnMenu: openColumnMenu,
+                      onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
+                      onReorderEnd: endReorder,
+                      onReorderMove: handleReorderPointerMove,
+                      onReorderStart: handleReorderPointerDown,
+                      onResizeEnd: endResize,
+                      onResizeMove: handleResizePointerMove,
+                      onResizeStart: handleResizePointerDown,
+                      onSort: handleHeaderSort,
+                      pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
+                      reorderingColumnId: columnReorderPreview?.sourceColumnId,
+                      scrollLeft: scrollOffset.left,
+                      sortState,
+                      totalWidth: virtualWindow.totalWidth,
+                      viewportWidth: viewport.width,
+                      filterText: columnFilterText[column.columnId] ?? "",
+                      filterPopupOpen: filterPopupState?.columnId === column.columnId,
+                      onOpenFilterPopup: (col, anchor) =>
+                        setFilterPopupState((prev) =>
+                          prev?.columnId === col.columnId
+                            ? null
+                            : { columnId: col.columnId, anchor },
+                        ),
+                    }),
+                  )}
+                </div>
+                {columnReorderPreview ? (
                   <div
-                    key={entry.rowId}
-                    className={classNames(
-                      "bc-grid-row",
-                      selected ? "bc-grid-row-selected" : undefined,
-                      disabled ? "bc-grid-row-disabled" : undefined,
-                    )}
+                    aria-hidden="true"
+                    className="bc-grid-column-drop-indicator"
+                    style={{
+                      height: headerHeight * 2,
+                      left: columnReorderPreview.indicatorLeft,
+                    }}
+                  />
+                ) : null}
+                {hasInlineFilters ? (
+                  <div
+                    className="bc-grid-filter-row"
                     role="row"
-                    aria-rowindex={virtualRow.index + bodyAriaRowOffset}
-                    aria-level={groupingActive ? entry.level : undefined}
-                    aria-selected={selected || undefined}
-                    aria-disabled={disabled || undefined}
-                    data-row-id={entry.rowId}
-                    data-row-index={virtualRow.index}
-                    data-bc-grid-row-kind="data"
-                    style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
-                    onClick={(event) => {
-                      // Selection logic. Shift+click → range from anchor; ctrl/
-                      // cmd+click → toggle this row in current selection;
-                      // plain click → select only this row.
-                      if (!disabled) {
-                        if (event.shiftKey && selectionAnchorRef.current) {
-                          setSelectionState(
-                            selectRange(
-                              visibleSelectableRowIds,
-                              selectionAnchorRef.current,
-                              entry.rowId,
-                            ),
-                          )
-                        } else if (event.ctrlKey || event.metaKey) {
-                          setSelectionState(toggleRow(selectionState, entry.rowId))
-                          selectionAnchorRef.current = entry.rowId
-                        } else {
-                          setSelectionState(selectOnly(entry.rowId))
-                          selectionAnchorRef.current = entry.rowId
-                        }
-                      }
-                      onRowClick?.(entry.row, event)
-                    }}
-                    onDoubleClick={(event) => {
-                      // Activate edit on the cell at the click point if the
-                      // column is editable. Falls through to onRowDoubleClick
-                      // either way.
-                      const target = (event.target as HTMLElement).closest<HTMLElement>(
-                        "[data-column-id]",
-                      )
-                      const columnId = target?.dataset.columnId
-                      if (!disabled && columnId) {
-                        const column = resolvedColumns.find((c) => c.columnId === columnId)
-                        if (column && isCellEditable(column, entry.row)) {
-                          const editor = (column.source.cellEditor ?? defaultTextEditor) as never
-                          editController.start(
-                            { rowId: entry.rowId, columnId: column.columnId },
-                            "doubleclick",
-                            {
-                              pointerHint: { x: event.clientX, y: event.clientY },
-                              editor,
-                              row: entry.row,
-                              rowId: entry.rowId,
-                            },
-                          )
-                        }
-                      }
-                      onRowDoubleClick?.(entry.row, event)
-                    }}
+                    aria-rowindex={2}
+                    style={headerRowStyle(
+                      virtualWindow.totalWidth,
+                      headerHeight,
+                      scrollOffset.left,
+                    )}
                   >
-                    {virtualWindow.cols.map((virtualCol) =>
-                      renderBodyCell({
-                        activeCell,
-                        column: resolvedColumns[virtualCol.index],
+                    {resolvedColumns.map((column, index) =>
+                      renderFilterCell({
+                        column,
                         domBaseId,
-                        entry,
-                        locale,
-                        onCellFocus,
-                        pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
-                        searchText,
+                        filterText: columnFilterText[column.columnId] ?? "",
+                        headerHeight,
+                        index,
+                        loadSetFilterOptions,
+                        onFilterChange: (next) =>
+                          setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
+                        pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
                         scrollLeft: scrollOffset.left,
-                        setActiveCell,
                         totalWidth: virtualWindow.totalWidth,
                         viewportWidth: viewport.width,
-                        virtualCol,
-                        virtualRow: cellVirtualRow,
-                        selected,
-                        disabled,
-                        expanded,
-                        editingCell,
-                        hasOverlayValue: editController.hasOverlayValue,
-                        getOverlayValue: editController.getOverlayValue,
-                        getCellEditEntry: editController.getCellEditEntry,
-                        getRowEditState: editController.getRowEditState,
                       }),
                     )}
-                    {expanded && renderDetailPanel ? (
+                  </div>
+                ) : null}
+              </div>
+
+              <div
+                ref={scrollerRef}
+                className="bc-grid-scroller"
+                role="rowgroup"
+                onScroll={handleScroll}
+                style={scrollerStyle(bodyHeight)}
+              >
+                <div
+                  className="bc-grid-canvas"
+                  style={canvasStyle(virtualWindow.totalHeight, virtualWindow.totalWidth)}
+                >
+                  {virtualWindow.rows.map((virtualRow) => {
+                    const entry = rowEntries[virtualRow.index]
+                    if (!entry) return null
+                    if (!isDataRowEntry(entry)) {
+                      return (
+                        <div
+                          key={entry.rowId}
+                          className={classNames("bc-grid-row", "bc-grid-row-group")}
+                          role="row"
+                          aria-rowindex={virtualRow.index + bodyAriaRowOffset}
+                          aria-level={entry.level}
+                          aria-expanded={entry.expanded}
+                          data-row-id={entry.rowId}
+                          data-row-index={virtualRow.index}
+                          data-bc-grid-row-kind="group"
+                          style={rowStyle(
+                            virtualRow.top,
+                            virtualRow.height,
+                            virtualWindow.totalWidth,
+                          )}
+                          onClick={() => {
+                            focusGroupRow(entry)
+                            toggleGroupRow(entry)
+                          }}
+                        >
+                          {renderGroupRowCell({
+                            activeCell,
+                            colCount: resolvedColumns.length,
+                            column: resolvedColumns[0],
+                            domBaseId,
+                            entry,
+                            onToggle: (groupEntry) => {
+                              focusGroupRow(groupEntry)
+                              toggleGroupRow(groupEntry)
+                            },
+                            totalWidth: virtualWindow.totalWidth,
+                            virtualRow,
+                          })}
+                        </div>
+                      )
+                    }
+                    const disabled = isRowDisabled(entry.row)
+                    const selected = !disabled && isRowSelected(selectionState, entry.rowId)
+                    const expanded = hasDetail && expansionState.has(entry.rowId)
+                    const detailHeight = expanded ? getDetailHeight(entry) : 0
+                    const cellVirtualRow = expanded
+                      ? { ...virtualRow, height: defaultRowHeight }
+                      : virtualRow
+                    return (
                       <div
-                        className="bc-grid-detail-panel"
-                        role="region"
-                        aria-label="Detail"
-                        style={detailPanelStyle(
-                          defaultRowHeight,
-                          detailHeight,
+                        key={entry.rowId}
+                        className={classNames(
+                          "bc-grid-row",
+                          selected ? "bc-grid-row-selected" : undefined,
+                          disabled ? "bc-grid-row-disabled" : undefined,
+                        )}
+                        role="row"
+                        aria-rowindex={virtualRow.index + bodyAriaRowOffset}
+                        aria-level={groupingActive ? entry.level : undefined}
+                        aria-selected={selected || undefined}
+                        aria-disabled={disabled || undefined}
+                        data-row-id={entry.rowId}
+                        data-row-index={virtualRow.index}
+                        data-bc-grid-row-kind="data"
+                        style={rowStyle(
+                          virtualRow.top,
+                          virtualRow.height,
                           virtualWindow.totalWidth,
                         )}
-                        onClick={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          // Selection logic. Shift+click → range from anchor; ctrl/
+                          // cmd+click → toggle this row in current selection;
+                          // plain click → select only this row.
+                          if (!disabled) {
+                            if (event.shiftKey && selectionAnchorRef.current) {
+                              setSelectionState(
+                                selectRange(
+                                  visibleSelectableRowIds,
+                                  selectionAnchorRef.current,
+                                  entry.rowId,
+                                ),
+                              )
+                            } else if (event.ctrlKey || event.metaKey) {
+                              setSelectionState(toggleRow(selectionState, entry.rowId))
+                              selectionAnchorRef.current = entry.rowId
+                            } else {
+                              setSelectionState(selectOnly(entry.rowId))
+                              selectionAnchorRef.current = entry.rowId
+                            }
+                          }
+                          onRowClick?.(entry.row, event)
+                        }}
+                        onDoubleClick={(event) => {
+                          // Activate edit on the cell at the click point if the
+                          // column is editable. Falls through to onRowDoubleClick
+                          // either way.
+                          const target = (event.target as HTMLElement).closest<HTMLElement>(
+                            "[data-column-id]",
+                          )
+                          const columnId = target?.dataset.columnId
+                          if (!disabled && columnId) {
+                            const column = resolvedColumns.find((c) => c.columnId === columnId)
+                            if (column && isCellEditable(column, entry.row)) {
+                              const editor = (column.source.cellEditor ??
+                                defaultTextEditor) as never
+                              editController.start(
+                                { rowId: entry.rowId, columnId: column.columnId },
+                                "doubleclick",
+                                {
+                                  pointerHint: { x: event.clientX, y: event.clientY },
+                                  editor,
+                                  row: entry.row,
+                                  rowId: entry.rowId,
+                                },
+                              )
+                            }
+                          }
+                          onRowDoubleClick?.(entry.row, event)
+                        }}
                       >
-                        {renderDetailPanel({
-                          row: entry.row,
-                          rowId: entry.rowId,
-                          rowIndex: entry.index,
-                        })}
+                        {virtualWindow.cols.map((virtualCol) =>
+                          renderBodyCell({
+                            activeCell,
+                            column: resolvedColumns[virtualCol.index],
+                            domBaseId,
+                            entry,
+                            locale,
+                            onCellFocus,
+                            pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
+                            searchText,
+                            scrollLeft: scrollOffset.left,
+                            setActiveCell,
+                            totalWidth: virtualWindow.totalWidth,
+                            viewportWidth: viewport.width,
+                            virtualCol,
+                            virtualRow: cellVirtualRow,
+                            selected,
+                            disabled,
+                            expanded,
+                            editingCell,
+                            hasOverlayValue: editController.hasOverlayValue,
+                            getOverlayValue: editController.getOverlayValue,
+                            getCellEditEntry: editController.getCellEditEntry,
+                            getRowEditState: editController.getRowEditState,
+                          }),
+                        )}
+                        {expanded && renderDetailPanel ? (
+                          <div
+                            className="bc-grid-detail-panel"
+                            role="region"
+                            aria-label="Detail"
+                            style={detailPanelStyle(
+                              defaultRowHeight,
+                              detailHeight,
+                              virtualWindow.totalWidth,
+                            )}
+                            onClick={(event) => event.stopPropagation()}
+                            onDoubleClick={(event) => event.stopPropagation()}
+                          >
+                            {renderDetailPanel({
+                              row: entry.row,
+                              rowId: entry.rowId,
+                              rowIndex: entry.index,
+                            })}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
+                    )
+                  })}
+                </div>
+
+                <EditorPortal
+                  controller={editController}
+                  activeCell={activeCell}
+                  rowEntries={visibleDataRowEntries}
+                  resolvedColumns={resolvedColumns}
+                  cellRect={editorCellRect}
+                  virtualizer={virtualizer}
+                  rowIndexById={rowIndexById}
+                  columnIndexById={columnIndexById}
+                  defaultEditor={defaultTextEditor as never}
+                />
+
+                {loading ? (
+                  <div className="bc-grid-overlay" role="status" style={overlayStyle}>
+                    {loadingOverlay ?? messages.loadingLabel}
                   </div>
-                )
-              })}
-            </div>
+                ) : null}
 
-            <EditorPortal
-              controller={editController}
-              activeCell={activeCell}
-              rowEntries={visibleDataRowEntries}
-              resolvedColumns={resolvedColumns}
-              cellRect={editorCellRect}
-              virtualizer={virtualizer}
-              rowIndexById={rowIndexById}
-              columnIndexById={columnIndexById}
-              defaultEditor={defaultTextEditor as never}
-            />
-
-            {loading ? (
-              <div className="bc-grid-overlay" role="status" style={overlayStyle}>
-                {loadingOverlay ?? messages.loadingLabel}
+                {!loading && rowEntries.length === 0 ? (
+                  <div className="bc-grid-overlay" role="status" style={overlayStyle}>
+                    {messages.noRowsLabel}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </>
+          )}
 
-            {!loading && rowEntries.length === 0 ? (
-              <div className="bc-grid-overlay" role="status" style={overlayStyle}>
-                {messages.noRowsLabel}
-              </div>
-            ) : null}
-          </div>
-
-          {hasAggregationFooter ? (
+          {!pivotMode && hasAggregationFooter ? (
             <BcGridAggregationFooterRow
               columns={resolvedColumns}
               locale={locale}

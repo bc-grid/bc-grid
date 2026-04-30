@@ -454,6 +454,7 @@ export function assertNoMixedControlledProps<TRow>(props: BcGridProps<TRow>): vo
     ["filter", "defaultFilter"],
     ["selection", "defaultSelection"],
     ["rangeSelection", "defaultRangeSelection"],
+    ["pivotState", "defaultPivotState"],
     ["expansion", "defaultExpansion"],
     ["groupBy", "defaultGroupBy"],
     ["columnState", "defaultColumnState"],

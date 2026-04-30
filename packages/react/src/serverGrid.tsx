@@ -17,7 +17,7 @@ import type {
   ServerSelection,
   ServerViewState,
 } from "@bc-grid/core"
-import { emptyBcRangeSelection } from "@bc-grid/core"
+import { emptyBcPivotState, emptyBcRangeSelection } from "@bc-grid/core"
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { BcGrid, useBcGridApi } from "./grid"
@@ -144,6 +144,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       getRangeSelection() {
         return gridApiRef.current?.getRangeSelection() ?? emptyBcRangeSelection
       },
+      getPivotState() {
+        return gridApiRef.current?.getPivotState() ?? emptyBcPivotState
+      },
       getColumnState() {
         return gridApiRef.current?.getColumnState() ?? []
       },
@@ -158,6 +161,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       },
       setRangeSelection(selection) {
         gridApiRef.current?.setRangeSelection(selection)
+      },
+      setPivotState(state) {
+        gridApiRef.current?.setPivotState(state)
       },
       copyRange(range) {
         return gridApiRef.current?.copyRange(range) ?? Promise.resolve()

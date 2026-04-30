@@ -986,6 +986,45 @@
   background: var(--bc-grid-muted);
 }
 
+.bc-grid-pivot-header-viewport {
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-bottom: 1px solid var(--bc-grid-border);
+  background: var(--bc-grid-header-bg);
+  position: relative;
+  z-index: 3;
+}
+
+.bc-grid-pivot-header,
+.bc-grid-pivot-header-row {
+  background: var(--bc-grid-header-bg);
+  color: var(--bc-grid-header-fg);
+  font-size: var(--bc-grid-header-font-size);
+  font-weight: 700;
+}
+
+.bc-grid-pivot-row-axis-header,
+.bc-grid-pivot-col-cell {
+  background: var(--bc-grid-header-bg);
+  border-bottom: 1px solid var(--bc-grid-border);
+}
+
+.bc-grid-pivot-row-axis,
+.bc-grid-pivot-total-cell {
+  background: var(--bc-grid-muted);
+}
+
+.bc-grid-pivot-row-axis {
+  color: var(--bc-grid-fg);
+  font-weight: 600;
+}
+
+.bc-grid-pivot-total-row .bc-grid-cell,
+.bc-grid-pivot-total-cell {
+  color: var(--bc-grid-fg);
+  font-weight: 700;
+}
+
 .bc-grid-pagination {
   display: flex;
   min-width: 0;

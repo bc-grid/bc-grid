@@ -423,6 +423,7 @@ For each piece of grid state, there is a controlled (`<state>` + `on<State>Chang
 | Filter | `filter: BcGridFilter` | `onFilterChange(next, prev)` | `defaultFilter` |
 | Selection | `selection: BcSelection` | `onSelectionChange(next, prev)` | `defaultSelection` |
 | Range selection | `rangeSelection: BcRangeSelection` | `onRangeSelectionChange(next, prev)` | `defaultRangeSelection` |
+| Pivot | `pivotState: BcPivotState` | `onPivotStateChange(next, prev)` | `defaultPivotState` |
 | Expansion | `expansion: ReadonlySet<RowId>` | `onExpansionChange(next, prev)` | `defaultExpansion` |
 | Group-by | `groupBy: ColumnId[]` | `onGroupByChange(next, prev)` | `defaultGroupBy` |
 | Column state | `columnState: BcColumnStateEntry[]` | `onColumnStateChange(next, prev)` | `defaultColumnState` |
@@ -527,6 +528,10 @@ export interface BcGridStateProps {
   rangeSelection?: BcRangeSelection
   defaultRangeSelection?: BcRangeSelection
   onRangeSelectionChange?: (next: BcRangeSelection, prev: BcRangeSelection) => void
+
+  pivotState?: BcPivotState
+  defaultPivotState?: BcPivotState
+  onPivotStateChange?: (next: BcPivotState, prev: BcPivotState) => void
 
   expansion?: ReadonlySet<RowId>
   defaultExpansion?: ReadonlySet<RowId>
@@ -692,6 +697,15 @@ export interface BcFilterEditorProps<TValue = unknown> {
   // Aggregations
   aggregationScope="filtered" // "filtered" | "all" | "selected"
 
+  // Pivot
+  pivotMode={true}
+  pivotScope="filtered" // "filtered" | "all"
+  defaultPivotState={{
+    rowGroups: ["region"],
+    colGroups: ["quarter"],
+    values: [{ columnId: "amount" }],
+  }}
+
   // Grouping
   groupableColumns={[{ columnId: "region", header: "Region" }]}
   groupsExpandedByDefault={true}
@@ -777,6 +791,10 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   // Aggregations
   aggregationScope?: "filtered" | "all" | "selected"
 
+  // Pivot
+  pivotMode?: boolean
+  pivotScope?: "filtered" | "all"
+
   // Grouping
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
   groupsExpandedByDefault?: boolean
@@ -845,6 +863,12 @@ themselves when their content is irrelevant: `filtered` only appears once a
 filter narrows the row count, `selected` only when a selection is active, and
 `aggregations` only when at least one aggregation result is available. Custom
 segments render unconditionally — visibility is the consumer's responsibility.
+
+When `pivotMode` is true, the React grid replaces the normal row body with a
+read-only pivot tree/table built from `pivotState` and the pure
+`@bc-grid/aggregations` engine. `pivotScope` defaults to `"filtered"` so
+filters apply before pivot aggregation; set `"all"` to pivot over the original
+client-side rows.
 
 ```ts
 type BcStatusBarSegment<TRow = unknown> =
@@ -1021,6 +1045,7 @@ export interface BcGridApi<TRow = unknown> {
   getActiveCell(): BcCellPosition | null
   getSelection(): BcSelection
   getRangeSelection(): BcRangeSelection
+  getPivotState(): BcPivotState
   getColumnState(): BcColumnStateEntry[]
 
   // Mutations (controlled-state shortcuts; only effective in uncontrolled mode)
@@ -1028,6 +1053,7 @@ export interface BcGridApi<TRow = unknown> {
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter): void
   setRangeSelection(selection: BcRangeSelection): void
+  setPivotState(state: BcPivotState): void
   copyRange(range?: BcRange): Promise<void>
   clearRangeSelection(): void
   expandAll(): void
@@ -1200,9 +1226,11 @@ export type {
   BcServerRowUpdateHandler, BcServerRowUpdateSubscribe, BcServerRowUpdateUnsubscribe,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
   BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarCustomPanel, BcSidebarPanel,
+  BcSidebarPivotContext,
 
   // Re-exports from @bc-grid/core
   BcCellPosition, BcSelection, BcRange, BcRangeSelection, BcRangeKeyAction,
+  BcPivotState, BcPivotValue, BcPivotedDataDTO, BcPivotCellDTO, BcPivotColNodeDTO, BcPivotRowNodeDTO,
   BcGridSort, BcGridFilter,
   BcColumnFilter, BcColumnFormat, BcColumnStateEntry,
   BcValidationResult, ColumnId, RowId,

@@ -11,6 +11,12 @@ import type {
   BcGridSort,
   BcGridStateProps,
   BcPaginationState,
+  BcPivotCellDTO,
+  BcPivotColNodeDTO,
+  BcPivotRowNodeDTO,
+  BcPivotState,
+  BcPivotValue,
+  BcPivotedDataDTO,
   BcRowId,
   BcRowState,
   BcSelection,
@@ -242,7 +248,13 @@ export interface BcSidebarContext<TRow = unknown> {
   groupBy: readonly ColumnId[]
   setGroupBy: (state: readonly ColumnId[]) => void
   groupableColumns: readonly { columnId: ColumnId; header: string }[]
-  pivot?: unknown
+  pivot?: BcSidebarPivotContext
+}
+
+export interface BcSidebarPivotContext {
+  mode: boolean
+  state: BcPivotState
+  setState: (state: BcPivotState) => void
 }
 
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
@@ -257,6 +269,8 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   pagination?: boolean
   pageSizeOptions?: number[]
   aggregationScope?: BcAggregationScope
+  pivotMode?: boolean
+  pivotScope?: "filtered" | "all"
 
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
   groupsExpandedByDefault?: boolean
@@ -476,6 +490,12 @@ export type {
   BcGridSort,
   BcGridStateProps,
   BcPaginationState,
+  BcPivotCellDTO,
+  BcPivotColNodeDTO,
+  BcPivotRowNodeDTO,
+  BcPivotState,
+  BcPivotValue,
+  BcPivotedDataDTO,
   BcSelection,
   BcServerGridApi,
   BcValidationResult,
