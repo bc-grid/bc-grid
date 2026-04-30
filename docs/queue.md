@@ -81,6 +81,19 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 **Phase 5.5 health metrics (not blocking gates beyond `grid-tsx-file-split`):** `grid.tsx` split → unblocks parallel Phase 6 React-layer work. Smoke perf + bundle size CI → keeps quality bars enforced on every Phase 6 PR. Q1 vertical-slice gate **already cleared as of PR #42** (AR Customers ledger in `apps/examples`); a real bc-next integration cutover is a separate post-1.0 follow-up. Tooltip / persistence / filter-UI items are independent and land any time.
 
+### Phase 5.6 — Publishing (private GitHub Packages)
+
+Spec: `docs/design/publish-rfc.md`. Distribution channel pinned: GitHub Packages, private repo, Classic PAT for consumer reads. 8 tasks; can run in parallel except where ordering is noted.
+
+- `[ready]` **publish-config-pass-1** — drop `private: true`, set version `0.1.0-alpha.1`, add `publishConfig`/`repository`/`homepage`/`bugs`/`license`/`author` fields across all 11 `packages/*/package.json`. Also drop the unused `@tanstack/react-table` peerDependency from `@bc-grid/react` (no source imports). **Effort**: S.
+- `[ready]` **license-file** — root `LICENSE` file with `UNLICENSED` proprietary text. **Effort**: XS.
+- `[ready]` **package-readmes** — per-package `README.md` files (full README for `@bc-grid/react` + `@bc-grid/theming`; one-paragraph stub for each of the other 9). **Effort**: S.
+- `[ready]` **changesets-setup** — install `@changesets/cli`, run `bun run changeset init`, configure for GitHub Packages restricted access. **Effort**: S.
+- `[blocked: depends on publish-config-pass-1 + license-file + changesets-setup]` **release-workflow** — `.github/workflows/release.yml` per `publish-rfc.md §Release workflow shape`. Runs full quality gate then `bun publish` per package. Triggered by `v*` tag push. **Effort**: S.
+- `[ready]` **consumer-install-doc** — README section in root + `.npmrc.example` template + step-by-step PAT creation guide. **Effort**: S.
+- `[blocked: depends on publish-config-pass-1]` **tarball-smoke-test** — pre-publish script: `bun pack` each package, install into a clean tmp project, verify `import { BcGrid }` resolves and CSS import works. Catches missing `exports`/`workspace:*` leaks. **Effort**: M.
+- `[blocked: depends on release-workflow + tarball-smoke-test]` **first-release** — cut tag `v0.1.0-alpha.1`, verify the workflow publishes successfully, install from bc-next as a smoke test. **Effort**: S.
+
 ### Phase 6 — v1.0 Parity Sprint (Phase B feature tracks)
 
 8 tracks. **Tracks land RFC-by-RFC; impl tasks listed inline below.** Each impl task is sized so a single agent owns one PR; cross-task work claims the next available `[ready]` task per AGENTS.md §5. Convention: when claiming, edit `[ready]` → `[in-flight: <agent>]` in the same commit that creates the branch; transition to `[review: <agent> #N]` when the PR opens; `[done: <agent> #N]` when it merges.
