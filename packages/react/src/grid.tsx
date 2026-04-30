@@ -44,6 +44,8 @@ import {
   type ColumnFilterTypeByColumnId,
   type SetFilterOption,
   buildGridFilter,
+  columnFilterTextFromGridFilter,
+  isBlankSetFilterValue,
   matchesGridFilter,
   setFilterValueKeys,
 } from "./filter"
@@ -210,10 +212,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultSort ?? urlPersistedGridState.sort ?? [],
     props.onSortChange,
   )
-  const [, setFilterState] = useControlledState<BcGridFilter | null>(
+  const defaultFilterState =
+    props.defaultFilter ?? urlPersistedGridState.filter ?? persistedGridState.filter ?? null
+  const [filterState, setFilterState] = useControlledState<BcGridFilter | null>(
     hasProp(props, "filter"),
     props.filter ?? null,
-    props.defaultFilter ?? null,
+    defaultFilterState,
     props.onFilterChange
       ? (next, prev) => {
           if (next) props.onFilterChange?.(next, prev ?? next)
@@ -224,7 +228,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // Per-column text-filter inputs. Internal state — projected into the
   // canonical `BcGridFilter` shape via `buildGridFilter` and surfaced
   // through `setFilterState` whenever it changes.
-  const [columnFilterText, setColumnFilterText] = useState<ColumnFilterText>({})
+  const [columnFilterText, setColumnFilterText] = useState<ColumnFilterText>(() =>
+    columnFilterTextFromGridFilter(hasProp(props, "filter") ? props.filter : defaultFilterState),
+  )
   // Filter-popup anchor + columnId for `column.filter.variant === "popup"`
   // columns per `filter-popup-variant`. Null when no popup is open.
   const [filterPopupState, setFilterPopupState] = useState<{
@@ -336,19 +342,29 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => ({
       columnState: persistedColumnState,
       density,
+      filter: filterState ?? undefined,
       groupBy: groupByState,
       pageSize: pageSizeState,
       sidebarPanel: hasSidebar ? activeSidebarPanel : undefined,
     }),
-    [activeSidebarPanel, density, groupByState, hasSidebar, pageSizeState, persistedColumnState],
+    [
+      activeSidebarPanel,
+      density,
+      filterState,
+      groupByState,
+      hasSidebar,
+      pageSizeState,
+      persistedColumnState,
+    ],
   )
   usePersistedGridStateWriter(props.gridId, persistenceState)
   const urlPersistenceState = useMemo(
     () => ({
       columnState: persistedColumnState,
+      filter: filterState ?? undefined,
       sort: sortState,
     }),
-    [persistedColumnState, sortState],
+    [filterState, persistedColumnState, sortState],
   )
   useUrlPersistedGridStateWriter(props.urlStatePersistence, urlPersistenceState)
 
@@ -361,10 +377,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     return next
   }, [consumerResolvedColumns])
 
-  const activeFilter = useMemo(
+  const inlineFilter = useMemo(
     () => buildGridFilter(columnFilterText, columnFilterTypes),
     [columnFilterText, columnFilterTypes],
   )
+  const activeFilter = filterState
   const searchText = props.searchText ?? props.defaultSearchText ?? ""
   const aggregationScope = props.aggregationScope ?? "filtered"
 
@@ -675,14 +692,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     return map
   }, [resolvedColumns])
 
-  // Surface activeFilter through the controlled setFilterState contract so
+  // Surface inline filters through the controlled setFilterState contract so
   // consumers using the `filter` prop see the canonical BcGridFilter shape
-  // when the user types.
+  // when the user types. Skip the first pass so a URL/localStorage/default
+  // filter can hydrate without being cleared by initially-empty filter inputs.
+  const filterTextHydratedRef = useRef(false)
   // biome-ignore lint/correctness/useExhaustiveDependencies: setFilterState identity isn't useful here
   useEffect(() => {
-    if (activeFilter) setFilterState(activeFilter)
+    if (!filterTextHydratedRef.current) {
+      filterTextHydratedRef.current = true
+      return
+    }
+    setFilterState(inlineFilter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilter])
+  }, [inlineFilter])
 
   const { politeMessage, assertiveMessage, announcePolite, announceAssertive } =
     useLiveRegionAnnouncements({

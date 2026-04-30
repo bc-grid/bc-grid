@@ -572,16 +572,16 @@ export interface BcGridIdentity {
 
 export interface BcGridUrlStatePersistence {
   /**
-   * Search parameter that stores a JSON payload containing columnState and
-   * sort. Example: `?grid={...}`.
+   * Search parameter that stores a JSON payload containing columnState, sort,
+   * and filter. Example: `?grid={...}`.
    */
   searchParam: string
 }
 ```
 
-When `gridId` is set, the React layer persists `columnState`, `pageSize`, `density`, `groupBy`, and the active `sidebarPanel` to `localStorage` by default. A consumer-provided storage backend via `<BcGridProvider storage={...}>` is reserved for Q2 and is not exported at v0.1.
+When `gridId` is set, the React layer persists `columnState`, `pageSize`, `density`, `groupBy`, `filter`, and the active `sidebarPanel` to `localStorage` by default. A consumer-provided storage backend via `<BcGridProvider storage={...}>` is reserved for Q2 and is not exported at v0.1.
 
-When `urlStatePersistence` is set, the React layer reads and writes `columnState` and `sort` to the configured URL search parameter via `history.replaceState`. This is opt-in because URL state is shareable and user-visible.
+When `urlStatePersistence` is set, the React layer reads and writes `columnState`, `sort`, and `filter` to the configured URL search parameter via `history.replaceState`. This is opt-in because URL state is shareable and user-visible. URL filter state takes precedence over `localStorage` filter state on mount.
 
 ---
 
