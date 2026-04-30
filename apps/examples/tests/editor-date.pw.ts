@@ -81,9 +81,7 @@ test("commit persists the new date to the cell display", async ({ page }) => {
   await expect(cell).toContainText("2025")
 })
 
-test("validate rejects future dates — editor stays mounted with aria-invalid", async ({
-  page,
-}) => {
+test("validate rejects future dates — editor stays mounted with aria-invalid", async ({ page }) => {
   await page.goto(URL)
   await focusBodyCell(page, 0, DATE_COLUMN)
   await page.keyboard.press("F2")
