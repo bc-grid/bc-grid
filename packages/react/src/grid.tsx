@@ -1806,7 +1806,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
             {loading ? (
               <div className="bc-grid-overlay" role="status" style={overlayStyle}>
-                {loadingOverlay ?? messages.loadingLabel}
+                {loadingOverlay ?? (
+                  <span className="bc-grid-loading">
+                    <span className="bc-grid-loading-spinner" aria-hidden="true" />
+                    <span>{messages.loadingLabel}</span>
+                  </span>
+                )}
               </div>
             ) : null}
 

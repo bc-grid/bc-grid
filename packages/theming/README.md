@@ -30,11 +30,14 @@ bc-grid CSS variables fall back to shadcn token names with hard-coded defaults:
   --bc-grid-bg: hsl(var(--background, 0 0% 100%));
   --bc-grid-fg: hsl(var(--foreground, 222 47% 11%));
   --bc-grid-row-hover: hsl(var(--accent, 210 40% 96%) / 0.7);
+  --bc-grid-accent: hsl(var(--primary, 221 83% 53%));
+  --bc-grid-accent-fg: hsl(var(--primary-foreground, 0 0% 98%));
+  --bc-grid-accent-soft: hsl(var(--primary, 221 83% 53%) / 0.12);
   /* ... */
 }
 ```
 
-If your app already declares shadcn tokens on `:root` (the standard shadcn setup), bc-grid inherits them. If not, the fallbacks render a sensible neutral theme.
+If your app already declares shadcn tokens on `:root` (the standard shadcn setup), bc-grid inherits them. If not, the fallbacks render a sensible neutral theme. `--accent` remains the subtle row-hover tint; `--primary` feeds the visible bc-grid brand accent used by selected-row strips, sorted headers, focused filters, loading spinners, and edit action hover states.
 
 To override per-grid, set the variables on a parent of the grid root.
 

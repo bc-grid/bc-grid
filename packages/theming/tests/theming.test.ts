@@ -28,15 +28,20 @@ describe("@bc-grid/theming", () => {
   })
 
   test("creates typed CSS variable override maps", () => {
+    expect(bcGridThemeVars.accent).toBe("--bc-grid-accent")
+    expect(bcGridThemeVars.accentFg).toBe("--bc-grid-accent-fg")
+    expect(bcGridThemeVars.accentSoft).toBe("--bc-grid-accent-soft")
     expect(bcGridThemeVars.focusRing).toBe("--bc-grid-focus-ring")
     expect(bcGridThemeVars.searchMatchBg).toBe("--bc-grid-search-match-bg")
     expect(
       createBcGridThemeVars({
         "--bc-grid-bg": "Canvas",
+        "--bc-grid-accent": "Highlight",
         "--bc-grid-focus-ring": "Highlight",
       }),
     ).toEqual({
       "--bc-grid-bg": "Canvas",
+      "--bc-grid-accent": "Highlight",
       "--bc-grid-focus-ring": "Highlight",
     })
   })
@@ -44,6 +49,8 @@ describe("@bc-grid/theming", () => {
   test("tailwind preset maps to CSS variables", () => {
     const colors = bcGridPreset.theme.extend.colors as Record<string, Record<string, string>>
     expect(colors["bc-grid"]?.bg).toBe("var(--bc-grid-bg)")
+    expect(colors["bc-grid"]?.accent).toBe("var(--bc-grid-accent)")
+    expect(colors["bc-grid"]?.["accent-soft"]).toBe("var(--bc-grid-accent-soft)")
     expect(colors["bc-grid"]?.["header-bg"]).toBe("var(--bc-grid-header-bg)")
     expect(colors["bc-grid"]?.ring).toBe("var(--bc-grid-focus-ring)")
     expect(colors["bc-grid"]?.["search-match"]).toBe("var(--bc-grid-search-match-bg)")
@@ -53,6 +60,8 @@ describe("@bc-grid/theming", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     expect(css).toContain("@media (prefers-reduced-motion: reduce)")
     expect(css).toContain("@media (forced-colors: active)")
+    expect(css).toContain("--bc-grid-accent: Highlight")
+    expect(css).toContain("--bc-grid-accent-fg: HighlightText")
     expect(css).toContain("--bc-grid-focus-ring: Highlight")
     expect(css).toContain("--bc-grid-search-match-bg: Highlight")
     expect(css).toContain('[data-bc-grid-active-cell="true"]')
@@ -64,6 +73,16 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain(".bc-grid-cell")
     expect(css).toContain(".bc-grid-status-open")
     expect(css).not.toContain("bc-grid__")
+  })
+
+  test("CSS applies brand accent treatment to grid interaction surfaces", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    expect(css).toContain("--bc-grid-accent: hsl(var(--primary")
+    expect(css).toContain('.bc-grid-row[aria-selected="true"]::before')
+    expect(css).toContain(".bc-grid-header-cell-sorted-asc")
+    expect(css).toContain("border-color: var(--bc-grid-accent)")
+    expect(css).toContain(".bc-grid-loading-spinner")
+    expect(css).toContain(".bc-grid-action:hover:not(:disabled)")
   })
 
   test("package exports built CSS, not source CSS", () => {

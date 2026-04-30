@@ -1302,6 +1302,22 @@ export type {
 import "@bc-grid/theming/styles.css"
 ```
 
+The theme CSS consumes shadcn-style HSL tokens by default. `--accent` remains the
+subtle row-hover/row-selected tint, while `--primary` maps to bc-grid's brand
+accent surfaces via:
+
+```css
+.bc-grid {
+  --bc-grid-accent: hsl(var(--primary, 221 83% 53%));
+  --bc-grid-accent-fg: hsl(var(--primary-foreground, 0 0% 98%));
+  --bc-grid-accent-soft: hsl(var(--primary, 221 83% 53%) / 0.12);
+}
+```
+
+Consumers can set `--primary` globally to align bc-grid with app branding, or
+override `--bc-grid-accent` / `--bc-grid-accent-fg` / `--bc-grid-accent-soft` on a
+grid wrapper for screen-specific accent treatment without changing host tokens.
+
 ### `@bc-grid/aggregations`
 
 ```ts

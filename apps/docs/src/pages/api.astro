@@ -38,8 +38,17 @@ const themingSnippet = `/* Host app globals.css */
   --muted: 210 40% 96%;
   --muted-foreground: 215 16% 47%;
   --accent: 210 40% 96%;
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 98%;
   --ring: 221 83% 53%;
   --destructive: 0 84% 60%;
+}
+
+/* Optional per-grid brand accent override */
+.brand-accent-grid {
+  --bc-grid-accent: hsl(var(--brand-accent));
+  --bc-grid-accent-fg: hsl(var(--brand-accent-foreground));
+  --bc-grid-accent-soft: hsl(var(--brand-accent) / 0.12);
 }
 
 /* App entry */
@@ -1168,8 +1177,9 @@ function statusClass(status: keyof typeof statusLabels) {
         <p>
           bc-grid consumes the host app's shadcn-style CSS variables such as
           <code>--background</code>, <code>--foreground</code>, <code>--border</code>,
-          <code>--muted</code>, <code>--accent</code>, <code>--ring</code>, and
-          <code>--destructive</code>. It does not ship opinionated product themes.
+          <code>--muted</code>, <code>--accent</code>, <code>--primary</code>,
+          <code>--ring</code>, and <code>--destructive</code>. It does not ship
+          opinionated product themes.
         </p>
         <p>
           See the
@@ -1183,6 +1193,12 @@ function statusClass(status: keyof typeof statusLabels) {
           Override <code>--bc-grid-*</code> variables only when the grid chrome needs to differ
           from the rest of the app. Use <code>bcGridPreset</code> for Tailwind utility mapping and
           <code>createBcGridThemeVars</code> for typed override maps.
+        </p>
+        <p>
+          <code>--bc-grid-accent</code>, <code>--bc-grid-accent-fg</code>, and
+          <code>--bc-grid-accent-soft</code> default to the app's <code>--primary</code>
+          tokens. They drive visible brand-accent treatments such as selected-row strips,
+          sorted headers, focused filters, loading spinners, and edit action hover states.
         </p>
       </article>
     </div>
