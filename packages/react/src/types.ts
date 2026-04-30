@@ -91,6 +91,23 @@ export interface BcCellRendererParams<TRow, TValue = unknown> {
   searchText: string
   rowState: BcRowState
   editing: boolean
+  /**
+   * True between `commit` and `onCellEditCommit` Promise resolution —
+   * the cell has been edited locally and the consumer hook is in
+   * flight. Per `editing-rfc §Dirty Tracking`.
+   */
+  pending: boolean
+  /**
+   * Validation rejection or server-commit error. Cleared on successful
+   * retry or on cancel. Per `editing-rfc §Dirty Tracking`.
+   */
+  editError?: string
+  /**
+   * True when the cell has been edited (committed locally) this
+   * session, regardless of whether the consumer's commit hook has
+   * settled. Per `editing-rfc §Dirty Tracking`.
+   */
+  isDirty: boolean
 }
 
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {

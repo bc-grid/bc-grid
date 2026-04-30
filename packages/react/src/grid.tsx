@@ -1132,6 +1132,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     disabled,
                     hasOverlayValue: editController.hasOverlayValue,
                     getOverlayValue: editController.getOverlayValue,
+                    getCellEditEntry: editController.getCellEditEntry,
                   }),
                 )}
               </div>
