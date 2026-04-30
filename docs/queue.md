@@ -153,7 +153,7 @@ Spec pending: `docs/design/range-rfc.md` (c2 to author).
 - `[blocked: depends on clipboard-paste-from-excel]` **fill-handle** — drag-square at bottom-right of active range; drag to extend; release to fill (linear / copy / smart-fill). **Effort**: M.
 - `[ready]` **master-detail** — expandable row that mounts a consumer-supplied detail component below the row. State via `expansion: ReadonlySet<RowId>` (already declared). `aria-level` + `role="treegrid"` when active. Independent of range work; can run in parallel. **Effort**: M.
 - `[ready]` **column-groups-multi-row-headers** — multi-row column headers (e.g., parent header "Q1 Sales" with children "Jan / Feb / Mar"). Surface: `BcReactGridColumn.children?: BcReactGridColumn[]` (additive). Renders header rows for each level with `aria-colspan`. Independent; can run in parallel. **Effort**: M.
-- `[in-flight: x1]` **sticky-header-polish** — refine the existing pinned-top header to maintain scroll-shadow + correct z-index against pinned-left/-right corners. Independent; can run in parallel. **Effort**: S.
+- `[review: x1 #110]` **sticky-header-polish** — refine the existing pinned-top header to maintain scroll-shadow + correct z-index against pinned-left/-right corners. Independent; can run in parallel. **Effort**: S.
 
 #### Track 3 — Server row model (Q4 surface)
 
