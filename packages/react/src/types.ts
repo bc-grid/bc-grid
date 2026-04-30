@@ -200,6 +200,34 @@ export interface BcCellEditorProps<TRow, TValue = unknown> {
   cancel(): void
   error?: string
   focusRef?: RefObject<HTMLElement | null>
+
+  /**
+   * Seed value when the editor was activated by typing a printable
+   * character. Editors should treat this as the user's first keystroke,
+   * replacing the cell's prior value. Per `editing-rfc §Activation`.
+   */
+  seedKey?: string
+
+  /**
+   * Caret-position hint when activated by double-click, in client
+   * coordinates. Editors may use `document.caretPositionFromPoint` or
+   * an equivalent to position the caret near the click. Per
+   * `editing-rfc §Activation`.
+   */
+  pointerHint?: { x: number; y: number }
+
+  /**
+   * Result of `editor.prepare()` if the editor declared one. Per
+   * `editing-rfc §Lifecycle`.
+   */
+  prepareResult?: unknown
+
+  /**
+   * True while async validation or async server commit is in flight.
+   * Editors should disable their commit affordance and surface a
+   * spinner / disabled state.
+   */
+  pending?: boolean
 }
 
 export interface BcCellEditCommitEvent<TRow, TValue = unknown> {

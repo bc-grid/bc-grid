@@ -1,4 +1,4 @@
-import type { BcCellPosition } from "@bc-grid/core"
+import type { BcCellPosition, ColumnId, RowId } from "@bc-grid/core"
 import type { ReactNode } from "react"
 import {
   type ResolvedColumn,
@@ -33,6 +33,15 @@ interface RenderBodyCellParams<TRow> {
   viewportWidth: number
   virtualCol: { index: number; left: number; width: number; pinned: "left" | "right" | null }
   virtualRow: { height: number }
+  /**
+   * Overlay-aware lookup from the editing controller. When the cell has
+   * been edited locally (committed via the editor framework) the overlay
+   * holds the new value; the renderer prefers it over the raw row[field]
+   * read so the grid reflects the commit immediately even before the
+   * consumer mirrors it into their own data prop.
+   */
+  hasOverlayValue?: (rowId: RowId, columnId: ColumnId) => boolean
+  getOverlayValue?: (rowId: RowId, columnId: ColumnId) => unknown
 }
 
 export function renderBodyCell<TRow>({
@@ -50,10 +59,15 @@ export function renderBodyCell<TRow>({
   viewportWidth,
   virtualCol,
   virtualRow,
+  hasOverlayValue,
+  getOverlayValue,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
 
-  const value = getCellValue(entry.row, column.source)
+  const overlayApplies = hasOverlayValue?.(entry.rowId, column.columnId) ?? false
+  const value = overlayApplies
+    ? getOverlayValue?.(entry.rowId, column.columnId)
+    : getCellValue(entry.row, column.source)
   const formattedValue = formatCellValue(value, entry.row, column.source, locale)
   const rowState = {
     rowId: entry.rowId,

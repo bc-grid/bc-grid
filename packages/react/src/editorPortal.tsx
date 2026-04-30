@@ -1,0 +1,317 @@
+import type { BcCellPosition } from "@bc-grid/core"
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react"
+import type { MoveOnSettle } from "./editingStateMachine"
+import type { ResolvedColumn, RowEntry } from "./gridInternals"
+import type { BcCellEditor } from "./types"
+import type { EditingController } from "./useEditingController"
+
+interface EditorPortalProps<TRow> {
+  controller: EditingController<TRow>
+  /** Resolved cell position; null when not editing. */
+  activeCell: BcCellPosition | null
+  /** Current row entries (for resolving the row from an active cell). */
+  rowEntries: readonly RowEntry<TRow>[]
+  /** Resolved columns (for resolving the column from a columnId). */
+  resolvedColumns: readonly ResolvedColumn<TRow>[]
+  /** Pixel position of the cell being edited. */
+  cellRect: { top: number; left: number; width: number; height: number } | null
+  /**
+   * Default editor used when a column doesn't supply its own
+   * `cellEditor`. v0.1 default is a text input.
+   */
+  defaultEditor?: BcCellEditor<TRow>
+}
+
+/**
+ * Mounts the active editor at the cell position determined by the
+ * controller's state. Handles:
+ *   - Real DOM focus shift to `focusRef`
+ *   - Tab / Shift+Tab / Enter / Shift+Enter / Escape interception
+ *   - Lifecycle dispatch (`mounted` / `unmounted`)
+ *
+ * Defers actual input rendering to `column.cellEditor.Component` (or
+ * `defaultEditor.Component` when the column doesn't supply one).
+ */
+export function EditorPortal<TRow>({
+  controller,
+  activeCell,
+  rowEntries,
+  resolvedColumns,
+  cellRect,
+  defaultEditor,
+}: EditorPortalProps<TRow>): ReactNode {
+  const { editState } = controller
+
+  // The editor's DOM lives only through Mounting / Editing / Validating.
+  // Once the state machine reaches Committing or Cancelling, we unmount
+  // so the useLayoutEffect cleanup dispatches `unmounted` and the
+  // machine advances to Unmounting → Navigation.
+  if (
+    editState.mode !== "mounting" &&
+    editState.mode !== "editing" &&
+    editState.mode !== "validating"
+  ) {
+    return null
+  }
+  if (!activeCell || !cellRect) return null
+
+  const rowEntry = rowEntries.find((entry) => entry.rowId === activeCell.rowId)
+  const column = resolvedColumns.find((c) => c.columnId === activeCell.columnId)
+  if (!rowEntry || !column) return null
+
+  const editorSpec: BcCellEditor<TRow> | undefined = column.source.cellEditor ?? defaultEditor
+  if (!editorSpec) return null
+
+  return (
+    <EditorMount
+      controller={controller}
+      cell={activeCell}
+      cellRect={cellRect}
+      column={column}
+      rowEntry={rowEntry}
+      editor={editorSpec}
+    />
+  )
+}
+
+interface EditorMountProps<TRow> {
+  controller: EditingController<TRow>
+  cell: BcCellPosition
+  cellRect: { top: number; left: number; width: number; height: number }
+  column: ResolvedColumn<TRow>
+  rowEntry: RowEntry<TRow>
+  editor: BcCellEditor<TRow>
+}
+
+function EditorMount<TRow>({
+  controller,
+  cell,
+  cellRect,
+  column,
+  rowEntry,
+  editor,
+}: EditorMountProps<TRow>) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const focusRef = useRef<HTMLElement | null>(null)
+  const { editState, commit, cancel, dispatchMounted, dispatchUnmounted, getOverlayValue } =
+    controller
+
+  // editState is narrowed to Mounting / Editing / Validating here.
+  const seedKey =
+    editState.mode === "mounting" || editState.mode === "editing" ? editState.seedKey : undefined
+  const pointerHint =
+    editState.mode === "mounting" || editState.mode === "editing"
+      ? editState.pointerHint
+      : undefined
+  const error = editState.mode === "editing" ? editState.error : undefined
+  const pending = editState.mode === "validating"
+
+  // Initial value for the editor. Read from the overlay first (so a
+  // re-edit of a previously-committed cell keeps the latest value), else
+  // raw row[field].
+  const overlayValue = getOverlayValue(cell.rowId, cell.columnId)
+  const initialValue =
+    overlayValue !== undefined
+      ? overlayValue
+      : column.source.field
+        ? (rowEntry.row as Record<string, unknown>)[column.source.field]
+        : undefined
+
+  // Move DOM focus to the editor's `focusRef` after mount, then dispatch
+  // `mounted` to advance the state machine to Editing. Cleanup releases
+  // the focus back to the grid root via `unmounted`.
+  useLayoutEffect(() => {
+    focusRef.current?.focus({ preventScroll: true })
+    dispatchMounted()
+    return () => {
+      dispatchUnmounted()
+    }
+  }, [dispatchMounted, dispatchUnmounted])
+
+  const handleCommit = (newValue: unknown, moveOnSettle: MoveOnSettle = "down") => {
+    void commit(
+      {
+        rowId: cell.rowId,
+        row: rowEntry.row,
+        columnId: cell.columnId,
+        column: column.source,
+        value: newValue,
+        previousValue: initialValue,
+      },
+      moveOnSettle,
+    )
+  }
+
+  // Wrapper-level keyboard intercepts. The editor input handles printable
+  // keys / arrow keys / Backspace via browser default; only the Q1
+  // commit/cancel keys are intercepted here. Per editing-rfc §Keyboard
+  // model in edit mode.
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault()
+      const value = readEditorInputValue(focusRef.current)
+      handleCommit(value, "down")
+      return
+    }
+    if (event.key === "Enter" && event.shiftKey) {
+      event.preventDefault()
+      const value = readEditorInputValue(focusRef.current)
+      handleCommit(value, "up")
+      return
+    }
+    if (event.key === "Tab" && !event.shiftKey) {
+      event.preventDefault()
+      const value = readEditorInputValue(focusRef.current)
+      handleCommit(value, "right")
+      return
+    }
+    if (event.key === "Tab" && event.shiftKey) {
+      event.preventDefault()
+      const value = readEditorInputValue(focusRef.current)
+      handleCommit(value, "left")
+      return
+    }
+    if (event.key === "Escape") {
+      event.preventDefault()
+      cancel()
+      return
+    }
+  }
+
+  const Component = editor.Component as React.ComponentType<{
+    initialValue: unknown
+    row: TRow
+    rowId: typeof cell.rowId
+    column: typeof column.source
+    commit: (next: unknown) => void
+    cancel: () => void
+    error?: string
+    focusRef?: RefObject<HTMLElement | null>
+    seedKey?: string
+    pointerHint?: { x: number; y: number }
+    pending?: boolean
+  }>
+
+  return (
+    <div
+      ref={wrapperRef}
+      className="bc-grid-editor-portal"
+      data-bc-grid-editor-root="true"
+      onKeyDown={handleKeyDown}
+      style={editorWrapperStyle(cellRect)}
+    >
+      <Component
+        initialValue={initialValue}
+        row={rowEntry.row}
+        rowId={cell.rowId}
+        column={column.source}
+        commit={(next) => handleCommit(next)}
+        cancel={cancel}
+        focusRef={focusRef}
+        {...(seedKey != null ? { seedKey } : {})}
+        {...(pointerHint ? { pointerHint } : {})}
+        {...(error != null ? { error } : {})}
+        {...(pending ? { pending } : {})}
+      />
+    </div>
+  )
+}
+
+function editorWrapperStyle(rect: {
+  top: number
+  left: number
+  width: number
+  height: number
+}): CSSProperties {
+  return {
+    position: "absolute",
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+    zIndex: 5,
+  }
+}
+
+/**
+ * Default text editor used when a column doesn't supply its own
+ * `cellEditor`. Renders a single `<input>` whose value is committed on
+ * the grid's commit-keys (Enter / Tab / Esc). Dedicated `editor-text`
+ * task will replace this with a full shadcn `Input` integration.
+ */
+export const defaultTextEditor: BcCellEditor<unknown> = {
+  Component: DefaultTextEditor,
+  kind: "text-default",
+}
+
+interface DefaultTextEditorProps {
+  initialValue: unknown
+  commit: (next: unknown) => void
+  cancel: () => void
+  focusRef?: RefObject<HTMLElement | null>
+  seedKey?: string
+  error?: string
+  pending?: boolean
+}
+
+function DefaultTextEditor({
+  initialValue,
+  focusRef,
+  seedKey,
+  error,
+  pending,
+}: DefaultTextEditorProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  // Hand the focusRef back up to the controller — it's the element the
+  // grid will focus after mount.
+  useEffect(() => {
+    if (focusRef && inputRef.current) {
+      ;(focusRef as { current: HTMLElement | null }).current = inputRef.current
+    }
+  }, [focusRef])
+
+  // Seed value: if activated by typing a printable char, replace content
+  // with that char; else default to the formatted current value. Native
+  // input maintains its own state from this point.
+  const seeded = seedKey != null ? seedKey : initialValue == null ? "" : String(initialValue)
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      defaultValue={seeded}
+      disabled={pending}
+      aria-invalid={error ? true : undefined}
+      data-bc-grid-editor-input="true"
+      style={defaultEditorInputStyle}
+    />
+  )
+}
+
+const defaultEditorInputStyle: CSSProperties = {
+  width: "100%",
+  height: "100%",
+  border: "2px solid hsl(var(--ring, 217 91% 60%))",
+  borderRadius: "calc(var(--radius, 0.375rem) - 1px)",
+  background: "hsl(var(--background, 0 0% 100%))",
+  color: "inherit",
+  font: "inherit",
+  paddingInline: "var(--bc-grid-cell-padding-x, 12px)",
+  outline: "none",
+  boxSizing: "border-box",
+}
+
+function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {
+  if (focusRefCurrent instanceof HTMLInputElement) return focusRefCurrent.value
+  if (focusRefCurrent instanceof HTMLTextAreaElement) return focusRefCurrent.value
+  if (focusRefCurrent instanceof HTMLSelectElement) return focusRefCurrent.value
+  return undefined
+}

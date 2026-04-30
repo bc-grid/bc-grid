@@ -87,6 +87,18 @@ function checkboxSelectionEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("checkbox") === "1"
 }
 
+/**
+ * `?edit=1` URL flag opts the AR Customers grid into the
+ * `editor-framework` demo. Selected columns gain `editable: true` so
+ * F2 / Enter / typing / double-click activate the default text editor.
+ * A `validate` is wired on `tradingName` to demonstrate the validation
+ * flow (rejects empty strings).
+ */
+function editorFrameworkEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("edit") === "1"
+}
+
 function CustomerGridDemo({
   density,
   onDensityChange,
@@ -134,6 +146,15 @@ function CustomerGridDemo({
         header: "Trading Name",
         width: 220,
         filter: { type: "text" },
+        // ?edit=1: editable + validate (rejects empty). Activates the
+        // editor-framework default text editor.
+        editable: editorFrameworkEnabled(),
+        validate: (next: unknown) => {
+          const stringValue = typeof next === "string" ? next : String(next ?? "")
+          return stringValue.trim().length === 0
+            ? { valid: false as const, error: "Trading name is required." }
+            : { valid: true as const }
+        },
       },
       {
         columnId: "region",

@@ -23,6 +23,7 @@ import {
   useState,
 } from "react"
 import { renderBodyCell } from "./bodyCells"
+import { EditorPortal, defaultTextEditor } from "./editorPortal"
 import { type ColumnFilterText, buildGridFilter, matchesGridFilter } from "./filter"
 import {
   DEFAULT_BODY_HEIGHT,
@@ -62,7 +63,8 @@ import { readPersistedGridState, usePersistedGridStateWriter } from "./persisten
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
-import type { BcGridProps } from "./types"
+import type { BcCellEditCommitEvent, BcGridProps } from "./types"
+import { useEditingController } from "./useEditingController"
 import { formatCellValue, getCellValue } from "./value"
 
 export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
@@ -385,6 +387,87 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   const virtualWindow = virtualizer.computeWindow()
 
+  // Editing controller. The framework owns the lifecycle / state machine /
+  // overlay; consumers wire commit semantics via `onCellEditCommit` (read
+  // off props since it's declared on `BcEditGridProps` and reaches us via
+  // spread). Sync + async per-column `validate` runs through the
+  // controller before the overlay updates.
+  const onCellEditCommitProp = (
+    props as {
+      onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
+    }
+  ).onCellEditCommit
+  const editController = useEditingController<TRow>({
+    ...(onCellEditCommitProp ? { onCellEditCommit: onCellEditCommitProp } : {}),
+    validate: (value, row, columnId) => {
+      const column = consumerResolvedColumns.find((c) => c.columnId === columnId)
+      if (!column?.source.validate) return { valid: true }
+      return column.source.validate(value as never, row)
+    },
+  })
+
+  // Apply the moveOnSettle directive after the editor unmounts. The state
+  // machine reaches Unmounting once the editor's useLayoutEffect cleanup
+  // dispatches; we read `next.move`, advance the active cell, and dispatch
+  // the final `unmounted` to land back in Navigation.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dispatchUnmounted is stable; columnIndex/rowIndex are read at fire time
+  useEffect(() => {
+    if (editController.editState.mode !== "unmounting") return
+    const next = editController.editState.next
+    const cell = editController.editState.cell
+    const rowIndex = rowIndexById.get(cell.rowId)
+    const colIndex = columnIndexById.get(cell.columnId)
+    if (rowIndex == null || colIndex == null) {
+      editController.dispatchUnmounted()
+      return
+    }
+    let nextRow = rowIndex
+    let nextCol = colIndex
+    const lastRow = rowEntries.length - 1
+    const lastCol = resolvedColumns.length - 1
+    if (next.move === "down" && rowIndex < lastRow) nextRow = rowIndex + 1
+    else if (next.move === "up" && rowIndex > 0) nextRow = rowIndex - 1
+    else if (next.move === "right" && colIndex < lastCol) nextCol = colIndex + 1
+    else if (next.move === "left" && colIndex > 0) nextCol = colIndex - 1
+    const targetRow = rowEntries[nextRow]
+    const targetCol = resolvedColumns[nextCol]
+    if (targetRow && targetCol) {
+      setActiveCell({ rowId: targetRow.rowId, columnId: targetCol.columnId })
+    }
+    rootRef.current?.focus({ preventScroll: true })
+    editController.dispatchUnmounted()
+  }, [editController.editState, rowEntries, resolvedColumns, rowIndexById, columnIndexById])
+
+  // Pixel rect of the cell currently being edited — passed to the editor
+  // portal for absolute positioning. Computed from the virtualizer so we
+  // get the right offsets even when the row/col is in a pinned region.
+  const editorCellRect = useMemo(() => {
+    if (editController.editState.mode === "navigation") return null
+    if (editController.editState.mode === "unmounting") return null
+    const cell = editController.editState.cell
+    const rowIndex = rowIndexById.get(cell.rowId)
+    const colIndex = columnIndexById.get(cell.columnId)
+    if (rowIndex == null || colIndex == null) return null
+    const rowOffset = virtualizer.scrollOffsetForRow(rowIndex, "nearest")
+    const colOffset = virtualizer.scrollOffsetForCol(colIndex, "nearest")
+    const rowHeightAtIndex = defaultRowHeight
+    const column = resolvedColumns[colIndex]
+    return {
+      top: rowOffset - scrollOffset.top,
+      left: colOffset - scrollOffset.left,
+      width: column?.width ?? 120,
+      height: rowHeightAtIndex,
+    }
+  }, [
+    editController.editState,
+    rowIndexById,
+    columnIndexById,
+    virtualizer,
+    defaultRowHeight,
+    resolvedColumns,
+    scrollOffset,
+  ])
+
   const scrollToRow = useCallback(
     (targetRowId: RowId, align: "start" | "center" | "end" | "nearest" = "nearest") => {
       const rowIndex = rowIndexById.get(targetRowId)
@@ -521,8 +604,34 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const lastCol = resolvedColumns.length - 1
       if (lastRow < 0 || lastCol < 0) return
 
+      // Edit mode: the editor's own onKeyDown owns Tab / Enter / Esc /
+      // Shift+Enter / Shift+Tab. The grid stays out of the way.
+      if (editController.editState.mode !== "navigation") return
+
       const currentRow = activeCell ? (rowIndexById.get(activeCell.rowId) ?? 0) : 0
       const currentCol = activeCell ? (columnIndexById.get(activeCell.columnId) ?? 0) : 0
+
+      // Activation paths per `editing-rfc §Activation`:
+      //   - F2 / Enter: toggle edit mode on the active cell
+      //   - Printable single character (no Ctrl/Meta): seed the editor
+      //   - Double-click is handled separately on the cell (onDoubleClick)
+      const isPrintable =
+        event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey
+      const cellTarget = activeCell ?? null
+      const cellRow = cellTarget ? rowEntries[currentRow] : null
+      const cellColumn = cellTarget ? resolvedColumns[currentCol] : null
+      if (cellTarget && cellRow && cellColumn && isCellEditable(cellColumn, cellRow.row)) {
+        if (event.key === "F2" || event.key === "Enter") {
+          event.preventDefault()
+          editController.start(cellTarget, event.key === "F2" ? "f2" : "enter")
+          return
+        }
+        if (isPrintable) {
+          event.preventDefault()
+          editController.start(cellTarget, "printable", { seedKey: event.key })
+          return
+        }
+      }
 
       const outcome = nextKeyboardNav({
         key: event.key,
@@ -554,6 +663,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [
       activeCell,
       columnIndexById,
+      editController,
       focusCell,
       pageRowCount,
       resolvedColumns,
@@ -718,7 +828,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   }
                   onRowClick?.(entry.row, event)
                 }}
-                onDoubleClick={(event) => onRowDoubleClick?.(entry.row, event)}
+                onDoubleClick={(event) => {
+                  // Activate edit on the cell at the click point if the
+                  // column is editable. Falls through to onRowDoubleClick
+                  // either way.
+                  const target = (event.target as HTMLElement).closest<HTMLElement>(
+                    "[data-column-id]",
+                  )
+                  const columnId = target?.dataset.columnId
+                  if (columnId) {
+                    const column = resolvedColumns.find((c) => c.columnId === columnId)
+                    if (column && isCellEditable(column, entry.row)) {
+                      editController.start(
+                        { rowId: entry.rowId, columnId: column.columnId },
+                        "doubleclick",
+                        { pointerHint: { x: event.clientX, y: event.clientY } },
+                      )
+                    }
+                  }
+                  onRowDoubleClick?.(entry.row, event)
+                }}
               >
                 {virtualWindow.cols.map((virtualCol) =>
                   renderBodyCell({
@@ -736,12 +865,23 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     virtualCol,
                     virtualRow,
                     selected,
+                    hasOverlayValue: editController.hasOverlayValue,
+                    getOverlayValue: editController.getOverlayValue,
                   }),
                 )}
               </div>
             )
           })}
         </div>
+
+        <EditorPortal
+          controller={editController}
+          activeCell={activeCell}
+          rowEntries={rowEntries}
+          resolvedColumns={resolvedColumns}
+          cellRect={editorCellRect}
+          defaultEditor={defaultTextEditor as never}
+        />
 
         {loading ? (
           <div className="bc-grid-overlay" role="status" style={overlayStyle}>
@@ -782,4 +922,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       />
     </div>
   )
+}
+
+/**
+ * Activation guard per `editing-rfc §Activation guards`. The column may
+ * declare `editable` as a boolean or a row-fn; default false (read-only).
+ */
+function isCellEditable<TRow>(
+  column: { source: { editable?: boolean | ((row: TRow) => boolean) } },
+  row: TRow,
+): boolean {
+  const editable = column.source.editable
+  if (typeof editable === "function") return editable(row)
+  return editable === true
 }
