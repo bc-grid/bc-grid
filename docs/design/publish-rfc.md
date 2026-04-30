@@ -187,6 +187,6 @@ Total: ~6 hours of focused work, sized so each can be a separate PR.
 
 ## Why not the alternatives
 
-- **Direct git install** (`bun add github:johncotdev/bc-grid#main`) — Skips the registry; consumer pulls source + builds at install-time. Faster to set up but loses version semantics and adds build tooling to every consumer. Rejected.
+- **Direct git install** (`bun add github:bc-grid/bc-grid#main`) — Skips the registry; consumer pulls source + builds at install-time. Faster to set up but loses version semantics and adds build tooling to every consumer. Rejected.
 - **Verdaccio / private npm Pro / JFrog** — Extra hosting, cost, and operational burden. GitHub Packages is free for private repos and integrates with the existing GH auth.
 - **Tarballs in Releases** — Workable for one-off versions but no resolution graph; consumer's `bun.lock` would have to pin tarball URLs. Rejected.

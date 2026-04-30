@@ -4,14 +4,14 @@
   "description": "Core types and contracts for bc-grid",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
-  "homepage": "https://github.com/johncotdev/bc-grid",
+  "homepage": "https://github.com/bc-grid/bc-grid",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johncotdev/bc-grid.git",
+    "url": "git+https://github.com/bc-grid/bc-grid.git",
     "directory": "packages/core"
   },
   "bugs": {
-    "url": "https://github.com/johncotdev/bc-grid/issues"
+    "url": "https://github.com/bc-grid/bc-grid/issues"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
