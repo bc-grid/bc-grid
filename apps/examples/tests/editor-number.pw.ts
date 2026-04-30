@@ -18,6 +18,13 @@ const URL = "/?edit=1"
 const NUMBER_COLUMN = "creditLimit"
 
 async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    if (scroller) scroller.scrollLeft = 900
+  })
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+
   const cell = page
     .locator(
       `.bc-grid-row[data-row-index="${rowIndex}"] .bc-grid-cell[data-column-id="${columnId}"]`,
