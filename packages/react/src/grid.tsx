@@ -827,6 +827,24 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     },
   })
 
+  // Overlay cleanup per `editing-rfc §Row-model ownership`: when the
+  // consumer's `data` prop catches up to a patched value, drop the
+  // overlay entry — the canonical state now reflects it. Pending /
+  // error entries are preserved (the overlay is still load-bearing).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pruneOverlay is stable from the controller; the canonical resolver reads from data + columns at fire time
+  useEffect(() => {
+    editController.pruneOverlay((rowId, columnId) => {
+      const entry = rowEntries.find((e) => e.rowId === rowId)
+      // Group rows have no `row`; only DataRowEntry carries the
+      // canonical TRow we read fields from.
+      if (!entry || entry.kind !== "data") return undefined
+      const column = consumerResolvedColumns.find((c) => c.columnId === columnId)
+      const field = column?.source.field
+      if (!field) return undefined
+      return (entry.row as Record<string, unknown>)[field]
+    })
+  }, [data, rowEntries, consumerResolvedColumns])
+
   // Apply the moveOnSettle directive after the editor unmounts. The state
   // machine reaches Unmounting once the editor's useLayoutEffect cleanup
   // dispatches; we read `next.move`, advance the active cell, and dispatch
@@ -1732,6 +1750,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         hasOverlayValue: editController.hasOverlayValue,
                         getOverlayValue: editController.getOverlayValue,
                         getCellEditEntry: editController.getCellEditEntry,
+                        getRowEditState: editController.getRowEditState,
                       }),
                     )}
                     {expanded && renderDetailPanel ? (

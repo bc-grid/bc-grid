@@ -21,7 +21,7 @@ export interface BcCellEditEntry {
   error?: string
   /** Original value before this edit cycle; used for rollback on server reject. */
   previousValue?: unknown
-  /** Server-side mutation id once the consumer assigns one. */
+  /** Client-side commit id used to ignore stale async settle paths. */
   mutationId?: string
 }
 
@@ -206,6 +206,14 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     // useLayoutEffect — see editorPortal.
   }, [])
 
+  // Monotonic counter used to stamp every successful commit with a
+  // unique `mutationId`. Per `editing-rfc §Concurrency`: re-editing a
+  // cell whose previous commit is still in flight supersedes it; on
+  // the older commit's settle we compare the entry's mutationId against
+  // the captured one and bail if they no longer match (the user has
+  // moved on to a newer value, so rolling back would clobber it).
+  const mutationCounterRef = useRef(0)
+
   /**
    * Commit a candidate value. Runs `validate` (sync or async). On valid,
    * applies overlay patch + invokes `onCellEditCommit` (which may return
@@ -222,6 +230,13 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
         column: BcReactGridColumn<TRow, unknown>
         value: unknown
         previousValue: unknown
+        /**
+         * How the commit was triggered. Threaded into
+         * `BcCellEditCommitEvent.source` for consumer audit / analytics.
+         * Defaults to `"keyboard"` since that's the most common path
+         * (Enter / Tab / Shift+Enter / Shift+Tab in the editor).
+         */
+        source?: BcCellEditCommitEvent<TRow>["source"]
       },
       moveOnSettle: MoveOnSettle,
     ): Promise<void> => {
@@ -273,12 +288,19 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       const rowPatch = overlayRef.current.patches.get(candidate.rowId) ?? new Map()
       rowPatch.set(candidate.columnId, parsedValue)
       overlayRef.current.patches.set(candidate.rowId, rowPatch)
+      // Stamp this commit with a monotonic mutationId so a later
+      // settle can detect supersedure: a re-edit of the same cell
+      // overwrites the entry; the older Promise's settle handler
+      // compares its captured id against the current entry and bails
+      // if they differ (the newer value is now authoritative).
+      const mutationId = `m-${++mutationCounterRef.current}`
       // Edit entry: clear error, no longer pending unless onCellEditCommit
       // returns a Promise (set below).
       const rowEntries = editEntriesRef.current.get(candidate.rowId) ?? new Map()
       rowEntries.set(candidate.columnId, {
         pending: false,
         previousValue: candidate.previousValue,
+        mutationId,
       })
       editEntriesRef.current.set(candidate.rowId, rowEntries)
       forceRender()
@@ -301,7 +323,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           column: candidate.column,
           previousValue: candidate.previousValue as never,
           nextValue: parsedValue as never,
-          source: "keyboard",
+          source: candidate.source ?? "keyboard",
         })
         if (settle && typeof (settle as Promise<void>).then === "function") {
           // Mark pending until the Promise settles.
@@ -311,21 +333,32 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           try {
             await settle
             const after = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
-            if (after) after.pending = false
-            forceRender()
-            announceCommitted()
+            // Stale-settle guard: if a newer commit superseded this
+            // one, the entry's mutationId no longer matches what we
+            // started with. Don't touch the entry — the newer commit
+            // owns its own pending lifecycle.
+            if (after && after.mutationId === mutationId) {
+              after.pending = false
+              forceRender()
+              announceCommitted()
+            }
           } catch (err) {
-            // Roll back the overlay on server-side rejection.
-            const patches = overlayRef.current.patches.get(candidate.rowId)
-            patches?.delete(candidate.columnId)
+            // Roll back the overlay on server-side rejection — but only
+            // if this settle still represents the cell's current state.
+            // A re-edit during the in-flight Promise stamps a new
+            // mutationId; rolling back would clobber the user's newer
+            // value, so we silently drop the rejection per
+            // `editing-rfc §Concurrency` ("on reject of the old, ignore
+            // the rollback because the new value is now authoritative").
             const rollbackEntry = editEntriesRef.current
               .get(candidate.rowId)
               ?.get(candidate.columnId)
+            if (!rollbackEntry || rollbackEntry.mutationId !== mutationId) return
+            const patches = overlayRef.current.patches.get(candidate.rowId)
+            patches?.delete(candidate.columnId)
             const rollbackError = err instanceof Error ? err.message : "Server rejected the edit."
-            if (rollbackEntry) {
-              rollbackEntry.pending = false
-              rollbackEntry.error = rollbackError
-            }
+            rollbackEntry.pending = false
+            rollbackEntry.error = rollbackError
             forceRender()
             options.announce?.({
               kind: "serverError",
@@ -350,17 +383,120 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
   const dispatchMounted = useCallback(() => dispatch({ type: "mounted" }), [])
   const dispatchUnmounted = useCallback(() => dispatch({ type: "unmounted" }), [])
 
+  /**
+   * Walk the overlay and clear entries whose patched value matches the
+   * canonical row value returned by `getCanonicalValue`. Per
+   * `editing-rfc §Row-model ownership`: "Patches are cleared from the
+   * overlay when the consumer's `data` prop updates — the assumption
+   * is that a `data` prop update means the consumer accepted the edit
+   * upstream and the new `data` reflects it."
+   *
+   * Pending entries (in-flight server commits) and entries with an
+   * unresolved error are preserved — the overlay is still authoritative
+   * in those cases. Only "settled to canonical" entries are dropped.
+   *
+   * Idempotent and safe to call on every `data` prop update.
+   */
+  const pruneOverlay = useCallback(
+    (getCanonicalValue: (rowId: RowId, columnId: ColumnId) => unknown) => {
+      const result = pruneOverlayPatches(
+        overlayRef.current.patches,
+        editEntriesRef.current,
+        getCanonicalValue,
+      )
+      if (result.changed) forceRender()
+    },
+    [],
+  )
+
+  /**
+   * Aggregate pending / error state for a single row across all its
+   * edited cells. Returns `{ pending, error? }` or `null` when the row
+   * has no edit entries. Used by `<BcEditGrid>` to disable destructive
+   * action buttons while a row has any in-flight commit. Per
+   * `editing-rfc §Server commit + optimistic UI`.
+   */
+  const getRowEditState = useCallback(
+    (rowId: RowId): { pending: boolean; error?: string } | null => {
+      return summariseRowEditState(editEntriesRef.current.get(rowId))
+    },
+    [],
+  )
+
   return {
     editState,
     getOverlayValue,
     hasOverlayValue,
     getCellEditEntry,
+    getRowEditState,
+    pruneOverlay,
     start,
     commit,
     cancel,
     dispatchMounted,
     dispatchUnmounted,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pure helpers — extracted so concurrency / cleanup semantics are
+// unit-testable without mounting React.
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove overlay entries whose patched value equals the canonical row
+ * value. Pending and error entries are preserved (the overlay is still
+ * the source of truth there). Mutates the maps in place; returns
+ * `{ changed }` so the caller knows whether to bump the render counter.
+ */
+export function pruneOverlayPatches(
+  patches: Map<RowId, Map<ColumnId, unknown>>,
+  entries: Map<RowId, Map<ColumnId, BcCellEditEntry>>,
+  getCanonicalValue: (rowId: RowId, columnId: ColumnId) => unknown,
+): { changed: boolean; cleared: number } {
+  let changed = false
+  let cleared = 0
+  for (const [rowId, rowPatches] of patches) {
+    const rowEntries = entries.get(rowId)
+    for (const [columnId, overlayValue] of rowPatches) {
+      const entry = rowEntries?.get(columnId)
+      // Preserve in-flight or error entries — overlay is still load-bearing.
+      if (entry?.pending || entry?.error) continue
+      const canonical = getCanonicalValue(rowId, columnId)
+      if (canonical === overlayValue) {
+        rowPatches.delete(columnId)
+        rowEntries?.delete(columnId)
+        cleared++
+        changed = true
+      }
+    }
+    if (rowPatches.size === 0) patches.delete(rowId)
+    if (rowEntries && rowEntries.size === 0) entries.delete(rowId)
+  }
+  return { changed, cleared }
+}
+
+/**
+ * Reduce a row's per-column edit entries into a single
+ * `{ pending, error? }` summary for the action column. Returns `null`
+ * when the row has no edits.
+ *
+ *   - `pending` is true if any cell in the row has `pending: true`.
+ *   - `error` is the first non-empty error encountered; if multiple
+ *     cells have errors, the first wins (cells are iterated in
+ *     insertion order, which matches commit order).
+ */
+export function summariseRowEditState(
+  rowEntries: Map<ColumnId, BcCellEditEntry> | undefined,
+): { pending: boolean; error?: string } | null {
+  if (!rowEntries || rowEntries.size === 0) return null
+  let pending = false
+  let error: string | undefined
+  for (const entry of rowEntries.values()) {
+    if (entry.pending) pending = true
+    if (!error && entry.error) error = entry.error
+  }
+  return error ? { pending, error } : { pending }
 }
 
 export type EditingController<TRow> = ReturnType<typeof useEditingController<TRow>>
