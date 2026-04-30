@@ -14,6 +14,7 @@
     { "path": "./packages/enterprise" },
     { "path": "./tools/api-surface" },
     { "path": "./tools/bundle-size" },
+    { "path": "./tools/release-preflight" },
     { "path": "./apps/examples" },
     { "path": "./apps/animation-benchmarks" },
     { "path": "./apps/benchmarks" }
