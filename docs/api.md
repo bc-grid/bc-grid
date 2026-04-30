@@ -757,6 +757,11 @@ export interface BcSidebarContext<TRow = unknown> {
   groupBy: readonly ColumnId[]
   setGroupBy: (state: readonly ColumnId[]) => void
   groupableColumns: readonly { columnId: ColumnId; header: string }[]
+  columnFilterText: Readonly<Record<ColumnId, string>>
+  setColumnFilterText: (columnId: ColumnId, value: string) => void
+  clearColumnFilterText: (columnId?: ColumnId) => void
+  getSetFilterOptions?: (columnId: ColumnId) => readonly { value: string; label: string }[]
+  messages: BcGridMessages
   pivot?: unknown
 }
 
