@@ -46,3 +46,24 @@ Key constants:
 - Reduced motion returns no animations.
 - `flip`, `flash`, and `slide` animate only `transform` and/or `opacity`.
 - Unit tests cover FLIP math, keyframes, budget clamping/release, reduced motion, and primitive budget behavior.
+
+## Post-Alpha.2 Motion Policy
+
+The v1 grid motion system keeps every runtime animation on compositor-friendly properties:
+`transform` for row movement, group/detail disclosure icons, and slide-in row entrances; `opacity`
+for cell flash, row entrance fade, tooltips, and pinned-edge shadows. Sidebar open/close no longer
+animates width because it is a layout property.
+
+React row motion is split by trigger:
+
+- Sort captures visible row rects before state commit and plays FLIP after the sorted render.
+- Filter, group expand/collapse, detail expand/collapse, row insert, and row remove animate surviving
+  visible rows from their previous rects to their new rects. Newly visible rows slide/fade in. Rows
+  removed by filtering/collapse leave immediately because virtualization has already released their
+  DOM nodes; the survivor FLIP keeps the transition readable without retaining arbitrary exits.
+- Cell flash uses the same `AnimationBudget` path as row motion, so rapid edit commits cannot start
+  unbounded Web Animations.
+
+`prefers-reduced-motion: reduce` disables package primitives through `resolveMotionPolicy()` and
+disables CSS animation/transition durations through the theme media query. Explicit
+`motionPolicy: "normal"` remains available for controlled benchmarks and tests only.
