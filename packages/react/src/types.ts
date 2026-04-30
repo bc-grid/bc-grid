@@ -1,3 +1,4 @@
+import type { AggregationResult } from "@bc-grid/aggregations"
 import type {
   BcCellPosition,
   BcColumnFilter,
@@ -55,6 +56,16 @@ export interface BcGridUrlStatePersistence {
   searchParam: string
 }
 
+export type BcAggregationScope = "filtered" | "all" | "selected"
+
+export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
+  value: unknown
+  formattedValue: string
+  result: AggregationResult
+  column: BcReactGridColumn<TRow, TValue>
+  locale?: string | undefined
+}
+
 export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
   BcCoreGridColumn<TRow, TValue>,
   "header"
@@ -66,6 +77,7 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
     | CSSProperties
     | ((params: BcCellRendererParams<TRow, TValue>) => CSSProperties | undefined)
   cellEditor?: BcCellEditor<TRow, TValue>
+  aggregationFormatter?: (params: BcAggregationFormatterParams<TRow, TValue>) => ReactNode
 }
 
 export type BcGridColumn<TRow, TValue = unknown> = BcReactGridColumn<TRow, TValue>
@@ -92,6 +104,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   pagination?: boolean
   pageSizeOptions?: number[]
+  aggregationScope?: BcAggregationScope
 
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
   groupsExpandedByDefault?: boolean

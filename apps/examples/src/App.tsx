@@ -116,6 +116,11 @@ function paginationEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("pagination") === "1"
 }
 
+function aggregationsEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("aggregations") === "1"
+}
+
 function CustomerGridDemo({
   density,
   onDensityChange,
@@ -136,6 +141,7 @@ function CustomerGridDemo({
   const urlStateEnabled = urlStatePersistenceEnabled()
   const disabledRows = disabledRowsEnabled()
   const paginationDemo = paginationEnabled()
+  const aggregationDemo = aggregationsEnabled()
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
   const urlStatePersistence = useMemo(
@@ -237,6 +243,7 @@ function CustomerGridDemo({
         width: 140,
         format: { type: "currency", currency: "USD", precision: 0 },
         filter: { type: "number" },
+        ...(aggregationDemo ? { aggregation: { type: "max" as const } } : {}),
         // ?edit=1: editable numeric column. valueParser strips locale
         // thousands separators (commas, spaces) and runs parseFloat.
         // validate enforces a non-negative bound (credit limits can't
@@ -265,6 +272,7 @@ function CustomerGridDemo({
         width: 144,
         format: { type: "currency", currency: "USD", precision: 0 },
         filter: { type: "number" },
+        ...(aggregationDemo ? { aggregation: { type: "sum" as const } } : {}),
       },
       {
         columnId: "current",
@@ -345,7 +353,7 @@ function CustomerGridDemo({
         filter: { type: "date" },
       },
     ],
-    [],
+    [aggregationDemo],
   )
 
   const handleEdit = useCallback((row: CustomerRow) => {

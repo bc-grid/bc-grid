@@ -19,7 +19,7 @@ export function formatCellValue<TRow>(
   return String(value)
 }
 
-function formatPresetValue(
+export function formatPresetValue(
   value: unknown,
   format: BcColumnFormat,
   locale: string | undefined,

@@ -24,6 +24,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { BcGridAggregationFooterRow, useAggregations } from "./aggregations"
 import { renderBodyCell } from "./bodyCells"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
 import {
@@ -268,6 +269,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [columnFilterText, columnFilterTypes],
   )
   const searchText = props.searchText ?? props.defaultSearchText ?? ""
+  const aggregationScope = props.aggregationScope ?? "filtered"
 
   const allRowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
     let visibleRows: TRow[] =
@@ -362,6 +364,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       .slice(paginationWindow.startIndex, paginationWindow.endIndex)
       .map((entry, index) => ({ ...entry, index }))
   }, [allRowEntries, paginationEnabled, paginationWindow.endIndex, paginationWindow.startIndex])
+  const aggregationRows = useMemo(() => allRowEntries.map((entry) => entry.row), [allRowEntries])
 
   // Visible, selectable row IDs in display order (post-filter, post-sort).
   // Used by the synthetic selection-checkbox column's header to compute the
@@ -392,6 +395,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setSelectionState,
     visibleSelectableRowIds,
   ])
+  const aggregationResults = useAggregations(aggregationRows, columns, {
+    allRows: data,
+    locale,
+    rowId,
+    scope: aggregationScope,
+    selection: selectionState,
+  })
+  const hasAggregationFooter = aggregationResults.length > 0
 
   const columnIndexById = useMemo(() => {
     const map = new Map<(typeof resolvedColumns)[number]["columnId"], number>()
@@ -889,7 +900,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       role="grid"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
-      aria-rowcount={rowEntries.length + 2}
+      aria-rowcount={rowEntries.length + 2 + (hasAggregationFooter ? 1 : 0)}
       aria-colcount={resolvedColumns.length}
       aria-activedescendant={activeCellId}
       tabIndex={0}
@@ -1071,6 +1082,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           </div>
         ) : null}
       </div>
+
+      {hasAggregationFooter ? (
+        <BcGridAggregationFooterRow
+          columns={resolvedColumns}
+          locale={locale}
+          results={aggregationResults}
+          rowHeight={defaultRowHeight}
+          rowIndex={rowEntries.length + 3}
+          scrollLeft={scrollOffset.left}
+          totalWidth={virtualWindow.totalWidth}
+          viewportWidth={viewport.width}
+        />
+      ) : null}
 
       {renderedFooter ? <div className="bc-grid-footer">{renderedFooter}</div> : null}
 
