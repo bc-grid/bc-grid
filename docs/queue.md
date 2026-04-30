@@ -13,7 +13,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 >
 > Cut a release after each demo-critical PR merges; bsncraft pulls the new version + a follow-up updates wrappers. Coordinator: Codex in `~/work/bc-grid` (auditor / merge integrator / Playwright owner).
 >
-> **5-worker launch plan (2026-04-30):** all workers start clean from parking branches. `worker1` = Codex, `worker2` = Claude, `worker3` = Codex, `worker4` = Claude, `worker5` = Codex. Codex in `~/work/bc-grid` coordinates PR review, merge, releases, and Playwright. Preferred first claims: `worker1/range-state-machine`, `worker2/filter-set-impl`, `worker3/group-by-client`, `worker4/editor-framework`, `worker5/sidebar-impl`. These are not pre-claimed; each worker must still edit this queue from `[ready]` to `[in-flight: workerN]` before coding. If a preferred task is already claimed, choose the next highest-priority `[ready]` task from `docs/coordination/v1-parity-sprint.md`.
+> **5-worker launch plan (2026-04-30):** all workers start clean from parking branches. `worker1` = Codex, `worker2` = Claude, `worker3` = Codex, `worker4` = Claude, `worker5` = Codex. Codex in `~/work/bc-grid` coordinates PR review, merge, releases, and Playwright. Preferred first claims: `worker1/range-state-machine`, `worker2/filter-set-impl`, `worker3/group-by-client`, `worker4/editor-framework`, `worker5/sidebar-impl`. These are not pre-claimed; each worker must still edit this queue from `[ready]` to `[in-flight: workerN]` before coding. If a preferred task is already claimed, choose the next highest-priority `[ready]` task from `docs/coordination/five-worker-v1-execution-plan.md`.
 
 **Status legend:**
 - `[ready]` — task spec written, no blockers, claim by editing this file + branching

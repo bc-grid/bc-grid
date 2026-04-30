@@ -5,6 +5,7 @@
 **Authorising:** JohnC
 **Supersedes (timeline only):** `docs/roadmap.md` Q5-Q8 — feature scope from those quarters is pulled forward into this sprint; the original quarter-by-quarter calendar is replaced by the parallel-track plan below.
 **Does NOT supersede:** `docs/AGENTS.md` golden rules, `docs/design.md` architectural decisions (§13), `docs/api.md` v0.1 surface, `docs/PARALLEL_WORK.md` worktree scheme. All still binding.
+**Worker execution plan:** `docs/coordination/five-worker-v1-execution-plan.md`
 
 ---
 
