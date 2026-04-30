@@ -72,7 +72,11 @@ export const tagsAnyFilter: BcReactFilterDefinition<readonly string[]> = {
     return JSON.stringify(toTagList(criteria))
   },
   parse(serialized) {
-    return toTagList(JSON.parse(serialized))
+    try {
+      return toTagList(JSON.parse(serialized))
+    } catch {
+      return []
+    }
   },
   Editor: TagsAnyFilterEditor,
 }`
