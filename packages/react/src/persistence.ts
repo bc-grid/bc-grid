@@ -1,4 +1,11 @@
-import type { BcColumnStateEntry, BcGridSort, ColumnId } from "@bc-grid/core"
+import type {
+  BcColumnStateEntry,
+  BcGridFilter,
+  BcGridSort,
+  ColumnId,
+  ServerColumnFilter,
+  ServerFilter,
+} from "@bc-grid/core"
 import { useEffect } from "react"
 import type { BcGridDensity } from "./types"
 
@@ -15,6 +22,7 @@ export interface PersistedGridState {
   pageSize?: number | undefined
   density?: BcGridDensity | undefined
   groupBy?: readonly ColumnId[] | undefined
+  filter?: BcGridFilter | undefined
   sidebarPanel?: string | null | undefined
 }
 
@@ -25,6 +33,7 @@ export interface UrlStatePersistenceOptions {
 export interface UrlPersistedGridState {
   columnState?: readonly BcColumnStateEntry[] | undefined
   sort?: readonly BcGridSort[] | undefined
+  filter?: BcGridFilter | undefined
 }
 
 export interface LocationLike {
@@ -53,6 +62,7 @@ export function readPersistedGridState(
     pageSize: readJson(storage, gridStorageKey(gridId, "pageSize"), parsePageSize),
     density: readJson(storage, gridStorageKey(gridId, "density"), parseDensity),
     groupBy: readJson(storage, gridStorageKey(gridId, "groupBy"), parseGroupBy),
+    filter: readJson(storage, gridStorageKey(gridId, "filter"), parseFilterState),
     sidebarPanel: readJson(storage, gridStorageKey(gridId, "sidebarPanel"), parseSidebarPanel),
   }
 }
@@ -68,6 +78,7 @@ export function writePersistedGridState(
   writeJson(storage, gridStorageKey(gridId, "pageSize"), state.pageSize)
   writeJson(storage, gridStorageKey(gridId, "density"), state.density)
   writeJson(storage, gridStorageKey(gridId, "groupBy"), state.groupBy)
+  writeJson(storage, gridStorageKey(gridId, "filter"), state.filter)
   writeJson(storage, gridStorageKey(gridId, "sidebarPanel"), state.sidebarPanel)
 }
 
@@ -98,7 +109,7 @@ export function writeUrlPersistedGridState(
 
   try {
     const params = new URLSearchParams(location.search)
-    if (state.columnState === undefined && state.sort === undefined) {
+    if (state.columnState === undefined && state.sort === undefined && state.filter === undefined) {
       params.delete(searchParam)
     } else {
       params.set(searchParam, JSON.stringify(state))
@@ -236,9 +247,11 @@ function parseUrlPersistedGridState(value: unknown): UrlPersistedGridState | und
   if (!isRecord(value)) return undefined
   const columnState = parseColumnState(value.columnState)
   const sort = parseSortState(value.sort)
+  const filter = parseFilterState(value.filter)
   const state: UrlPersistedGridState = {}
   if (columnState) state.columnState = columnState
   if (sort) state.sort = sort
+  if (filter) state.filter = filter
   return state
 }
 
@@ -262,6 +275,46 @@ function parseSortEntry(value: unknown): BcGridSort | undefined {
   return { columnId: value.columnId, direction: value.direction }
 }
 
+function parseFilterState(value: unknown): BcGridFilter | undefined {
+  return parseServerFilter(value)
+}
+
+function parseServerFilter(value: unknown): ServerFilter | undefined {
+  if (!isRecord(value)) return undefined
+
+  if (value.kind === "group") {
+    if ((value.op !== "and" && value.op !== "or") || !Array.isArray(value.filters)) {
+      return undefined
+    }
+    const filters = value.filters.flatMap((filter) => {
+      const parsed = parseServerFilter(filter)
+      return parsed ? [parsed] : []
+    })
+    return filters.length > 0 ? { kind: "group", op: value.op, filters } : undefined
+  }
+
+  if (value.kind !== "column") return undefined
+  if (
+    typeof value.columnId !== "string" ||
+    value.columnId.length === 0 ||
+    !isColumnFilterType(value.type) ||
+    typeof value.op !== "string" ||
+    value.op.length === 0
+  ) {
+    return undefined
+  }
+
+  const filter: ServerColumnFilter = {
+    kind: "column",
+    columnId: value.columnId,
+    type: value.type,
+    op: value.op,
+  }
+  if ("value" in value) filter.value = value.value
+  if (Array.isArray(value.values)) filter.values = [...value.values]
+  return filter
+}
+
 function parsePageSize(value: unknown): number | undefined {
   return Number.isInteger(value) && typeof value === "number" && value > 0 ? value : undefined
 }
@@ -280,6 +333,19 @@ function parseSidebarPanel(value: unknown): string | null | undefined {
   if (typeof value !== "string") return undefined
   const trimmed = value.trim()
   return trimmed ? trimmed : undefined
+}
+
+function isColumnFilterType(value: unknown): value is ServerColumnFilter["type"] {
+  return (
+    value === "text" ||
+    value === "number" ||
+    value === "number-range" ||
+    value === "date" ||
+    value === "date-range" ||
+    value === "set" ||
+    value === "boolean" ||
+    value === "custom"
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

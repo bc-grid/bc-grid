@@ -37,6 +37,9 @@ describe("grid state persistence", () => {
     expect(gridStorageKey("accounts-receivable.customers", "sidebarPanel")).toBe(
       "bc-grid:accounts-receivable.customers:sidebarPanel",
     )
+    expect(gridStorageKey("accounts-receivable.customers", "filter")).toBe(
+      "bc-grid:accounts-receivable.customers:filter",
+    )
   })
 
   test("reads and validates persisted grid state", () => {
@@ -65,6 +68,16 @@ describe("grid state persistence", () => {
     storage.setItem(gridStorageKey(gridId, "pageSize"), JSON.stringify(100))
     storage.setItem(gridStorageKey(gridId, "density"), JSON.stringify("compact"))
     storage.setItem(gridStorageKey(gridId, "groupBy"), JSON.stringify(["tier", "status"]))
+    storage.setItem(
+      gridStorageKey(gridId, "filter"),
+      JSON.stringify({
+        kind: "column",
+        columnId: "status",
+        type: "set",
+        op: "in",
+        values: ["Open", "Past Due"],
+      }),
+    )
     storage.setItem(gridStorageKey(gridId, "sidebarPanel"), JSON.stringify("columns"))
 
     expect(readPersistedGridState(gridId, storage)).toEqual({
@@ -81,6 +94,13 @@ describe("grid state persistence", () => {
         { columnId: "ignored-invalid-values" },
       ],
       density: "compact",
+      filter: {
+        kind: "column",
+        columnId: "status",
+        type: "set",
+        op: "in",
+        values: ["Open", "Past Due"],
+      },
       groupBy: ["tier", "status"],
       pageSize: 100,
       sidebarPanel: "columns",
@@ -94,12 +114,17 @@ describe("grid state persistence", () => {
     storage.setItem(gridStorageKey(gridId, "pageSize"), JSON.stringify(0))
     storage.setItem(gridStorageKey(gridId, "density"), JSON.stringify("dense"))
     storage.setItem(gridStorageKey(gridId, "groupBy"), JSON.stringify(["tier", 42]))
+    storage.setItem(
+      gridStorageKey(gridId, "filter"),
+      JSON.stringify({ kind: "column", columnId: "", type: "text", op: "contains", value: "x" }),
+    )
     storage.setItem(gridStorageKey(gridId, "sidebarPanel"), JSON.stringify(""))
 
     const state = readPersistedGridState(gridId, storage)
     expect(state.columnState).toBeUndefined()
     expect(state.pageSize).toBeUndefined()
     expect(state.density).toBeUndefined()
+    expect(state.filter).toBeUndefined()
     expect(state.groupBy).toBeUndefined()
     expect(state.sidebarPanel).toBeUndefined()
   })
@@ -113,6 +138,13 @@ describe("grid state persistence", () => {
       {
         columnState: [{ columnId: "customer", width: 240 }],
         density: "comfortable",
+        filter: {
+          kind: "column",
+          columnId: "status",
+          type: "text",
+          op: "contains",
+          value: "open",
+        },
         groupBy: ["tier"],
         pageSize: 50,
         sidebarPanel: "filters",
@@ -125,6 +157,15 @@ describe("grid state persistence", () => {
     )
     expect(storage.getItem(gridStorageKey(gridId, "pageSize"))).toBe(JSON.stringify(50))
     expect(storage.getItem(gridStorageKey(gridId, "density"))).toBe(JSON.stringify("comfortable"))
+    expect(storage.getItem(gridStorageKey(gridId, "filter"))).toBe(
+      JSON.stringify({
+        kind: "column",
+        columnId: "status",
+        type: "text",
+        op: "contains",
+        value: "open",
+      }),
+    )
     expect(storage.getItem(gridStorageKey(gridId, "groupBy"))).toBe(JSON.stringify(["tier"]))
     expect(storage.getItem(gridStorageKey(gridId, "sidebarPanel"))).toBe(JSON.stringify("filters"))
 
@@ -133,6 +174,7 @@ describe("grid state persistence", () => {
     expect(storage.getItem(gridStorageKey(gridId, "columnState"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "pageSize"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "density"))).toBeNull()
+    expect(storage.getItem(gridStorageKey(gridId, "filter"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "groupBy"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "sidebarPanel"))).toBeNull()
   })
@@ -168,6 +210,14 @@ describe("grid URL state persistence", () => {
         { columnId: "balance", direction: "desc" },
         { columnId: "ignored", direction: "sideways" },
       ],
+      filter: {
+        kind: "group",
+        op: "and",
+        filters: [
+          { kind: "column", columnId: "status", type: "text", op: "contains", value: "open" },
+          { kind: "column", columnId: "", type: "text", op: "contains", value: "ignored" },
+        ],
+      },
     })
     const location = locationLike(`?tab=customers&grid=${encodeURIComponent(payload)}`)
 
@@ -176,6 +226,13 @@ describe("grid URL state persistence", () => {
         { columnId: "customer", hidden: true, position: 2, width: 260 },
         { columnId: "bad-width" },
       ],
+      filter: {
+        kind: "group",
+        op: "and",
+        filters: [
+          { kind: "column", columnId: "status", type: "text", op: "contains", value: "open" },
+        ],
+      },
       sort: [{ columnId: "balance", direction: "desc" }],
     })
   })
@@ -198,6 +255,7 @@ describe("grid URL state persistence", () => {
       { searchParam: "grid" },
       {
         columnState: [{ columnId: "customer", width: 240 }],
+        filter: { kind: "column", columnId: "status", type: "boolean", op: "is", value: true },
         sort: [{ columnId: "balance", direction: "asc" }],
       },
       history,
@@ -210,6 +268,7 @@ describe("grid URL state persistence", () => {
     const encoded = new URL(`https://example.test${url}`).searchParams.get("grid")
     expect(encoded ? JSON.parse(encoded) : null).toEqual({
       columnState: [{ columnId: "customer", width: 240 }],
+      filter: { kind: "column", columnId: "status", type: "boolean", op: "is", value: true },
       sort: [{ columnId: "balance", direction: "asc" }],
     })
   })
