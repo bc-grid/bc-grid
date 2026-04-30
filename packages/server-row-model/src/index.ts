@@ -565,6 +565,7 @@ class ServerRowModelController<TRow> {
     const promise = input
       .loadPage(query, { signal: controller.signal })
       .then((result) => {
+        if (controller.signal.aborted) throw createAbortError()
         const rows = this.applyPendingMutationsToRows(result.rows)
         this.cache.markLoaded({
           blockKey,
@@ -725,6 +726,7 @@ class ServerRowModelController<TRow> {
     const promise = input
       .loadChildren(query, { signal: controller.signal })
       .then((result) => {
+        if (controller.signal.aborted) throw createAbortError()
         validateTreeResult(result, query)
         const resultRows = result.rows.map((row) => row.data)
         const rows = this.applyPendingMutationsToRows(resultRows)
@@ -816,6 +818,8 @@ class ServerRowModelController<TRow> {
       if (invalidation.scope === "all") this.clearTreeIndex()
       else this.forgetTreeBlocks(affectedBlockKeys)
     }
+
+    this.abortInvalidatedRequests(affectedBlockKeys)
 
     if (invalidation.scope !== "rows") {
       for (const blockKey of affectedBlockKeys) {
@@ -1323,6 +1327,27 @@ class ServerRowModelController<TRow> {
     return affectedBlockKeys
   }
 
+  private abortInvalidatedRequests(blockKeys: readonly ServerBlockKey[]): void {
+    if (blockKeys.length === 0) return
+    const invalidated = new Set(blockKeys)
+    for (const [blockKey, request] of this.#inFlightPaged) {
+      if (!invalidated.has(blockKey)) continue
+      request.controller.abort()
+      this.#inFlightPaged.delete(blockKey)
+    }
+    for (const [blockKey, request] of this.#inFlightInfinite) {
+      if (!invalidated.has(blockKey)) continue
+      request.controller.abort()
+      request.reject(createAbortError())
+      this.#inFlightInfinite.delete(blockKey)
+    }
+    for (const [blockKey, request] of this.#inFlightTree) {
+      if (!invalidated.has(blockKey)) continue
+      request.controller.abort()
+      this.#inFlightTree.delete(blockKey)
+    }
+  }
+
   private startInfiniteRequest(input: {
     blockKey: ServerBlockKey
     deferred: Deferred<ServerBlockResult<TRow>>
@@ -1360,6 +1385,7 @@ class ServerRowModelController<TRow> {
     input.input
       .loadBlock(input.query, { signal: input.request.controller.signal })
       .then((result) => {
+        if (input.request.controller.signal.aborted) throw createAbortError()
         observeFetchDuration()
         validateInfiniteResult(result, input.query)
         const rows = this.applyPendingMutationsToRows(result.rows)
