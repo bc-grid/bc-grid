@@ -301,25 +301,31 @@ function parseFilterDate(value: unknown): string | null {
   }
   const trimmed = String(value ?? "").trim()
   if (!trimmed) return null
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
-  if (dateOnly) {
-    const year = Number(dateOnly[1])
-    const month = Number(dateOnly[2])
-    const day = Number(dateOnly[3])
-    const parsed = new Date(Date.UTC(year, month - 1, day))
-    if (
-      parsed.getUTCFullYear() === year &&
-      parsed.getUTCMonth() === month - 1 &&
-      parsed.getUTCDate() === day
-    ) {
-      return trimmed
-    }
-    return null
-  }
+  const isoDate = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/.exec(trimmed)
+  if (isoDate) return normaliseDateParts(isoDate[1], isoDate[2], isoDate[3])
 
   const parsed = new Date(trimmed)
   if (Number.isNaN(parsed.valueOf())) return null
   return toDateInputValue(parsed)
+}
+
+function normaliseDateParts(
+  yearPart: string | undefined,
+  monthPart: string | undefined,
+  dayPart: string | undefined,
+): string | null {
+  const year = Number(yearPart)
+  const month = Number(monthPart)
+  const day = Number(dayPart)
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  if (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  ) {
+    return `${yearPart}-${monthPart}-${dayPart}`
+  }
+  return null
 }
 
 function parseFilterNumber(value: string): number | null {
