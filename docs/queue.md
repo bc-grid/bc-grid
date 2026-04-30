@@ -151,7 +151,7 @@ Spec already exists: `docs/design/server-query-rfc.md` (PR #2). No new RFC neede
 - `[blocked: depends on infinite-mode-block-cache]` **server-tree-mode** — `rowModel="tree"`: lazy children fetching via `LoadServerTreeChildren`; expand/collapse triggers fetch; `ServerTreeRow` rendering. **Effort**: L.
 - `[review: x2 #89]` **mutation-pipeline** — `ServerRowPatch` apply path; optimistic UI with `pendingMutations` map; `ServerMutationResult` settle handling. Integrates with Track 1's `bc-edit-grid-complete`. **Branch**: `agent/x2/mutation-pipeline`. **Effort**: M.
 - `[ready]` **invalidation-impl** — `ServerInvalidation` scopes (all / view / blocks / rows / tree). Refetch + cache eviction logic. **Effort**: M.
-- `[blocked: depends on infinite-mode-block-cache + mutation-pipeline]` **server-row-model-perf-tuning** — measure block fetch latency, debounce settings, cache hit rate at 100k+ rows. Add to nightly perf harness. **Effort**: M.
+- `[in-flight: x2]` **server-row-model-perf-tuning** — measure block fetch latency, debounce settings, cache hit rate at 100k+ rows. Add to nightly perf harness. **Branch**: `agent/x2/server-row-model-perf-tuning`. **Effort**: M.
 
 #### Track 4 — Aggregations + Pivots (Q5 pulled forward)
 
