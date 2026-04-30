@@ -177,7 +177,7 @@ Spec already exists: `docs/design/server-query-rfc.md` (PR #2). No new RFC neede
 - `[review: x2 #90]` **server-tree-mode** — `rowModel="tree"`: lazy children fetching via `LoadServerTreeChildren`; expand/collapse triggers fetch; `ServerTreeRow` rendering. **Branch**: `agent/x2/server-tree-mode`. **Effort**: L.
 - `[review: worker3 #180]` **mutation-pipeline** — `ServerRowPatch` apply path; optimistic UI with `pendingMutations` map; `ServerMutationResult` settle handling. Integrates with Track 1's `bc-edit-grid-complete`. **Branch**: `agent/worker3/mutation-pipeline`. **Effort**: M.
 - `[done: worker3 #183]` **invalidation-impl** — `ServerInvalidation` scopes (all / view / blocks / rows / tree). Refetch + cache eviction logic. **Branch**: `agent/worker3/invalidation-impl`. **Effort**: M.
-- `[in-flight: worker3]` **server-row-model-mutation-docs-v060** — v0.6 planning/doc pass for server-row-model mutation readiness: optimistic patches, stale settle, invalidation after commit, rollback/error state, row identity, and `BcServerGrid` composition. **Branch**: `agent/worker3/server-row-model-mutation-docs-v060`. **Effort**: S.
+- `[review: worker3 #214]` **server-row-model-mutation-docs-v060** — v0.6 planning/doc pass for server-row-model mutation readiness: optimistic patches, stale settle, invalidation after commit, rollback/error state, row identity, and `BcServerGrid` composition. **Branch**: `agent/worker3/server-row-model-mutation-docs-v060`. **Effort**: S.
 - `[review: x2 #96]` **server-row-model-perf-tuning** — measure block fetch latency, debounce settings, cache hit rate at 100k+ rows. Add to nightly perf harness. **Branch**: `agent/x2/server-row-model-perf-tuning`. **Effort**: M.
 
 #### Track 4 — Aggregations + Pivots (Q5 pulled forward)
