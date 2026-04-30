@@ -16,16 +16,19 @@ import {
   type NumberFilterOperator,
   type SetFilterOperator,
   type SetFilterOption,
+  type TextFilterOperator,
   decodeDateFilterInput,
   decodeDateRangeFilterInput,
   decodeNumberFilterInput,
   decodeNumberRangeFilterInput,
   decodeSetFilterInput,
+  decodeTextFilterInput,
   encodeDateFilterInput,
   encodeDateRangeFilterInput,
   encodeNumberFilterInput,
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
+  encodeTextFilterInput,
 } from "./filter"
 import {
   type ResolvedColumn,
@@ -762,6 +765,17 @@ export function FilterEditorBody({
       />
     )
   }
+  if (filterType === "text") {
+    return (
+      <TextFilterControl
+        filterId={filterId}
+        filterLabel={filterLabel}
+        filterText={filterText}
+        onFilterChange={onFilterChange}
+        primaryRef={focusRef}
+      />
+    )
+  }
   return (
     <input
       ref={(el) => {
@@ -1077,6 +1091,91 @@ function DateRangeFilterControl({
         onChange={(event) => update({ valueTo: event.currentTarget.value })}
         onKeyDown={(event) => event.stopPropagation()}
       />
+    </div>
+  )
+}
+
+/**
+ * Inline text filter editor with operator dropdown plus
+ * case-sensitivity (`Aa`) and regex (`.*`) modifier toggles per
+ * `filter-registry-rfc §text`. The toggles are checkbox-styled buttons
+ * (`aria-pressed`) so they're keyboard reachable and announce as
+ * pressable controls. Modifier flags are stripped from the encoded
+ * payload when they match defaults (off) to keep the round-trip shape
+ * minimal — pre-extend filter inputs that emitted plain strings still
+ * decode (legacy `contains` interpretation) thanks to
+ * `decodeTextFilterInput`'s fallback path.
+ */
+function TextFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+  primaryRef,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+  primaryRef?: { current: FilterFocusElement | null }
+}): ReactNode {
+  const input = decodeTextFilterInput(filterText)
+  const update = (next: Partial<typeof input>) => {
+    onFilterChange(encodeTextFilterInput({ ...input, ...next }))
+  }
+  const stop = (event: { stopPropagation(): void }) => event.stopPropagation()
+  const caseOn = input.caseSensitive === true
+  const regexOn = input.regex === true
+
+  return (
+    <div className="bc-grid-filter-text">
+      <select
+        aria-label={`${filterLabel} operator`}
+        className="bc-grid-filter-select"
+        value={input.op}
+        onChange={(event) => update({ op: event.currentTarget.value as TextFilterOperator })}
+        onKeyDown={stop}
+      >
+        <option value="contains">Contains</option>
+        <option value="starts-with">Starts</option>
+        <option value="ends-with">Ends</option>
+        <option value="equals">Equals</option>
+      </select>
+      <input
+        ref={(el) => {
+          if (primaryRef) primaryRef.current = el
+        }}
+        aria-label={filterLabel}
+        className="bc-grid-filter-input"
+        id={filterId}
+        type="text"
+        value={input.value}
+        onChange={(event) => update({ value: event.currentTarget.value })}
+        onKeyDown={stop}
+        placeholder="Filter"
+      />
+      <button
+        type="button"
+        aria-label={`${filterLabel} case-sensitive`}
+        aria-pressed={caseOn}
+        className="bc-grid-filter-text-toggle"
+        onClick={() => update({ caseSensitive: !caseOn })}
+        onKeyDown={stop}
+        onPointerDown={stop}
+      >
+        Aa
+      </button>
+      <button
+        type="button"
+        aria-label={`${filterLabel} regex`}
+        aria-pressed={regexOn}
+        className="bc-grid-filter-text-toggle"
+        onClick={() => update({ regex: !regexOn })}
+        onKeyDown={stop}
+        onPointerDown={stop}
+      >
+        .*
+      </button>
     </div>
   )
 }

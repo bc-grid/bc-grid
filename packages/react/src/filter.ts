@@ -19,6 +19,23 @@ export type ColumnFilterTypeByColumnId = Readonly<Record<ColumnId, BcColumnFilte
 export type DateFilterOperator = "is" | "before" | "after" | "between"
 export type NumberFilterOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "between"
 export type SetFilterOperator = "in" | "not-in" | "blank"
+/**
+ * Operator surface for `BcColumnFilter.type === "text"` per
+ * `filter-registry-rfc §text`. The `regex` modifier is a separate
+ * boolean toggle that, when on, causes the predicate to interpret
+ * `value` as a `RegExp` pattern (operator-agnostic — `op` is ignored
+ * for matching because regex patterns describe their own anchoring).
+ */
+export type TextFilterOperator = "contains" | "starts-with" | "ends-with" | "equals"
+
+export interface TextFilterInput {
+  op: TextFilterOperator
+  value: string
+  /** Default false (case-insensitive). */
+  caseSensitive?: boolean
+  /** Default false. When true, `value` is a regex pattern. */
+  regex?: boolean
+}
 
 export interface DateFilterInput {
   op: DateFilterOperator
@@ -72,6 +89,7 @@ export type FilterCellValue =
       rawValue?: unknown
     }
 
+type TextColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "text" }
 type DateColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "date" }
 type DateRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
   type: "date-range"
@@ -133,7 +151,9 @@ export function buildGridFilter(
       filters.push({ ...parsed, columnId })
       continue
     }
-    filters.push({ kind: "column", columnId, type: "text", op: "contains", value })
+    const parsed = parseTextFilterInput(value)
+    if (!parsed) continue
+    filters.push({ ...parsed, columnId })
   }
   if (filters.length === 0) return null
   if (filters.length === 1 && filters[0]) return filters[0]
@@ -172,10 +192,40 @@ function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFil
     return matchesSetFilter(value, filter)
   }
   if (filter.type !== "text") return false
-  if (filter.op !== "contains") return false
-  const needle = String(filter.value ?? "").toLowerCase()
-  if (needle.length === 0) return true
-  return value.formattedValue.toLowerCase().includes(needle)
+  return matchesTextFilter(value.formattedValue, filter)
+}
+
+/**
+ * Predicate for the `text` filter type. Switches on the operator
+ * (`contains` default, plus `starts-with` / `ends-with` / `equals`)
+ * and applies the `caseSensitive` and `regex` modifier flags. When
+ * `regex` is on the operator is ignored — regex patterns describe
+ * their own anchoring, so applying op semantics on top would surprise
+ * users who wrote `^foo$` and selected `contains`. A regex that fails
+ * to compile drops the filter (no match) — partial typing of an
+ * unfinished pattern shouldn't blank out the row set.
+ */
+function matchesTextFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
+  const needleRaw = String(filter.value ?? "")
+  if (needleRaw.length === 0) return true
+
+  if (filter.regex === true) {
+    try {
+      const pattern = new RegExp(needleRaw, filter.caseSensitive === true ? "" : "i")
+      return pattern.test(formattedValue)
+    } catch {
+      return false
+    }
+  }
+
+  const caseSensitive = filter.caseSensitive === true
+  const haystack = caseSensitive ? formattedValue : formattedValue.toLowerCase()
+  const needle = caseSensitive ? needleRaw : needleRaw.toLowerCase()
+  if (filter.op === "starts-with") return haystack.startsWith(needle)
+  if (filter.op === "ends-with") return haystack.endsWith(needle)
+  if (filter.op === "equals") return haystack === needle
+  // Default + unknown ops: contains.
+  return haystack.includes(needle)
 }
 
 /**
@@ -216,6 +266,36 @@ export function encodeNumberFilterInput(input: NumberFilterInput): string {
 }
 
 export const encodeDateFilterInput = encodeNumberFilterInput as (input: DateFilterInput) => string
+
+export function encodeTextFilterInput(input: TextFilterInput): string {
+  return JSON.stringify(input)
+}
+
+/**
+ * Decode the editor's serialized text-filter state. Falls back to the
+ * legacy plain-string contract (`raw` taken as a `contains` needle) so
+ * filter inputs typed under the pre-extend code path still resolve.
+ * Default op is `contains` per `filter-registry-rfc §text`.
+ */
+export function decodeTextFilterInput(raw: string): TextFilterInput {
+  try {
+    const parsed = JSON.parse(raw) as Partial<TextFilterInput>
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.value === "string" &&
+      isTextFilterOperator(parsed.op)
+    ) {
+      const out: TextFilterInput = { op: parsed.op, value: parsed.value }
+      if (parsed.caseSensitive === true) out.caseSensitive = true
+      if (parsed.regex === true) out.regex = true
+      return out
+    }
+  } catch {
+    // fall through
+  }
+  return { op: "contains", value: raw }
+}
 
 export function encodeNumberRangeFilterInput(input: NumberRangeFilterInput): string {
   return JSON.stringify(input)
@@ -278,6 +358,39 @@ export function decodeSetFilterInput(raw: string): SetFilterInput {
   } catch {
     return { op: "in", values: [] }
   }
+}
+
+/**
+ * Parse a `text` filter draft into the canonical `ServerColumnFilter`
+ * shape. Trims the value at the build boundary so a whitespace-only
+ * input drops the filter (consistent with the rest of buildGridFilter).
+ * Regex patterns that fail to compile drop the filter so partial typing
+ * of an unfinished pattern doesn't blank out the row set. Modifier
+ * flags are emitted only when non-default to keep the canonical shape
+ * minimal.
+ */
+function parseTextFilterInput(raw: string): TextColumnFilterDraft | null {
+  const input = decodeTextFilterInput(raw)
+  const value = input.value.trim()
+  if (!value) return null
+
+  if (input.regex === true) {
+    try {
+      new RegExp(value, input.caseSensitive === true ? "" : "i")
+    } catch {
+      return null
+    }
+  }
+
+  const draft: TextColumnFilterDraft = {
+    kind: "column",
+    type: "text",
+    op: input.op,
+    value,
+  }
+  if (input.caseSensitive === true) draft.caseSensitive = true
+  if (input.regex === true) draft.regex = true
+  return draft
 }
 
 function parseDateFilterInput(raw: string): DateColumnFilterDraft | null {
@@ -615,4 +728,10 @@ function isNumberFilterOperator(value: unknown): value is NumberFilterOperator {
 
 function isSetFilterOperator(value: unknown): value is SetFilterOperator {
   return value === "in" || value === "not-in" || value === "blank"
+}
+
+function isTextFilterOperator(value: unknown): value is TextFilterOperator {
+  return (
+    value === "contains" || value === "starts-with" || value === "ends-with" || value === "equals"
+  )
 }

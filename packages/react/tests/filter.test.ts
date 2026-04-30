@@ -4,11 +4,13 @@ import {
   buildGridFilter,
   decodeDateRangeFilterInput,
   decodeNumberRangeFilterInput,
+  decodeTextFilterInput,
   encodeDateFilterInput,
   encodeDateRangeFilterInput,
   encodeNumberFilterInput,
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
+  encodeTextFilterInput,
   matchesGridFilter,
   setFilterValueKeys,
 } from "../src/filter"
@@ -337,6 +339,81 @@ describe("buildGridFilter", () => {
       throw new Error("expected column filter")
     }
   })
+
+  test("text inputs honour the chosen operator + caseSensitive + regex flags", () => {
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "starts-with", value: "Acme" }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "starts-with",
+      value: "Acme",
+    })
+
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({
+          op: "equals",
+          value: "Acme",
+          caseSensitive: true,
+        }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "equals",
+      value: "Acme",
+      caseSensitive: true,
+    })
+
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({
+          op: "contains",
+          value: "^A.*e$",
+          regex: true,
+        }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "contains",
+      value: "^A.*e$",
+      regex: true,
+    })
+  })
+
+  test("text inputs drop the filter when regex pattern fails to compile", () => {
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "contains", value: "(unterminated", regex: true }),
+      }),
+    ).toBeNull()
+  })
+
+  test("modifier flags default-off are stripped from the canonical shape", () => {
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({
+          op: "contains",
+          value: "Acme",
+          caseSensitive: false,
+          regex: false,
+        }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "contains",
+      value: "Acme",
+    })
+  })
 })
 
 describe("encodeNumberRangeFilterInput / decodeNumberRangeFilterInput", () => {
@@ -387,6 +464,45 @@ describe("encodeDateRangeFilterInput / decodeDateRangeFilterInput", () => {
   })
 })
 
+describe("encodeTextFilterInput / decodeTextFilterInput", () => {
+  test("legacy plain strings decode as a contains shortcut", () => {
+    expect(decodeTextFilterInput("Acme")).toEqual({ op: "contains", value: "Acme" })
+    expect(decodeTextFilterInput("")).toEqual({ op: "contains", value: "" })
+  })
+
+  test("falls back to contains shortcut when JSON shape is unrecognised", () => {
+    expect(decodeTextFilterInput("{not parseable")).toEqual({
+      op: "contains",
+      value: "{not parseable",
+    })
+    expect(decodeTextFilterInput(JSON.stringify({ op: "starts-with" }))).toEqual({
+      op: "contains",
+      value: JSON.stringify({ op: "starts-with" }),
+    })
+    expect(decodeTextFilterInput(JSON.stringify({ op: "unknown", value: "x" }))).toEqual({
+      op: "contains",
+      value: JSON.stringify({ op: "unknown", value: "x" }),
+    })
+  })
+
+  test("round-trips populated input with modifier flags", () => {
+    const input = {
+      op: "ends-with" as const,
+      value: "Inc",
+      caseSensitive: true,
+      regex: true,
+    }
+    expect(decodeTextFilterInput(encodeTextFilterInput(input))).toEqual(input)
+  })
+
+  test("decodes default-off modifiers as omitted", () => {
+    expect(decodeTextFilterInput(encodeTextFilterInput({ op: "equals", value: "Acme" }))).toEqual({
+      op: "equals",
+      value: "Acme",
+    })
+  })
+})
+
 describe("matchesGridFilter — column", () => {
   const lookup =
     (values: Record<ColumnId, string>) =>
@@ -416,6 +532,58 @@ describe("matchesGridFilter — column", () => {
     const filter = buildGridFilter({ email: "acme" })
     if (!filter) throw new Error("expected filter")
     expect(matchesGridFilter(filter, lookup({}))).toBe(false)
+  })
+
+  test("starts-with / ends-with / equals operators apply (case-insensitive default)", () => {
+    const startsWith = buildGridFilter({
+      name: encodeTextFilterInput({ op: "starts-with", value: "Ac" }),
+    })
+    const endsWith = buildGridFilter({
+      name: encodeTextFilterInput({ op: "ends-with", value: "Co" }),
+    })
+    const equals = buildGridFilter({
+      name: encodeTextFilterInput({ op: "equals", value: "Acme" }),
+    })
+    if (!startsWith || !endsWith || !equals) throw new Error("expected filters")
+
+    expect(matchesGridFilter(startsWith, lookup({ name: "Acme Inc" }))).toBe(true)
+    expect(matchesGridFilter(startsWith, lookup({ name: "macme" }))).toBe(false)
+    expect(matchesGridFilter(endsWith, lookup({ name: "Acme & Co" }))).toBe(true)
+    expect(matchesGridFilter(endsWith, lookup({ name: "Acme Co Inc" }))).toBe(false)
+    expect(matchesGridFilter(equals, lookup({ name: "ACME" }))).toBe(true)
+    expect(matchesGridFilter(equals, lookup({ name: "Acme Inc" }))).toBe(false)
+  })
+
+  test("caseSensitive toggle requires exact case match", () => {
+    const filter = buildGridFilter({
+      name: encodeTextFilterInput({ op: "contains", value: "Acme", caseSensitive: true }),
+    })
+    if (!filter) throw new Error("expected filter")
+
+    expect(matchesGridFilter(filter, lookup({ name: "Acme Inc" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "ACME INC" }))).toBe(false)
+    expect(matchesGridFilter(filter, lookup({ name: "acme inc" }))).toBe(false)
+  })
+
+  test("regex toggle ignores op and matches by .test() semantics", () => {
+    const insensitive = buildGridFilter({
+      name: encodeTextFilterInput({ op: "equals", value: "^A.*e$", regex: true }),
+    })
+    const sensitive = buildGridFilter({
+      name: encodeTextFilterInput({
+        op: "contains",
+        value: "^A.*e$",
+        regex: true,
+        caseSensitive: true,
+      }),
+    })
+    if (!insensitive || !sensitive) throw new Error("expected filters")
+
+    expect(matchesGridFilter(insensitive, lookup({ name: "Acme" }))).toBe(true)
+    expect(matchesGridFilter(insensitive, lookup({ name: "ACME" }))).toBe(true)
+    expect(matchesGridFilter(insensitive, lookup({ name: "Acmes Inc" }))).toBe(false)
+    expect(matchesGridFilter(sensitive, lookup({ name: "Acme" }))).toBe(true)
+    expect(matchesGridFilter(sensitive, lookup({ name: "ACME" }))).toBe(false)
   })
 
   test("unsupported non-text types are rejected (Q2 follow-up)", () => {
