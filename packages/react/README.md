@@ -65,7 +65,7 @@ export function CustomerGrid() {
 
 ## Bundle size
 
-At v0.1.0-alpha.2: `core+virtualizer+animations+react` combined 57.75 KiB gzipped. Enforced under a 100 KiB hard cap with a 10% per-PR drift guard from the latest release baseline by `tools/bundle-size`.
+Current main baseline for `core+virtualizer+animations+react`: 64.05 KiB gzipped. Enforced under a 100 KiB hard cap with a 10% per-PR drift guard from the latest accepted main baseline by `tools/bundle-size`.
 
 ## Documentation
 
