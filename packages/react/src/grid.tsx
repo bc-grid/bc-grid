@@ -99,6 +99,7 @@ import {
   BcGridPagination,
   DEFAULT_CLIENT_PAGE_SIZE,
   getPaginationWindow,
+  isPaginationEnabled,
   normalisePageSizeOptions,
 } from "./pagination"
 import {
@@ -462,8 +463,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     searchText,
     sortState,
   ])
-  const paginationEnabled = props.pagination === true
   const effectivePageSize = pageSizeState ?? pageSizeOptions[0] ?? DEFAULT_CLIENT_PAGE_SIZE
+  const paginationEnabled = isPaginationEnabled(
+    props.pagination,
+    allRowEntries.length,
+    effectivePageSize,
+  )
   const paginationWindow = useMemo(
     () => getPaginationWindow(allRowEntries.length, pageState, effectivePageSize),
     [allRowEntries.length, effectivePageSize, pageState],

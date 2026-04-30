@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { getPaginationWindow, normalisePageSizeOptions } from "../src/pagination"
+import {
+  getPaginationWindow,
+  isPaginationEnabled,
+  normalisePageSizeOptions,
+} from "../src/pagination"
 
 describe("normalisePageSizeOptions", () => {
   test("keeps positive integer options, deduped and sorted", () => {
@@ -41,5 +45,27 @@ describe("getPaginationWindow", () => {
       startIndex: 0,
       endIndex: 0,
     })
+  })
+})
+
+describe("isPaginationEnabled", () => {
+  test("explicit true forces pagination on regardless of dataset size", () => {
+    expect(isPaginationEnabled(true, 0, 100)).toBe(true)
+    expect(isPaginationEnabled(true, 5, 100)).toBe(true)
+  })
+
+  test("explicit false bypasses the threshold and stays off", () => {
+    expect(isPaginationEnabled(false, 5_000, 100)).toBe(false)
+  })
+
+  test("undefined auto-enables once rowCount exceeds pageSize", () => {
+    expect(isPaginationEnabled(undefined, 99, 100)).toBe(false)
+    expect(isPaginationEnabled(undefined, 100, 100)).toBe(false)
+    expect(isPaginationEnabled(undefined, 101, 100)).toBe(true)
+  })
+
+  test("undefined stays off for small/empty datasets", () => {
+    expect(isPaginationEnabled(undefined, 0, 100)).toBe(false)
+    expect(isPaginationEnabled(undefined, 50, 100)).toBe(false)
   })
 })
