@@ -12,6 +12,7 @@ import {
   domToken,
   headerDomId,
   pinnedClassName,
+  pinnedEdgeClassName,
 } from "./gridInternals"
 
 /**
@@ -32,6 +33,7 @@ interface RenderHeaderCellParams<TRow> {
   onResizeMove: (event: PointerEvent<HTMLDivElement>) => void
   onResizeStart: (column: ResolvedColumn<TRow>, event: PointerEvent<HTMLDivElement>) => void
   onSort: (column: ResolvedColumn<TRow>, modifiers: SortModifiers) => void
+  pinnedEdge: "left" | "right" | null
   scrollLeft: number
   sortState: readonly BcGridSort[]
   totalWidth: number
@@ -47,6 +49,7 @@ export function renderHeaderCell<TRow>({
   onResizeMove,
   onResizeStart,
   onSort,
+  pinnedEdge,
   scrollLeft,
   sortState,
   totalWidth,
@@ -98,6 +101,7 @@ export function renderHeaderCell<TRow>({
         sortable ? "bc-grid-header-cell-sortable" : undefined,
         sort ? `bc-grid-header-cell-sorted-${sort.direction}` : undefined,
         pinnedClassName(column.pinned),
+        pinnedEdgeClassName(pinnedEdge),
         column.align === "right" ? "bc-grid-cell-right" : undefined,
       )}
       role="columnheader"
@@ -115,6 +119,7 @@ export function renderHeaderCell<TRow>({
         totalWidth,
         viewportWidth,
         width: column.width,
+        zIndex: column.pinned ? 4 : 3,
       })}
       data-column-id={column.columnId}
     >
@@ -177,6 +182,7 @@ interface RenderFilterCellParams<TRow> {
   headerHeight: number
   index: number
   onFilterChange: (next: string) => void
+  pinnedEdge: "left" | "right" | null
   scrollLeft: number
   totalWidth: number
   viewportWidth: number
@@ -189,6 +195,7 @@ export function renderFilterCell<TRow>({
   headerHeight,
   index,
   onFilterChange,
+  pinnedEdge,
   scrollLeft,
   totalWidth,
   viewportWidth,
@@ -204,6 +211,7 @@ export function renderFilterCell<TRow>({
         "bc-grid-cell",
         "bc-grid-filter-cell",
         pinnedClassName(column.pinned),
+        pinnedEdgeClassName(pinnedEdge),
         column.align === "right" ? "bc-grid-cell-right" : undefined,
       )}
       role="gridcell"
@@ -217,6 +225,7 @@ export function renderFilterCell<TRow>({
         totalWidth,
         viewportWidth,
         width: column.width,
+        zIndex: column.pinned ? 4 : 3,
       })}
       data-column-id={column.columnId}
       onClick={(event) => {

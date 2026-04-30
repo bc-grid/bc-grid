@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { type Locator, expect, test } from "@playwright/test"
 
 /**
  * React-demo Playwright suite — verifies pinned-column behaviour through
@@ -99,6 +99,58 @@ test("pinned scroll-shadow data attrs toggle with scroll position", async ({ pag
   await expect(grid).not.toHaveAttribute("data-scrolled-left", "true", { timeout: 1000 })
 })
 
+test("pinned scroll shadows render only on pinned group seam cells", async ({ page }) => {
+  await page.goto("/?checkbox=1")
+  const grid = page.locator(".bc-grid").first()
+  await expect(grid).toBeVisible()
+
+  const pinnedLeftHeaders = grid.locator(".bc-grid-header .bc-grid-cell-pinned-left")
+  expect(await pinnedLeftHeaders.count()).toBeGreaterThan(1)
+  await expect(grid.locator(".bc-grid-header .bc-grid-cell-pinned-left-edge")).toHaveCount(1)
+  await expect(
+    grid.locator(".bc-grid-header .bc-grid-cell-pinned-left:not(.bc-grid-cell-pinned-left-edge)"),
+  ).not.toHaveCount(0)
+  await expect(grid.locator(".bc-grid-header .bc-grid-cell-pinned-right-edge")).toHaveCount(1)
+})
+
+test("pinned header corner shadow fades in when body content scrolls underneath", async ({
+  page,
+}) => {
+  await page.goto("/?checkbox=1")
+  const grid = page.locator(".bc-grid").first()
+  await expect(grid).toBeVisible()
+
+  const leftEdge = grid.locator(".bc-grid-header .bc-grid-cell-pinned-left-edge").first()
+  await expect(leftEdge).toBeVisible()
+  await expect.poll(() => pseudoOpacity(leftEdge, "::after")).toBe("0")
+
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    if (scroller) scroller.scrollLeft = 240
+  })
+
+  await expect(grid).toHaveAttribute("data-scrolled-left", "true", { timeout: 1000 })
+  await expect.poll(() => pseudoOpacity(leftEdge, "::after")).toBe("1")
+})
+
+test("pinned header cells layer above body cells and unpinned header cells", async ({ page }) => {
+  await page.goto("/")
+  const grid = page.locator(".bc-grid").first()
+  await expect(grid).toBeVisible()
+
+  const headerPinned = grid.locator(".bc-grid-header .bc-grid-cell-pinned-left").first()
+  const headerUnpinned = grid
+    .locator(
+      ".bc-grid-header .bc-grid-cell:not(.bc-grid-cell-pinned-left):not(.bc-grid-cell-pinned-right)",
+    )
+    .first()
+  const bodyPinned = grid.locator(".bc-grid-row .bc-grid-cell-pinned-left").first()
+
+  const headerPinnedZ = await zIndex(headerPinned)
+  expect(headerPinnedZ).toBeGreaterThan(await zIndex(headerUnpinned))
+  expect(headerPinnedZ).toBeGreaterThan(await zIndex(bodyPinned))
+})
+
 test("keyboard ArrowRight from last body cell reaches a pinned-right cell", async ({ page }) => {
   await page.goto("/")
   const grid = page.locator(".bc-grid").first()
@@ -144,3 +196,17 @@ test("aria-colindex preserves visual order: pinned-left → body → pinned-righ
     expect(colIndexes[i]).toBeGreaterThan(colIndexes[i - 1] ?? -1)
   }
 })
+
+async function pseudoOpacity(
+  locator: Locator,
+  pseudoElement: "::before" | "::after",
+): Promise<string> {
+  return locator.evaluate(
+    (element, pseudo) => getComputedStyle(element, pseudo).opacity,
+    pseudoElement,
+  )
+}
+
+async function zIndex(locator: Locator): Promise<number> {
+  return locator.evaluate((element) => Number(getComputedStyle(element).zIndex))
+}

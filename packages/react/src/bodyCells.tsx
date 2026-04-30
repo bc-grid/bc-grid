@@ -8,6 +8,7 @@ import {
   classNames,
   headerDomId,
   pinnedClassName,
+  pinnedEdgeClassName,
 } from "./gridInternals"
 import { BcGridTooltip } from "./tooltip"
 import type { BcCellRendererParams } from "./types"
@@ -25,6 +26,7 @@ interface RenderBodyCellParams<TRow> {
   entry: RowEntry<TRow>
   locale: string | undefined
   onCellFocus: ((position: BcCellPosition) => void) | undefined
+  pinnedEdge: "left" | "right" | null
   scrollLeft: number
   searchText: string
   selected: boolean
@@ -52,6 +54,7 @@ export function renderBodyCell<TRow>({
   entry,
   locale,
   onCellFocus,
+  pinnedEdge,
   scrollLeft,
   searchText,
   selected,
@@ -115,6 +118,7 @@ export function renderBodyCell<TRow>({
         className={classNames(
           "bc-grid-cell",
           pinnedClassName(virtualCol.pinned),
+          pinnedEdgeClassName(pinnedEdge),
           column.align === "right" ? "bc-grid-cell-right" : undefined,
           active ? "bc-grid-cell-active" : undefined,
           coreClassName,
