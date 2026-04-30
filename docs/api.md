@@ -414,6 +414,7 @@ For each piece of grid state, there is a controlled (`<state>` + `on<State>Chang
 | Search text | `searchText: string` | `onSearchTextChange(next)` | `defaultSearchText` |
 | Filter | `filter: BcGridFilter` | `onFilterChange(next, prev)` | `defaultFilter` |
 | Selection | `selection: BcSelection` | `onSelectionChange(next, prev)` | `defaultSelection` |
+| Range selection | `rangeSelection: BcRangeSelection` | `onRangeSelectionChange(next, prev)` | `defaultRangeSelection` |
 | Expansion | `expansion: ReadonlySet<RowId>` | `onExpansionChange(next, prev)` | `defaultExpansion` |
 | Group-by | `groupBy: ColumnId[]` | `onGroupByChange(next, prev)` | `defaultGroupBy` |
 | Column state | `columnState: BcColumnStateEntry[]` | `onColumnStateChange(next, prev)` | `defaultColumnState` |
@@ -455,6 +456,17 @@ export interface BcCellPosition {
   columnId: ColumnId
 }
 
+export interface BcRange {
+  start: BcCellPosition
+  end: BcCellPosition
+}
+
+export interface BcRangeSelection {
+  ranges: readonly BcRange[]
+  /** The cell that anchors Shift+arrow / Shift+click extension. */
+  anchor: BcCellPosition | null
+}
+
 export interface BcPaginationState {
   page: number
   pageSize: number
@@ -476,6 +488,10 @@ export interface BcGridStateProps {
   selection?: BcSelection
   defaultSelection?: BcSelection
   onSelectionChange?: (next: BcSelection, prev: BcSelection) => void
+
+  rangeSelection?: BcRangeSelection
+  defaultRangeSelection?: BcRangeSelection
+  onRangeSelectionChange?: (next: BcRangeSelection, prev: BcRangeSelection) => void
 
   expansion?: ReadonlySet<RowId>
   defaultExpansion?: ReadonlySet<RowId>
@@ -502,6 +518,8 @@ export interface BcGridStateProps {
 ```
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
+
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers; React overlay rendering, clipboard copy/paste, and fill handle behavior are Track 2 implementation tasks.
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
@@ -734,6 +752,14 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   // Slots
   toolbar?: React.ReactNode
   footer?: React.ReactNode
+  /**
+   * Footer status-bar segments rendered below the body and above any
+   * `footer` slot. Built-in IDs (`total`, `filtered`, `selected`,
+   * `aggregations`) opt in to the standard renderers; objects matching
+   * `BcStatusBarCustomSegment` render consumer-supplied content. Per
+   * `docs/design/chrome-rfc.md §Status bar`.
+   */
+  statusBar?: readonly BcStatusBarSegment<TRow>[]
   sidebar?: readonly BcSidebarPanel<TRow>[]
   defaultSidebarPanel?: string | null
   sidebarPanel?: string | null
@@ -773,6 +799,35 @@ disclosure column. Expanding a row mounts the returned React node below that
 row, using the existing `expansion` state pair. Detail panels are fixed-height
 by default (`144px`) or per-row via `detailPanelHeight`; auto-measured detail
 height is deferred so virtualization remains deterministic.
+
+The `statusBar` slot accepts an array of segment descriptors. Built-in IDs hide
+themselves when their content is irrelevant: `filtered` only appears once a
+filter narrows the row count, `selected` only when a selection is active, and
+`aggregations` only when at least one aggregation result is available. Custom
+segments render unconditionally — visibility is the consumer's responsibility.
+
+```ts
+type BcStatusBarSegment<TRow = unknown> =
+  | "total"
+  | "filtered"
+  | "selected"
+  | "aggregations"
+  | BcStatusBarCustomSegment<TRow>
+
+interface BcStatusBarCustomSegment<TRow = unknown> {
+  id: string
+  render: (ctx: BcStatusBarContext<TRow>) => React.ReactNode
+  align?: "left" | "right"
+}
+
+interface BcStatusBarContext<TRow = unknown> {
+  totalRowCount: number | "unknown"
+  filteredRowCount: number
+  selectedRowCount: number
+  aggregations: readonly AggregationResult[]
+  api: BcGridApi<TRow>
+}
+```
 
 ### 5.2 `<BcEditGrid>` (frozen at v0.1 surface; editing is Q2)
 
@@ -1037,11 +1092,28 @@ Every export listed here is the v0.1 public API. CI runs `tools/api-surface-diff
 ### `@bc-grid/core`
 
 ```ts
-export { emptyBcPivotState }
+export {
+  emptyBcPivotState,
+  emptyBcRangeSelection,
+  expandRangeTo,
+  newRangeAt,
+  parseRangeSelection,
+  rangeBounds,
+  rangeClear,
+  rangeContains,
+  rangeKeydown,
+  rangePointerDown,
+  rangePointerMove,
+  rangePointerUp,
+  rangeSelectAll,
+  rangesContain,
+  serializeRangeSelection,
+}
 
 // Framework-agnostic column/state/API types (§1.1-1.2, §3, §4, §6).
 // All Server* types from server-query-rfc (§8).
-// Helpers: ColumnId, RowId, BcCellPosition, BcRange (Q3-reserved),
+// Helpers: ColumnId, RowId, BcCellPosition, BcRange, BcRangeSelection,
+//   BcRangeKeyAction,
 //   BcScrollAlign, BcScrollOptions, BcAggregation, BcGridIdentity, BcRowState,
 //   BcPivotState, BcPivotValue, BcPivotedDataDTO, BcPivot*DTO.
 // Excludes React component props, React renderers, refs, DOM events, and editor components.
@@ -1053,10 +1125,13 @@ The machine-checkable manifest for this package lives in `tools/api-surface/src/
 
 ```ts
 // Components
-export { BcGrid, BcEditGrid, BcServerGrid }
+export { BcGrid, BcEditGrid, BcServerGrid, BcStatusBar }
 
 // Hooks
 export { useBcGridApi, useAggregations }
+
+// Helpers
+export { resolveVisibleSegments }
 
 // React-aware types plus @bc-grid/core re-exports for consumer convenience.
 // (Re-exports let consumers import every column / state / loader type from one place.)
@@ -1274,7 +1349,7 @@ Re-stated from `design.md §9` and confirmed here:
 3. **`groupableColumns` redundancy with `groupable: true` per column**: the per-column `groupable` is the source of truth; `groupableColumns` (in `BcGridProps`) is reserved if/when we want UI-side filtering of which groupables appear in the dropdown. **Decision:** keep both; `groupableColumns` defaults to `columns.filter(c => c.groupable)`.
 4. **Locale sources of truth**: grid `locale` prop vs `view.locale` (in `ServerViewState`) — for client grids, `BcGridProps.locale` is canonical. For server grids, `view.locale` is what the server sees; the grid copies the prop into the view state.
 5. **`onCellEditCommit` event timing**: pre-commit (with cancel option) or post-commit only? **Decision:** post-commit only. Pre-commit validation is `column.validate`; cancelled edits do not emit `onCellEditCommit`.
-6. **`BcRange` (range selection)**: declared in `core` for Q3. Does the v0.1 surface need to mention it at all? **Answer:** declared as `@reserved Q3`, not implemented; consumers can't use it but the type exists so future component props can reference it.
+6. **`BcRange` (range selection)**: declared in `core` for Q3. Does the v0.1 surface need to mention it at all? **Answer:** Track 2 unblocked the core state machine: `BcRangeSelection` and pure range helpers are exported from `@bc-grid/core`. React overlay rendering, clipboard copy/paste, and fill handle behavior remain separate implementation tasks.
 7. **i18n message keys**: which strings are localizable at v0.1? **Proposal:** `BcGridMessages` covers loading state, no-rows, search placeholder, page-size label, group-by label, action-column label, action-menu items, sort-direction labels, accessibility live-region templates from `accessibility-rfc §Live Regions`.
 
 ---
