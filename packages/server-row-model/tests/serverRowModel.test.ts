@@ -4,6 +4,8 @@ import { ServerBlockCache, createServerRowModel, defaultBlockKey } from "../src"
 
 interface Row {
   id: string
+  amount?: number
+  name?: string
 }
 
 const view: ServerViewState = {
@@ -11,6 +13,7 @@ const view: ServerViewState = {
   sort: [{ columnId: "name", direction: "asc" }],
   visibleColumns: ["name", "balance"],
 }
+const emptySelection = { mode: "explicit", rowIds: new Set<string>() } as const
 
 describe("defaultBlockKey", () => {
   test("formats paged, infinite, and tree block keys", () => {
@@ -264,5 +267,185 @@ describe("createServerRowModel", () => {
       "ServerBlockResult returned a short block while hasMore is true",
     )
     expect(model.cache.get(request.blockKey)?.state).toBe("error")
+  })
+
+  test("queues mutations and overlays every cached copy of a row", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:2",
+      rows: [
+        { id: "a", name: "old" },
+        { id: "b", name: "stable" },
+      ],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:0:size:2",
+      rows: [{ id: "a", name: "old" }],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+
+    const result = model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.updatedRows).toBe(2)
+    expect(model.cache.get("paged:v1:page:0:size:2")?.rows).toEqual([
+      { id: "a", name: "optimistic" },
+      { id: "b", name: "stable" },
+    ])
+    expect(model.cache.get("infinite:v1:start:0:size:2")?.rows).toEqual([
+      { id: "a", name: "optimistic" },
+    ])
+    expect(
+      model.getState({ mode: "paged", rowCount: 2, selection: emptySelection, view, viewKey: "v1" })
+        .pendingMutations,
+    ).toEqual(new Map([["m1", { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" }]]))
+  })
+
+  test("applies pending mutations to rows loaded after the mutation was queued", async () => {
+    const model = createServerRowModel<Row>()
+    const queued = model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    expect(queued.updatedRows).toBe(0)
+
+    const page = model.loadPagedPage({
+      loadPage: () =>
+        Promise.resolve({
+          pageIndex: 0,
+          pageSize: 1,
+          rows: [{ id: "a", name: "old" }],
+          totalRows: 1,
+        }),
+      pageIndex: 0,
+      pageSize: 1,
+      view,
+      viewKey: "v1",
+    })
+    const result = await page.promise
+
+    expect(result.rows).toEqual([{ id: "a", name: "optimistic" }])
+    expect(model.cache.get(page.blockKey)?.rows).toEqual([{ id: "a", name: "optimistic" }])
+
+    model.settleMutation({
+      result: { mutationId: "m1", reason: "validation", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+    expect(model.cache.get(page.blockKey)?.rows).toEqual([{ id: "a", name: "old" }])
+  })
+
+  test("settles accepted mutations with the server canonical row", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "m1", row: { id: "a", name: "server" }, status: "accepted" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(false)
+    expect(result.updatedRows).toBe(1)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([{ id: "a", name: "server" }])
+    expect(
+      model.getState({ mode: "paged", rowCount: 1, selection: emptySelection, view, viewKey: "v1" })
+        .pendingMutations.size,
+    ).toBe(0)
+  })
+
+  test("rolls back rejected mutations", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "m1", reason: "validation", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(false)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([{ id: "a", name: "old" }])
+  })
+
+  test("recomputes later optimistic mutations when an earlier mutation rejects", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ amount: 1, id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "first" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    model.queueMutation({
+      patch: { changes: { amount: 2 }, mutationId: "m2", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "m1", reason: "validation", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(true)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([
+      { amount: 2, id: "a", name: "old" },
+    ])
+    expect(
+      model.getState({ mode: "paged", rowCount: 1, selection: emptySelection, view, viewKey: "v1" })
+        .pendingMutations,
+    ).toEqual(new Map([["m2", { changes: { amount: 2 }, mutationId: "m2", rowId: "a" }]]))
+  })
+
+  test("settles conflicts with the server canonical row", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "m1", row: { id: "a", name: "server" }, status: "conflict" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(false)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([{ id: "a", name: "server" }])
   })
 })
