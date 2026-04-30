@@ -25,6 +25,12 @@ export interface CustomerRow {
    * ERP scheduling field. Used by the editor-time demo + e2e.
    */
   cutoffTime: string
+  /**
+   * Next scheduled call/email follow-up in `YYYY-MM-DDTHH:mm` form
+   * (local wall-clock, no timezone). Realistic ERP scheduling field.
+   * Used by the editor-datetime demo + e2e.
+   */
+  nextScheduledCall: string
 }
 
 const customerNames = [
@@ -123,6 +129,23 @@ function createCustomerRows(count: number): CustomerRow[] {
         2,
         "0",
       )}`,
+      // Next scheduled follow-up: derived deterministically from `index`
+      // (NOT from the seeded RNG) so adding the field doesn't shift
+      // seeded values used by other columns. Date sits 1-30 days out
+      // from a fixed base; time at quarter-hour marks 09:00–17:00.
+      nextScheduledCall: (() => {
+        const baseUtc = Date.UTC(2026, 4, 1)
+        const dayOffset = (index % 30) + 1
+        const hour = 9 + ((index >> 2) & 7)
+        const minute = (index & 3) * 15
+        const date = new Date(baseUtc + dayOffset * dayMs)
+        return `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(
+          date.getUTCMonth() + 1,
+        ).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}T${String(hour).padStart(
+          2,
+          "0",
+        )}:${String(minute).padStart(2, "0")}`
+      })(),
     }
   })
 }
