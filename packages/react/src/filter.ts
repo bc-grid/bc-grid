@@ -132,9 +132,7 @@ export function encodeNumberFilterInput(input: NumberFilterInput): string {
   return JSON.stringify(input)
 }
 
-export function encodeDateFilterInput(input: DateFilterInput): string {
-  return JSON.stringify(input)
-}
+export const encodeDateFilterInput = encodeNumberFilterInput as (input: DateFilterInput) => string
 
 export function decodeDateFilterInput(raw: string): DateFilterInput {
   try {
@@ -229,14 +227,14 @@ function normaliseNumberFilterInput(input: Partial<NumberFilterInput>): NumberFi
 }
 
 function matchesDateFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
-  const actual = parseFormattedDate(formattedValue)
+  const actual = parseFilterDate(formattedValue)
   if (!actual) return false
 
   if (filter.op === "between") {
-    const values = filter.values?.map((value) => parseFilterDate(String(value ?? ""))) ?? []
-    const valid = values.filter((value): value is string => Boolean(value))
-    if (valid.length < 2) return false
-    const [first, second] = valid as [string, string, ...string[]]
+    const [firstRaw, secondRaw] = filter.values ?? []
+    const first = parseFilterDate(String(firstRaw ?? ""))
+    const second = parseFilterDate(String(secondRaw ?? ""))
+    if (!first || !second) return false
     const min = first <= second ? first : second
     const max = first <= second ? second : first
     return actual >= min && actual <= max
@@ -276,15 +274,6 @@ function matchesNumberFilter(formattedValue: string, filter: ServerColumnFilter)
 function parseFormattedNumber(value: string): number | null {
   const cleaned = value.trim().replace(/[^0-9.+\-Ee]/g, "")
   return parseFilterNumber(cleaned)
-}
-
-function parseFormattedDate(value: string): string | null {
-  const trimmed = value.trim()
-  const isoDate = parseFilterDate(trimmed)
-  if (isoDate) return isoDate
-  const parsed = new Date(trimmed)
-  if (Number.isNaN(parsed.valueOf())) return null
-  return toDateInputValue(parsed)
 }
 
 function parseFilterDate(value: string): string | null {
