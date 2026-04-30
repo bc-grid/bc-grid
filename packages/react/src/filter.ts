@@ -18,6 +18,7 @@ export type ColumnFilterText = Readonly<Record<ColumnId, string>>
 export type ColumnFilterTypeByColumnId = Readonly<Record<ColumnId, BcColumnFilter["type"]>>
 export type DateFilterOperator = "is" | "before" | "after" | "between"
 export type NumberFilterOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "between"
+export type SetFilterOperator = "in" | "not-in" | "blank"
 
 export interface DateFilterInput {
   op: DateFilterOperator
@@ -42,6 +43,16 @@ export interface NumberRangeFilterInput {
   valueTo: string
 }
 
+export interface SetFilterInput {
+  op: SetFilterOperator
+  values: readonly string[]
+}
+
+export interface SetFilterOption {
+  value: string
+  label: string
+}
+
 export type FilterCellValue =
   | string
   | {
@@ -54,6 +65,7 @@ type NumberColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "n
 type NumberRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
   type: "number-range"
 }
+type SetColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "set" }
 
 /**
  * Convert per-column filter-control values into the canonical `BcGridFilter`
@@ -94,6 +106,12 @@ export function buildGridFilter(
       filters.push({ ...parsed, columnId })
       continue
     }
+    if (filterType === "set") {
+      const parsed = parseSetFilterInput(value)
+      if (!parsed) continue
+      filters.push({ ...parsed, columnId })
+      continue
+    }
     filters.push({ kind: "column", columnId, type: "text", op: "contains", value })
   }
   if (filters.length === 0) return null
@@ -123,6 +141,9 @@ function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFil
   }
   if (filter.type === "date") {
     return matchesDateFilter(value, filter)
+  }
+  if (filter.type === "set") {
+    return matchesSetFilter(value, filter)
   }
   if (filter.type !== "text") return false
   if (filter.op !== "contains") return false
@@ -186,6 +207,10 @@ export function decodeNumberRangeFilterInput(raw: string): NumberRangeFilterInpu
   }
 }
 
+export function encodeSetFilterInput(input: SetFilterInput): string {
+  return JSON.stringify(input)
+}
+
 export function decodeDateFilterInput(raw: string): DateFilterInput {
   try {
     const parsed = JSON.parse(raw) as Partial<DateFilterInput>
@@ -201,6 +226,15 @@ export function decodeNumberFilterInput(raw: string): NumberFilterInput {
     return normaliseNumberFilterInput(parsed)
   } catch {
     return { op: "=", value: "" }
+  }
+}
+
+export function decodeSetFilterInput(raw: string): SetFilterInput {
+  try {
+    const parsed = JSON.parse(raw) as Partial<SetFilterInput>
+    return normaliseSetFilterInput(parsed)
+  } catch {
+    return { op: "in", values: [] }
   }
 }
 
@@ -279,6 +313,26 @@ function parseNumberRangeFilterInput(raw: string): NumberRangeColumnFilterDraft 
   }
 }
 
+function parseSetFilterInput(raw: string): SetColumnFilterDraft | null {
+  const input = decodeSetFilterInput(raw)
+
+  if (input.op === "blank") {
+    return {
+      kind: "column",
+      type: "set",
+      op: "blank",
+    }
+  }
+
+  if (input.values.length === 0) return null
+  return {
+    kind: "column",
+    type: "set",
+    op: input.op,
+    values: [...input.values],
+  }
+}
+
 function normaliseDateFilterInput(input: Partial<DateFilterInput>): DateFilterInput {
   const op = isDateFilterOperator(input.op) ? input.op : "is"
   return {
@@ -299,6 +353,14 @@ function normaliseNumberFilterInput(input: Partial<NumberFilterInput>): NumberFi
       ? { valueTo: typeof input.valueTo === "string" ? input.valueTo : "" }
       : {}),
   }
+}
+
+function normaliseSetFilterInput(input: Partial<SetFilterInput>): SetFilterInput {
+  const op = isSetFilterOperator(input.op) ? input.op : "in"
+  const values = Array.isArray(input.values)
+    ? Array.from(new Set(input.values.map(setFilterValueKey).filter((value) => value.length > 0)))
+    : []
+  return { op, values }
 }
 
 function matchesDateFilter(
@@ -323,6 +385,24 @@ function matchesDateFilter(
   if (filter.op === "is") return actual === expected
   if (filter.op === "before") return actual < expected
   if (filter.op === "after") return actual > expected
+  return false
+}
+
+function matchesSetFilter(
+  cellValue: { formattedValue: string; rawValue?: unknown },
+  filter: ServerColumnFilter,
+): boolean {
+  if (filter.op === "blank") return isBlankSetFilterCellValue(cellValue)
+
+  const selected = new Set(
+    (filter.values ?? []).map(setFilterValueKey).filter((value) => value.length > 0),
+  )
+  if (selected.size === 0) return true
+
+  const candidates = setFilterCandidateValues(cellValue)
+  const hasMatch = candidates.some((value) => selected.has(value))
+  if (filter.op === "in") return hasMatch
+  if (filter.op === "not-in") return !hasMatch
   return false
 }
 
@@ -352,6 +432,40 @@ function matchesNumberFilter(formattedValue: string, filter: ServerColumnFilter)
 function parseFormattedNumber(value: string): number | null {
   const cleaned = value.trim().replace(/[^0-9.+\-Ee]/g, "")
   return parseFilterNumber(cleaned)
+}
+
+export function setFilterValueKey(value: unknown): string {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.valueOf())) return ""
+    return toDateInputValue(value)
+  }
+  return String(value ?? "")
+}
+
+export function isBlankSetFilterValue(value: unknown): boolean {
+  if (value == null) return true
+  if (typeof value === "string") return value.trim().length === 0
+  return false
+}
+
+function isBlankSetFilterCellValue(value: { formattedValue: string; rawValue?: unknown }): boolean {
+  if ("rawValue" in value && isBlankSetFilterValue(value.rawValue)) return true
+  return value.formattedValue.trim().length === 0
+}
+
+function setFilterCandidateValues(value: { formattedValue: string; rawValue?: unknown }): string[] {
+  const candidates: string[] = []
+  if ("rawValue" in value) {
+    const rawKey = setFilterValueKey(value.rawValue)
+    if (rawKey.length > 0) candidates.push(rawKey)
+  }
+
+  const formattedKey = setFilterValueKey(value.formattedValue)
+  if (formattedKey.length > 0 && !candidates.includes(formattedKey)) {
+    candidates.push(formattedKey)
+  }
+
+  return candidates
 }
 
 function parseFilterDate(value: unknown): string | null {
@@ -420,4 +534,8 @@ function isNumberFilterOperator(value: unknown): value is NumberFilterOperator {
     value === ">=" ||
     value === "between"
   )
+}
+
+function isSetFilterOperator(value: unknown): value is SetFilterOperator {
+  return value === "in" || value === "not-in" || value === "blank"
 }

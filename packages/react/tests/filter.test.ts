@@ -6,6 +6,7 @@ import {
   encodeDateFilterInput,
   encodeNumberFilterInput,
   encodeNumberRangeFilterInput,
+  encodeSetFilterInput,
   matchesGridFilter,
 } from "../src/filter"
 
@@ -201,6 +202,63 @@ describe("buildGridFilter", () => {
     ).toBeNull()
   })
 
+  test("set inputs produce set ServerColumnFilter objects", () => {
+    expect(
+      buildGridFilter(
+        { status: encodeSetFilterInput({ op: "in", values: ["Open", "Past Due"] }) },
+        { status: "set" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "status",
+      type: "set",
+      op: "in",
+      values: ["Open", "Past Due"],
+    })
+
+    expect(
+      buildGridFilter(
+        { status: encodeSetFilterInput({ op: "not-in", values: ["Closed"] }) },
+        { status: "set" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "status",
+      type: "set",
+      op: "not-in",
+      values: ["Closed"],
+    })
+  })
+
+  test("blank set input produces a blank ServerColumnFilter", () => {
+    expect(
+      buildGridFilter(
+        { status: encodeSetFilterInput({ op: "blank", values: [] }) },
+        { status: "set" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "status",
+      type: "set",
+      op: "blank",
+    })
+  })
+
+  test("empty set selections do not activate a filter", () => {
+    expect(
+      buildGridFilter(
+        { status: encodeSetFilterInput({ op: "in", values: [] }) },
+        { status: "set" },
+      ),
+    ).toBeNull()
+    expect(
+      buildGridFilter(
+        { status: encodeSetFilterInput({ op: "not-in", values: [] }) },
+        { status: "set" },
+      ),
+    ).toBeNull()
+  })
+
   test("trims trailing/leading whitespace on values", () => {
     const result = buildGridFilter({ name: "  John  " })
     if (result?.kind === "column") {
@@ -356,6 +414,60 @@ describe("matchesGridFilter — column", () => {
       })),
     ).toBe(true)
     expect(matchesGridFilter(filter, lookup({ lastInvoice: "31.03.2026" }))).toBe(false)
+  })
+
+  test("set filters match selected formatted values", () => {
+    const filter = buildGridFilter(
+      { status: encodeSetFilterInput({ op: "in", values: ["Open", "Past Due"] }) },
+      { status: "set" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(matchesGridFilter(filter, lookup({ status: "Open" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ status: "Closed" }))).toBe(false)
+  })
+
+  test("set filters prefer raw values when available", () => {
+    const filter = buildGridFilter(
+      { status: encodeSetFilterInput({ op: "in", values: ["open"] }) },
+      { status: "set" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "Open",
+        rawValue: "open",
+      })),
+    ).toBe(true)
+  })
+
+  test("not-in set filters reject selected values", () => {
+    const filter = buildGridFilter(
+      { status: encodeSetFilterInput({ op: "not-in", values: ["Closed"] }) },
+      { status: "set" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(matchesGridFilter(filter, lookup({ status: "Open" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ status: "Closed" }))).toBe(false)
+  })
+
+  test("blank set filters match empty raw or formatted values", () => {
+    const filter = buildGridFilter(
+      { status: encodeSetFilterInput({ op: "blank", values: [] }) },
+      { status: "set" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "Fallback",
+        rawValue: null,
+      })),
+    ).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ status: "" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ status: "Open" }))).toBe(false)
   })
 
   test("unknown op is rejected (Q2 follow-up)", () => {
