@@ -49,7 +49,6 @@ import {
   setFilterValueKeys,
 } from "./filter"
 import {
-  DEFAULT_BODY_HEIGHT,
   DEFAULT_COL_WIDTH,
   type DataRowEntry,
   type GroupRowEntry,
@@ -1221,9 +1220,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       ? cellDomId(domBaseId, activeDescendantCell.rowId, activeDescendantCell.columnId)
       : undefined
 
+  const isAutoHeight = height === "auto"
+  // Numeric height takes the root; "auto" lets the grid grow to its
+  // canvas height; undefined falls through to the parent's flex space.
   const rootHeight = typeof height === "number" ? height : undefined
-  const bodyHeight =
-    height === "auto" ? Math.min(virtualWindow.totalHeight, DEFAULT_BODY_HEIGHT) : undefined
+  // Auto-height & undefined both leave the scroller height to layout
+  // (page-flow vs. parent-flex respectively, controlled by `pageFlow`
+  // below). Only numeric height paths could benefit from a clamp here,
+  // and the existing root flex column already enforces that.
+  const bodyHeight: number | undefined = undefined
 
   const handleScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -1568,7 +1573,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       tabIndex={0}
       onFocus={handleFocus}
       onKeyDown={handleKeyDown}
-      style={rootStyle(rootHeight)}
+      style={rootStyle(isAutoHeight ? "auto" : rootHeight)}
+      data-bc-grid-height-mode={isAutoHeight ? "auto" : "fixed"}
     >
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
 
@@ -1654,7 +1660,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             className="bc-grid-scroller"
             role="rowgroup"
             onScroll={handleScroll}
-            style={scrollerStyle(bodyHeight)}
+            style={scrollerStyle(bodyHeight, isAutoHeight)}
           >
             <div
               className="bc-grid-canvas"

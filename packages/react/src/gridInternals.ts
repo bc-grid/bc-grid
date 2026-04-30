@@ -237,7 +237,19 @@ export function cellStyle({
   }
 }
 
-export function rootStyle(height: number | undefined): CSSProperties {
+export function rootStyle(height: number | "auto" | undefined): CSSProperties {
+  if (height === "auto") {
+    // Page-flow mode: the grid grows to fit its rendered content and
+    // the page scrolls naturally. No fixed root height; min-height: 0
+    // keeps it shrinkable inside flex parents.
+    return {
+      display: "flex",
+      flexDirection: "column",
+      minHeight: 0,
+      outline: "none",
+      position: "relative",
+    }
+  }
   return {
     display: "flex",
     flexDirection: "column",
@@ -265,11 +277,23 @@ export function headerRowStyle(width: number, height: number, scrollLeft: number
   }
 }
 
-export function scrollerStyle(height: number | undefined): CSSProperties {
+export function scrollerStyle(bodyHeight: number | undefined, pageFlow = false): CSSProperties {
+  if (pageFlow) {
+    // Auto-height mode: the scroller does not own its own scrollbar —
+    // it grows to match its canvas content height and the page scrolls
+    // through it. Header alignment + horizontal scroll still come from
+    // the same translate3d transform the body uses, so this only
+    // changes vertical layout.
+    return {
+      flex: "0 0 auto",
+      overflow: "visible",
+      position: "relative",
+    }
+  }
   return {
-    flex: height == null ? "1 1 auto" : "0 0 auto",
-    height,
-    minHeight: height == null ? 0 : undefined,
+    flex: bodyHeight == null ? "1 1 auto" : "0 0 auto",
+    height: bodyHeight,
+    minHeight: bodyHeight == null ? 0 : undefined,
     overflow: "auto",
     position: "relative",
   }
@@ -1253,6 +1277,12 @@ export function resolveFallbackBodyHeight(
   rowHeight: number,
   headerHeight: number,
 ): number {
+  // Pre-mount fallback used only by the virtualizer's first render, before
+  // the ResizeObserver in `useViewportSync` reports the real `clientHeight`.
+  // Numeric height: the body fills `height - headerHeight`. Auto / undefined:
+  // the default 360px is enough to compute a reasonable initial window;
+  // page-flow auto mode then re-syncs to the rendered canvas height on the
+  // next ResizeObserver tick.
   return typeof height === "number"
     ? Math.max(rowHeight, height - headerHeight)
     : DEFAULT_BODY_HEIGHT
