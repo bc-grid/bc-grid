@@ -228,7 +228,7 @@ Spec pending: `docs/design/charts-rfc.md` (c2 to author; user confirmed peer-dep
 - `[review: worker3 #169]` **streaming-row-updates** — server pushes new rows mid-session via `ServerRowUpdate` types (already in core); animated insertion via FLIP. Consumer subscribes via a hook. **Effort**: M.
 - `[ready]` **mobile-touch-fallback** — `accessibility-rfc §Pointer and Touch Fallback`: 44px hit targets in coarse-pointer mode; double-tap to edit; long-press 500ms for context menu; pointer selection handles 44px. **Effort**: M.
 - `[ready]` **wcag-deep-pass** — full axe-core audit on every demo + manual NVDA / JAWS / VoiceOver runs; fix any findings. Generates a `docs/design/a11y-impl-report.md`. **Effort**: M.
-- `[in-flight: worker5]` **animation-polish** — review every transition (sort / filter / expand / collapse / insert / remove / cell-flash); tune to 60fps; document the motion system. **Effort**: M.
+- `[review: worker5 #190]` **animation-polish** — review every transition (sort / filter / expand / collapse / insert / remove / cell-flash); tune to 60fps; document the motion system. **Effort**: M.
 - `[ready]` **browser-compat-matrix** — full Chromium / FF / WebKit / Safari / Edge pass on the AR Customers demo + standalone tests. Document any known issues. **Effort**: S.
 - `[review: x1 #108]` **migration-guide** — from AG Grid Community + Enterprise to bc-grid; documented patterns; side-by-side examples; no codemod (out-of-scope). Lives in `apps/docs`. **Effort**: M.
 
