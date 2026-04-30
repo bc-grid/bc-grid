@@ -269,6 +269,139 @@ describe("createServerRowModel", () => {
     expect(model.cache.get(request.blockKey)?.state).toBe("error")
   })
 
+  test("dedupes concurrent tree children requests", async () => {
+    const model = createServerRowModel<Row>()
+    let calls = 0
+    let resolveTree: (value: {
+      childCount: number
+      childStart: number
+      groupPath: []
+      parentRowId: string | null
+      rows: Array<{ data: Row; kind: "leaf" }>
+    }) => void = () => {}
+    const loadChildren = () => {
+      calls += 1
+      return new Promise<{
+        childCount: number
+        childStart: number
+        groupPath: []
+        parentRowId: string | null
+        rows: Array<{ data: Row; kind: "leaf" }>
+      }>((resolve) => {
+        resolveTree = resolve
+      })
+    }
+
+    const first = model.loadTreeChildren({
+      childCount: 2,
+      childStart: 0,
+      loadChildren,
+      parentRowId: null,
+      view,
+    })
+    const second = model.loadTreeChildren({
+      childCount: 2,
+      childStart: 0,
+      loadChildren,
+      parentRowId: null,
+      view,
+    })
+
+    expect(calls).toBe(1)
+    expect(second.deduped).toBe(true)
+    expect(second.promise).toBe(first.promise)
+    expect(second.query.requestId).toBe(first.query.requestId)
+
+    resolveTree({
+      childCount: 2,
+      childStart: 0,
+      groupPath: [],
+      parentRowId: null,
+      rows: [{ data: { id: "a" }, kind: "leaf" }],
+    })
+    await first.promise
+
+    expect(model.cache.get(first.blockKey)?.state).toBe("loaded")
+    expect(model.cache.get(first.blockKey)?.rows).toEqual([{ id: "a" }])
+  })
+
+  test("marks invalid tree protocol responses as errors", async () => {
+    const model = createServerRowModel<Row>()
+    const request = model.loadTreeChildren({
+      childCount: 2,
+      childStart: 0,
+      loadChildren: () =>
+        Promise.resolve({
+          childCount: 2,
+          childStart: 2,
+          groupPath: [],
+          parentRowId: null,
+          rows: [],
+        }),
+      parentRowId: null,
+      view,
+    })
+
+    await expect(request.promise).rejects.toThrow(
+      "ServerTreeResult.childStart 2 does not match query childStart 0",
+    )
+    expect(model.cache.get(request.blockKey)?.state).toBe("error")
+  })
+
+  test("merges and flattens tree snapshots by expansion", () => {
+    const model = createServerRowModel<Row>()
+    const salesGroup = { columnId: "department", rowId: "group:sales", value: "Sales" }
+    let snapshot = model.createTreeSnapshot()
+
+    snapshot = model.mergeTreeResult({
+      getRowId: (row) => row.id,
+      parentNode: null,
+      result: {
+        childCount: 2,
+        childStart: 0,
+        groupPath: [],
+        parentRowId: null,
+        rows: [
+          {
+            data: { id: "sales" },
+            groupKey: salesGroup,
+            hasChildren: true,
+            kind: "group",
+          },
+          { data: { id: "root-leaf" }, kind: "leaf" },
+        ],
+      },
+      snapshot,
+      viewKey: "v1",
+    })
+
+    expect(model.flattenTreeSnapshot(snapshot, new Set()).map((node) => node.rowId)).toEqual([
+      "group:sales",
+      "root-leaf",
+    ])
+
+    const groupNode = snapshot.nodes.get("group:sales")
+    expect(groupNode).toBeDefined()
+    snapshot = model.mergeTreeResult({
+      getRowId: (row) => row.id,
+      parentNode: groupNode ?? null,
+      result: {
+        childCount: 1,
+        childStart: 0,
+        groupPath: [salesGroup],
+        parentRowId: "group:sales",
+        rows: [{ data: { id: "child" }, kind: "leaf" }],
+      },
+      snapshot,
+      viewKey: "v1",
+    })
+
+    expect(snapshot.nodes.get("group:sales")?.childrenLoaded).toBe(true)
+    expect(
+      model.flattenTreeSnapshot(snapshot, new Set(["group:sales"])).map((node) => node.rowId),
+    ).toEqual(["group:sales", "child", "root-leaf"])
+  })
+
   test("queues mutations and overlays every cached copy of a row", () => {
     const model = createServerRowModel<Row>()
     model.cache.markLoaded({

@@ -200,6 +200,33 @@
   padding-inline: 0.0625rem;
 }
 
+.bc-grid-tree-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.bc-grid-tree-indent,
+.bc-grid-tree-spacer {
+  display: inline-block;
+}
+
+.bc-grid-tree-spacer,
+.bc-grid-tree-toggle {
+  width: 1.25rem;
+}
+
+.bc-grid-tree-toggle {
+  display: inline-flex;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
 /*
  * Pinned-region scroll shadows. Active when body content has scrolled
  * under a pinned region — signals to the user that the pinned columns

@@ -1,10 +1,14 @@
 import type {
+  BcGridFilter,
+  BcGridSort,
+  ColumnId,
   RowId,
   ServerBlockCacheOptions,
   ServerBlockKey,
   ServerBlockQuery,
   ServerBlockResult,
   ServerCacheBlock,
+  ServerGroupKey,
   ServerInvalidation,
   ServerLoadContext,
   ServerMutationResult,
@@ -14,6 +18,9 @@ import type {
   ServerRowModelState,
   ServerRowPatch,
   ServerSelection,
+  ServerTreeQuery,
+  ServerTreeResult,
+  ServerTreeRow,
   ServerViewState,
 } from "@bc-grid/core"
 
@@ -77,6 +84,7 @@ type LoadInfiniteBlockResult<TRow> = {
 }
 
 type RowIdGetter<TRow> = (row: TRow) => RowId
+type IndexedRowIdGetter<TRow> = (row: TRow, index: number) => RowId
 
 type QueueMutationInput<TRow> = {
   patch: ServerRowPatch
@@ -100,6 +108,54 @@ type SettleMutationResult<TRow> = {
   updatedRows: number
 }
 
+type LoadTreeChildrenInput<TRow> = {
+  loadChildren: (
+    query: ServerTreeQuery,
+    context: ServerLoadContext,
+  ) => Promise<ServerTreeResult<TRow>>
+  childCount: number
+  childStart: number
+  groupPath?: ServerTreeQuery["groupPath"]
+  parentRowId: RowId | null
+  view: ServerViewState
+  viewKey?: string
+}
+
+type LoadTreeChildrenResult<TRow> = {
+  blockKey: ServerBlockKey
+  deduped: boolean
+  promise: Promise<ServerTreeResult<TRow>>
+  query: ServerTreeQuery
+}
+
+type ServerTreeNode<TRow> = {
+  childIds: RowId[]
+  childCount: number | "unknown"
+  childrenLoaded: boolean
+  error: unknown
+  groupPath: ServerGroupKey[]
+  hasChildren: boolean
+  kind: "leaf" | "group"
+  level: number
+  loading: boolean
+  parentRowId: RowId | null
+  row: TRow
+  rowId: RowId
+}
+
+type ServerTreeSnapshot<TRow> = {
+  nodes: Map<RowId, ServerTreeNode<TRow>>
+  rootIds: RowId[]
+}
+
+type MergeTreeResultInput<TRow> = {
+  getRowId: IndexedRowIdGetter<TRow>
+  parentNode: ServerTreeNode<TRow> | null
+  result: ServerTreeResult<TRow>
+  snapshot: ServerTreeSnapshot<TRow>
+  viewKey: string
+}
+
 type InFlightPagedRequest<TRow> = {
   controller: AbortController
   promise: Promise<ServerPagedResult<TRow>>
@@ -115,6 +171,12 @@ type InFlightInfiniteRequest<TRow> = {
   state: "queued" | "fetching"
 }
 
+type InFlightTreeRequest<TRow> = {
+  controller: AbortController
+  promise: Promise<ServerTreeResult<TRow>>
+  query: ServerTreeQuery
+}
+
 type Deferred<T> = {
   promise: Promise<T>
   reject: (error: unknown) => void
@@ -127,6 +189,15 @@ type StateSnapshotInput = {
   selection: ServerSelection
   view: ServerViewState
   viewKey: string
+}
+
+type ViewStateInput = {
+  filter: BcGridFilter | undefined
+  groupBy: readonly ColumnId[]
+  locale: string | undefined
+  searchText: string | undefined
+  sort: readonly BcGridSort[]
+  visibleColumns: readonly ColumnId[]
 }
 
 const DEFAULT_BLOCK_CACHE_OPTIONS: ServerBlockCacheOptions = {
@@ -324,12 +395,31 @@ class ServerRowModelController<TRow> {
   #canonicalMutationRows = new Map<RowId, TRow>()
   #inFlightInfinite = new Map<ServerBlockKey, InFlightInfiniteRequest<TRow>>()
   #inFlightPaged = new Map<ServerBlockKey, InFlightPagedRequest<TRow>>()
+  #inFlightTree = new Map<ServerBlockKey, InFlightTreeRequest<TRow>>()
   #pendingMutations = new Map<string, ServerRowPatch>()
   #requestSequence = 0
   #mutationRowIdGetter: RowIdGetter<TRow> | null = null
 
   createViewKey(view: ServerViewState): string {
     return `view:${stableStringify(view)}`
+  }
+
+  createViewState(input: ViewStateInput): ServerViewState {
+    return {
+      groupBy: input.groupBy.map((columnId) => ({ columnId })),
+      sort: input.sort.map((entry) => ({
+        columnId: entry.columnId,
+        direction: entry.direction,
+      })),
+      visibleColumns: [...input.visibleColumns],
+      ...(input.filter ? { filter: input.filter } : {}),
+      ...(input.searchText ? { search: input.searchText } : {}),
+      ...(input.locale ? { locale: input.locale } : {}),
+    }
+  }
+
+  isAbortError(error: unknown): boolean {
+    return isAbortError(error)
   }
 
   loadPagedPage(input: LoadPagedPageInput<TRow>): LoadPagedPageResult<TRow> {
@@ -479,6 +569,81 @@ class ServerRowModelController<TRow> {
     return { blockKey, cached: false, deduped: false, promise: deferred.promise, query }
   }
 
+  loadTreeChildren(input: LoadTreeChildrenInput<TRow>): LoadTreeChildrenResult<TRow> {
+    const viewKey = input.viewKey ?? this.createViewKey(input.view)
+    const blockKey = defaultBlockKey({
+      mode: "tree",
+      childCount: input.childCount,
+      childStart: input.childStart,
+      parentRowId: input.parentRowId,
+      viewKey,
+    })
+    const existing = this.#inFlightTree.get(blockKey)
+    if (existing) {
+      return {
+        blockKey,
+        deduped: true,
+        promise: existing.promise,
+        query: existing.query,
+      }
+    }
+
+    const query = this.createTreeQuery({
+      childCount: input.childCount,
+      childStart: input.childStart,
+      groupPath: input.groupPath ?? [],
+      parentRowId: input.parentRowId,
+      view: input.view,
+      viewKey,
+    })
+    const controller = new AbortController()
+    this.cache.markFetching({
+      blockKey,
+      size: input.childCount,
+      start: input.childStart,
+      viewKey,
+    })
+
+    const promise = input
+      .loadChildren(query, { signal: controller.signal })
+      .then((result) => {
+        validateTreeResult(result, query)
+        const resultRows = result.rows.map((row) => row.data)
+        const rows = this.applyPendingMutationsToRows(resultRows)
+        this.cache.markLoaded({
+          blockKey,
+          rows,
+          size: result.childCount,
+          start: result.childStart,
+          viewKey: result.viewKey ?? viewKey,
+          ...(result.revision ? { revision: result.revision } : {}),
+        })
+        if (rows === resultRows) return result
+        return {
+          ...result,
+          rows: result.rows.map((row, index) => ({ ...row, data: rows[index] ?? row.data })),
+        }
+      })
+      .catch((error: unknown) => {
+        if (!isAbortError(error)) {
+          this.cache.markError({
+            blockKey,
+            error,
+            size: input.childCount,
+            start: input.childStart,
+            viewKey,
+          })
+        }
+        throw error
+      })
+      .finally(() => {
+        this.#inFlightTree.delete(blockKey)
+      })
+
+    this.#inFlightTree.set(blockKey, { controller, promise, query })
+    return { blockKey, deduped: false, promise, query }
+  }
+
   abortExcept(blockKey: ServerBlockKey): void {
     for (const [key, request] of this.#inFlightPaged) {
       if (key === blockKey) continue
@@ -491,6 +656,11 @@ class ServerRowModelController<TRow> {
       request.reject(createAbortError())
       this.#inFlightInfinite.delete(key)
     }
+    for (const [key, request] of this.#inFlightTree) {
+      if (key === blockKey) continue
+      request.controller.abort()
+      this.#inFlightTree.delete(key)
+    }
   }
 
   abortAll(): void {
@@ -501,6 +671,8 @@ class ServerRowModelController<TRow> {
       request.reject(createAbortError())
     }
     this.#inFlightInfinite.clear()
+    for (const request of this.#inFlightTree.values()) request.controller.abort()
+    this.#inFlightTree.clear()
   }
 
   invalidate(invalidation: ServerInvalidation): void {
@@ -596,6 +768,93 @@ class ServerRowModelController<TRow> {
     }
   }
 
+  collectContiguousInfiniteRows(viewKey: string): TRow[] {
+    const loadedBlocks = [...this.cache.toMap().values()]
+      .filter((block) => block.viewKey === viewKey && block.state === "loaded")
+      .sort((a, b) => a.start - b.start)
+    const rows: TRow[] = []
+    let expectedStart = 0
+
+    for (const block of loadedBlocks) {
+      if (block.start !== expectedStart) break
+      rows.push(...block.rows)
+      expectedStart = block.start + block.size
+    }
+
+    return rows
+  }
+
+  mergeInfiniteRows(currentRows: readonly TRow[], result: ServerBlockResult<TRow>): TRow[] | null {
+    if (result.blockStart > currentRows.length) return null
+    const nextRows = currentRows.slice()
+    nextRows.splice(result.blockStart, result.blockSize, ...result.rows)
+    return nextRows
+  }
+
+  createTreeSnapshot(): ServerTreeSnapshot<TRow> {
+    return { nodes: new Map(), rootIds: [] }
+  }
+
+  flattenTreeSnapshot(
+    snapshot: ServerTreeSnapshot<TRow>,
+    expandedRowIds: ReadonlySet<RowId>,
+  ): ServerTreeNode<TRow>[] {
+    const rows: ServerTreeNode<TRow>[] = []
+    const append = (rowId: RowId) => {
+      const node = snapshot.nodes.get(rowId)
+      if (!node) return
+      rows.push(node)
+      if (!expandedRowIds.has(rowId)) return
+      for (const childId of node.childIds) append(childId)
+    }
+    for (const rowId of snapshot.rootIds) append(rowId)
+    return rows
+  }
+
+  updateTreeNode(
+    snapshot: ServerTreeSnapshot<TRow>,
+    rowId: RowId,
+    patch: Partial<ServerTreeNode<TRow>>,
+  ): ServerTreeSnapshot<TRow> {
+    const node = snapshot.nodes.get(rowId)
+    if (!node) return snapshot
+    const nodes = new Map(snapshot.nodes)
+    nodes.set(rowId, { ...node, ...patch })
+    return { ...snapshot, nodes }
+  }
+
+  mergeTreeResult(input: MergeTreeResultInput<TRow>): ServerTreeSnapshot<TRow> {
+    const nodes = new Map(input.snapshot.nodes)
+    const level = input.parentNode ? input.parentNode.level + 1 : 0
+    const childNodes = input.result.rows.map((row, index) =>
+      this.createTreeNode({
+        getRowId: input.getRowId,
+        index: input.result.childStart + index,
+        level,
+        parentGroupPath: input.result.groupPath,
+        parentRowId: input.result.parentRowId,
+        row,
+        viewKey: input.viewKey,
+      }),
+    )
+    const childIds = childNodes.map((node) => node.rowId)
+    for (const node of childNodes) nodes.set(node.rowId, node)
+
+    if (!input.parentNode) {
+      return { nodes, rootIds: childIds }
+    }
+
+    const parent = nodes.get(input.parentNode.rowId) ?? input.parentNode
+    nodes.set(parent.rowId, {
+      ...parent,
+      childIds,
+      childrenLoaded: true,
+      error: null,
+      loading: false,
+    })
+    return { ...input.snapshot, nodes }
+  }
+
   private createPagedQuery(input: {
     pageIndex: number
     pageSize: number
@@ -626,6 +885,84 @@ class ServerRowModelController<TRow> {
       view: input.view,
       viewKey: input.viewKey,
     }
+  }
+
+  private createTreeQuery(input: {
+    childCount: number
+    childStart: number
+    groupPath: ServerTreeQuery["groupPath"]
+    parentRowId: RowId | null
+    view: ServerViewState
+    viewKey: string
+  }): ServerTreeQuery {
+    return {
+      childCount: input.childCount,
+      childStart: input.childStart,
+      groupPath: input.groupPath,
+      mode: "tree",
+      parentRowId: input.parentRowId,
+      requestId: `server-tree-${++this.#requestSequence}`,
+      view: input.view,
+      viewKey: input.viewKey,
+    }
+  }
+
+  private createTreeNode(input: {
+    getRowId: IndexedRowIdGetter<TRow>
+    index: number
+    level: number
+    parentGroupPath: ServerGroupKey[]
+    parentRowId: RowId | null
+    row: ServerTreeRow<TRow>
+    viewKey: string
+  }): ServerTreeNode<TRow> {
+    const groupPath =
+      input.row.kind === "group" && input.row.groupKey
+        ? [...input.parentGroupPath, input.row.groupKey]
+        : input.parentGroupPath
+    const rowId = this.treeRowId({
+      getRowId: input.getRowId,
+      groupPath,
+      index: input.index,
+      row: input.row,
+      viewKey: input.viewKey,
+    })
+    const childCount =
+      typeof input.row.childCount === "number"
+        ? input.row.childCount
+        : input.row.hasChildren
+          ? "unknown"
+          : 0
+
+    return {
+      childCount,
+      childIds: [],
+      childrenLoaded: false,
+      error: null,
+      groupPath,
+      hasChildren: input.row.hasChildren ?? (input.row.kind === "group" || childCount !== 0),
+      kind: input.row.kind,
+      level: input.level,
+      loading: false,
+      parentRowId: input.parentRowId,
+      row: input.row.data,
+      rowId,
+    }
+  }
+
+  private treeRowId(input: {
+    getRowId: IndexedRowIdGetter<TRow>
+    groupPath: ServerGroupKey[]
+    index: number
+    row: ServerTreeRow<TRow>
+    viewKey: string
+  }): RowId {
+    if (input.row.rowId) return input.row.rowId
+    if (input.row.kind === "group") {
+      if (input.row.groupKey?.rowId) return input.row.groupKey.rowId
+      return `group:${input.viewKey}:${stableStringify(input.groupPath)}`
+    }
+    return input.getRowId(input.row.data, input.index)
   }
 
   private startInfiniteRequest(input: {
@@ -872,6 +1209,25 @@ function validateInfiniteResult<TRow>(
   }
   if (result.totalRows == null && result.hasMore == null) {
     throw new Error("ServerBlockResult requires totalRows or hasMore")
+  }
+}
+
+function validateTreeResult<TRow>(result: ServerTreeResult<TRow>, query: ServerTreeQuery): void {
+  if (result.parentRowId !== query.parentRowId) {
+    throw new Error("ServerTreeResult.parentRowId does not match query parentRowId")
+  }
+  if (result.childStart !== query.childStart) {
+    throw new Error(
+      `ServerTreeResult.childStart ${result.childStart} does not match query childStart ${query.childStart}`,
+    )
+  }
+  if (result.childCount !== query.childCount) {
+    throw new Error(
+      `ServerTreeResult.childCount ${result.childCount} does not match query childCount ${query.childCount}`,
+    )
+  }
+  if (result.rows.length > query.childCount) {
+    throw new Error("ServerTreeResult returned more rows than requested")
   }
 }
 
