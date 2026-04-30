@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { ServerPagedResult, ServerViewState } from "@bc-grid/core"
+import type { ServerBlockResult, ServerPagedResult, ServerViewState } from "@bc-grid/core"
 import { ServerBlockCache, createServerRowModel, defaultBlockKey } from "../src"
 
 interface Row {
@@ -122,5 +122,147 @@ describe("createServerRowModel", () => {
 
     expect(signals[0]?.aborted).toBe(true)
     expect(signals[1]?.aborted).toBe(false)
+  })
+
+  test("dedupes concurrent infinite block requests", async () => {
+    const model = createServerRowModel<Row>()
+    let calls = 0
+    let resolveBlock: (value: ServerBlockResult<Row>) => void = () => {}
+    const loadBlock = () => {
+      calls += 1
+      return new Promise<ServerBlockResult<Row>>((resolve) => {
+        resolveBlock = resolve
+      })
+    }
+
+    const first = model.loadInfiniteBlock({ blockSize: 2, blockStart: 0, loadBlock, view })
+    const second = model.loadInfiniteBlock({ blockSize: 2, blockStart: 1, loadBlock, view })
+
+    expect(calls).toBe(1)
+    expect(second.deduped).toBe(true)
+    expect(second.promise).toBe(first.promise)
+    expect(second.query.requestId).toBe(first.query.requestId)
+
+    resolveBlock({
+      blockSize: 2,
+      blockStart: 0,
+      hasMore: false,
+      rows: [{ id: "a" }, { id: "b" }],
+    })
+    await first.promise
+
+    expect(model.cache.get(first.blockKey)?.state).toBe("loaded")
+    expect(model.cache.get(first.blockKey)?.rows).toEqual([{ id: "a" }, { id: "b" }])
+  })
+
+  test("queues infinite block requests over the concurrency limit", async () => {
+    const model = createServerRowModel<Row>()
+    const resolvers: Array<(value: ServerBlockResult<Row>) => void> = []
+    const loadBlock = () =>
+      new Promise<ServerBlockResult<Row>>((resolve) => {
+        resolvers.push(resolve)
+      })
+
+    const first = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      cacheOptions: { maxConcurrentRequests: 1 },
+      loadBlock,
+      view,
+    })
+    const second = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 2,
+      cacheOptions: { maxConcurrentRequests: 1 },
+      loadBlock,
+      view,
+    })
+
+    expect(resolvers.length).toBe(1)
+    expect(model.cache.get(second.blockKey)?.state).toBe("queued")
+
+    resolvers[0]?.({
+      blockSize: 2,
+      blockStart: 0,
+      hasMore: true,
+      rows: [{ id: "a" }, { id: "b" }],
+    })
+    await first.promise
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(resolvers.length).toBe(2)
+    expect(model.cache.get(second.blockKey)?.state).toBe("fetching")
+
+    resolvers[1]?.({
+      blockSize: 2,
+      blockStart: 2,
+      hasMore: false,
+      rows: [{ id: "c" }, { id: "d" }],
+    })
+    await second.promise
+    expect(model.cache.get(second.blockKey)?.state).toBe("loaded")
+  })
+
+  test("evicts least-recently-used loaded infinite blocks", async () => {
+    const model = createServerRowModel<Row>()
+    const loadBlock = (resultRows: Row[]) => (query: { blockStart: number; blockSize: number }) =>
+      Promise.resolve({
+        blockSize: query.blockSize,
+        blockStart: query.blockStart,
+        hasMore: query.blockStart < 4,
+        rows: resultRows,
+      })
+
+    const first = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      cacheOptions: { maxBlocks: 2 },
+      loadBlock: loadBlock([{ id: "a" }, { id: "b" }]),
+      view,
+    })
+    await first.promise
+    const second = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 2,
+      cacheOptions: { maxBlocks: 2 },
+      loadBlock: loadBlock([{ id: "c" }, { id: "d" }]),
+      view,
+    })
+    await second.promise
+    model.cache.get(first.blockKey)
+    const third = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 4,
+      cacheOptions: { maxBlocks: 2 },
+      loadBlock: loadBlock([{ id: "e" }, { id: "f" }]),
+      view,
+    })
+    await third.promise
+
+    expect(model.cache.get(first.blockKey)?.state).toBe("loaded")
+    expect(model.cache.get(second.blockKey)).toBeUndefined()
+    expect(model.cache.get(third.blockKey)?.state).toBe("loaded")
+  })
+
+  test("marks invalid infinite block protocol responses as errors", async () => {
+    const model = createServerRowModel<Row>()
+    const request = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      loadBlock: () =>
+        Promise.resolve({
+          blockSize: 2,
+          blockStart: 0,
+          hasMore: true,
+          rows: [{ id: "short" }],
+        }),
+      view,
+    })
+
+    await expect(request.promise).rejects.toThrow(
+      "ServerBlockResult returned a short block while hasMore is true",
+    )
+    expect(model.cache.get(request.blockKey)?.state).toBe("error")
   })
 })

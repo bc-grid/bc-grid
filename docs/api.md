@@ -620,6 +620,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onRowClick?: (row: TRow, event: React.MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: React.MouseEvent) => void
   onCellFocus?: (position: BcCellPosition) => void
+  onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
 
   // Imperative
   apiRef?: React.RefObject<BcGridApi<TRow> | null>
@@ -737,7 +738,7 @@ export type BcServerGridProps<TRow> =
   | BcServerInfiniteProps<TRow>
   | BcServerTreeProps<TRow>
 
-export interface BcServerPagedProps<TRow> extends Omit<BcGridProps<TRow>, "data"> {
+export interface BcServerPagedProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef" | "data"> {
   rowModel: "paged"
   pageSize?: number
   loadPage: LoadServerPage<TRow>
@@ -746,7 +747,7 @@ export interface BcServerPagedProps<TRow> extends Omit<BcGridProps<TRow>, "data"
   apiRef?: React.RefObject<BcServerGridApi<TRow> | null>
 }
 
-export interface BcServerInfiniteProps<TRow> extends Omit<BcGridProps<TRow>, "data"> {
+export interface BcServerInfiniteProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef" | "data"> {
   rowModel: "infinite"
   blockSize?: number          // default 100
   maxCachedBlocks?: number    // default 20
@@ -756,7 +757,7 @@ export interface BcServerInfiniteProps<TRow> extends Omit<BcGridProps<TRow>, "da
   apiRef?: React.RefObject<BcServerGridApi<TRow> | null>
 }
 
-export interface BcServerTreeProps<TRow> extends Omit<BcGridProps<TRow>, "data"> {
+export interface BcServerTreeProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef" | "data"> {
   rowModel: "tree"
   loadChildren: LoadServerTreeChildren<TRow>
   /** Required when the tree's root needs an initial fetch. */

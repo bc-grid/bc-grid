@@ -7,6 +7,8 @@ import type {
   ColumnId,
   RowId,
   ServerBlockKey,
+  ServerBlockResult,
+  ServerCacheBlock,
   ServerInvalidation,
   ServerPagedResult,
   ServerRowModelMode,
@@ -21,12 +23,28 @@ import { assignRef, createEmptySelection, hasProp } from "./gridInternals"
 import type { BcGridProps, BcServerGridProps } from "./types"
 
 const DEFAULT_SERVER_PAGE_SIZE = 100
+const DEFAULT_SERVER_BLOCK_SIZE = 100
 
 interface PagedServerState<TRow> {
   error: unknown
   getModelState: () => ServerRowModelState<TRow>
   handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
+  invalidate: (invalidation: ServerInvalidation) => void
+  loading: boolean
+  refresh: (opts?: { purge?: boolean }) => void
+  retryBlock: (blockKey: ServerBlockKey) => void
+  rows: readonly TRow[]
+  rowCount: number | "unknown"
+  view: ServerViewState
+}
+
+interface InfiniteServerState<TRow> {
+  error: unknown
+  getModelState: () => ServerRowModelState<TRow>
+  handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
+  handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
+  handleVisibleRowRangeChange: (range: { startIndex: number; endIndex: number }) => void
   invalidate: (invalidation: ServerInvalidation) => void
   loading: boolean
   refresh: (opts?: { purge?: boolean }) => void
@@ -47,6 +65,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
     [props.columns],
   )
   const paged = usePagedServerState(props, visibleColumns)
+  const infinite = useInfiniteServerState(props, visibleColumns)
 
   const serverApi = useMemo<BcServerGridApi<TRow>>(() => {
     const mode = props.rowModel
@@ -96,13 +115,16 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       },
       refreshServerRows(opts) {
         if (mode === "paged") paged.refresh(opts)
+        else if (mode === "infinite") infinite.refresh(opts)
         else gridApiRef.current?.refresh()
       },
       invalidateServerRows(invalidation) {
         if (mode === "paged") paged.invalidate(invalidation)
+        else if (mode === "infinite") infinite.invalidate(invalidation)
       },
       retryServerBlock(blockKey) {
         if (mode === "paged") paged.retryBlock(blockKey)
+        else if (mode === "infinite") infinite.retryBlock(blockKey)
       },
       getServerRowModelState() {
         if (mode === "paged") {
@@ -110,6 +132,13 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
           return {
             ...state,
             selection: toServerSelection(gridApiRef.current?.getSelection(), paged.view),
+          }
+        }
+        if (mode === "infinite") {
+          const state = infinite.getModelState()
+          return {
+            ...state,
+            selection: toServerSelection(gridApiRef.current?.getSelection(), infinite.view),
           }
         }
         return createServerRowModelState({
@@ -120,25 +149,44 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         })
       },
     }
-  }, [gridApiRef, paged, props.rowModel])
+  }, [gridApiRef, infinite, paged, props.rowModel])
 
   useEffect(() => assignRef(externalApiRef, serverApi), [externalApiRef, serverApi])
 
   const gridProps = props as unknown as BcGridProps<TRow>
-  const loading = props.loading ?? (props.rowModel === "paged" ? paged.loading : true)
+  const loading =
+    props.loading ??
+    (props.rowModel === "paged"
+      ? paged.loading
+      : props.rowModel === "infinite"
+        ? infinite.loading
+        : true)
   const loadingOverlay =
     props.loadingOverlay ??
-    (props.rowModel === "paged" && paged.error ? "Failed to load rows" : undefined)
+    (props.rowModel === "paged" && paged.error
+      ? "Failed to load rows"
+      : props.rowModel === "infinite" && infinite.error
+        ? "Failed to load rows"
+        : undefined)
 
   return (
     <BcGrid
       {...gridProps}
-      data={props.rowModel === "paged" ? paged.rows : []}
+      data={
+        props.rowModel === "paged" ? paged.rows : props.rowModel === "infinite" ? infinite.rows : []
+      }
       apiRef={gridApiRef}
       loading={loading}
       loadingOverlay={loadingOverlay}
-      onFilterChange={paged.handleFilterChange}
-      onSortChange={paged.handleSortChange}
+      onFilterChange={
+        props.rowModel === "infinite" ? infinite.handleFilterChange : paged.handleFilterChange
+      }
+      onSortChange={
+        props.rowModel === "infinite" ? infinite.handleSortChange : paged.handleSortChange
+      }
+      {...(props.rowModel === "infinite"
+        ? { onVisibleRowRangeChange: infinite.handleVisibleRowRangeChange }
+        : {})}
     />
   )
 }
@@ -312,6 +360,228 @@ function usePagedServerState<TRow>(
   }
 }
 
+function useInfiniteServerState<TRow>(
+  props: BcServerGridProps<TRow>,
+  visibleColumns: readonly ColumnId[],
+): InfiniteServerState<TRow> {
+  const modelRef = useRef(createServerRowModel<TRow>())
+  const inFlightCountRef = useRef(0)
+  const loadedRowsRef = useRef<TRow[]>([])
+  const [refreshVersion, setRefreshVersion] = useState(0)
+  const [rows, setRows] = useState<readonly TRow[]>([])
+  const [rowCount, setRowCount] = useState<number | "unknown">("unknown")
+  const [loading, setLoading] = useState(() => props.rowModel === "infinite")
+  const [error, setError] = useState<unknown>(null)
+
+  const sortControlled = hasProp(props, "sort")
+  const [uncontrolledSort, setUncontrolledSort] = useState<readonly BcGridSort[]>(
+    () => props.defaultSort ?? [],
+  )
+  const sortState = sortControlled ? (props.sort ?? []) : uncontrolledSort
+
+  const filterControlled = hasProp(props, "filter")
+  const [uncontrolledFilter, setUncontrolledFilter] = useState<BcGridFilter | undefined>(
+    () => props.defaultFilter,
+  )
+  const filterState = filterControlled ? props.filter : uncontrolledFilter
+
+  const blockSize =
+    props.rowModel === "infinite"
+      ? (props.blockSize ?? DEFAULT_SERVER_BLOCK_SIZE)
+      : DEFAULT_SERVER_BLOCK_SIZE
+  const maxCachedBlocks = props.rowModel === "infinite" ? props.maxCachedBlocks : undefined
+  const blockLoadDebounceMs = props.rowModel === "infinite" ? props.blockLoadDebounceMs : undefined
+  const maxConcurrentRequests =
+    props.rowModel === "infinite" ? props.maxConcurrentRequests : undefined
+  const loadBlock = props.rowModel === "infinite" ? props.loadBlock : undefined
+  const searchText = props.searchText ?? props.defaultSearchText
+  const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
+  const view = useMemo(
+    () =>
+      createServerViewState({
+        filter: filterState,
+        groupBy,
+        locale: props.locale,
+        searchText,
+        sort: sortState,
+        visibleColumns,
+      }),
+    [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
+  )
+  const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
+
+  const syncRowsFromCache = useCallback(() => {
+    const nextRows = collectContiguousInfiniteRows(modelRef.current.cache.toMap(), viewKey)
+    loadedRowsRef.current = nextRows
+    setRows(nextRows)
+  }, [viewKey])
+
+  const resetInfiniteRows = useCallback(() => {
+    modelRef.current.abortAll()
+    modelRef.current.cache.clear()
+    inFlightCountRef.current = 0
+    loadedRowsRef.current = []
+    setRows([])
+    setRowCount("unknown")
+    setError(null)
+    setRefreshVersion((version) => version + 1)
+  }, [])
+
+  const trackPromise = useCallback((promise: Promise<ServerBlockResult<TRow>>) => {
+    inFlightCountRef.current += 1
+    setLoading(true)
+    promise
+      .finally(() => {
+        inFlightCountRef.current -= 1
+        if (inFlightCountRef.current <= 0) setLoading(false)
+      })
+      .catch(() => {})
+  }, [])
+
+  const ensureBlock = useCallback(
+    (rowIndex: number) => {
+      if (!loadBlock) return
+      const blockStart = Math.max(0, Math.floor(rowIndex / blockSize) * blockSize)
+      const request = modelRef.current.loadInfiniteBlock({
+        blockSize,
+        blockStart,
+        cacheOptions: {
+          ...(maxCachedBlocks ? { maxBlocks: maxCachedBlocks } : {}),
+          ...(blockLoadDebounceMs ? { blockLoadDebounceMs } : {}),
+          ...(maxConcurrentRequests ? { maxConcurrentRequests } : {}),
+        },
+        loadBlock,
+        view,
+        viewKey,
+      })
+
+      if (request.cached) return
+      if (request.deduped) return
+
+      trackPromise(request.promise)
+      request.promise
+        .then((result) => {
+          setError(null)
+          const nextRows = mergeInfiniteRows(loadedRowsRef.current, result)
+          if (nextRows) {
+            loadedRowsRef.current = nextRows
+            setRows(nextRows)
+          } else {
+            syncRowsFromCache()
+          }
+          if (result.totalRows != null) setRowCount(result.totalRows)
+          else if (result.hasMore === false) setRowCount(result.blockStart + result.rows.length)
+          else setRowCount("unknown")
+        })
+        .catch((nextError: unknown) => {
+          if (isAbortError(nextError)) return
+          setError(nextError)
+        })
+    },
+    [
+      blockLoadDebounceMs,
+      blockSize,
+      loadBlock,
+      maxCachedBlocks,
+      maxConcurrentRequests,
+      syncRowsFromCache,
+      trackPromise,
+      view,
+      viewKey,
+    ],
+  )
+
+  useEffect(() => {
+    if (!loadBlock) return
+    void refreshVersion
+    ensureBlock(0)
+  }, [ensureBlock, loadBlock, refreshVersion])
+
+  useEffect(() => () => modelRef.current.abortAll(), [])
+
+  const handleVisibleRowRangeChange = useCallback(
+    (range: { startIndex: number; endIndex: number }) => {
+      if (!loadBlock) return
+      ensureBlock(range.startIndex)
+      ensureBlock(range.endIndex)
+      if (rowCount === "unknown" || rows.length < rowCount) {
+        ensureBlock(range.endIndex + blockSize)
+      }
+    },
+    [blockSize, ensureBlock, loadBlock, rowCount, rows.length],
+  )
+
+  const handleSortChange = useCallback(
+    (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => {
+      if (!sortControlled) setUncontrolledSort(next)
+      resetInfiniteRows()
+      props.onSortChange?.(next, prev)
+    },
+    [props.onSortChange, resetInfiniteRows, sortControlled],
+  )
+
+  const handleFilterChange = useCallback(
+    (next: BcGridFilter, prev: BcGridFilter) => {
+      if (!filterControlled) setUncontrolledFilter(next)
+      resetInfiniteRows()
+      props.onFilterChange?.(next, prev)
+    },
+    [filterControlled, props.onFilterChange, resetInfiniteRows],
+  )
+
+  const refresh = useCallback((opts?: { purge?: boolean }) => {
+    if (opts?.purge) {
+      modelRef.current.cache.clear()
+      loadedRowsRef.current = []
+      setRows([])
+      setRowCount("unknown")
+      setError(null)
+    }
+    setRefreshVersion((version) => version + 1)
+  }, [])
+
+  const invalidate = useCallback(
+    (invalidation: ServerInvalidation) => {
+      modelRef.current.invalidate(invalidation)
+      syncRowsFromCache()
+      setRefreshVersion((version) => version + 1)
+    },
+    [syncRowsFromCache],
+  )
+
+  const retryBlock = useCallback((blockKey: ServerBlockKey) => {
+    modelRef.current.cache.delete(blockKey)
+    setRefreshVersion((version) => version + 1)
+  }, [])
+
+  const getModelState = useCallback(
+    () =>
+      modelRef.current.getState({
+        mode: props.rowModel,
+        rowCount,
+        selection: toServerSelection(undefined, view),
+        view,
+        viewKey,
+      }),
+    [props.rowModel, rowCount, view, viewKey],
+  )
+
+  return {
+    error,
+    getModelState,
+    handleFilterChange,
+    handleSortChange,
+    handleVisibleRowRangeChange,
+    invalidate,
+    loading,
+    refresh,
+    retryBlock,
+    rowCount,
+    rows,
+    view,
+  }
+}
+
 function createServerViewState(input: {
   filter: BcGridFilter | undefined
   groupBy: readonly ColumnId[]
@@ -331,6 +601,35 @@ function createServerViewState(input: {
     ...(input.searchText ? { search: input.searchText } : {}),
     ...(input.locale ? { locale: input.locale } : {}),
   }
+}
+
+function collectContiguousInfiniteRows<TRow>(
+  blocks: Map<ServerBlockKey, ServerCacheBlock<TRow>>,
+  viewKey: string,
+): TRow[] {
+  const loadedBlocks = [...blocks.values()]
+    .filter((block) => block.viewKey === viewKey && block.state === "loaded")
+    .sort((a, b) => a.start - b.start)
+  const rows: TRow[] = []
+  let expectedStart = 0
+
+  for (const block of loadedBlocks) {
+    if (block.start !== expectedStart) break
+    rows.push(...block.rows)
+    expectedStart = block.start + block.size
+  }
+
+  return rows
+}
+
+function mergeInfiniteRows<TRow>(
+  currentRows: readonly TRow[],
+  result: ServerBlockResult<TRow>,
+): TRow[] | null {
+  if (result.blockStart > currentRows.length) return null
+  const nextRows = currentRows.slice()
+  nextRows.splice(result.blockStart, result.blockSize, ...result.rows)
+  return nextRows
 }
 
 function createServerRowModelState<TRow>(input: {

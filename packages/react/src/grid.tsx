@@ -90,6 +90,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     onRowClick,
     onRowDoubleClick,
     onCellFocus,
+    onVisibleRowRangeChange,
   } = props
 
   const messages = useMemo(() => ({ ...defaultMessages, ...props.messages }), [props.messages])
@@ -384,6 +385,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   }, [activeColIndex, activeRowIndex, requestRender, virtualizer])
 
   const virtualWindow = virtualizer.computeWindow()
+  const firstVirtualRow = virtualWindow.rows.reduce(
+    (first, row) => Math.min(first, row.index),
+    Number.POSITIVE_INFINITY,
+  )
+  const lastVirtualRow = virtualWindow.rows.reduce((last, row) => Math.max(last, row.index), -1)
+
+  useEffect(() => {
+    if (!onVisibleRowRangeChange || lastVirtualRow < 0) return
+    onVisibleRowRangeChange({
+      startIndex: firstVirtualRow === Number.POSITIVE_INFINITY ? 0 : firstVirtualRow,
+      endIndex: lastVirtualRow,
+    })
+  }, [firstVirtualRow, lastVirtualRow, onVisibleRowRangeChange])
 
   const scrollToRow = useCallback(
     (targetRowId: RowId, align: "start" | "center" | "end" | "nearest" = "nearest") => {
