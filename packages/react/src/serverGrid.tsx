@@ -423,12 +423,16 @@ function usePagedServerState<TRow>(
         return
       }
 
-      modelRef.current.applyRowUpdate({ rowId: serverRowId, update, viewKey: activeViewKey })
+      const updateResult = modelRef.current.applyRowUpdate({
+        rowId: serverRowId,
+        update,
+        viewKey: activeViewKey,
+      })
       const blockKey = latestBlockKeyRef.current
       const block = blockKey ? modelRef.current.cache.get(blockKey) : undefined
       setResult((prev) => {
         if (!prev) return prev
-        const totalRows = nextKnownServerRowCount(prev.totalRows, update)
+        const totalRows = nextKnownServerRowCount(prev.totalRows, updateResult)
         if (!block || (block.state !== "loaded" && block.state !== "stale")) {
           return totalRows === prev.totalRows ? prev : { ...prev, totalRows }
         }
@@ -696,9 +700,9 @@ function useInfiniteServerState<TRow>(
         return
       }
 
-      modelRef.current.applyRowUpdate({ rowId: serverRowId, update, viewKey })
+      const updateResult = modelRef.current.applyRowUpdate({ rowId: serverRowId, update, viewKey })
       syncRowsFromCache()
-      setRowCount((prev) => nextServerRowCount(prev, update))
+      setRowCount((prev) => nextServerRowCount(prev, updateResult))
     },
     [refresh, serverRowId, syncRowsFromCache, viewKey],
   )
@@ -1025,18 +1029,22 @@ function createTreeColumns<TRow>(input: {
   })
 }
 
-function nextServerRowCount<TRow>(
+function nextServerRowCount(
   rowCount: number | "unknown",
-  update: ServerRowUpdate<TRow>,
+  updateResult: { insertedRowIds: readonly RowId[]; removedRowIds: readonly RowId[] },
 ): number | "unknown" {
   if (rowCount === "unknown") return rowCount
-  if (update.type === "rowAdded") return rowCount + 1
-  if (update.type === "rowRemoved") return Math.max(0, rowCount - 1)
-  return rowCount
+  return Math.max(
+    0,
+    rowCount + updateResult.insertedRowIds.length - updateResult.removedRowIds.length,
+  )
 }
 
-function nextKnownServerRowCount<TRow>(rowCount: number, update: ServerRowUpdate<TRow>): number {
-  return nextServerRowCount(rowCount, update) as number
+function nextKnownServerRowCount(
+  rowCount: number,
+  updateResult: { insertedRowIds: readonly RowId[]; removedRowIds: readonly RowId[] },
+): number {
+  return nextServerRowCount(rowCount, updateResult) as number
 }
 
 function insertRootTreeRow<TRow>(
