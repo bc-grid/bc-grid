@@ -13,6 +13,7 @@ import type {
   ServerPagedResult,
   ServerRowModelMode,
   ServerRowModelState,
+  ServerRowUpdate,
   ServerSelection,
   ServerViewState,
 } from "@bc-grid/core"
@@ -27,6 +28,7 @@ const DEFAULT_SERVER_PAGE_SIZE = 100
 const DEFAULT_SERVER_BLOCK_SIZE = 100
 
 interface PagedServerState<TRow> {
+  applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
   error: unknown
   getModelState: () => ServerRowModelState<TRow>
   handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
@@ -41,6 +43,7 @@ interface PagedServerState<TRow> {
 }
 
 interface InfiniteServerState<TRow> {
+  applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
   error: unknown
   getModelState: () => ServerRowModelState<TRow>
   handleFilterChange: (next: BcGridFilter, prev: BcGridFilter) => void
@@ -63,6 +66,7 @@ interface ServerSortFilterState {
 }
 
 interface TreeServerState<TRow> {
+  applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
   columns: readonly BcReactGridColumn<TRow>[]
   error: unknown
   getModelState: () => ServerRowModelState<TRow>
@@ -185,6 +189,11 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         if (mode === "paged") paged.retryBlock(blockKey)
         else if (mode === "infinite") infinite.retryBlock(blockKey)
         else if (mode === "tree") tree.retryBlock(blockKey)
+      },
+      applyServerRowUpdate(update) {
+        if (mode === "paged") paged.applyRowUpdate(update)
+        else if (mode === "infinite") infinite.applyRowUpdate(update)
+        else if (mode === "tree") tree.applyRowUpdate(update)
       },
       getServerRowModelState() {
         if (mode === "paged") {
@@ -384,6 +393,7 @@ function usePagedServerState<TRow>(
     [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
   )
   const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
+  const serverRowId = useCallback((row: TRow) => props.rowId(row, 0), [props.rowId])
 
   const refresh = useCallback((opts?: { purge?: boolean }) => {
     if (opts?.purge) modelRef.current.cache.clear()
@@ -402,6 +412,41 @@ function usePagedServerState<TRow>(
     modelRef.current.cache.delete(blockKey)
     setRefreshVersion((version) => version + 1)
   }, [])
+
+  const applyRowUpdate = useCallback(
+    (update: ServerRowUpdate<TRow>) => {
+      const activeViewKey = result?.viewKey ?? viewKey
+      if (update.type === "viewInvalidated") {
+        if (update.viewKey && update.viewKey !== activeViewKey) return
+        modelRef.current.applyRowUpdate({ rowId: serverRowId, update, viewKey: activeViewKey })
+        refresh({ purge: true })
+        return
+      }
+
+      const updateResult = modelRef.current.applyRowUpdate({
+        rowId: serverRowId,
+        update,
+        viewKey: activeViewKey,
+      })
+      const blockKey = latestBlockKeyRef.current
+      const block = blockKey ? modelRef.current.cache.get(blockKey) : undefined
+      setResult((prev) => {
+        if (!prev) return prev
+        const totalRows = nextKnownServerRowCount(prev.totalRows, updateResult)
+        if (!block || (block.state !== "loaded" && block.state !== "stale")) {
+          return totalRows === prev.totalRows ? prev : { ...prev, totalRows }
+        }
+        return {
+          ...prev,
+          rows: block.rows,
+          totalRows,
+          viewKey: block.viewKey,
+          ...(block.revision ? { revision: block.revision } : {}),
+        }
+      })
+    },
+    [refresh, result?.viewKey, serverRowId, viewKey],
+  )
 
   useEffect(() => {
     if (!loadPage) return
@@ -453,6 +498,7 @@ function usePagedServerState<TRow>(
   )
 
   return {
+    applyRowUpdate,
     error,
     getModelState,
     handleFilterChange,
@@ -521,6 +567,7 @@ function useInfiniteServerState<TRow>(
     [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
   )
   const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
+  const serverRowId = useCallback((row: TRow) => props.rowId(row, 0), [props.rowId])
 
   const syncRowsFromCache = useCallback(() => {
     const nextRows = modelRef.current.collectContiguousInfiniteRows(viewKey)
@@ -644,6 +691,22 @@ function useInfiniteServerState<TRow>(
     setRefreshVersion((version) => version + 1)
   }, [])
 
+  const applyRowUpdate = useCallback(
+    (update: ServerRowUpdate<TRow>) => {
+      if (update.type === "viewInvalidated") {
+        if (update.viewKey && update.viewKey !== viewKey) return
+        modelRef.current.applyRowUpdate({ rowId: serverRowId, update, viewKey })
+        refresh({ purge: true })
+        return
+      }
+
+      const updateResult = modelRef.current.applyRowUpdate({ rowId: serverRowId, update, viewKey })
+      syncRowsFromCache()
+      setRowCount((prev) => nextServerRowCount(prev, updateResult))
+    },
+    [refresh, serverRowId, syncRowsFromCache, viewKey],
+  )
+
   const getModelState = useCallback(
     () =>
       modelRef.current.getState({
@@ -657,6 +720,7 @@ function useInfiniteServerState<TRow>(
   )
 
   return {
+    applyRowUpdate,
     error,
     getModelState,
     handleFilterChange,
@@ -723,6 +787,7 @@ function useTreeServerState<TRow>(
     [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
   )
   const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
+  const serverRowId = useCallback((row: TRow) => props.rowId(row, 0), [props.rowId])
 
   const flatNodes = useMemo(
     () => modelRef.current.flattenTreeSnapshot(tree, expansionState),
@@ -865,6 +930,30 @@ function useTreeServerState<TRow>(
     setRefreshVersion((version) => version + 1)
   }, [])
 
+  const applyRowUpdate = useCallback(
+    (update: ServerRowUpdate<TRow>) => {
+      if (update.type === "viewInvalidated") {
+        if (update.viewKey && update.viewKey !== viewKey) return
+        modelRef.current.applyRowUpdate({ rowId: serverRowId, update, viewKey })
+        refresh({ purge: true })
+        return
+      }
+
+      modelRef.current.applyRowUpdate({ rowId: serverRowId, update, viewKey })
+      if (update.type === "rowAdded") {
+        const rowId = props.rowId(update.row, update.indexHint ?? 0)
+        setTree((prev) => insertRootTreeRow(prev, rowId, update.row, update.indexHint))
+        return
+      }
+      if (update.type === "rowUpdated") {
+        setTree((prev) => updateTreeRow(prev, update.rowId, update.row))
+        return
+      }
+      setTree((prev) => removeTreeRow(prev, update.rowId))
+    },
+    [props.rowId, refresh, serverRowId, viewKey],
+  )
+
   const getModelState = useCallback(
     () =>
       modelRef.current.getState({
@@ -878,6 +967,7 @@ function useTreeServerState<TRow>(
   )
 
   return {
+    applyRowUpdate,
     columns,
     error,
     getModelState,
@@ -937,6 +1027,95 @@ function createTreeColumns<TRow>(input: {
       },
     } satisfies BcReactGridColumn<TRow>
   })
+}
+
+function nextServerRowCount(
+  rowCount: number | "unknown",
+  updateResult: { insertedRowIds: readonly RowId[]; removedRowIds: readonly RowId[] },
+): number | "unknown" {
+  if (rowCount === "unknown") return rowCount
+  return Math.max(
+    0,
+    rowCount + updateResult.insertedRowIds.length - updateResult.removedRowIds.length,
+  )
+}
+
+function nextKnownServerRowCount(
+  rowCount: number,
+  updateResult: { insertedRowIds: readonly RowId[]; removedRowIds: readonly RowId[] },
+): number {
+  return nextServerRowCount(rowCount, updateResult) as number
+}
+
+function insertRootTreeRow<TRow>(
+  snapshot: TreeSnapshot<TRow>,
+  rowId: RowId,
+  row: TRow,
+  indexHint: number | undefined,
+): TreeSnapshot<TRow> {
+  const existing = snapshot.nodes.get(rowId)
+  if (existing) return updateTreeRow(snapshot, rowId, row)
+
+  const nodes = new Map(snapshot.nodes)
+  nodes.set(rowId, {
+    childCount: 0,
+    childIds: [],
+    childrenLoaded: true,
+    error: null,
+    groupPath: [],
+    hasChildren: false,
+    kind: "leaf",
+    level: 0,
+    loading: false,
+    parentRowId: null,
+    row,
+    rowId,
+  })
+  const rootIds = snapshot.rootIds.slice()
+  rootIds.splice(clampArrayIndex(indexHint ?? rootIds.length, 0, rootIds.length), 0, rowId)
+  return { nodes, rootIds }
+}
+
+function updateTreeRow<TRow>(
+  snapshot: TreeSnapshot<TRow>,
+  rowId: RowId,
+  row: TRow,
+): TreeSnapshot<TRow> {
+  const node = snapshot.nodes.get(rowId)
+  if (!node) return snapshot
+  const nodes = new Map(snapshot.nodes)
+  nodes.set(rowId, { ...node, row })
+  return { ...snapshot, nodes }
+}
+
+function removeTreeRow<TRow>(snapshot: TreeSnapshot<TRow>, rowId: RowId): TreeSnapshot<TRow> {
+  if (!snapshot.nodes.has(rowId)) return snapshot
+
+  const removed = new Set<RowId>()
+  const collect = (targetRowId: RowId) => {
+    if (removed.has(targetRowId)) return
+    removed.add(targetRowId)
+    const node = snapshot.nodes.get(targetRowId)
+    if (!node) return
+    for (const childId of node.childIds) collect(childId)
+  }
+  collect(rowId)
+
+  const nodes = new Map(snapshot.nodes)
+  for (const removedRowId of removed) nodes.delete(removedRowId)
+  for (const [nodeRowId, node] of nodes) {
+    const childIds = node.childIds.filter((childId) => !removed.has(childId))
+    if (childIds.length !== node.childIds.length) nodes.set(nodeRowId, { ...node, childIds })
+  }
+  return {
+    nodes,
+    rootIds: snapshot.rootIds.filter((rootId) => !removed.has(rootId)),
+  }
+}
+
+function clampArrayIndex(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return max
+  return Math.min(max, Math.max(min, Math.floor(value)))
 }
 
 function createServerRowModelState<TRow>(input: {

@@ -484,6 +484,106 @@ describe("createServerRowModel", () => {
     expect(model.cache.get("infinite:v1:start:2:size:2")?.state).toBe("loaded")
   })
 
+  test("applies streaming row additions to loaded view blocks", () => {
+    const events: ServerRowModelEvent<Row>[] = []
+    const model = createServerRowModel<Row>({ onEvent: (event) => events.push(event) })
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:0:size:3",
+      rows: [
+        { id: "a", name: "alpha" },
+        { id: "c", name: "charlie" },
+      ],
+      size: 3,
+      start: 0,
+      viewKey: "v1",
+    })
+
+    const result = model.applyRowUpdate({
+      rowId: (row) => row.id,
+      update: { indexHint: 1, row: { id: "b", name: "bravo" }, type: "rowAdded", viewKey: "v1" },
+      viewKey: "v1",
+    })
+
+    expect(result.insertedRowIds).toEqual(["b"])
+    expect(model.cache.get("infinite:v1:start:0:size:3")?.rows).toEqual([
+      { id: "a", name: "alpha" },
+      { id: "b", name: "bravo" },
+      { id: "c", name: "charlie" },
+    ])
+    expect(events.at(-1)).toMatchObject({
+      insertedRowIds: ["b"],
+      type: "rowUpdateApplied",
+    })
+  })
+
+  test("applies streaming row updates and removals to loaded active-view rows", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:2",
+      rows: [
+        { id: "a", name: "old" },
+        { id: "b", name: "stable" },
+      ],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.cache.markLoaded({
+      blockKey: "paged:v2:page:0:size:1",
+      rows: [{ id: "a", name: "other-view" }],
+      size: 1,
+      start: 0,
+      viewKey: "v2",
+    })
+
+    const updated = model.applyRowUpdate({
+      rowId: (row) => row.id,
+      update: { row: { id: "a", name: "new" }, rowId: "a", type: "rowUpdated" },
+      viewKey: "v1",
+    })
+    const removed = model.applyRowUpdate({
+      rowId: (row) => row.id,
+      update: { rowId: "b", type: "rowRemoved" },
+      viewKey: "v1",
+    })
+
+    expect(updated.updatedRowIds).toEqual(["a"])
+    expect(removed.removedRowIds).toEqual(["b"])
+    expect(model.cache.get("paged:v1:page:0:size:2")?.rows).toEqual([{ id: "a", name: "new" }])
+    expect(model.cache.get("paged:v2:page:0:size:1")?.rows).toEqual([
+      { id: "a", name: "other-view" },
+    ])
+  })
+
+  test("applies streaming view invalidation to matching cached blocks", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.cache.markLoaded({
+      blockKey: "paged:v2:page:0:size:1",
+      rows: [{ id: "b" }],
+      size: 1,
+      start: 0,
+      viewKey: "v2",
+    })
+
+    const result = model.applyRowUpdate({
+      rowId: (row) => row.id,
+      update: { reason: "server-push", type: "viewInvalidated", viewKey: "v1" },
+      viewKey: "v1",
+    })
+
+    expect(result.invalidated).toBe(true)
+    expect(result.affectedBlockKeys).toEqual(["paged:v1:page:0:size:1"])
+    expect(model.cache.get("paged:v1:page:0:size:1")).toBeUndefined()
+    expect(model.cache.get("paged:v2:page:0:size:1")?.rows).toEqual([{ id: "b" }])
+  })
+
   test("evicts tree blocks for a parent recursively", async () => {
     const model = createServerRowModel<Row>()
     const loadRoot = model.loadTreeChildren({

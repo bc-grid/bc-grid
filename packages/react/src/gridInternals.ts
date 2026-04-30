@@ -1111,6 +1111,88 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
 }
 
 // ---------------------------------------------------------------------------
+// FLIP animation when visible row IDs are inserted.
+// ---------------------------------------------------------------------------
+
+export interface UseFlipOnRowInsertionParams<TRow> {
+  rowEntries: readonly RowEntry<TRow>[]
+  scrollerRef: RefObject<HTMLDivElement | null>
+  virtualizer: Virtualizer
+}
+
+export function useFlipOnRowInsertion<TRow>({
+  rowEntries,
+  scrollerRef,
+  virtualizer,
+}: UseFlipOnRowInsertionParams<TRow>): void {
+  const flipBudget = useMemo(() => new AnimationBudget(), [])
+  const previousRowRectsRef = useRef<Map<RowId, FlipRect>>(new Map())
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rowEntries is the render-change trigger.
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) {
+      previousRowRectsRef.current = new Map()
+      return
+    }
+
+    const rows = visibleBodyRows(scroller)
+    const currentRects = new Map<RowId, FlipRect>()
+    for (const row of rows) {
+      const rowId = row.dataset.rowId as RowId | undefined
+      if (!rowId) continue
+      currentRects.set(rowId, readFlipRect(row))
+    }
+
+    const previousRects = previousRowRectsRef.current
+    previousRowRectsRef.current = currentRects
+    if (previousRects.size === 0 || currentRects.size === 0) return
+
+    let hasVisibleInsertion = false
+    for (const rowId of currentRects.keys()) {
+      if (!previousRects.has(rowId)) {
+        hasVisibleInsertion = true
+        break
+      }
+    }
+    if (!hasVisibleInsertion) return
+
+    const targets: FlipTarget[] = []
+    const handles: { release(): void }[] = []
+    for (const rowEl of rows) {
+      const rowId = rowEl.dataset.rowId as RowId | undefined
+      if (!rowId) continue
+      const first = previousRects.get(rowId)
+      if (!first) continue
+      const last = currentRects.get(rowId)
+      if (!last) continue
+      targets.push({ element: rowEl, first, last })
+      const rowIndexAttr = rowEl.dataset.rowIndex
+      if (rowIndexAttr) {
+        const rowIndex = Number(rowIndexAttr)
+        if (Number.isFinite(rowIndex)) handles.push(virtualizer.beginInFlightRow(rowIndex))
+      }
+    }
+
+    if (targets.length === 0) {
+      for (const handle of handles) handle.release()
+      return
+    }
+
+    const animations = flip(targets, { budget: flipBudget })
+    if (animations.length === 0) {
+      for (const handle of handles) handle.release()
+      return
+    }
+    for (const [index, animation] of animations.entries()) {
+      const handle = handles[index]
+      if (!handle) continue
+      animation.finished.finally(() => handle.release())
+    }
+  }, [flipBudget, rowEntries, scrollerRef, virtualizer])
+}
+
+// ---------------------------------------------------------------------------
 // Density-derived heights.
 // ---------------------------------------------------------------------------
 

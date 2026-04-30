@@ -27,6 +27,7 @@ import type {
   ServerLoadContext,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
 } from "@bc-grid/core"
@@ -485,6 +486,7 @@ export type {
   ServerLoadContext,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
 }

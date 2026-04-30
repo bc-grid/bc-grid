@@ -3,6 +3,7 @@ export { BcEditGrid } from "./editGrid"
 export { BcGrid, useBcGridApi } from "./grid"
 export { BcServerGrid } from "./serverGrid"
 export { BcStatusBar, resolveVisibleSegments } from "./statusBar"
+export { useServerRowUpdates } from "./useServerRowUpdates"
 
 export type {
   BcAggregationFormatterParams,
@@ -62,7 +63,13 @@ export type {
   ServerLoadContext,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
 } from "./types"
 export type { UseAggregationsOptions } from "./aggregations"
+export type {
+  BcServerRowUpdateHandler,
+  BcServerRowUpdateSubscribe,
+  BcServerRowUpdateUnsubscribe,
+} from "./useServerRowUpdates"
