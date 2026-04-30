@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import {
+  type HistoryLike,
+  type LocationLike,
   type StorageLike,
   gridStorageKey,
   readPersistedGridState,
+  readUrlPersistedGridState,
   writePersistedGridState,
+  writeUrlPersistedGridState,
 } from "../src/persistence"
 
 class MemoryStorage implements StorageLike {
@@ -142,3 +146,89 @@ describe("grid state persistence", () => {
     ).not.toThrow()
   })
 })
+
+describe("grid URL state persistence", () => {
+  test("reads and validates column state + sort from a configured search param", () => {
+    const payload = JSON.stringify({
+      columnState: [
+        { columnId: "customer", hidden: true, position: 2, width: 260 },
+        { columnId: "bad-width", width: -1 },
+      ],
+      sort: [
+        { columnId: "balance", direction: "desc" },
+        { columnId: "ignored", direction: "sideways" },
+      ],
+    })
+    const location = locationLike(`?tab=customers&grid=${encodeURIComponent(payload)}`)
+
+    expect(readUrlPersistedGridState({ searchParam: "grid" }, location)).toEqual({
+      columnState: [
+        { columnId: "customer", hidden: true, position: 2, width: 260 },
+        { columnId: "bad-width" },
+      ],
+      sort: [{ columnId: "balance", direction: "desc" }],
+    })
+  })
+
+  test("ignores missing, blank, and malformed URL state", () => {
+    expect(
+      readUrlPersistedGridState({ searchParam: "grid" }, locationLike("?tab=customers")),
+    ).toEqual({})
+    expect(readUrlPersistedGridState({ searchParam: " " }, locationLike("?grid={}"))).toEqual({})
+    expect(
+      readUrlPersistedGridState({ searchParam: "grid" }, locationLike("?grid=not-json")),
+    ).toEqual({})
+  })
+
+  test("writes URL state without dropping unrelated search params or hash", () => {
+    const history = historyLike()
+    const location = locationLike("?tab=customers#ledger")
+
+    writeUrlPersistedGridState(
+      { searchParam: "grid" },
+      {
+        columnState: [{ columnId: "customer", width: 240 }],
+        sort: [{ columnId: "balance", direction: "asc" }],
+      },
+      history,
+      location,
+    )
+
+    const url = history.urls.at(-1)
+    expect(url?.startsWith("/?tab=customers&grid=")).toBe(true)
+    expect(url?.endsWith("#ledger")).toBe(true)
+    const encoded = new URL(`https://example.test${url}`).searchParams.get("grid")
+    expect(encoded ? JSON.parse(encoded) : null).toEqual({
+      columnState: [{ columnId: "customer", width: 240 }],
+      sort: [{ columnId: "balance", direction: "asc" }],
+    })
+  })
+
+  test("removes URL state when no persisted values are present", () => {
+    const history = historyLike()
+    const location = locationLike("?tab=customers&grid=%7B%7D#ledger")
+
+    writeUrlPersistedGridState({ searchParam: "grid" }, {}, history, location)
+
+    expect(history.urls.at(-1)).toBe("/?tab=customers#ledger")
+  })
+})
+
+function locationLike(searchAndHash: string): LocationLike {
+  const [search = "", hash = ""] = searchAndHash.split("#")
+  return {
+    pathname: "/",
+    search,
+    hash: hash ? `#${hash}` : "",
+  }
+}
+
+function historyLike(): HistoryLike & { urls: string[] } {
+  const urls: string[] = []
+  return {
+    urls,
+    replaceState(_state, _unused, url) {
+      urls.push(String(url))
+    },
+  }
+}

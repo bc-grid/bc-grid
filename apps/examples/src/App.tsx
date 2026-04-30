@@ -87,6 +87,11 @@ function checkboxSelectionEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("checkbox") === "1"
 }
 
+function urlStatePersistenceEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("urlstate") === "1"
+}
+
 /**
  * `?edit=1` URL flag opts the AR Customers grid into the
  * `editor-framework` demo. Selected columns gain `editable: true` so
@@ -115,8 +120,13 @@ function CustomerGridDemo({
   const [selectedCount, setSelectedCount] = useState(0)
   const [activeCustomer, setActiveCustomer] = useState<CustomerRow | null>(customerRows[0] ?? null)
   const rows = customerRows
+  const urlStateEnabled = urlStatePersistenceEnabled()
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
+  const urlStatePersistence = useMemo(
+    () => (urlStateEnabled ? { searchParam: "grid" } : undefined),
+    [urlStateEnabled],
+  )
 
   const columns = useMemo<readonly BcGridColumn<CustomerRow>[]>(
     () => [
@@ -331,7 +341,7 @@ function CustomerGridDemo({
         </div>
       </div>
 
-      <BcEditGrid
+      <BcEditGrid<CustomerRow>
         ariaLabel="Accounts receivable customer ledger"
         apiRef={apiRef}
         columns={columns}
@@ -339,7 +349,9 @@ function CustomerGridDemo({
         data={rows}
         density={density}
         detailPath="/accounts-receivable/customers"
-        extraActions={(row) => [{ label: "Statement", onSelect: () => handleStatement(row) }]}
+        extraActions={(row: CustomerRow) => [
+          { label: "Statement", onSelect: () => handleStatement(row) },
+        ]}
         gridId="accounts-receivable.customers"
         height={560}
         linkField="legalName"
@@ -347,7 +359,8 @@ function CustomerGridDemo({
         onEdit={handleEdit}
         onRowClick={setActiveCustomer}
         onSelectionChange={handleSelectionChange}
-        rowId={(row) => row.id}
+        rowId={(row: CustomerRow) => row.id}
+        {...(urlStatePersistence ? { urlStatePersistence } : {})}
       />
 
       {activeCustomer ? <CustomerDetail row={activeCustomer} /> : null}

@@ -24,6 +24,7 @@ export type {
   BcGridProps,
   BcGridSort,
   BcGridStateProps,
+  BcGridUrlStatePersistence,
   BcPaginationState,
   BcReactFilterDefinition,
   BcReactGridColumn,

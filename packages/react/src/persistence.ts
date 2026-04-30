@@ -1,4 +1,4 @@
-import type { BcColumnStateEntry, ColumnId } from "@bc-grid/core"
+import type { BcColumnStateEntry, BcGridSort, ColumnId } from "@bc-grid/core"
 import { useEffect } from "react"
 import type { BcGridDensity } from "./types"
 
@@ -15,6 +15,26 @@ export interface PersistedGridState {
   pageSize?: number | undefined
   density?: BcGridDensity | undefined
   groupBy?: readonly ColumnId[] | undefined
+}
+
+export interface UrlStatePersistenceOptions {
+  searchParam: string
+}
+
+export interface UrlPersistedGridState {
+  columnState?: readonly BcColumnStateEntry[] | undefined
+  sort?: readonly BcGridSort[] | undefined
+}
+
+export interface LocationLike {
+  pathname: string
+  search: string
+  hash: string
+}
+
+export interface HistoryLike {
+  state?: unknown
+  replaceState(state: unknown, unused: string, url?: string | URL | null): void
 }
 
 export function gridStorageKey(gridId: string, state: keyof PersistedGridState): string {
@@ -48,6 +68,47 @@ export function writePersistedGridState(
   writeJson(storage, gridStorageKey(gridId, "groupBy"), state.groupBy)
 }
 
+export function readUrlPersistedGridState(
+  options: UrlStatePersistenceOptions | undefined,
+  location = getDefaultLocation(),
+): UrlPersistedGridState {
+  const searchParam = validSearchParam(options?.searchParam)
+  if (!searchParam || !location) return {}
+
+  try {
+    const raw = new URLSearchParams(location.search).get(searchParam)
+    if (raw == null) return {}
+    return parseUrlPersistedGridState(JSON.parse(raw)) ?? {}
+  } catch {
+    return {}
+  }
+}
+
+export function writeUrlPersistedGridState(
+  options: UrlStatePersistenceOptions | undefined,
+  state: UrlPersistedGridState,
+  history = getDefaultHistory(),
+  location = getDefaultLocation(),
+): void {
+  const searchParam = validSearchParam(options?.searchParam)
+  if (!searchParam || !history || !location) return
+
+  try {
+    const params = new URLSearchParams(location.search)
+    if (state.columnState === undefined && state.sort === undefined) {
+      params.delete(searchParam)
+    } else {
+      params.set(searchParam, JSON.stringify(state))
+    }
+
+    const query = params.toString()
+    const nextUrl = `${location.pathname}${query ? `?${query}` : ""}${location.hash}`
+    history.replaceState(history.state ?? null, "", nextUrl)
+  } catch {
+    // URL persistence is best-effort; history/security failures must not break the grid.
+  }
+}
+
 export function usePersistedGridStateWriter(gridId: string | undefined, state: PersistedGridState) {
   useEffect(() => {
     if (!gridId) return
@@ -60,12 +121,50 @@ export function usePersistedGridStateWriter(gridId: string | undefined, state: P
   }, [gridId, state])
 }
 
+export function useUrlPersistedGridStateWriter(
+  options: UrlStatePersistenceOptions | undefined,
+  state: UrlPersistedGridState,
+) {
+  const searchParam = validSearchParam(options?.searchParam)
+
+  useEffect(() => {
+    if (!searchParam) return
+
+    const handle = setTimeout(() => {
+      writeUrlPersistedGridState({ searchParam }, state)
+    }, GRID_STATE_WRITE_DEBOUNCE_MS)
+
+    return () => clearTimeout(handle)
+  }, [searchParam, state])
+}
+
 function getDefaultStorage(): StorageLike | undefined {
   try {
     return globalThis.localStorage
   } catch {
     return undefined
   }
+}
+
+function getDefaultLocation(): LocationLike | undefined {
+  try {
+    return globalThis.location
+  } catch {
+    return undefined
+  }
+}
+
+function getDefaultHistory(): HistoryLike | undefined {
+  try {
+    return globalThis.history
+  } catch {
+    return undefined
+  }
+}
+
+function validSearchParam(searchParam: string | undefined): string | undefined {
+  const trimmed = searchParam?.trim()
+  return trimmed ? trimmed : undefined
 }
 
 function readJson<T>(
@@ -128,6 +227,36 @@ function parseColumnStateEntry(value: unknown): BcColumnStateEntry | undefined {
   }
 
   return entry
+}
+
+function parseUrlPersistedGridState(value: unknown): UrlPersistedGridState | undefined {
+  if (!isRecord(value)) return undefined
+  const columnState = parseColumnState(value.columnState)
+  const sort = parseSortState(value.sort)
+  const state: UrlPersistedGridState = {}
+  if (columnState) state.columnState = columnState
+  if (sort) state.sort = sort
+  return state
+}
+
+function parseSortState(value: unknown): BcGridSort[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.flatMap((entry) => {
+    const parsed = parseSortEntry(entry)
+    return parsed ? [parsed] : []
+  })
+}
+
+function parseSortEntry(value: unknown): BcGridSort | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.columnId !== "string" ||
+    value.columnId.length === 0 ||
+    (value.direction !== "asc" && value.direction !== "desc")
+  ) {
+    return undefined
+  }
+  return { columnId: value.columnId, direction: value.direction }
 }
 
 function parsePageSize(value: unknown): number | undefined {
