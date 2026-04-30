@@ -1679,7 +1679,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 // server-tree path passes `treeRowAria(rowId)` returning
                 // `{ level, posinset?, setsize? }`; client-grouping rows
                 // already carry `entry.level` and take precedence.
-                const treeAria = treeRowAria?.(entry.rowId)
+                const treeAria = groupingActive ? undefined : treeRowAria?.(entry.rowId)
                 const rowAriaLevel = groupingActive ? entry.level : (treeAria?.level ?? undefined)
                 return (
                   <div

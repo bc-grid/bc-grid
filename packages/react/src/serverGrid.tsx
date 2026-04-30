@@ -235,7 +235,8 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
 
   useEffect(() => assignRef(externalApiRef, serverApi), [externalApiRef, serverApi])
 
-  const gridProps = props as unknown as BcGridProps<TRow>
+  const { treeRowAria: omittedTreeRowAria, ...gridProps } = props as unknown as BcGridProps<TRow>
+  void omittedTreeRowAria
   const loading =
     props.loading ??
     (props.rowModel === "paged"

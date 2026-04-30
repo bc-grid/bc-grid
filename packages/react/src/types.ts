@@ -388,7 +388,8 @@ export type BcServerGridProps<TRow> =
   | BcServerInfiniteProps<TRow>
   | BcServerTreeProps<TRow>
 
-export interface BcServerPagedProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef" | "data"> {
+export interface BcServerPagedProps<TRow>
+  extends Omit<BcGridProps<TRow>, "apiRef" | "data" | "treeRowAria"> {
   rowModel: "paged"
   pageSize?: number
   loadPage: LoadServerPage<TRow>
@@ -396,7 +397,8 @@ export interface BcServerPagedProps<TRow> extends Omit<BcGridProps<TRow>, "apiRe
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
 }
 
-export interface BcServerInfiniteProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef" | "data"> {
+export interface BcServerInfiniteProps<TRow>
+  extends Omit<BcGridProps<TRow>, "apiRef" | "data" | "treeRowAria"> {
   rowModel: "infinite"
   blockSize?: number
   maxCachedBlocks?: number
@@ -406,7 +408,8 @@ export interface BcServerInfiniteProps<TRow> extends Omit<BcGridProps<TRow>, "ap
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
 }
 
-export interface BcServerTreeProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef" | "data"> {
+export interface BcServerTreeProps<TRow>
+  extends Omit<BcGridProps<TRow>, "apiRef" | "data" | "treeRowAria"> {
   rowModel: "tree"
   loadChildren: LoadServerTreeChildren<TRow>
   loadRoots?: LoadServerTreeChildren<TRow>
