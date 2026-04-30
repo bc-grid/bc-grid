@@ -80,6 +80,7 @@ import {
   useColumnReorder,
   useColumnResize,
   useControlledState,
+  useFlipOnRowInsertion,
   useFlipOnSort,
   useLiveRegionAnnouncements,
   useViewportSync,
@@ -1329,6 +1330,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
 
   const { prepareSortAnimation } = useFlipOnSort({ sortState, scrollerRef, virtualizer })
+  useFlipOnRowInsertion({ rowEntries, scrollerRef, virtualizer })
 
   const handleHeaderSort = useCallback(
     (

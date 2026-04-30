@@ -287,6 +287,7 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   refreshServerRows(opts?: { purge?: boolean }): void
   invalidateServerRows(invalidation: ServerInvalidation): void
   retryServerBlock(blockKey: ServerBlockKey): void
+  applyServerRowUpdate(update: ServerRowUpdate<TRow>): void
   getServerRowModelState(): ServerRowModelState<TRow>
 }
 
@@ -543,3 +544,12 @@ export type ServerRowModelEvent<TRow> =
   | { type: "rowsInvalidated"; rowIds: RowId[] }
   | { type: "mutationQueued"; mutationId: string; rowId: RowId }
   | { type: "mutationSettled"; result: ServerMutationResult<TRow> }
+  | {
+      type: "rowUpdateApplied"
+      update: ServerRowUpdate<TRow>
+      affectedBlockKeys: ServerBlockKey[]
+      insertedRowIds: RowId[]
+      updatedRowIds: RowId[]
+      removedRowIds: RowId[]
+      invalidated: boolean
+    }

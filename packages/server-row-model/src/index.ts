@@ -18,6 +18,7 @@ import type {
   ServerRowModelMode,
   ServerRowModelState,
   ServerRowPatch,
+  ServerRowUpdate,
   ServerSelection,
   ServerTreeQuery,
   ServerTreeResult,
@@ -107,6 +108,20 @@ type SettleMutationResult<TRow> = {
   pending: boolean
   result: ServerMutationResult<TRow>
   updatedRows: number
+}
+
+type ApplyRowUpdateInput<TRow> = {
+  rowId: RowIdGetter<TRow>
+  update: ServerRowUpdate<TRow>
+  viewKey?: string
+}
+
+type ApplyRowUpdateResult = {
+  affectedBlockKeys: ServerBlockKey[]
+  insertedRowIds: RowId[]
+  invalidated: boolean
+  removedRowIds: RowId[]
+  updatedRowIds: RowId[]
 }
 
 type LoadTreeChildrenInput<TRow> = {
@@ -899,6 +914,86 @@ class ServerRowModelController<TRow> {
     return settled
   }
 
+  applyRowUpdate(input: ApplyRowUpdateInput<TRow>): ApplyRowUpdateResult {
+    const baseResult: ApplyRowUpdateResult = {
+      affectedBlockKeys: [],
+      insertedRowIds: [],
+      invalidated: false,
+      removedRowIds: [],
+      updatedRowIds: [],
+    }
+
+    if (input.update.type === "viewInvalidated") {
+      const { affectedBlockKeys } = this.invalidate({
+        scope: "view",
+        ...(input.update.viewKey ? { viewKey: input.update.viewKey } : {}),
+      })
+      const result = {
+        ...baseResult,
+        affectedBlockKeys,
+        invalidated: true,
+      }
+      this.emit({ type: "rowUpdateApplied", update: input.update, ...result })
+      return result
+    }
+
+    if (input.update.type === "rowAdded") {
+      const rowId = input.rowId(input.update.row)
+      const updatedRowIds = this.replaceCachedRowForUpdate({
+        row: input.update.row,
+        rowId,
+        rowIdGetter: input.rowId,
+        revision: input.update.revision,
+        viewKey: input.update.viewKey ?? input.viewKey,
+      })
+      if (updatedRowIds.length > 0) {
+        const result = { ...baseResult, updatedRowIds }
+        this.emit({ type: "rowUpdateApplied", update: input.update, ...result })
+        return result
+      }
+
+      const affectedBlockKey = this.insertCachedRowForUpdate({
+        indexHint: input.update.indexHint,
+        row: input.update.row,
+        rowId,
+        revision: input.update.revision,
+        viewKey: input.update.viewKey ?? input.viewKey,
+      })
+      const result = affectedBlockKey
+        ? {
+            ...baseResult,
+            affectedBlockKeys: [affectedBlockKey],
+            insertedRowIds: [rowId],
+          }
+        : baseResult
+      this.emit({ type: "rowUpdateApplied", update: input.update, ...result })
+      return result
+    }
+
+    if (input.update.type === "rowUpdated") {
+      const updatedRowIds = this.replaceCachedRowForUpdate({
+        row: input.update.row,
+        rowId: input.update.rowId,
+        rowIdGetter: input.rowId,
+        revision: input.update.revision,
+        viewKey: input.viewKey,
+      })
+      const result = { ...baseResult, updatedRowIds }
+      this.emit({ type: "rowUpdateApplied", update: input.update, ...result })
+      return result
+    }
+
+    const removedRowIds = this.removeCachedRowForUpdate({
+      rowId: input.update.rowId,
+      rowIdGetter: input.rowId,
+      revision: input.update.revision,
+      viewKey: input.viewKey,
+    })
+    const result = { ...baseResult, removedRowIds }
+    this.emit({ type: "rowUpdateApplied", update: input.update, ...result })
+    return result
+  }
+
   getState(input: StateSnapshotInput): ServerRowModelState<TRow> {
     return {
       blocks: this.cache.toMap(),
@@ -1457,6 +1552,98 @@ class ServerRowModelController<TRow> {
     return updatedRows
   }
 
+  private insertCachedRowForUpdate(input: {
+    indexHint: number | undefined
+    revision: string | undefined
+    row: TRow
+    rowId: RowId
+    viewKey: string | undefined
+  }): ServerBlockKey | null {
+    const blocks = this.loadedBlocksForUpdate(input.viewKey)
+    if (blocks.length === 0) return null
+    const block =
+      typeof input.indexHint === "number"
+        ? (blocks.find(
+            (candidate) =>
+              input.indexHint != null &&
+              input.indexHint >= candidate.start &&
+              input.indexHint <= candidate.start + candidate.rows.length,
+          ) ?? null)
+        : (blocks[blocks.length - 1] ?? null)
+    if (!block) return null
+
+    const localIndex =
+      typeof input.indexHint === "number"
+        ? clampIndex(input.indexHint - block.start, 0, block.rows.length)
+        : block.rows.length
+    const rows = block.rows.slice()
+    const row = this.applyPendingMutationsToRows([input.row])[0] ?? input.row
+    rows.splice(localIndex, 0, row)
+    this.cache.set({
+      ...block,
+      rows,
+      ...(input.revision ? { revision: input.revision } : {}),
+    })
+    return block.key
+  }
+
+  private removeCachedRowForUpdate(input: {
+    revision: string | undefined
+    rowId: RowId
+    rowIdGetter: RowIdGetter<TRow>
+    viewKey: string | undefined
+  }): RowId[] {
+    let removed = false
+    for (const block of this.loadedBlocksForUpdate(input.viewKey)) {
+      const rows = block.rows.filter((row) => input.rowIdGetter(row) !== input.rowId)
+      if (rows.length === block.rows.length) continue
+      removed = true
+      this.cache.set({
+        ...block,
+        rows,
+        ...(input.revision ? { revision: input.revision } : {}),
+      })
+    }
+    return removed ? [input.rowId] : []
+  }
+
+  private replaceCachedRowForUpdate(input: {
+    revision: string | undefined
+    row: TRow
+    rowId: RowId
+    rowIdGetter: RowIdGetter<TRow>
+    viewKey: string | undefined
+  }): RowId[] {
+    const row = this.applyPendingMutationsToRows([input.row])[0] ?? input.row
+    let updated = false
+    for (const block of this.loadedBlocksForUpdate(input.viewKey)) {
+      let changed = false
+      const rows = block.rows.map((candidate) => {
+        if (input.rowIdGetter(candidate) !== input.rowId) return candidate
+        changed = true
+        updated = true
+        return row
+      })
+      if (changed) {
+        this.cache.set({
+          ...block,
+          rows,
+          ...(input.revision ? { revision: input.revision } : {}),
+        })
+      }
+    }
+    return updated ? [input.rowId] : []
+  }
+
+  private loadedBlocksForUpdate(viewKey: string | undefined): ServerCacheBlock<TRow>[] {
+    return [...this.cache.toMap().values()]
+      .filter((block) => {
+        if (block.state !== "loaded" && block.state !== "stale") return false
+        return viewKey == null || block.viewKey === viewKey
+      })
+      .sort((a, b) => a.start - b.start)
+  }
+
   private replaceCachedRow(
     rowId: RowId,
     replacement: TRow,
@@ -1515,6 +1702,11 @@ function normalizeCacheOptions(
 function normalizeBlockStart(blockStart: number, blockSize: number): number {
   if (blockStart <= 0) return 0
   return Math.floor(blockStart / blockSize) * blockSize
+}
+
+function clampIndex(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return max
+  return Math.min(max, Math.max(min, Math.floor(value)))
 }
 
 function isStale<TRow>(block: ServerCacheBlock<TRow>, staleTimeMs: number): boolean {
