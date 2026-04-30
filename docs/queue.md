@@ -211,7 +211,7 @@ Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 - `[review: worker1 #175]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
 - `[review: worker2 #164]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
 - `[review: worker2 #159]` **filter-number-range-impl** — between two numbers. **Effort**: S.
-- `[in-flight: worker2 stacked on date-range PR]` **filter-text-impl-extend** — extend the existing inline text filter with operators (contains / starts-with / ends-with / equals / regex toggle / case-sensitivity toggle). **Effort**: S.
+- `[review: worker2 #170]` **filter-text-impl-extend** — extend the existing inline text filter with operators (contains / starts-with / ends-with / equals / regex toggle / case-sensitivity toggle). **Effort**: S.
 - `[ready]` **filter-custom-extension-example** — recipe in `apps/docs` showing how to register a custom filter type. **Effort**: S.
 - `[ready]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
 - `[done: x2 #72]` **export-csv-impl** — `@bc-grid/export.toCsv(rows, columns)` per `api.md §9`. No external deps; pure serializer. **Branch**: `agent/x2/export-csv-impl`. **Effort**: S.
