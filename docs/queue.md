@@ -195,7 +195,7 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 
 - `[done: c2 #46]` **chrome-rfc** — design doc; covers status-bar / sidebar tablist / context-menu.
 - `[ready]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
-- `[ready]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
+- `[in-flight: worker5]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
 - `[blocked: depends on sidebar-impl]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
 - `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
 - `[ready]` **context-menu-impl** — shadcn `ContextMenu` primitive; right-click + long-press (500ms coarse pointer) + Shift+F10. 4 built-in items + custom factory function. **Effort**: M.

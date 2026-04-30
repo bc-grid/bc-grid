@@ -152,6 +152,27 @@ export interface BcDetailPanelParams<TRow> {
   rowIndex: number
 }
 
+export type BcSidebarBuiltInPanel = "columns" | "filters" | "pivot"
+
+export type BcSidebarPanel<TRow = unknown> = BcSidebarBuiltInPanel | BcSidebarCustomPanel<TRow>
+
+export interface BcSidebarCustomPanel<TRow = unknown> {
+  id: string
+  label: string
+  icon: ComponentType<{ className?: string }>
+  render: (ctx: BcSidebarContext<TRow>) => ReactNode
+}
+
+export interface BcSidebarContext<TRow = unknown> {
+  api: BcGridApi<TRow>
+  columns: readonly BcReactGridColumn<TRow>[]
+  columnState: readonly BcColumnStateEntry[]
+  setColumnState: (state: readonly BcColumnStateEntry[]) => void
+  filterState: BcGridFilter | null
+  setFilterState: (state: BcGridFilter | null) => void
+  pivot?: unknown
+}
+
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   data: readonly TRow[]
   columns: readonly BcReactGridColumn<TRow>[]
@@ -175,6 +196,11 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   toolbar?: ReactNode
   footer?: ReactNode
+  sidebar?: readonly BcSidebarPanel<TRow>[]
+  defaultSidebarPanel?: string | null
+  sidebarPanel?: string | null
+  onSidebarPanelChange?: (next: string | null, prev: string | null) => void
+  sidebarWidth?: number
 
   /**
    * Master-detail render hook. When supplied, the grid renders a pinned-left

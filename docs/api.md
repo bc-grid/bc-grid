@@ -526,7 +526,7 @@ export interface BcGridUrlStatePersistence {
 }
 ```
 
-When `gridId` is set, the React layer persists `columnState`, `pageSize`, `density`, and `groupBy` to `localStorage` by default. A consumer-provided storage backend via `<BcGridProvider storage={...}>` is reserved for Q2 and is not exported at v0.1.
+When `gridId` is set, the React layer persists `columnState`, `pageSize`, `density`, `groupBy`, and the active `sidebarPanel` to `localStorage` by default. A consumer-provided storage backend via `<BcGridProvider storage={...}>` is reserved for Q2 and is not exported at v0.1.
 
 When `urlStatePersistence` is set, the React layer reads and writes `columnState` and `sort` to the configured URL search parameter via `history.replaceState`. This is opt-in because URL state is shareable and user-visible.
 
@@ -680,6 +680,29 @@ export interface BcDetailPanelParams<TRow> {
   rowIndex: number
 }
 
+export type BcSidebarBuiltInPanel = "columns" | "filters" | "pivot"
+
+export type BcSidebarPanel<TRow = unknown> =
+  | BcSidebarBuiltInPanel
+  | BcSidebarCustomPanel<TRow>
+
+export interface BcSidebarCustomPanel<TRow = unknown> {
+  id: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  render: (ctx: BcSidebarContext<TRow>) => React.ReactNode
+}
+
+export interface BcSidebarContext<TRow = unknown> {
+  api: BcGridApi<TRow>
+  columns: readonly BcReactGridColumn<TRow>[]
+  columnState: readonly BcColumnStateEntry[]
+  setColumnState: (state: readonly BcColumnStateEntry[]) => void
+  filterState: BcGridFilter | null
+  setFilterState: (state: BcGridFilter | null) => void
+  pivot?: unknown
+}
+
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   /** Row data (client-side). For server-side, use BcServerGrid. */
   data: readonly TRow[]
@@ -711,6 +734,11 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   // Slots
   toolbar?: React.ReactNode
   footer?: React.ReactNode
+  sidebar?: readonly BcSidebarPanel<TRow>[]
+  defaultSidebarPanel?: string | null
+  sidebarPanel?: string | null
+  onSidebarPanelChange?: (next: string | null, prev: string | null) => void
+  sidebarWidth?: number
 
   // Master-detail
   renderDetailPanel?: (params: BcDetailPanelParams<TRow>) => React.ReactNode
@@ -1043,6 +1071,7 @@ export type {
   BcCellEditor, BcCellEditorProps, BcCellEditorPrepareParams, BcCellEditCommitEvent,
   BcEditGridAction,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
+  BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarCustomPanel, BcSidebarPanel,
 
   // Re-exports from @bc-grid/core
   BcCellPosition, BcSelection, BcGridSort, BcGridFilter,
