@@ -22,9 +22,9 @@ type BcGridSelectElement = HTMLSelectElement & {
  *     vary on whether Space opens the dropdown immediately; the editor
  *     stays out of the way and lets browser-native behaviour drive.
  *   - Existing cell value pre-selects the matching option. If the
- *     current value isn't in the options list, the select renders with
- *     no selection (browsers typically default to the first option's
- *     visual state but preserve the empty internal value).
+ *     current value isn't in the options list, the select renders a
+ *     hidden disabled placeholder so Enter/Tab cannot silently commit
+ *     the first option.
  *   - Commit produces the selected option's `value` (typed `TValue`).
  *     This is a typed editor — `valueParser` doesn't fire on commit
  *     (the framework only runs valueParser when the editor produces
@@ -65,25 +65,32 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   const optionsSource = (column as { options?: unknown }).options
   const options = resolveOptions(optionsSource, row)
   const initialString = optionToString(initialValue)
+  const hasInitialOption = options.some((option) => optionToString(option.value) === initialString)
+  const selectOptionValues = hasInitialOption
+    ? options.map((option) => option.value)
+    : [undefined, ...options.map((option) => option.value)]
 
   useEffect(() => {
     if (selectRef.current) {
-      ;(selectRef.current as BcGridSelectElement)[bcGridSelectOptionValuesKey] = options.map(
-        (option) => option.value,
-      )
+      ;(selectRef.current as BcGridSelectElement)[bcGridSelectOptionValuesKey] = selectOptionValues
     }
-  }, [options])
+  }, [selectOptionValues])
 
   return (
     <select
       ref={selectRef}
-      defaultValue={initialString}
+      defaultValue={hasInitialOption ? initialString : ""}
       disabled={pending}
       aria-invalid={error ? true : undefined}
       data-bc-grid-editor-input="true"
       data-bc-grid-editor-kind="select"
       style={selectStyle}
     >
+      {!hasInitialOption ? (
+        <option value="" disabled hidden>
+          Select...
+        </option>
+      ) : null}
       {options.map((option) => (
         <option key={optionToString(option.value)} value={optionToString(option.value)}>
           {option.label}

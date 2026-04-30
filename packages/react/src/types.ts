@@ -190,7 +190,7 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
 
   onEdit?: (row: TRow) => void
   onDelete?: (row: TRow) => void
-  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void
+  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
   canEdit?: (row: TRow) => boolean
   canDelete?: (row: TRow) => boolean
 

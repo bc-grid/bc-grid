@@ -53,8 +53,8 @@ const components = [
   ],
   [
     "BcEditGrid",
-    "partial",
-    "Wraps BcGrid with an optional detail link column and actions column. In-grid editing, validation, and commit events are reserved for Q2.",
+    "implemented",
+    "Wraps BcGrid with detail/action columns and the in-grid editing commit hook.",
   ],
   [
     "BcServerGrid",
@@ -326,7 +326,7 @@ const reactColumnProps = [
     "cellRenderer",
     "(params) => ReactNode",
     "implemented",
-    "Receives value, formattedValue, row, rowId, column, searchText, rowState, and editing=false in Q1.",
+    "Receives value, formattedValue, row, rowId, column, searchText, rowState, editing, pending, editError, and isDirty.",
   ],
   ["cellClassName", "string | function", "implemented", "React-specific cell class hook."],
   [
@@ -339,7 +339,7 @@ const reactColumnProps = [
     "cellEditor",
     "BcCellEditor",
     "implemented",
-    "Per-column editor factory. Use kinds from @bc-grid/editors (textEditor, numberEditor, dateEditor, timeEditor) or supply a custom BcCellEditor.",
+    "Per-column editor factory. Use kinds from @bc-grid/editors (textEditor, numberEditor, dateEditor, timeEditor, datetimeEditor, selectEditor) or supply a custom BcCellEditor.",
   ],
 ]
 
@@ -681,7 +681,7 @@ const packageExports = [
   [
     "@bc-grid/editors",
     "implemented",
-    "v0.1: textEditor, numberEditor, dateEditor, timeEditor. Pending PRs add datetimeEditor + selectEditor; multiSelectEditor + autocompleteEditor follow.",
+    "v0.1: textEditor, numberEditor, dateEditor, timeEditor, datetimeEditor, selectEditor. multiSelectEditor + autocompleteEditor follow.",
     "Native-input leaf editors. No library dep — theme via @bc-grid/theming CSS variables. Use via column.cellEditor.",
   ],
   ["@bc-grid/enterprise", "reserved", "Reserved Q5+ enterprise features.", "No v0.1 exports."],
