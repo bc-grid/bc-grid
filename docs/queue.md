@@ -187,7 +187,7 @@ Specs: `docs/design/aggregation-rfc.md` (PR #51) + `pivot-rfc.md` (PR #52).
 - `[done: x2 #117]` **aggregation-react-adapter** — footer aggregation row + group-row aggregation rendering in `@bc-grid/react`. Wires `column.aggregation` (already declared `api.md §1.1`) to the engine. **Effort**: M.
 - `[done: c2 #52]` **pivot-rfc** — engine vs React split; drag-to-pivot UI; row/col/values dimensions; treegrid output. **Effort**: 1 day.
 - `[done: x2 #118]` **pivot-engine** — engine layer in `@bc-grid/aggregations` (or a separate `@bc-grid/pivots` if the RFC decides to split). Computes pivot table from rows + dimensions. **Effort**: L.
-- `[ready]` **pivot-ui-drag-zones** — Pivot tool panel in the sidebar (Track 5) with row/col/values drop zones. **Effort**: M.
+- `[in-flight: worker5 stacked on #167]` **pivot-ui-drag-zones** — Pivot tool panel in the sidebar (Track 5) with row/col/values drop zones. **Effort**: M.
 - `[ready]` **pivot-row-col-groups** — render the pivoted output: row-group axis, col-group axis, value cells. **Effort**: M.
 
 #### Track 5 — Chrome (Q6 pulled forward)
