@@ -1,3 +1,4 @@
+import { flash } from "@bc-grid/animations"
 import type {
   BcCellPosition,
   BcColumnFilter,
@@ -592,6 +593,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       editController.dispatchUnmounted()
       return
     }
+    // Cell-flash on commit per `editing-rfc §Edit-cell paint perf`.
+    // Off by default; opt-in via `BcGridProps.flashOnEdit`. Skipped when
+    // the user prefers reduced motion (the `flash` primitive already
+    // bails on the prefers-reduced-motion media query, so opting in
+    // here is safe regardless). Only fires on a successful commit —
+    // cancel paths have `next.committedValue === undefined`.
+    if (props.flashOnEdit && next.committedValue !== undefined) {
+      const cellEl = document.getElementById(cellDomId(domBaseId, cell.rowId, cell.columnId))
+      if (cellEl) flash(cellEl)
+    }
     let nextRow = rowIndex
     let nextCol = colIndex
     const lastRow = rowEntries.length - 1
@@ -607,7 +618,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     }
     rootRef.current?.focus({ preventScroll: true })
     editController.dispatchUnmounted()
-  }, [editController.editState, rowEntries, resolvedColumns, rowIndexById, columnIndexById])
+  }, [
+    editController.editState,
+    rowEntries,
+    resolvedColumns,
+    rowIndexById,
+    columnIndexById,
+    props.flashOnEdit,
+    domBaseId,
+  ])
 
   // Pixel rect of the cell currently being edited — passed to the editor
   // portal for absolute positioning. Computed from the virtualizer so we

@@ -525,6 +525,7 @@ function CustomerGridDemo({
         checkboxSelection={checkboxSelectionEnabled()}
         data={rows}
         density={density}
+        flashOnEdit={editorFrameworkEnabled()}
         detailPath="/accounts-receivable/customers"
         extraActions={(row: CustomerRow) => [
           { label: "Statement", onSelect: () => handleStatement(row) },
