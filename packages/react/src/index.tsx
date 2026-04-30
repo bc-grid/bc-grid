@@ -15,6 +15,7 @@ export type {
   BcColumnFilter,
   BcColumnFormat,
   BcColumnStateEntry,
+  BcDetailPanelParams,
   BcEditGridAction,
   BcEditGridProps,
   BcFilterDefinition,

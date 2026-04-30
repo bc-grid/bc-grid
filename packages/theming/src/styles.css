@@ -383,6 +383,59 @@
   padding: 0;
 }
 
+.bc-grid-detail-header {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip: rect(0, 0, 0, 0);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.bc-grid-detail-toggle {
+  display: inline-flex;
+  width: 1.625rem;
+  height: 1.625rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: var(--bc-grid-muted-fg);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  padding: 0;
+}
+
+.bc-grid-detail-toggle:hover,
+.bc-grid-detail-toggle:focus-visible {
+  border-color: var(--bc-grid-border);
+  background: var(--bc-grid-row-hover);
+  color: var(--bc-grid-fg);
+  outline: none;
+}
+
+.bc-grid-detail-toggle-icon {
+  display: inline-block;
+  transform: rotate(0deg);
+  transition: transform 120ms ease-out;
+}
+
+.bc-grid-detail-toggle[aria-expanded="true"] .bc-grid-detail-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.bc-grid-detail-panel {
+  border-top: 1px solid var(--bc-grid-border);
+  background: var(--bc-grid-muted);
+  color: var(--bc-grid-fg);
+  padding: 0.75rem var(--bc-grid-cell-padding-x);
+}
+
 /*
  * Pinned-region scroll shadows. Active when body content has scrolled
  * under a pinned region — signals to the user that the pinned columns

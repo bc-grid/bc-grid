@@ -650,6 +650,8 @@ export interface BcFilterEditorProps<TValue = unknown> {
   // Slots
   toolbar={<MyToolbar />}
   footer={<MyFooter />}
+  renderDetailPanel={({ row }) => <CustomerDetailPanel row={row} />}
+  detailPanelHeight={144}
 
   // Events (read-only)
   onRowClick={(row, ev) => ...}
@@ -672,6 +674,12 @@ export interface BcFilterEditorProps<TValue = unknown> {
 #### `<BcGrid>` props summary (frozen at v0.1)
 
 ```ts
+export interface BcDetailPanelParams<TRow> {
+  row: TRow
+  rowId: RowId
+  rowIndex: number
+}
+
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   /** Row data (client-side). For server-side, use BcServerGrid. */
   data: readonly TRow[]
@@ -704,6 +712,10 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   toolbar?: React.ReactNode
   footer?: React.ReactNode
 
+  // Master-detail
+  renderDetailPanel?: (params: BcDetailPanelParams<TRow>) => React.ReactNode
+  detailPanelHeight?: number | ((params: BcDetailPanelParams<TRow>) => number)
+
   // Read-only events
   onRowClick?: (row: TRow, event: React.MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: React.MouseEvent) => void
@@ -727,6 +739,12 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   ariaLabelledBy?: string
 }
 ```
+
+When `renderDetailPanel` is supplied, `<BcGrid>` renders a small pinned-left
+disclosure column. Expanding a row mounts the returned React node below that
+row, using the existing `expansion` state pair. Detail panels are fixed-height
+by default (`144px`) or per-row via `detailPanelHeight`; auto-measured detail
+height is deferred so virtualization remains deterministic.
 
 ### 5.2 `<BcEditGrid>` (frozen at v0.1 surface; editing is Q2)
 

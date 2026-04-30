@@ -102,6 +102,7 @@ export const apiSurfaceManifest = [
       "BcColumnFilter",
       "BcColumnFormat",
       "BcColumnStateEntry",
+      "BcDetailPanelParams",
       "BcEditGrid",
       "BcEditGridAction",
       "BcEditGridProps",
