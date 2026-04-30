@@ -11,7 +11,9 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 > - `group-by-client` — runtime row grouping with expand/collapse + count
 > - `range-state-machine` + `visual-selection-layer` + `clipboard-copy-tsv-html` — the Track 2 stack, all three need to land for AG-Grid-style range copy to work
 >
-> Cut a release after each demo-critical PR merges; bsncraft pulls the new version + a c2 follow-up updates wrappers. Coordinator: c2 (auditor / merge integrator).
+> Cut a release after each demo-critical PR merges; bsncraft pulls the new version + a follow-up updates wrappers. Coordinator: Codex in `~/work/bc-grid` (auditor / merge integrator / Playwright owner).
+>
+> **5-worker launch plan (2026-04-30):** all workers start clean from parking branches. `worker1` = Codex, `worker2` = Claude, `worker3` = Codex, `worker4` = Claude, `worker5` = Codex. Codex in `~/work/bc-grid` coordinates PR review, merge, releases, and Playwright. Preferred first claims: `worker1/range-state-machine`, `worker2/filter-set-impl`, `worker3/group-by-client`, `worker4/editor-framework`, `worker5/sidebar-impl`. These are not pre-claimed; each worker must still edit this queue from `[ready]` to `[in-flight: workerN]` before coding. If a preferred task is already claimed, choose the next highest-priority `[ready]` task from `docs/coordination/v1-parity-sprint.md`.
 
 **Status legend:**
 - `[ready]` — task spec written, no blockers, claim by editing this file + branching
@@ -144,7 +146,7 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 - `[done: c1 #120]` **editor-time** — `<input type="time" />` styled with shadcn `Input`; 24h commit. **Effort**: S.
 - `[done: c1 #127 (salvaged via #135)]` **editor-select** — native `<select>` (not shadcn); reads `column.options` (additive prop). Type-to-narrow via `seedKey`. **Effort**: M.
 - `[done: c1 #138]` **editor-multi-select** — native `<select multiple>` (not shadcn); reuses `column.options`. Returns `readonly TValue[]`. **Effort**: M.
-- `[review: c1 #143]` **editor-autocomplete** — native `<input list>` + `<datalist>` (not shadcn); async via `column.fetchOptions(query, signal)`. Debounced 200ms. AbortSignal races superseded fetches. **Effort**: M.
+- `[done: c1 #143]` **editor-autocomplete** — native `<input list>` + `<datalist>` (not shadcn); async via `column.fetchOptions(query, signal)`. Debounced 200ms. AbortSignal races superseded fetches. **Effort**: M.
 - `[done: c1 #88 (folded into editor-framework)]` **validation-framework** — sync + async validators with `AbortSignal` race semantics; `useEditingController` already exposes the full pipeline. **Effort**: S.
 - `[done: c1 #128 (salvaged via #135)]` **dirty-tracking** — `BcEditState` map + visual states (`data-bc-grid-cell-state`); cell renderer params extension (`pending`, `editError`, `isDirty`). **Effort**: S.
 - `[blocked: depends on editor-autocomplete merging]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. **Effort**: M.
@@ -204,7 +206,7 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 
 - `[done: c2 #48]` **filter-registry-rfc** — extension protocol; `BcFilterDefinition` / `BcReactFilterDefinition`; persistence shape; 7 built-in filter specs. **Effort**: 1 day.
-- `[ready]` **filter-popup-variant** ⭐ — When `column.filter.variant === "popup"`, render a header-icon (funnel) that opens a shadcn `Popover` with the existing text/number/date/boolean filter editor inside, instead of the inline-row input. Active state: solid/blue funnel + underline on the header, cleared by an `×` in the popover footer. The inline row collapses for that column when popup is active; if every column is popup-variant the row disappears entirely. AG-Grid-feel. Reuses existing filter editors — no logic duplication. **Demo-critical** (week 2). **Effort**: M.
+- `[review: c1 #145]` **filter-popup-variant** ⭐ — When `column.filter.variant === "popup"`, render a header-icon (funnel) that opens a shadcn `Popover` with the existing text/number/date/boolean filter editor inside, instead of the inline-row input. Active state: solid/blue funnel + underline on the header, cleared by an `×` in the popover footer. The inline row collapses for that column when popup is active; if every column is popup-variant the row disappears entirely. AG-Grid-feel. Reuses existing filter editors — no logic duplication. **Demo-critical** (week 2). **Effort**: M.
 - `[ready]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
 - `[ready]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
 - `[ready]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
