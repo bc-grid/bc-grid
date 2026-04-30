@@ -149,6 +149,12 @@ export function columnFilterTextFromGridFilter(
   return text
 }
 
+export function columnFilterTextEqual(left: ColumnFilterText, right: ColumnFilterText): boolean {
+  const leftKeys = Object.keys(left)
+  if (leftKeys.length !== Object.keys(right).length) return false
+  return leftKeys.every((key) => left[key] === right[key])
+}
+
 function assignColumnFilterText(filter: ServerFilter, text: Record<ColumnId, string>): void {
   if (filter.kind === "group") {
     if (filter.op !== "and") return
