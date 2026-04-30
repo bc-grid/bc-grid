@@ -199,7 +199,7 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 - `[done: worker5 #150]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
 - `[review: worker5 #160]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
 - `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
-- `[in-flight: worker5]` **tool-panel-polish** — Wire examples/docs affordances for already-merged tool panels without changing filters internals. **Effort**: S.
+- `[review: worker5 #206]` **tool-panel-polish** — Wire examples/docs affordances for already-merged tool panels without changing filters internals. **Effort**: S.
 - `[ready]` **context-menu-impl** — shadcn `ContextMenu` primitive; right-click + long-press (500ms coarse pointer) + Shift+F10. 4 built-in items + custom factory function. **Effort**: M.
 - `[done: worker2 #154]` **footer-aggregations** — wire the `aggregations` status-bar segment to the aggregation-engine output. **Effort**: S.
 
