@@ -26,6 +26,11 @@ export interface DateFilterInput {
   valueTo?: string
 }
 
+export interface DateRangeFilterInput {
+  value: string
+  valueTo: string
+}
+
 export interface NumberFilterInput {
   op: NumberFilterOperator
   value: string
@@ -50,6 +55,9 @@ export type FilterCellValue =
     }
 
 type DateColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "date" }
+type DateRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
+  type: "date-range"
+}
 type NumberColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "number" }
 type SetColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "set" }
 
@@ -86,6 +94,12 @@ export function buildGridFilter(
       filters.push({ ...parsed, columnId })
       continue
     }
+    if (filterType === "date-range") {
+      const parsed = parseDateRangeFilterInput(value)
+      if (!parsed) continue
+      filters.push({ ...parsed, columnId })
+      continue
+    }
     if (filterType === "set") {
       const parsed = parseSetFilterInput(value)
       if (!parsed) continue
@@ -116,6 +130,9 @@ function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFil
   }
   if (filter.type === "date") {
     return matchesDateFilter(value, filter)
+  }
+  if (filter.type === "date-range") {
+    return filter.op === "between" && matchesDateFilter(value, filter)
   }
   if (filter.type === "set") {
     return matchesSetFilter(value, filter)
@@ -166,6 +183,10 @@ export function encodeNumberFilterInput(input: NumberFilterInput): string {
 
 export const encodeDateFilterInput = encodeNumberFilterInput as (input: DateFilterInput) => string
 
+export function encodeDateRangeFilterInput(input: DateRangeFilterInput): string {
+  return JSON.stringify(input)
+}
+
 export function encodeSetFilterInput(input: SetFilterInput): string {
   return JSON.stringify(input)
 }
@@ -176,6 +197,18 @@ export function decodeDateFilterInput(raw: string): DateFilterInput {
     return normaliseDateFilterInput(parsed)
   } catch {
     return { op: "is", value: "" }
+  }
+}
+
+export function decodeDateRangeFilterInput(raw: string): DateRangeFilterInput {
+  try {
+    const parsed = JSON.parse(raw) as Partial<DateRangeFilterInput>
+    return {
+      value: typeof parsed.value === "string" ? parsed.value : "",
+      valueTo: typeof parsed.valueTo === "string" ? parsed.valueTo : "",
+    }
+  } catch {
+    return { value: "", valueTo: "" }
   }
 }
 
@@ -220,6 +253,21 @@ function parseDateFilterInput(raw: string): DateColumnFilterDraft | null {
     type: "date",
     op: input.op,
     value,
+  }
+}
+
+function parseDateRangeFilterInput(raw: string): DateRangeColumnFilterDraft | null {
+  const input = decodeDateRangeFilterInput(raw)
+  const value = parseFilterDate(input.value)
+  const valueTo = parseFilterDate(input.valueTo)
+  if (!value || !valueTo) return null
+  const min = value <= valueTo ? value : valueTo
+  const max = value <= valueTo ? valueTo : value
+  return {
+    kind: "column",
+    type: "date-range",
+    op: "between",
+    values: [min, max],
   }
 }
 

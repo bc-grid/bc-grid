@@ -13,13 +13,16 @@ import {
 } from "react"
 import {
   type DateFilterOperator,
+  type DateRangeFilterInput,
   type NumberFilterOperator,
   type SetFilterOperator,
   type SetFilterOption,
   decodeDateFilterInput,
+  decodeDateRangeFilterInput,
   decodeNumberFilterInput,
   decodeSetFilterInput,
   encodeDateFilterInput,
+  encodeDateRangeFilterInput,
   encodeNumberFilterInput,
   encodeSetFilterInput,
 } from "./filter"
@@ -724,6 +727,17 @@ export function FilterEditorBody({
       />
     )
   }
+  if (filterType === "date-range") {
+    return (
+      <DateRangeFilterControl
+        filterId={filterId}
+        filterLabel={filterLabel}
+        filterText={filterText}
+        onFilterChange={onFilterChange}
+        primaryRef={focusRef}
+      />
+    )
+  }
   if (filterType === "set") {
     return (
       <SetFilterControl
@@ -872,6 +886,53 @@ export function FilterPopup({
           × Clear
         </button>
       </div>
+    </div>
+  )
+}
+
+function DateRangeFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+  primaryRef,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+  primaryRef?: { current: FilterFocusElement | null }
+}): ReactNode {
+  const input = decodeDateRangeFilterInput(filterText)
+  const update = (next: Partial<DateRangeFilterInput>) => {
+    onFilterChange(encodeDateRangeFilterInput({ ...input, ...next }))
+  }
+
+  return (
+    <div className="bc-grid-filter-date-range">
+      <input
+        ref={(el) => {
+          if (primaryRef) primaryRef.current = el
+        }}
+        aria-label={`${filterLabel} start date`}
+        className="bc-grid-filter-input"
+        id={filterId}
+        type="date"
+        value={input.value}
+        onChange={(event) => update({ value: event.currentTarget.value })}
+        onKeyDown={(event) => event.stopPropagation()}
+      />
+      <span aria-hidden="true" className="bc-grid-filter-range-separator">
+        -
+      </span>
+      <input
+        aria-label={`${filterLabel} end date`}
+        className="bc-grid-filter-input"
+        type="date"
+        value={input.valueTo}
+        onChange={(event) => update({ valueTo: event.currentTarget.value })}
+        onKeyDown={(event) => event.stopPropagation()}
+      />
     </div>
   )
 }

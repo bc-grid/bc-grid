@@ -3,6 +3,7 @@ import type { ColumnId } from "@bc-grid/core"
 import {
   buildGridFilter,
   encodeDateFilterInput,
+  encodeDateRangeFilterInput,
   encodeNumberFilterInput,
   encodeSetFilterInput,
   matchesGridFilter,
@@ -145,6 +146,40 @@ describe("buildGridFilter", () => {
           }),
         },
         { lastInvoice: "date" },
+      ),
+    ).toBeNull()
+  })
+
+  test("date-range inputs produce inclusive min/max values", () => {
+    expect(
+      buildGridFilter(
+        {
+          lastInvoice: encodeDateRangeFilterInput({
+            value: "2026-03-31",
+            valueTo: "2026-03-01",
+          }),
+        },
+        { lastInvoice: "date-range" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "lastInvoice",
+      type: "date-range",
+      op: "between",
+      values: ["2026-03-01", "2026-03-31"],
+    })
+  })
+
+  test("incomplete date-range inputs do not activate a filter", () => {
+    expect(
+      buildGridFilter(
+        {
+          lastInvoice: encodeDateRangeFilterInput({
+            value: "2026-03-01",
+            valueTo: "",
+          }),
+        },
+        { lastInvoice: "date-range" },
       ),
     ).toBeNull()
   })
@@ -323,6 +358,29 @@ describe("matchesGridFilter — column", () => {
       })),
     ).toBe(true)
     expect(matchesGridFilter(filter, lookup({ lastInvoice: "31.03.2026" }))).toBe(false)
+  })
+
+  test("date-range filters compare formatted or raw date values inclusively", () => {
+    const filter = buildGridFilter(
+      {
+        lastInvoice: encodeDateRangeFilterInput({
+          value: "2026-03-01",
+          valueTo: "2026-03-31",
+        }),
+      },
+      { lastInvoice: "date-range" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "Mar 1, 2026" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "Mar 31, 2026" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "Apr 1, 2026" }))).toBe(false)
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "31.03.2026",
+        rawValue: "2026-03-31T00:00:00.000Z",
+      })),
+    ).toBe(true)
   })
 
   test("set filters match selected formatted values", () => {

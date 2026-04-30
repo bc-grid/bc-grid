@@ -178,7 +178,7 @@ export type ColumnId = string
 export type RowId = string
 
 export interface BcColumnFilter {
-  type: "text" | "number" | "date" | "set" | "boolean" | "custom"
+  type: "text" | "number" | "date" | "date-range" | "set" | "boolean" | "custom"
   /** Optional starting value. */
   defaultValue?: unknown
   /** Optional UI variant. */
@@ -592,7 +592,7 @@ The matched substring is exposed to `cellRenderer` via `params.searchText` so th
 
 Per-column `filter` declares **what kind of filter UI to show** and what parser to use; the actual filter state is in `BcGridFilter` (which mirrors `ServerFilter` from `server-query-rfc` for parity with server grids).
 
-Built-in filter types: `text`, `number`, `date`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. Set filters are multi-select editors over distinct scalar column values, loaded on first open, and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
+Built-in filter types: `text`, `number`, `date`, `date-range`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. Date-range filters render two date inputs and always emit `op: "between"` with inclusive min/max values; incomplete ranges are inactive. Set filters are multi-select editors over distinct scalar column values, loaded on first open, and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
 
 ```ts
 // from @bc-grid/filters (engine)
