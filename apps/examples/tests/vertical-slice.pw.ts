@@ -23,7 +23,7 @@ test("AR customer filters narrow the ledger to a single account", async ({ page 
   const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
   await expect(grid).toBeVisible()
 
-  await grid.getByLabel("Filter Account").fill("CUST-00042")
+  await grid.getByRole("textbox", { name: "Filter Account" }).fill("CUST-00042")
   await expect(grid).toHaveAttribute("aria-rowcount", "3")
   await expect(grid.locator(".bc-grid-row").first()).toContainText("CUST-00042")
 })
