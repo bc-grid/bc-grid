@@ -126,6 +126,21 @@
   opacity: 1;
 }
 
+.bc-grid-header-cell-reordering {
+  cursor: grabbing;
+}
+
+.bc-grid-column-drop-indicator {
+  position: absolute;
+  top: 0;
+  z-index: 8;
+  width: 2px;
+  background: var(--bc-grid-focus-ring);
+  box-shadow: 0 0 0 1px var(--bc-grid-bg);
+  pointer-events: none;
+  transform: translateX(-1px);
+}
+
 .bc-grid-header-menu-button:hover {
   background: var(--bc-grid-row-hover);
   color: var(--bc-grid-fg);
