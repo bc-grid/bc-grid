@@ -61,6 +61,12 @@ Before requesting review:
 - [ ] Linked to the task in `queue.md`
 - [ ] Updated relevant design docs if the architecture shifted
 
+### Test budget per PR
+
+Default to **1 happy-path e2e + unit tests for edges**, not 4-9 e2e tests per feature. Unit tests are 0.5s; e2e tests are 5-30s × 6 browser projects. Cover one happy-path flow end-to-end, then verify validation, error states, edge cases via `bun test` against the editor / column / hook in isolation. The goal is fast feedback for the author and fast review for the next agent.
+
+`bun run test:e2e` runs **chromium-only** by default (matches CI). For cross-browser validation before merging UI-sensitive changes, run `bun run test:e2e:full`. The full 3-browser × 2-app matrix runs nightly via `.github/workflows/e2e-nightly.yml` regardless.
+
 ## 7. PR review
 
 - **Reviewer is never the author.** Always a fresh agent or human. The reviewer reads the PR cold; they should have to ask zero questions to understand intent.
