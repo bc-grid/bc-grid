@@ -31,6 +31,7 @@ interface RenderBodyCellParams<TRow> {
   searchText: string
   selected: boolean
   disabled: boolean
+  expanded: boolean
   setActiveCell: (next: BcCellPosition | null) => void
   totalWidth: number
   viewportWidth: number
@@ -70,6 +71,7 @@ export function renderBodyCell<TRow>({
   searchText,
   selected,
   disabled,
+  expanded,
   setActiveCell,
   totalWidth,
   viewportWidth,
@@ -91,6 +93,7 @@ export function renderBodyCell<TRow>({
     index: entry.index,
     selected,
     disabled,
+    expanded,
   }
 
   // Editing state per `editing-rfc §Dirty Tracking`. Order of precedence:

@@ -13,6 +13,7 @@ import type {
 } from "@bc-grid/core"
 import { Virtualizer } from "@bc-grid/virtualizer"
 import {
+  type CSSProperties,
   type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
@@ -32,6 +33,7 @@ import {
   ColumnVisibilityMenu,
   type ColumnVisibilityMenuAnchor,
 } from "./columnVisibility"
+import { createDetailToggleColumn } from "./detailColumn"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
 import {
   type ColumnFilterText,
@@ -105,6 +107,8 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
   return useRef<BcGridApi<TRow> | null>(null)
 }
 
+const DEFAULT_DETAIL_HEIGHT = 144
+
 export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   assertNoMixedControlledProps(props)
 
@@ -122,6 +126,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     footer,
     loading,
     loadingOverlay,
+    renderDetailPanel,
+    detailPanelHeight,
     ariaLabel,
     ariaLabelledBy,
     onRowClick,
@@ -199,6 +205,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultSelection ?? createEmptySelection(),
     props.onSelectionChange,
   )
+  const emptyExpansion = useMemo(() => new Set<RowId>(), [])
+  const [expansionState, setExpansionState] = useControlledState<ReadonlySet<RowId>>(
+    hasProp(props, "expansion"),
+    props.expansion ?? emptyExpansion,
+    props.defaultExpansion ?? emptyExpansion,
+    props.onExpansionChange,
+  )
+  const hasDetail = renderDetailPanel != null
 
   // Anchor for shift-click range selection. Set on plain click + ctrl/cmd
   // click; consumed (and reset) by shift-click. Held in a ref so we don't
@@ -392,6 +406,18 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       .map((entry, index) => ({ ...entry, index }))
   }, [allRowEntries, paginationEnabled, paginationWindow.endIndex, paginationWindow.startIndex])
   const aggregationRows = useMemo(() => allRowEntries.map((entry) => entry.row), [allRowEntries])
+  const getDetailHeight = useCallback(
+    (entry: RowEntry<TRow>) => {
+      if (!hasDetail) return 0
+      const params = { row: entry.row, rowId: entry.rowId, rowIndex: entry.index }
+      const height =
+        typeof detailPanelHeight === "function"
+          ? detailPanelHeight(params)
+          : (detailPanelHeight ?? DEFAULT_DETAIL_HEIGHT)
+      return Math.max(0, height)
+    },
+    [hasDetail, detailPanelHeight],
+  )
 
   // Visible, selectable row IDs in display order (post-filter, post-sort).
   // Used by the synthetic selection-checkbox column's header to compute the
@@ -406,19 +432,35 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // on every render so its closure captures the live selectionState +
   // setter; resolveColumns is cheap so the cache miss here is acceptable.
   const resolvedColumns = useMemo(() => {
-    if (!props.checkboxSelection) return consumerResolvedColumns
-    const synthetic = createSelectionCheckboxColumn<TRow>({
-      selectionState,
-      setSelectionState,
-      visibleRowIds: visibleSelectableRowIds,
-    })
-    return resolveColumns([synthetic, ...columns], columnState)
+    if (!props.checkboxSelection && !hasDetail) return consumerResolvedColumns
+    const syntheticColumns: BcReactGridColumn<TRow>[] = []
+    if (hasDetail) {
+      syntheticColumns.push(
+        createDetailToggleColumn<TRow>({
+          expansionState,
+          setExpansionState,
+        }),
+      )
+    }
+    if (props.checkboxSelection) {
+      syntheticColumns.push(
+        createSelectionCheckboxColumn<TRow>({
+          selectionState,
+          setSelectionState,
+          visibleRowIds: visibleSelectableRowIds,
+        }),
+      )
+    }
+    return resolveColumns([...syntheticColumns, ...columns], columnState)
   }, [
     columns,
     columnState,
     consumerResolvedColumns,
+    hasDetail,
+    expansionState,
     props.checkboxSelection,
     selectionState,
+    setExpansionState,
     setSelectionState,
     visibleSelectableRowIds,
   ])
@@ -491,15 +533,25 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     })
 
     resolvedColumns.forEach((column, index) => next.setColWidth(index, column.width))
+    if (hasDetail) {
+      rowEntries.forEach((entry, index) => {
+        if (!expansionState.has(entry.rowId)) return
+        next.setRowHeight(index, defaultRowHeight + getDetailHeight(entry))
+      })
+    }
     next.setScrollTop(scrollOffsetRef.current.top)
     next.setScrollLeft(scrollOffsetRef.current.left)
     return next
   }, [
     defaultRowHeight,
+    hasDetail,
+    getDetailHeight,
+    expansionState,
     fallbackBodyHeight,
     pinnedLeftCols,
     pinnedRightCols,
     resolvedColumns,
+    rowEntries,
     rowEntries.length,
   ])
 
@@ -727,8 +779,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       setFilter(next) {
         setFilterState(next)
       },
-      expandAll() {},
-      collapseAll() {},
+      expandAll() {
+        if (!hasDetail) return
+        setExpansionState(new Set(rowEntries.map((entry) => entry.rowId)))
+      },
+      collapseAll() {
+        if (!hasDetail) return
+        setExpansionState(new Set<RowId>())
+      },
       refresh() {
         requestRender()
       },
@@ -737,15 +795,18 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       activeCell,
       columnIndexById,
       columnState,
+      hasDetail,
       focusCell,
       requestRender,
       resolvedColumns,
       rowIndexById,
+      rowEntries,
       rowsById,
       scrollToCell,
       scrollToRow,
       selectionState,
       setColumnState,
+      setExpansionState,
       setFilterState,
       setSortState,
       virtualizer,
@@ -1132,6 +1193,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             if (!entry) return null
             const disabled = isRowDisabled(entry.row)
             const selected = !disabled && isRowSelected(selectionState, entry.rowId)
+            const expanded = hasDetail && expansionState.has(entry.rowId)
+            const detailHeight = expanded ? getDetailHeight(entry) : 0
+            const cellVirtualRow = expanded
+              ? { ...virtualRow, height: defaultRowHeight }
+              : virtualRow
             return (
               <div
                 key={entry.rowId}
@@ -1206,14 +1272,35 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     totalWidth: virtualWindow.totalWidth,
                     viewportWidth: viewport.width,
                     virtualCol,
-                    virtualRow,
+                    virtualRow: cellVirtualRow,
                     selected,
                     disabled,
+                    expanded,
                     hasOverlayValue: editController.hasOverlayValue,
                     getOverlayValue: editController.getOverlayValue,
                     getCellEditEntry: editController.getCellEditEntry,
                   }),
                 )}
+                {expanded && renderDetailPanel ? (
+                  <div
+                    className="bc-grid-detail-panel"
+                    role="region"
+                    aria-label="Detail"
+                    style={detailPanelStyle(
+                      defaultRowHeight,
+                      detailHeight,
+                      virtualWindow.totalWidth,
+                    )}
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    {renderDetailPanel({
+                      row: entry.row,
+                      rowId: entry.rowId,
+                      rowIndex: entry.index,
+                    })}
+                  </div>
+                ) : null}
               </div>
             )
           })}
@@ -1332,4 +1419,16 @@ function buildColumnVisibilityItems<TRow>(
 
 function columnVisibilityLabel<TRow>(column: BcReactGridColumn<TRow>, columnId: ColumnId): string {
   return typeof column.header === "string" ? column.header : columnId
+}
+
+function detailPanelStyle(top: number, height: number, width: number): CSSProperties {
+  return {
+    height,
+    left: 0,
+    minWidth: "100%",
+    overflow: "auto",
+    position: "absolute",
+    top,
+    width: Math.max(width, 1),
+  }
 }

@@ -158,6 +158,11 @@ function aggregationsEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("aggregations") === "1"
 }
 
+function masterDetailEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("masterDetail") === "1"
+}
+
 function CustomerGridDemo({
   density,
   onDensityChange,
@@ -179,6 +184,7 @@ function CustomerGridDemo({
   const disabledRows = disabledRowsEnabled()
   const paginationDemo = paginationEnabled()
   const aggregationDemo = aggregationsEnabled()
+  const masterDetailDemo = masterDetailEnabled()
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
   const urlStatePersistence = useMemo(
@@ -594,6 +600,14 @@ function CustomerGridDemo({
         height={560}
         linkField="legalName"
         locale="en-US"
+        {...(masterDetailDemo
+          ? {
+              detailPanelHeight: 132,
+              renderDetailPanel: ({ row }: { row: CustomerRow }) => (
+                <CustomerMasterDetail row={row} />
+              ),
+            }
+          : {})}
         onEdit={handleEdit}
         onRowClick={setActiveCustomer}
         onSelectionChange={handleSelectionChange}
@@ -720,6 +734,35 @@ function CustomerDetail({ row }: { row: CustomerRow }) {
   )
 }
 
+function CustomerMasterDetail({ row }: { row: CustomerRow }) {
+  return (
+    <div className="customer-master-detail">
+      <div>
+        <span>Follow-up</span>
+        <strong>{formatDateTime(row.nextScheduledCall)}</strong>
+      </div>
+      <div>
+        <span>Collector Notes</span>
+        <p>
+          {row.owner} owns {row.region.toLowerCase()} collections for {row.terms.toLowerCase()}.
+          Current exposure is {currency.format(row.balance)} across {row.openInvoices} open
+          invoices.
+        </p>
+      </div>
+      <div>
+        <span>Aging Mix</span>
+        <strong>
+          {currency.format(row.current)} current / {currency.format(row.daysOver60)} 60+
+        </strong>
+      </div>
+      <div>
+        <span>Invoice Cutoff</span>
+        <strong>{row.cutoffTime}</strong>
+      </div>
+    </div>
+  )
+}
+
 function PackageMatrix() {
   return (
     <section id="package-matrix" className="package-panel" aria-label="Package matrix">
@@ -738,4 +781,9 @@ function PackageMatrix() {
       </div>
     </section>
   )
+}
+
+function formatDateTime(value: string): string {
+  const [date, time] = value.split("T")
+  return `${date ?? value} ${time ?? ""}`.trim()
 }

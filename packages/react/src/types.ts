@@ -134,6 +134,12 @@ export interface BcCellRendererParams<TRow, TValue = unknown> {
   isDirty: boolean
 }
 
+export interface BcDetailPanelParams<TRow> {
+  row: TRow
+  rowId: RowId
+  rowIndex: number
+}
+
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   data: readonly TRow[]
   columns: readonly BcReactGridColumn<TRow>[]
@@ -157,6 +163,19 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   toolbar?: ReactNode
   footer?: ReactNode
+
+  /**
+   * Master-detail render hook. When supplied, the grid renders a pinned-left
+   * disclosure column and mounts this panel below expanded rows. Expansion
+   * state uses the existing `expansion` / `defaultExpansion` /
+   * `onExpansionChange` controlled-state pair.
+   */
+  renderDetailPanel?: (params: BcDetailPanelParams<TRow>) => ReactNode
+  /**
+   * Fixed height for expanded detail panels. A per-row function is supported
+   * for predictable variable-height panels; auto-measurement is deferred.
+   */
+  detailPanelHeight?: number | ((params: BcDetailPanelParams<TRow>) => number)
 
   onRowClick?: (row: TRow, event: MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: MouseEvent) => void
