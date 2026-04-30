@@ -107,8 +107,9 @@ export interface BcCellRendererParams<TRow, TValue = unknown> {
    */
   pending: boolean
   /**
-   * Validation rejection or server-commit error. Cleared on successful
-   * retry or on cancel. Per `editing-rfc §Dirty Tracking`.
+   * Async commit / server-commit error. Validation rejection stays on
+   * the mounted editor because the commit never lands. Cleared on
+   * successful retry or on cancel. Per `editing-rfc §Dirty Tracking`.
    */
   editError?: string
   /**

@@ -17,7 +17,7 @@ import type { BcCellEditCommitEvent, BcReactGridColumn } from "./types"
 export interface BcCellEditEntry {
   /** True between commit and `onCellEditCommit` Promise resolution. */
   pending: boolean
-  /** Validation rejection or server reject. Cleared on successful retry / cancel. */
+  /** Async commit / server reject. Cleared on successful retry / cancel. */
   error?: string
   /** Original value before this edit cycle; used for rollback on server reject. */
   previousValue?: unknown

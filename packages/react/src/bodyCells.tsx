@@ -94,7 +94,7 @@ export function renderBodyCell<TRow>({
   }
 
   // Editing state per `editing-rfc §Dirty Tracking`. Order of precedence:
-  //   - error: validation rejected or server reject (highest priority)
+  //   - error: async commit / server reject (highest priority)
   //   - pending: async commit in flight
   //   - dirty: locally edited, no error / pending in flight
   //   - undefined (default): clean cell
