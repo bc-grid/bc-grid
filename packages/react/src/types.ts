@@ -343,6 +343,23 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   checkboxSelection?: boolean
 
   /**
+   * Override the inline filter row's visibility independent of the
+   * per-column filter configuration. Lets host apps wire a "filter
+   * toggle" button without touching column definitions.
+   *
+   * - `undefined` (default) — column-driven: the row renders when at
+   *   least one column has an inline-variant filter configured. Same
+   *   behavior consumers see today.
+   * - `true` — force the row visible. Columns with `filter: false` or
+   *   `variant: "popup"` still render empty filter cells in the row.
+   * - `false` — force the row hidden. Active filter state is **preserved**
+   *   (the underlying `columnFilterText` map is unaffected); only the
+   *   editor row is suppressed. Popup-variant filter funnels stay
+   *   reachable from each column header.
+   */
+  showFilterRow?: boolean
+
+  /**
    * Flash the cell briefly when an edit commits, per
    * `editing-rfc §Edit-cell paint perf`. Off by default. Uses the
    * `flash` primitive from `@bc-grid/animations`, which already

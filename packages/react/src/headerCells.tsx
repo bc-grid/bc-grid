@@ -178,6 +178,7 @@ export function renderHeaderCell<TRow>({
       className={classNames(
         "bc-grid-cell",
         "bc-grid-header-cell",
+        column.source.resizable === false ? undefined : "bc-grid-header-cell-resizable",
         sortable ? "bc-grid-header-cell-sortable" : undefined,
         reorderingColumnId === column.columnId ? "bc-grid-header-cell-reordering" : undefined,
         sort ? `bc-grid-header-cell-sorted-${sort.direction}` : undefined,

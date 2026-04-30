@@ -863,6 +863,23 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   // Accessibility
   ariaLabel?: string
   ariaLabelledBy?: string
+
+  /**
+   * Override the inline filter row's visibility independent of the
+   * per-column filter configuration. Lets host apps wire a filter
+   * toggle button without touching column definitions.
+   *
+   * - `undefined` (default) — column-driven: row renders iff at least
+   *   one column has an inline-variant filter configured. Same
+   *   behavior consumers see today.
+   * - `true` — force visible. Columns with `filter: false` or
+   *   `variant: "popup"` still render empty filter cells in the row.
+   * - `false` — force hidden. Active filter state (`columnFilterText`
+   *   / `BcGridFilter`) is preserved across the toggle; only the
+   *   editor row is suppressed. Popup-variant filter funnels stay
+   *   reachable from each column header.
+   */
+  showFilterRow?: boolean
 }
 ```
 
