@@ -1,7 +1,22 @@
 {
   "name": "@bc-grid/virtualizer",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.1",
+  "description": "Virtualizer engine for bc-grid (Fenwick offsets, in-flight retention, RAF throttling)",
+  "license": "UNLICENSED",
+  "author": "John Cottrell <john@cot.dev>",
+  "homepage": "https://github.com/johncotdev/bc-grid",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johncotdev/bc-grid.git",
+    "directory": "packages/virtualizer"
+  },
+  "bugs": {
+    "url": "https://github.com/johncotdev/bc-grid/issues"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

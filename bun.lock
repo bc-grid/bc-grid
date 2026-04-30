@@ -56,25 +56,25 @@
     },
     "packages/aggregations": {
       "name": "@bc-grid/aggregations",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/animations": {
       "name": "@bc-grid/animations",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/core": {
       "name": "@bc-grid/core",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
     },
     "packages/editors": {
       "name": "@bc-grid/editors",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -85,7 +85,7 @@
     },
     "packages/enterprise": {
       "name": "@bc-grid/enterprise",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -96,7 +96,7 @@
     },
     "packages/export": {
       "name": "@bc-grid/export",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
@@ -111,14 +111,14 @@
     },
     "packages/filters": {
       "name": "@bc-grid/filters",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/react": {
       "name": "@bc-grid/react",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/aggregations": "workspace:*",
         "@bc-grid/animations": "workspace:*",
@@ -134,28 +134,27 @@
         "@types/react-dom": "^19.0.0",
       },
       "peerDependencies": {
-        "@tanstack/react-table": "^8.20.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
       },
     },
     "packages/server-row-model": {
       "name": "@bc-grid/server-row-model",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/theming": {
       "name": "@bc-grid/theming",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/virtualizer": {
       "name": "@bc-grid/virtualizer",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
@@ -463,10 +462,6 @@
     "@shikijs/types": ["@shikijs/types@3.23.0", "", { "dependencies": { "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.4" } }, "sha512-3JZ5HXOZfYjsYSk0yPwBrkupyYSLpAE26Qc0HLghhZNGTZg/SKxXIIgoxOpmmeQP0RRSDJTk1/vPfw9tbw+jSQ=="],
 
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
-
-    "@tanstack/react-table": ["@tanstack/react-table@8.21.3", "", { "dependencies": { "@tanstack/table-core": "8.21.3" }, "peerDependencies": { "react": ">=16.8", "react-dom": ">=16.8" } }, "sha512-5nNMTSETP4ykGegmVkhjcS8tTLW6Vl4axfEGQN3v0zdHYbK4UfoqfPChclTrJ4EoK9QynqAu9oUf8VEmrpZ5Ww=="],
-
-    "@tanstack/table-core": ["@tanstack/table-core@8.21.3", "", {}, "sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg=="],
 
     "@types/babel__core": ["@types/babel__core@7.20.5", "", { "dependencies": { "@babel/parser": "^7.20.7", "@babel/types": "^7.20.7", "@types/babel__generator": "*", "@types/babel__template": "*", "@types/babel__traverse": "*" } }, "sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA=="],
 
