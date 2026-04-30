@@ -234,7 +234,7 @@ Spec pending: `docs/design/charts-rfc.md` (c2 to author; user confirmed peer-dep
 - `[review: worker5 #190]` **animation-polish** — review every transition (sort / filter / expand / collapse / insert / remove / cell-flash); tune to 60fps; document the motion system. **Effort**: M.
 - `[ready]` **browser-compat-matrix** — full Chromium / FF / WebKit / Safari / Edge pass on the AR Customers demo + standalone tests. Document any known issues. **Effort**: S.
 - `[review: x1 #108]` **migration-guide** — from AG Grid Community + Enterprise to bc-grid; documented patterns; side-by-side examples; no codemod (out-of-scope). Lives in `apps/docs`. **Effort**: M.
-- `[in-flight: worker4]` **v030-filtering-gap-map** — coordination doc mapping the v0.3 filtering / search / persistence milestone against current main (post #200/#202/#203/#157/#204) and open PRs (#208 + related). Output: `docs/coordination/v030-filtering-gap-map.md` with done / in-review / missing / v0.3 blockers / concrete follow-up tasks (filters, search, persistence, bsncraft validation). **Planning docs only — not implementation.** **Effort**: XS.
+- `[review: worker4 #213]` **v030-filtering-gap-map** — coordination doc mapping the v0.3 filtering / search / persistence milestone against current main (post #200/#202/#203/#157/#204) and open PRs (#208 + related). Output: `docs/coordination/v030-filtering-gap-map.md` with done / in-review / missing / v0.3 blockers / concrete follow-up tasks (filters, search, persistence, bsncraft validation). **Planning docs only — not implementation.** **Effort**: XS.
 
 ### Quality + infra (parallel throughout Q1)
 
