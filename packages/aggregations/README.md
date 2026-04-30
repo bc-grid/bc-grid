@@ -1,14 +1,15 @@
 # @bc-grid/aggregations
 
-Aggregation engine for bc-grid. **v0.1.0-alpha.1 ships an empty placeholder** to lock the `@bc-grid` namespace; the real implementation lands during the v1.0 parity sprint per `docs/design/aggregation-rfc.md`.
+Pure aggregation and pivot-table engine for bc-grid.
 
-When implemented, this package exposes:
-- Built-in factories: `sum`, `count`, `avg`, `min`, `max`
+This package exposes:
+- Built-in aggregation factories: `sum`, `count`, `avg`, `min`, `max`
 - A `registerAggregation` extension point for consumer-defined aggregations
-- The `Aggregation<TValue, TResult>` factory shape with `init / step / merge / finalize` (Java Collector-style)
-- The `AggregationResult<TResult>` output type
+- The `Aggregation<TValue, TResult>` factory shape with `init / step / merge / finalize`
+- Column and group aggregation drivers: `aggregate`, `aggregateColumns`, `aggregateGroups`
+- Client-side pivot computation via `pivot(rows, columns, state)`
 
-See the RFC for the full contract.
+React rendering lives in `@bc-grid/react`; this package has no DOM or React dependency.
 
 ## License
 

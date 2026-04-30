@@ -217,6 +217,55 @@ export interface BcAggregation {
       }
 }
 
+export interface BcAggregationResultDTO<TResult = unknown> {
+  columnId: ColumnId
+  rowCount: number
+  value: TResult
+}
+
+export interface BcPivotValue {
+  columnId: ColumnId
+  aggregation?: BcAggregation
+  label?: string
+}
+
+export interface BcPivotState {
+  rowGroups: readonly ColumnId[]
+  colGroups: readonly ColumnId[]
+  values: readonly BcPivotValue[]
+  subtotals?: { rows?: boolean; cols?: boolean }
+}
+
+export const emptyBcPivotState: BcPivotState
+
+export interface BcPivotedDataDTO {
+  rowRoot: BcPivotRowNodeDTO
+  colRoot: BcPivotColNodeDTO
+  cells: readonly BcPivotCellDTO[]
+}
+
+export interface BcPivotRowNodeDTO {
+  keyPath: readonly unknown[]
+  value: unknown
+  children: readonly BcPivotRowNodeDTO[]
+  isTotal: boolean
+  level: number
+}
+
+export interface BcPivotColNodeDTO {
+  keyPath: readonly unknown[]
+  value: unknown
+  children: readonly BcPivotColNodeDTO[]
+  isTotal: boolean
+  level: number
+}
+
+export interface BcPivotCellDTO {
+  rowKeyPath: readonly unknown[]
+  colKeyPath: readonly unknown[]
+  results: readonly BcAggregationResultDTO[]
+}
+
 export type BcValidationResult =
   | { valid: true }
   | { valid: false; error: string }
@@ -229,6 +278,8 @@ export interface BcScrollOptions {
 ```
 
 `BcScrollAlign` and `BcScrollOptions` are the named alias for the `opts` shape on `BcGridApi.scrollToRow` / `scrollToCell` (§6.1). They live in `@bc-grid/core` so that consumers writing their own scroll helpers can type the options without redeclaring the union.
+
+`BcPivotState` and the `BcPivot*DTO` types are the JSON-safe pivot contract used by the pure `@bc-grid/aggregations` engine and reserved server-side pivot results. React pivot rendering is implemented separately in the Track 4 pivot UI tasks.
 
 ### 1.3 React column extension (frozen at v0.1 in `@bc-grid/react`)
 
@@ -789,6 +840,8 @@ export interface BcServerTreeProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef
 
 The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are declared in `@bc-grid/core` with the rest of the server query contract and re-exported through `@bc-grid/react`. Runtime cache/state-machine helpers live in `@bc-grid/server-row-model`.
 
+`ServerPagedQuery.pivotState?: BcPivotState` and `ServerPagedResult.pivotedRows?: BcPivotedDataDTO` are reserved for server-side pivot pushdown. Client-side pivot uses the pure `@bc-grid/aggregations` engine; server-side pivot consumers can return the same JSON-safe DTO shape without exposing the engine's internal lookup maps.
+
 ---
 
 ## 6. Imperative API
@@ -884,7 +937,7 @@ The `<BcEditGrid>` and (Q2) editing variant of `<BcGrid>` consume this protocol;
 
 Per `server-query-rfc §Public Types`, the server-row-model types are:
 
-`RowId`, `ColumnId`, `ServerRowModelMode`, `ServerSort`, `ServerFilter`, `ServerFilterGroup`, `ServerColumnFilter`, `ServerGroup`, `ServerViewState`, `ServerQueryBase`, `ServerLoadContext`, `ServerPagedQuery/Result`, `ServerBlockQuery/Result`, `ServerTreeQuery/Result`, `ServerTreeRow`, `ServerGroupKey`, `ServerRowIdentity`, `ServerSelection`, `ServerSelectionSnapshot`, `ServerRowPatch`, `ServerMutationResult`, `ServerInvalidation`, `ServerCacheBlock`, `ServerBlockKey`, `ServerBlockCacheOptions`, `ServerExportQuery`, `ServerExportResult`, `ServerRowUpdate` (reserved), `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowModelState`, `ServerRowModelEvent`.
+`RowId`, `ColumnId`, `ServerRowModelMode`, `ServerSort`, `ServerFilter`, `ServerFilterGroup`, `ServerColumnFilter`, `ServerGroup`, `ServerViewState`, `ServerQueryBase`, `ServerLoadContext`, `ServerPagedQuery/Result`, `ServerBlockQuery/Result`, `ServerTreeQuery/Result`, `ServerTreeRow`, `ServerGroupKey`, `ServerRowIdentity`, `ServerSelection`, `ServerSelectionSnapshot`, `ServerRowPatch`, `ServerMutationResult`, `ServerInvalidation`, `ServerCacheBlock`, `ServerBlockKey`, `ServerBlockCacheOptions`, `ServerExportQuery`, `ServerExportResult`, `ServerRowUpdate` (reserved), `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowModelState`, `ServerRowModelEvent`, `BcPivotState`, `BcPivotedDataDTO`.
 
 `ServerQueryBase` is the shared shape every `ServerPagedQuery` / `ServerBlockQuery` / `ServerTreeQuery` extends (carries `view`, `requestId`, optional `viewKey`). `ServerRowIdentity` is the row-id contract (`rowId(row)` + optional `groupRowId`) the server-row-model passes to the React layer.
 
@@ -921,11 +974,13 @@ Every export listed here is the v0.1 public API. CI runs `tools/api-surface-diff
 ### `@bc-grid/core`
 
 ```ts
-// Types only (no runtime exports).
+export { emptyBcPivotState }
+
 // Framework-agnostic column/state/API types (§1.1-1.2, §3, §4, §6).
 // All Server* types from server-query-rfc (§8).
 // Helpers: ColumnId, RowId, BcCellPosition, BcRange (Q3-reserved),
-//   BcScrollAlign, BcScrollOptions, BcAggregation, BcGridIdentity, BcRowState.
+//   BcScrollAlign, BcScrollOptions, BcAggregation, BcGridIdentity, BcRowState,
+//   BcPivotState, BcPivotValue, BcPivotedDataDTO, BcPivot*DTO.
 // Excludes React component props, React renderers, refs, DOM events, and editor components.
 ```
 
@@ -1065,9 +1120,20 @@ export {
   avg,
   min,
   max,
+  pivot,
   registerAggregation,
 }
-export type { AggregateOptions, Aggregation, AggregationContext, AggregationResult }
+export type {
+  AggregateOptions,
+  Aggregation,
+  AggregationContext,
+  AggregationResult,
+  PivotOptions,
+  BcPivotedData,
+  BcPivotRowNode,
+  BcPivotColNode,
+  BcPivotCell,
+}
 ```
 
 ### `@bc-grid/filters`
