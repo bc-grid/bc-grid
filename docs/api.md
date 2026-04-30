@@ -592,7 +592,7 @@ The matched substring is exposed to `cellRenderer` via `params.searchText` so th
 
 Per-column `filter` declares **what kind of filter UI to show** and what parser to use; the actual filter state is in `BcGridFilter` (which mirrors `ServerFilter` from `server-query-rfc` for parity with server grids).
 
-Built-in filter types: `text`, `number`, `date`, `set`, `boolean`. Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
+Built-in filter types: `text`, `number`, `date`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. Set filters are multi-select editors over distinct scalar column values, loaded on first open, and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
 
 ```ts
 // from @bc-grid/filters (engine)
