@@ -23,6 +23,11 @@ interface PerfMetric {
   rowCount: number
 }
 
+interface ScrollPerfMetric extends PerfMetric {
+  fps: number
+  frameCount: number
+}
+
 interface PerfRow {
   id: number
   customer: string
@@ -35,9 +40,10 @@ declare global {
   interface Window {
     __autoScrollDone__: boolean
     __bcGridPerf: {
-      mountGrid(): void
+      mountGrid(): Promise<PerfMetric>
       sortRows(): Promise<PerfMetric>
       filterRows(): Promise<PerfMetric>
+      scrollForFps(durationMs?: number): Promise<ScrollPerfMetric>
       rawRowCount: number
     }
     __fps__: number[]
@@ -49,6 +55,14 @@ function $<T extends Element>(selector: string): T {
   const el = document.querySelector<T>(selector)
   if (!el) throw new Error(`Missing element: ${selector}`)
   return el
+}
+
+function applyNumericParam(name: string, input: HTMLInputElement): void {
+  const value = urlParams.get(name)
+  if (value === null) return
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return
+  input.value = String(parsed)
 }
 
 const grid = $<HTMLElement>("#grid")
@@ -70,6 +84,14 @@ const scrollToMiddleBtn = $<HTMLButtonElement>("#scrollToMiddle")
 const autoScrollBtn = $<HTMLButtonElement>("#autoScroll")
 
 const urlParams = new URLSearchParams(location.search)
+applyNumericParam("rows", rowCountInput)
+applyNumericParam("cols", colCountInput)
+applyNumericParam("pinnedLeft", pinnedLeftInput)
+applyNumericParam("pinnedRight", pinnedRightInput)
+applyNumericParam("pinnedTop", pinnedTopInput)
+applyNumericParam("pinnedBottom", pinnedBottomInput)
+if (urlParams.get("variableHeight") === "true") variableHeightToggle.checked = true
+
 const rawRows = urlParams.has("rawData")
   ? createPerfRows(Number(rowCountInput.value), Number(colCountInput.value))
   : []
@@ -144,8 +166,14 @@ function buildGrid(): void {
     host: grid,
     virtualizer,
     renderCell({ rowIndex, colIndex }: RenderCellParams, cell: HTMLElement) {
-      const text =
-        colIndex === 0 ? `R-${String(rowIndex).padStart(7, "0")}` : `${rowIndex}.${colIndex}`
+      const row = rawRows[rowIndex]
+      const text = row
+        ? colIndex === 0
+          ? `R-${String(row.id).padStart(7, "0")}`
+          : String(row.values[colIndex] ?? `${row.id}.${colIndex}`)
+        : colIndex === 0
+          ? `R-${String(rowIndex).padStart(7, "0")}`
+          : `${rowIndex}.${colIndex}`
       if (cell.textContent !== text) cell.textContent = text
     },
     onAfterRender() {
@@ -263,6 +291,41 @@ function startAutoScroll(): void {
   autoScrollHandle = requestAnimationFrame(step)
 }
 
+async function scrollForFps(durationMs = 1000): Promise<ScrollPerfMetric> {
+  const scrollerEl = grid.querySelector<HTMLElement>(".bc-grid-scroller")
+  if (!scrollerEl) throw new Error("Cannot run scroll perf without a mounted grid")
+  const scroller: HTMLElement = scrollerEl
+
+  await nextPaint()
+
+  return new Promise((resolve) => {
+    const start = performance.now()
+    const endTop = scroller.scrollHeight - scroller.clientHeight
+    let frameCount = 0
+
+    function step(now: number) {
+      frameCount++
+      const elapsed = now - start
+      const progress = Math.min(1, elapsed / durationMs)
+      scroller.scrollTop = endTop * progress
+
+      if (elapsed >= durationMs) {
+        resolve({
+          durationMs: elapsed,
+          fps: (frameCount / elapsed) * 1000,
+          frameCount,
+          rowCount: virtualizer.rowCount,
+        })
+        return
+      }
+
+      requestAnimationFrame(step)
+    }
+
+    requestAnimationFrame(step)
+  })
+}
+
 // ---- Keyboard navigation + focus retention --------------------------------
 
 /**
@@ -350,12 +413,16 @@ if (urlParams.get("autorun") === "fps") {
 }
 
 window.__bcGridPerf = {
-  mountGrid() {
+  async mountGrid() {
+    const start = performance.now()
     buildGrid()
+    await nextPaint()
+    return { durationMs: performance.now() - start, rowCount: virtualizer.rowCount }
   },
   async sortRows() {
     const start = performance.now()
     rawRows.sort((a, b) => a.amount - b.amount || a.id - b.id)
+    renderer?.render()
     await nextPaint()
     return { durationMs: performance.now() - start, rowCount: rawRows.length }
   },
@@ -368,6 +435,7 @@ window.__bcGridPerf = {
   get rawRowCount() {
     return rawRows.length
   },
+  scrollForFps,
 }
 
 function createPerfRows(rowCount: number, colCount: number): PerfRow[] {

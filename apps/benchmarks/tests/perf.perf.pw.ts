@@ -9,7 +9,7 @@ declare global {
   interface Window {
     __autoScrollDone__: boolean
     __bcGridPerf: {
-      mountGrid(): void
+      mountGrid(): Promise<PerfMetric>
       sortRows(): Promise<PerfMetric>
       filterRows(): Promise<PerfMetric>
       rawRowCount: number

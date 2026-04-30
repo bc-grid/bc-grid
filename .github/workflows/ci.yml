@@ -69,5 +69,28 @@ jobs:
       - name: Run Playwright tests (Chromium + Firefox + WebKit)
         run: bunx playwright test
 
-  # Future: perf smoke.
+  smoke-perf:
+    name: smoke perf (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: smoke
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build packages
+        run: bun run --filter './packages/*' build
+
+      - name: Install Chromium
+        run: bunx playwright install chromium --with-deps
+
+      - name: Run smoke perf harness
+        run: bun run test:smoke-perf
+
   # Added by repo-foundation task.
