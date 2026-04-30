@@ -1,17 +1,10 @@
 import type { ColumnId, RowId } from "@bc-grid/core"
-import type {
-  DataRowEntry,
-  GroupPathEntry,
-  GroupRowEntry,
-  ResolvedColumn,
-  RowEntry,
-} from "./gridInternals"
+import type { DataRowEntry, GroupRowEntry, ResolvedColumn, RowEntry } from "./gridInternals"
 import { formatCellValue, getCellValue } from "./value"
 
 export interface GroupedRowModel<TRow> {
   active: boolean
   rows: readonly RowEntry<TRow>[]
-  groupRowIds: readonly RowId[]
   allGroupRowIds: readonly RowId[]
 }
 
@@ -28,8 +21,11 @@ interface GroupBucket<TRow> {
   rows: DataRowEntry<TRow>[]
 }
 
-interface InternalGroupPathEntry extends GroupPathEntry {
+interface InternalGroupPathEntry {
+  columnId: ColumnId
+  formattedValue: string
   key: string
+  value: unknown
 }
 
 export function buildGroupedRowModel<TRow>({
@@ -49,24 +45,25 @@ export function buildGroupedRowModel<TRow>({
     return {
       active: false,
       rows: rows.map((entry, index) => ({ ...entry, index })),
-      groupRowIds: [],
       allGroupRowIds: [],
     }
   }
 
   const output: RowEntry<TRow>[] = []
-  const groupRowIds: RowId[] = []
   const allGroupRowIds: RowId[] = []
 
   const appendLevel = (
     levelRows: readonly DataRowEntry<TRow>[],
     depth: number,
     path: readonly InternalGroupPathEntry[],
+    visible: boolean,
   ): void => {
     const column = groupColumns[depth]
     if (!column) {
-      for (const entry of levelRows) {
-        output.push({ ...entry, level: depth + 1 })
+      if (visible) {
+        for (const entry of levelRows) {
+          output.push({ ...entry, level: depth + 1 })
+        }
       }
       return
     }
@@ -75,51 +72,31 @@ export function buildGroupedRowModel<TRow>({
       const nextPath = [...path, bucket.pathEntry]
       const groupRowId = groupRowIdForPath(nextPath)
       const expanded = expansionState.has(groupRowId)
-      groupRowIds.push(groupRowId)
-      output.push({
-        kind: "group",
-        rowId: groupRowId,
-        index: -1,
-        level: depth + 1,
-        groupColumnId: column.columnId,
-        groupColumnHeader: columnHeaderText(column),
-        formattedValue: bucket.pathEntry.formattedValue,
-        childCount: bucket.rows.length,
-        childRowIds: bucket.rows.map((entry) => entry.rowId),
-        expanded,
-        path: nextPath.map(({ columnId, formattedValue, value }) => ({
-          columnId,
-          formattedValue,
-          value,
-        })),
-      } satisfies GroupRowEntry)
+      allGroupRowIds.push(groupRowId)
+      if (visible) {
+        output.push({
+          kind: "group",
+          rowId: groupRowId,
+          index: -1,
+          level: depth + 1,
+          groupColumnId: column.columnId,
+          groupColumnHeader: columnHeaderText(column),
+          formattedValue: bucket.pathEntry.formattedValue,
+          childCount: bucket.rows.length,
+          childRowIds: bucket.rows.map((entry) => entry.rowId),
+          expanded,
+        } satisfies GroupRowEntry)
+      }
 
-      if (expanded) appendLevel(bucket.rows, depth + 1, nextPath)
+      appendLevel(bucket.rows, depth + 1, nextPath, visible && expanded)
     }
   }
 
-  const collectGroupRowIds = (
-    levelRows: readonly DataRowEntry<TRow>[],
-    depth: number,
-    path: readonly InternalGroupPathEntry[],
-  ): void => {
-    const column = groupColumns[depth]
-    if (!column) return
-
-    for (const bucket of groupRowsByColumn(levelRows, column, locale).values()) {
-      const nextPath = [...path, bucket.pathEntry]
-      allGroupRowIds.push(groupRowIdForPath(nextPath))
-      collectGroupRowIds(bucket.rows, depth + 1, nextPath)
-    }
-  }
-
-  appendLevel(rows, 0, [])
-  collectGroupRowIds(rows, 0, [])
+  appendLevel(rows, 0, [], true)
 
   return {
     active: true,
     rows: output.map((entry, index) => ({ ...entry, index })),
-    groupRowIds,
     allGroupRowIds,
   }
 }

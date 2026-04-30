@@ -1224,6 +1224,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const maxScrollLeft = Math.max(0, virtualWindow.totalWidth - viewport.width)
   const isScrolledLeft = scrollOffset.left > 1 && pinnedLeftCols > 0
   const isScrolledRight = scrollOffset.left < maxScrollLeft - 1 && pinnedRightCols > 0
+  const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
 
   return (
     <div
@@ -1342,7 +1343,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   key={entry.rowId}
                   className={classNames("bc-grid-row", "bc-grid-row-group")}
                   role="row"
-                  aria-rowindex={virtualRow.index + 3}
+                  aria-rowindex={virtualRow.index + bodyAriaRowOffset}
                   aria-level={entry.level}
                   aria-expanded={entry.expanded}
                   data-row-id={entry.rowId}
@@ -1386,7 +1387,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   disabled ? "bc-grid-row-disabled" : undefined,
                 )}
                 role="row"
-                aria-rowindex={virtualRow.index + 3}
+                aria-rowindex={virtualRow.index + bodyAriaRowOffset}
                 aria-level={groupingActive ? entry.level : undefined}
                 aria-selected={selected || undefined}
                 aria-disabled={disabled || undefined}

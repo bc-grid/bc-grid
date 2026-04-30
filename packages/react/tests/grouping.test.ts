@@ -36,7 +36,6 @@ describe("buildGroupedRowModel", () => {
     const model = buildModel(["missing"])
 
     expect(model.active).toBe(false)
-    expect(model.groupRowIds).toEqual([])
     expect(model.allGroupRowIds).toEqual([])
     expect(model.rows.map((entry) => entry.rowId)).toEqual(["1", "2", "3", "4"])
     expect(model.rows.every((entry) => entry.kind === "data")).toBe(true)
@@ -46,7 +45,7 @@ describe("buildGroupedRowModel", () => {
     const model = buildModel(["status"])
 
     expect(model.active).toBe(true)
-    expect(model.rows.map((entry) => entry.rowId)).toEqual(model.groupRowIds)
+    expect(model.rows.every((entry) => entry.kind === "group")).toBe(true)
     expect(model.rows.map((entry) => (entry as GroupRowEntry).formattedValue)).toEqual([
       "Open",
       "Closed",
@@ -58,7 +57,7 @@ describe("buildGroupedRowModel", () => {
 
   test("expands a group row and stamps tree levels on leaves", () => {
     const collapsed = buildModel(["status"])
-    const openGroupId = collapsed.groupRowIds[0]
+    const openGroupId = visibleGroupIds(collapsed)[0]
     if (!openGroupId) throw new Error("expected group id")
 
     const expanded = buildModel(["status"], new Set([openGroupId]))
@@ -67,8 +66,8 @@ describe("buildGroupedRowModel", () => {
       openGroupId,
       "1",
       "3",
-      collapsed.groupRowIds[1],
-      collapsed.groupRowIds[2],
+      visibleGroupIds(collapsed)[1],
+      visibleGroupIds(collapsed)[2],
     ])
     expect(expanded.rows[0]).toMatchObject({ kind: "group", level: 1, expanded: true })
     expect(expanded.rows[1]).toMatchObject({ kind: "data", level: 2 })
@@ -77,7 +76,7 @@ describe("buildGroupedRowModel", () => {
 
   test("builds nested groups for multiple group-by columns", () => {
     const byStatus = buildModel(["status", "region"])
-    const openGroupId = byStatus.groupRowIds[0]
+    const openGroupId = visibleGroupIds(byStatus)[0]
     if (!openGroupId) throw new Error("expected status group id")
     expect(byStatus.allGroupRowIds).toHaveLength(7)
 
@@ -97,8 +96,8 @@ describe("buildGroupedRowModel", () => {
       ["group", northGroup.rowId, 2],
       ["data", "1", 3],
       ["group", byStatusExpanded.rows[2]?.rowId, 2],
-      ["group", byStatus.groupRowIds[1], 1],
-      ["group", byStatus.groupRowIds[2], 1],
+      ["group", visibleGroupIds(byStatus)[1], 1],
+      ["group", visibleGroupIds(byStatus)[2], 1],
     ])
   })
 })
@@ -110,4 +109,10 @@ function buildModel(groupBy: readonly ColumnId[], expansionState = new Set<strin
     groupBy,
     expansionState,
   })
+}
+
+function visibleGroupIds(model: ReturnType<typeof buildModel>): readonly string[] {
+  return model.rows
+    .filter((entry): entry is GroupRowEntry => entry.kind === "group")
+    .map((entry) => entry.rowId)
 }

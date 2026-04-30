@@ -83,12 +83,6 @@ export interface DataRowEntry<TRow> {
   level?: number
 }
 
-export interface GroupPathEntry {
-  columnId: ColumnId
-  formattedValue: string
-  value: unknown
-}
-
 export interface GroupRowEntry {
   kind: "group"
   rowId: RowId
@@ -100,7 +94,6 @@ export interface GroupRowEntry {
   childCount: number
   childRowIds: readonly RowId[]
   expanded: boolean
-  path: readonly GroupPathEntry[]
 }
 
 export type RowEntry<TRow> = DataRowEntry<TRow> | GroupRowEntry
