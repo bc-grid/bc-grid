@@ -27,7 +27,7 @@ import {
   useState,
 } from "react"
 import { BcGridAggregationFooterRow, useAggregations } from "./aggregations"
-import { renderBodyCell } from "./bodyCells"
+import { renderBodyCell, renderGroupRowCell } from "./bodyCells"
 import {
   type ColumnVisibilityItem,
   ColumnVisibilityMenu,
@@ -45,7 +45,8 @@ import {
 import {
   DEFAULT_BODY_HEIGHT,
   DEFAULT_COL_WIDTH,
-  type RowEntry,
+  type DataRowEntry,
+  type GroupRowEntry,
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
@@ -60,6 +61,7 @@ import {
   hasProp,
   headerRowStyle,
   headerViewportStyle,
+  isDataRowEntry,
   overlayStyle,
   pinnedEdgeFor,
   resolveColumns,
@@ -77,6 +79,7 @@ import {
   useViewportSync,
   visuallyHiddenStyle,
 } from "./gridInternals"
+import { buildGroupedRowModel } from "./grouping"
 import {
   type ColumnMenuAnchor,
   FilterPopup,
@@ -215,8 +218,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.onSelectionChange,
   )
   const emptyExpansion = useMemo(() => new Set<RowId>(), [])
+  const expansionControlled = hasProp(props, "expansion")
+  const defaultExpansionProvided = hasProp(props, "defaultExpansion")
   const [expansionState, setExpansionState] = useControlledState<ReadonlySet<RowId>>(
-    hasProp(props, "expansion"),
+    expansionControlled,
     props.expansion ?? emptyExpansion,
     props.defaultExpansion ?? emptyExpansion,
     props.onExpansionChange,
@@ -318,7 +323,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const searchText = props.searchText ?? props.defaultSearchText ?? ""
   const aggregationScope = props.aggregationScope ?? "filtered"
 
-  const allRowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
+  const allRowEntries = useMemo<readonly DataRowEntry<TRow>[]>(() => {
     let visibleRows: TRow[] =
       props.showInactive === false && rowIsInactive
         ? data.filter((row) => !rowIsInactive(row))
@@ -358,6 +363,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     }
 
     const built = visibleRows.map((row, index) => ({
+      kind: "data" as const,
       row,
       index,
       rowId: rowId(row, index),
@@ -407,16 +413,59 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         : normalisePageSizeOptions([...pageSizeOptions, effectivePageSize]),
     [effectivePageSize, pageSizeOptions],
   )
-  const rowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
+  const leafRowEntries = useMemo<readonly DataRowEntry<TRow>[]>(() => {
     if (!paginationEnabled) return allRowEntries
 
     return allRowEntries
       .slice(paginationWindow.startIndex, paginationWindow.endIndex)
       .map((entry, index) => ({ ...entry, index }))
   }, [allRowEntries, paginationEnabled, paginationWindow.endIndex, paginationWindow.startIndex])
+  const groupedRowModel = useMemo(
+    () =>
+      buildGroupedRowModel({
+        rows: leafRowEntries,
+        columns: consumerResolvedColumns,
+        groupBy: groupByState,
+        expansionState,
+        locale,
+      }),
+    [consumerResolvedColumns, expansionState, groupByState, leafRowEntries, locale],
+  )
+  const rowEntries = groupedRowModel.rows
+  const groupingActive = groupedRowModel.active
+  const visibleDataRowEntries = useMemo(() => rowEntries.filter(isDataRowEntry), [rowEntries])
+  const autoExpandedGroupIdsRef = useRef(new Set<RowId>())
+  useEffect(() => {
+    if (
+      !groupingActive ||
+      !props.groupsExpandedByDefault ||
+      expansionControlled ||
+      defaultExpansionProvided
+    ) {
+      return
+    }
+
+    let nextExpansion: Set<RowId> | null = null
+    for (const groupRowId of groupedRowModel.allGroupRowIds) {
+      if (autoExpandedGroupIdsRef.current.has(groupRowId)) continue
+      autoExpandedGroupIdsRef.current.add(groupRowId)
+      if (expansionState.has(groupRowId)) continue
+      nextExpansion ??= new Set(expansionState)
+      nextExpansion.add(groupRowId)
+    }
+    if (nextExpansion) setExpansionState(nextExpansion)
+  }, [
+    defaultExpansionProvided,
+    expansionControlled,
+    expansionState,
+    groupedRowModel.allGroupRowIds,
+    groupingActive,
+    props.groupsExpandedByDefault,
+    setExpansionState,
+  ])
   const aggregationRows = useMemo(() => allRowEntries.map((entry) => entry.row), [allRowEntries])
   const getDetailHeight = useCallback(
-    (entry: RowEntry<TRow>) => {
+    (entry: DataRowEntry<TRow>) => {
       if (!hasDetail) return 0
       const params = { row: entry.row, rowId: entry.rowId, rowIndex: entry.index }
       const height =
@@ -432,8 +481,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // Used by the synthetic selection-checkbox column's header to compute the
   // tri-state "all / some / none" master toggle while skipping disabled rows.
   const visibleSelectableRowIds = useMemo(
-    () => rowEntries.filter((entry) => !isRowDisabled(entry.row)).map((entry) => entry.rowId),
-    [isRowDisabled, rowEntries],
+    () =>
+      visibleDataRowEntries
+        .filter((entry) => !isRowDisabled(entry.row))
+        .map((entry) => entry.rowId),
+    [isRowDisabled, visibleDataRowEntries],
   )
 
   // Layout-resolved columns including the synthetic pinned-left checkbox
@@ -517,17 +569,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       sortState,
       resolvedColumns,
       activeFilter,
-      rowEntries,
+      rowEntries: visibleDataRowEntries,
       data,
       selectionState,
       messages,
     })
 
   const rowsById = useMemo(() => {
-    const map = new Map<RowId, RowEntry<TRow>>()
-    for (const entry of rowEntries) map.set(entry.rowId, entry)
+    const map = new Map<RowId, DataRowEntry<TRow>>()
+    for (const entry of visibleDataRowEntries) map.set(entry.rowId, entry)
     return map
-  }, [rowEntries])
+  }, [visibleDataRowEntries])
 
   const rowIndexById = useMemo(() => {
     const map = new Map<RowId, number>()
@@ -559,6 +611,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     resolvedColumns.forEach((column, index) => next.setColWidth(index, column.width))
     if (hasDetail) {
       rowEntries.forEach((entry, index) => {
+        if (!isDataRowEntry(entry)) return
         if (!expansionState.has(entry.rowId)) return
         next.setRowHeight(index, defaultRowHeight + getDetailHeight(entry))
       })
@@ -690,7 +743,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       next.move,
     )
     const targetRow = rowEntries[nextRow]
-    const targetCol = resolvedColumns[nextCol]
+    const targetCol =
+      targetRow && isDataRowEntry(targetRow) ? resolvedColumns[nextCol] : resolvedColumns[0]
     if (targetRow && targetCol) {
       setActiveCell({ rowId: targetRow.rowId, columnId: targetCol.columnId })
     }
@@ -768,6 +822,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [onCellFocus, scrollToCell, setActiveCell],
   )
 
+  const allExpandableRowIds = useMemo(() => {
+    const expandable = [...groupedRowModel.allGroupRowIds]
+    if (hasDetail) {
+      for (const entry of visibleDataRowEntries) expandable.push(entry.rowId)
+    }
+    return expandable
+  }, [groupedRowModel.allGroupRowIds, hasDetail, visibleDataRowEntries])
+
   const api = useMemo<BcGridApi<TRow>>(
     () => ({
       scrollToRow(targetRowId, opts) {
@@ -805,11 +867,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         setFilterState(next)
       },
       expandAll() {
-        if (!hasDetail) return
-        setExpansionState(new Set(rowEntries.map((entry) => entry.rowId)))
+        if (allExpandableRowIds.length === 0) return
+        setExpansionState(new Set(allExpandableRowIds))
       },
       collapseAll() {
-        if (!hasDetail) return
+        if (allExpandableRowIds.length === 0) return
         setExpansionState(new Set<RowId>())
       },
       refresh() {
@@ -818,14 +880,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     }),
     [
       activeCell,
+      allExpandableRowIds,
       columnIndexById,
       columnState,
-      hasDetail,
       focusCell,
       requestRender,
       resolvedColumns,
       rowIndexById,
-      rowEntries,
       rowsById,
       scrollToCell,
       scrollToRow,
@@ -922,6 +983,37 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [updateScrollOffset, virtualizer],
   )
 
+  const focusGroupRow = useCallback(
+    (entry: GroupRowEntry) => {
+      const firstColumn = resolvedColumns[0]
+      if (!firstColumn) return
+      const position = { rowId: entry.rowId, columnId: firstColumn.columnId }
+      setActiveCell(position)
+      onCellFocus?.(position)
+    },
+    [onCellFocus, resolvedColumns, setActiveCell],
+  )
+
+  const toggleGroupRow = useCallback(
+    (entry: GroupRowEntry) => {
+      const next = new Set(expansionState)
+      if (entry.expanded) next.delete(entry.rowId)
+      else next.add(entry.rowId)
+      setExpansionState(next)
+
+      announcePolite(
+        entry.expanded
+          ? `Collapsed ${entry.label}.`
+          : `Expanded ${entry.label}. ${entry.childCount} rows.`,
+      )
+
+      if (entry.expanded && activeCell && entry.childRowIds.includes(activeCell.rowId)) {
+        focusGroupRow(entry)
+      }
+    },
+    [activeCell, announcePolite, expansionState, focusGroupRow, setExpansionState],
+  )
+
   const handleFocus = useCallback(
     (event: FocusEvent<HTMLDivElement>) => {
       if (event.target !== event.currentTarget) return
@@ -961,9 +1053,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const cellTarget = activeCell ?? null
       const cellRow = cellTarget ? rowEntries[currentRow] : null
       const cellColumn = cellTarget ? resolvedColumns[currentCol] : null
+
+      if (cellRow && !isDataRowEntry(cellRow)) {
+        const shouldToggle =
+          event.key === "Enter" ||
+          event.key === " " ||
+          event.key === "Spacebar" ||
+          (event.key === "ArrowRight" && !cellRow.expanded) ||
+          (event.key === "ArrowLeft" && cellRow.expanded)
+        if (shouldToggle) {
+          event.preventDefault()
+          focusGroupRow(cellRow)
+          toggleGroupRow(cellRow)
+          return
+        }
+      }
+
       if (
         cellTarget &&
         cellRow &&
+        isDataRowEntry(cellRow) &&
         cellColumn &&
         !isRowDisabled(cellRow.row) &&
         isCellEditable(cellColumn, cellRow.row)
@@ -1003,6 +1112,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (outcome.type === "toggleSelection") {
         const targetRow = rowEntries[currentRow]
         if (!targetRow) return
+        if (!isDataRowEntry(targetRow)) return
         if (isRowDisabled(targetRow.row)) return
         setSelectionState(toggleRow(selectionState, targetRow.rowId))
         selectionAnchorRef.current = targetRow.rowId
@@ -1010,7 +1120,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       }
 
       const nextRow = rowEntries[outcome.row]
-      const nextColumn = resolvedColumns[outcome.col]
+      const nextColumn =
+        nextRow && isDataRowEntry(nextRow) ? resolvedColumns[outcome.col] : resolvedColumns[0]
       if (!nextRow || !nextColumn) return
       focusCell({ rowId: nextRow.rowId, columnId: nextColumn.columnId })
     },
@@ -1018,6 +1129,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       activeCell,
       columnIndexById,
       editController,
+      focusGroupRow,
       focusCell,
       isRowDisabled,
       pageRowCount,
@@ -1026,6 +1138,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       rowIndexById,
       selectionState,
       setSelectionState,
+      toggleGroupRow,
     ],
   )
 
@@ -1142,6 +1255,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const maxScrollLeft = Math.max(0, virtualWindow.totalWidth - viewport.width)
   const isScrolledLeft = scrollOffset.left > 1 && pinnedLeftCols > 0
   const isScrolledRight = scrollOffset.left < maxScrollLeft - 1 && pinnedRightCols > 0
+  const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
 
   return (
     <div
@@ -1149,9 +1263,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       className={classNames("bc-grid", `bc-grid--${density}`)}
       data-density={density}
       data-bc-grid-react="v0"
+      data-bc-grid-grouped={groupingActive || undefined}
       data-scrolled-left={isScrolledLeft || undefined}
       data-scrolled-right={isScrolledRight || undefined}
-      role="grid"
+      role={groupingActive ? "treegrid" : "grid"}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-rowcount={
@@ -1253,6 +1368,40 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           {virtualWindow.rows.map((virtualRow) => {
             const entry = rowEntries[virtualRow.index]
             if (!entry) return null
+            if (!isDataRowEntry(entry)) {
+              return (
+                <div
+                  key={entry.rowId}
+                  className={classNames("bc-grid-row", "bc-grid-row-group")}
+                  role="row"
+                  aria-rowindex={virtualRow.index + bodyAriaRowOffset}
+                  aria-level={entry.level}
+                  aria-expanded={entry.expanded}
+                  data-row-id={entry.rowId}
+                  data-row-index={virtualRow.index}
+                  data-bc-grid-row-kind="group"
+                  style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
+                  onClick={() => {
+                    focusGroupRow(entry)
+                    toggleGroupRow(entry)
+                  }}
+                >
+                  {renderGroupRowCell({
+                    activeCell,
+                    colCount: resolvedColumns.length,
+                    column: resolvedColumns[0],
+                    domBaseId,
+                    entry,
+                    onToggle: (groupEntry) => {
+                      focusGroupRow(groupEntry)
+                      toggleGroupRow(groupEntry)
+                    },
+                    totalWidth: virtualWindow.totalWidth,
+                    virtualRow,
+                  })}
+                </div>
+              )
+            }
             const disabled = isRowDisabled(entry.row)
             const selected = !disabled && isRowSelected(selectionState, entry.rowId)
             const expanded = hasDetail && expansionState.has(entry.rowId)
@@ -1269,11 +1418,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   disabled ? "bc-grid-row-disabled" : undefined,
                 )}
                 role="row"
-                aria-rowindex={virtualRow.index + 3}
+                aria-rowindex={virtualRow.index + bodyAriaRowOffset}
+                aria-level={groupingActive ? entry.level : undefined}
                 aria-selected={selected || undefined}
                 aria-disabled={disabled || undefined}
                 data-row-id={entry.rowId}
                 data-row-index={virtualRow.index}
+                data-bc-grid-row-kind="data"
                 style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
                 onClick={(event) => {
                   // Selection logic. Shift+click → range from anchor; ctrl/
@@ -1378,7 +1529,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         <EditorPortal
           controller={editController}
           activeCell={activeCell}
-          rowEntries={rowEntries}
+          rowEntries={visibleDataRowEntries}
           resolvedColumns={resolvedColumns}
           cellRect={editorCellRect}
           virtualizer={virtualizer}
