@@ -441,6 +441,11 @@ export interface BcGridSort {
 /**
  * Filter shape mirrors `ServerFilter` from `server-query-rfc` so client
  * grids and server grids share one filter shape. AND/OR groupable.
+ *
+ * `ServerColumnFilter` carries two additive optional modifier flags
+ * for the `text` filter type — `caseSensitive?: boolean` and
+ * `regex?: boolean` — per §4.4 below. Other filter types ignore
+ * them; servers that don't recognise them see a normal column filter.
  */
 export type BcGridFilter = ServerFilter   // re-exported from @bc-grid/core
 
@@ -629,6 +634,64 @@ The matched substring is exposed to `cellRenderer` via `params.searchText` so th
 Per-column `filter` declares **what kind of filter UI to show** and what parser to use; the actual filter state is in `BcGridFilter` (which mirrors `ServerFilter` from `server-query-rfc` for parity with server grids).
 
 Built-in filter types: `text`, `number`, `number-range`, `date`, `date-range`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. The `number-range` type is a convenience over `number` `between` that renders two `inputMode="decimal"` fields and always emits `op: "between"`; partial input (only one bound filled, or non-numeric content) is treated as inactive so typing doesn't narrow the row set mid-keystroke. The `date-range` type mirrors `number-range` for ISO 8601 dates: two `<input type="date">` fields separated by an em-dash, no operator dropdown, and `op: "between"` with the bounds normalised so consumers can type either edge first. Set filters are multi-select editors over distinct column values, loaded on first open, and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). For array-valued cells, each array item is indexed and matched independently. Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
+
+#### Text filter operators + modifier toggles (v0.3)
+
+Per `filter-registry-rfc §text`. Lands with `filter-text-impl-extend` (PR #208).
+
+The text filter exposes an operator dropdown plus two boolean modifier toggles. The four operators are positional:
+
+| `op` value | Match behaviour (case-insensitive default) |
+|---|---|
+| `contains` (default) | Cell value contains the needle. |
+| `starts-with` | Cell value starts with the needle. |
+| `ends-with` | Cell value ends with the needle. |
+| `equals` | Cell value equals the needle. |
+
+Modifier toggles surface on `ServerColumnFilter` as additive optional fields and travel through `BcGridFilter` ↔ persistence ↔ server consumers without translation:
+
+```ts
+// additive, applies to text filters only
+export interface ServerColumnFilter {
+  // ... existing fields (kind, columnId, type, op, value, values) ...
+  /** Default false. When true, comparisons are case-sensitive. */
+  caseSensitive?: boolean
+  /** Default false. When true, `value` is a RegExp pattern; `op` is ignored. */
+  regex?: boolean
+}
+```
+
+Predicate semantics:
+
+- **`caseSensitive`** applies to every operator. When off (default), both haystack and needle are lower-cased before comparison.
+- **`regex`** is operator-agnostic. When on, the predicate compiles `new RegExp(value, caseSensitive ? "" : "i")` and tests against the formatted cell value. Patterns describe their own anchoring, so `op` is ignored — `"contains"` + `regex` and `"equals"` + `regex` produce the same match. A pattern that fails to compile drops the filter (no match) at both build time and match time as defense in depth, so partial typing or hand-built filters never throw.
+- **Empty needle** short-circuits to "match all" before any operator / regex / caseSensitive consultation, so toggling modifier flags on an empty input never narrows the row set.
+
+The React editor emits its state into `columnFilterText` as either:
+
+- a **plain string** when the filter is the default `contains` + no modifiers — same shape consumers and persistence payloads have always emitted; legacy clients keep round-tripping unchanged; or
+- a **JSON-encoded `TextFilterInput`** (described below) when any non-default operator or modifier is active. `decodeTextFilterInput` accepts both shapes; `encodeColumnFilterInput` reverses the choice based on the filter's canonical shape so persistence stays minimal.
+
+```ts
+// from @bc-grid/react (lands with PR #208)
+export type TextFilterOperator = "contains" | "starts-with" | "ends-with" | "equals"
+
+export interface TextFilterInput {
+  op: TextFilterOperator
+  value: string
+  /** Default false (case-insensitive). Omitted from JSON when off. */
+  caseSensitive?: boolean
+  /** Default false. When true, `value` is a regex pattern. Omitted from JSON when off. */
+  regex?: boolean
+}
+```
+
+#### Compatibility notes — text filter persistence + clear semantics
+
+- **Plain-string legacy contract preserved.** A simple `contains` filter (no modifier flags) round-trips through `gridId` `localStorage` and `urlStatePersistence` as a plain string — the same payload pre-v0.3 consumers have today. Existing persistence payloads from earlier releases continue to round-trip unchanged.
+- **JSON form is opt-in by state, not by version.** The editor only emits JSON when a non-default operator or modifier flag is active. A persistence payload that contains no JSON-shaped text filter is, by construction, plain-`contains` only.
+- **Clear semantics from PR #200 are preserved.** Clearing every text filter slot — including via `null`/empty value with toggles still active — drops the filter at `parseTextFilterInput`, and `buildGridFilter` returns `null` when no filters remain. `onFilterChange` consumers still see `null` on full clear.
+- **Server consumers ignore unknown flags.** The `caseSensitive` / `regex` fields are additive and optional. A server that doesn't recognise them sees a normal `contains` filter (or whatever the chosen operator is) and predicates client-side; the wire shape stays compatible.
 
 ```ts
 // from @bc-grid/filters (engine)

@@ -50,6 +50,7 @@ The v0.1 API already declares the filter types (`api.md §4.4`). What this RFC p
 | URL state persistence | Encoded as a single query param (default name `f`). The RFC ships a `bcGridFilterToUrl(filter, columns)` + `bcGridFilterFromUrl(searchParam, columns)` helper pair. |
 | Persistence opt-in | URL via `BcGridProps.urlStatePersistence?: { searchParam: string }` (additive, lands in Track 0 `column-state-url-persistence` task and reused here). `localStorage` via existing `gridId` (Phase 5.5 `localstorage-gridid-persistence`). |
 | Active filter announcement | When a filter is applied, polite region announces `Filter applied. {visibleRows} of {totalRows} rows shown.` (already wired by #41). When cleared: `Filter cleared. {totalRows} rows shown.` |
+| **Text-filter wire-shape additions (v0.3, additive)** | `ServerColumnFilter` gains optional `caseSensitive?: boolean` and `regex?: boolean`. Both flags apply to `type === "text"` only; other filter types ignore them. Lands with `filter-text-impl-extend` (PR #208). The persistence shape stays plain-string for the default `contains` + no-modifier case (legacy round-trip preserved); JSON only when any non-default state is active. See `§ "v0.3 implementation reconciliation"` below. |
 
 ---
 
@@ -244,6 +245,51 @@ Serialize: JSON-encoded criteria. Modifier flags are nested keys, not delimiter 
 ```
 
 The `caseSensitive` modifier is part of `BcFilterCriteria.value` only when non-default (i.e. omit when matching the global default). Parse: `JSON.parse(s)` — values containing colons / pipes / quotes round-trip correctly because they're inside JSON strings, escaped per JSON.
+
+#### v0.3 implementation reconciliation
+
+The original RFC sketch (above) is the broader operator surface from the v1 parity sprint. The actual v0.3 ship in `filter-text-impl-extend` (PR #208) tightens the surface as follows; the wider operator list and trim toggle remain post-v0.3 work.
+
+**Operators that ship at v0.3** — four positional operators only:
+
+- `contains` (default)
+- `starts-with`
+- `ends-with`
+- `equals`
+
+`not-equals` is deferred. Consumers can express it via a custom filter type or by composing with another column filter.
+
+**Modifier toggles that ship at v0.3** — two booleans:
+
+- `caseSensitive` — applies to every operator. When off (default), both haystack and needle are lower-cased before comparison.
+- `regex` — operator-agnostic. When on, the predicate compiles `new RegExp(value, caseSensitive ? "" : "i")` and tests against the formatted cell value. Patterns describe their own anchoring, so `op` is ignored — `"contains"` + `regex` and `"equals"` + `regex` produce identical match results. A pattern that fails to compile drops the filter (no match) at both build time **and** match time, so partial typing or hand-built filters never throw.
+
+`regex` is therefore a **modifier toggle**, not an operator value, in the v0.3 implementation. The original sketch listed it as one of the six operators; the implementation chose toggle semantics so users can flip regex on top of any operator-style typing without losing context. This also means a `ServerColumnFilter.op === "regex"` is **not** a valid v0.3 wire shape; emit `op === "contains"` (or any positional op — it's ignored) plus `regex: true`.
+
+**Whitespace-trim toggle is omitted.** v0.3 trims at the `buildGridFilter` boundary so a whitespace-only input always drops the filter; a per-filter trim toggle would only matter for "value contains exactly N spaces" filters, which can be expressed via regex.
+
+**Wire-shape on `ServerColumnFilter`** — the modifier flags surface as additive optional fields on the canonical filter (not nested inside `value`):
+
+```ts
+export interface ServerColumnFilter {
+  // ... existing kind / columnId / type / op / value / values ...
+  caseSensitive?: boolean
+  regex?: boolean
+}
+```
+
+Other filter types ignore both fields. Server consumers that don't recognise them see a normal column filter. Tracked in `docs/api.md §3.2 / §4.4`.
+
+**Persistence shape — plain string vs JSON.** The editor's `columnFilterText` map serialises into either:
+
+- a **plain string** when the filter is the default `contains` + no modifiers — same shape consumers and persistence payloads emit pre-v0.3; legacy clients keep round-tripping unchanged;
+- a **JSON-encoded `TextFilterInput`** when any non-default operator or modifier flag is active — `{"op":"starts-with","value":"Acme"}`, `{"op":"equals","value":"Acme","caseSensitive":true}`, `{"op":"contains","value":"^A.*e$","regex":true}`, etc.
+
+`decodeTextFilterInput` accepts both shapes; `encodeColumnFilterInput` reverses the choice based on the canonical `ServerColumnFilter`'s shape so persistence stays minimal. The plain-string fallback also catches "JSON-shaped strings with an unrecognised op" — those decode as a `contains` filter against the raw string, which is a deliberate footgun-avoidance: if a persistence payload mutates and the shape stops parsing, the user gets a literal substring search rather than an exception.
+
+**Clear semantics** are inherited from `buildGridFilter`'s outer trim guard: an empty or whitespace-only `columnFilterText` value drops the filter at parse time regardless of operator or modifier flags. With every text filter cleared, `buildGridFilter` returns `null` so `onFilterChange` consumers see `null` (per PR #200).
+
+**Editor surface.** `<TextFilterControl>` in the React layer renders an operator `<select>` + value `<input>` + two `<button aria-pressed>` toggle buttons (`Aa` for case-sensitive, `.*` for regex). The same control is used for the inline filter row and the popup variant via `<FilterEditorBody>` so the two surfaces share one implementation.
 
 ### `number`
 
