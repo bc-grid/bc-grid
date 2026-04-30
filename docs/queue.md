@@ -195,8 +195,8 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 
 - `[done: c2 #46]` **chrome-rfc** — design doc; covers status-bar / sidebar tablist / context-menu.
 - `[done: worker2 #151]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
-- `[review: worker5 #150]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
-- `[blocked: depends on sidebar-impl]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
+- `[done: worker5 #150]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
+- `[review: worker5 #160]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
 - `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
 - `[ready]` **context-menu-impl** — shadcn `ContextMenu` primitive; right-click + long-press (500ms coarse pointer) + Shift+F10. 4 built-in items + custom factory function. **Effort**: M.
 - `[done: worker2 #154]` **footer-aggregations** — wire the `aggregations` status-bar segment to the aggregation-engine output. **Effort**: S.
@@ -207,13 +207,13 @@ Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 
 - `[done: c2 #48]` **filter-registry-rfc** — extension protocol; `BcFilterDefinition` / `BcReactFilterDefinition`; persistence shape; 7 built-in filter specs. **Effort**: 1 day.
 - `[done: c1 #145]` **filter-popup-variant** ⭐ — When `column.filter.variant === "popup"`, render a header-icon (funnel) that opens a shadcn `Popover` with the existing text/number/date/boolean filter editor inside, instead of the inline-row input. Active state: solid/blue funnel + underline on the header, cleared by an `×` in the popover footer. The inline row collapses for that column when popup is active; if every column is popup-variant the row disappears entirely. AG-Grid-feel. Reuses existing filter editors — no logic duplication. **Demo-critical** (week 2). **Effort**: M.
-- `[review: worker1 #156]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
-- `[review: worker1 #175]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
-- `[review: worker2 #164]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
-- `[review: worker2 #159]` **filter-number-range-impl** — between two numbers. **Effort**: S.
+- `[done: worker1 #156]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
+- `[done: worker1 #175]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
+- `[done: worker2 #164]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
+- `[done: worker2 #159]` **filter-number-range-impl** — between two numbers. **Effort**: S.
 - `[review: worker2 #170]` **filter-text-impl-extend** — extend the existing inline text filter with operators (contains / starts-with / ends-with / equals / regex toggle / case-sensitivity toggle). **Effort**: S.
-- `[ready]` **filter-custom-extension-example** — recipe in `apps/docs` showing how to register a custom filter type. **Effort**: S.
-- `[ready]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
+- `[done: worker1 #177]` **filter-custom-extension-example** — recipe in `apps/docs` showing how to register a custom filter type. **Effort**: S.
+- `[review: worker1 #178]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
 - `[done: x2 #72]` **export-csv-impl** — `@bc-grid/export.toCsv(rows, columns)` per `api.md §9`. No external deps; pure serializer. **Branch**: `agent/x2/export-csv-impl`. **Effort**: S.
 - `[done: x2 #75]` **export-xlsx-impl** — peer-dep on **ExcelJS** (confirmed in coordination plan). `toExcel(rows, columns)`. **Branch**: `agent/x2/export-xlsx-impl`. **Effort**: M.
 - `[review: x2 #77]` **export-pdf-impl** — peer-dep on **jsPDF** (confirmed in coordination plan; alternative `react-pdf` if jsPDF doesn't fit; first PR picks the winner). `toPdf(rows, columns)`. **Branch**: `agent/x2/export-pdf-impl`. **Effort**: M.

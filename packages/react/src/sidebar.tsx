@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
 } from "react"
+import { BcColumnsToolPanel } from "./columnToolPanel"
 import { domToken } from "./gridInternals"
 import type { BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarPanel } from "./types"
 
@@ -223,7 +224,12 @@ function resolveBuiltInPanel<TRow>(panelId: BcSidebarBuiltInPanel): ResolvedSide
     id: panelId,
     label: config.label,
     Icon: config.Icon,
-    render: () => <BuiltInPanelSlot panelId={panelId} label={config.label} />,
+    render: (context) =>
+      panelId === "columns" ? (
+        <BcColumnsToolPanel context={context} />
+      ) : (
+        <BuiltInPanelSlot panelId={panelId} label={config.label} />
+      ),
   }
 }
 

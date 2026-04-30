@@ -271,7 +271,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       [],
     props.onColumnStateChange,
   )
-  const [groupByState] = useControlledState<readonly ColumnId[]>(
+  const [groupByState, setGroupByState] = useControlledState<readonly ColumnId[]>(
     hasProp(props, "groupBy"),
     props.groupBy ?? [],
     props.defaultGroupBy ?? persistedGridState.groupBy ?? [],
@@ -1499,10 +1499,23 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       columns,
       columnState,
       filterState: activeFilter,
+      groupableColumns: props.groupableColumns ?? [],
+      groupBy: groupByState,
       setColumnState,
       setFilterState,
+      setGroupBy: setGroupByState,
     }),
-    [activeFilter, api, columnState, columns, setColumnState, setFilterState],
+    [
+      activeFilter,
+      api,
+      columnState,
+      columns,
+      groupByState,
+      props.groupableColumns,
+      setColumnState,
+      setFilterState,
+      setGroupByState,
+    ],
   )
   const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
 
