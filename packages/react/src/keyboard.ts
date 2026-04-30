@@ -32,6 +32,15 @@ export interface KeyboardNavInput {
 export type KeyboardNavOutcome =
   | { type: "move"; row: number; col: number }
   | { type: "toggleSelection" }
+  | {
+      type: "rangeSelection"
+      action:
+        | { type: "extend"; direction: "up" | "down" | "left" | "right"; toEdge?: boolean }
+        | { type: "select-all" }
+        | { type: "select-row" }
+        | { type: "select-column" }
+        | { type: "clear" }
+    }
   | { type: "preventDefault" }
   | { type: "noop" }
 
@@ -46,14 +55,23 @@ export function nextKeyboardNav(input: KeyboardNavInput): KeyboardNavOutcome {
 
   if (lastRow < 0 || lastCol < 0) return { type: "noop" }
 
-  // Q3-reserved: Shift+Arrow and Ctrl/Cmd+A. Swallow to suppress the
-  // browser's text-selection default, but don't move the active cell.
-  if (shiftKey && /^Arrow/.test(key)) return { type: "preventDefault" }
-  if (ctrlOrMeta && (key === "a" || key === "A")) return { type: "preventDefault" }
+  if (shiftKey && /^Arrow/.test(key)) {
+    const direction = arrowDirection(key)
+    if (!direction) return { type: "preventDefault" }
+    return {
+      type: "rangeSelection",
+      action: { type: "extend", direction, ...(ctrlOrMeta ? { toEdge: true } : {}) },
+    }
+  }
+  if (ctrlOrMeta && (key === "a" || key === "A")) {
+    return { type: "rangeSelection", action: { type: "select-all" } }
+  }
   if (key === " " || key === "Spacebar") {
-    if (shiftKey || ctrlOrMeta) return { type: "preventDefault" }
+    if (shiftKey) return { type: "rangeSelection", action: { type: "select-row" } }
+    if (ctrlOrMeta) return { type: "rangeSelection", action: { type: "select-column" } }
     return { type: "toggleSelection" }
   }
+  if (key === "Escape") return { type: "rangeSelection", action: { type: "clear" } }
 
   let row = currentRow
   let col = currentCol
@@ -97,4 +115,12 @@ export function nextKeyboardNav(input: KeyboardNavInput): KeyboardNavOutcome {
   }
 
   return { type: "move", row, col }
+}
+
+function arrowDirection(key: string): "up" | "down" | "left" | "right" | null {
+  if (key === "ArrowUp") return "up"
+  if (key === "ArrowDown") return "down"
+  if (key === "ArrowLeft") return "left"
+  if (key === "ArrowRight") return "right"
+  return null
 }

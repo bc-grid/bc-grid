@@ -73,6 +73,17 @@ export interface BcGridUrlStatePersistence {
 
 export type BcAggregationScope = "filtered" | "all" | "selected"
 
+export interface BcRangeSelectionOptions {
+  /** Allow Ctrl/Cmd pointer gestures to append disjoint ranges. Defaults to true. */
+  multiRange?: boolean
+  /**
+   * When true, cell clicks update range selection without also selecting the
+   * row. Defaults to false so plain clicks preserve the existing row-selection
+   * behavior while also starting a cell range.
+   */
+  preventRowSelection?: boolean
+}
+
 /**
  * Render context handed to status-bar segment renderers. Rebuilt per
  * grid render so segments always reflect current row / selection /
@@ -226,6 +237,14 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * content. Per `chrome-rfc §Status bar`.
    */
   statusBar?: readonly BcStatusBarSegment<TRow>[]
+
+  /**
+   * Enables the React range-selection layer.
+   *
+   * @example
+   * <BcGrid rangeSelectionOptions={{ multiRange: true, preventRowSelection: true }} />
+   */
+  rangeSelectionOptions?: boolean | BcRangeSelectionOptions
 
   /**
    * Master-detail render hook. When supplied, the grid renders a pinned-left
@@ -390,6 +409,8 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   nextValue: TValue
   source: "keyboard" | "pointer" | "api"
 }
+
+export type { BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
 
 export interface BcFilterDefinition<TValue = unknown> {
   type: string

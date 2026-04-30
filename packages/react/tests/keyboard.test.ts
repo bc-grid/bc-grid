@@ -178,29 +178,55 @@ describe("nextKeyboardNav — PageUp / PageDown", () => {
   })
 })
 
-describe("nextKeyboardNav — Q3-reserved keys swallow without moving", () => {
-  test("Shift+ArrowDown returns preventDefault, no move", () => {
+describe("nextKeyboardNav — range selection keys", () => {
+  test("Shift+ArrowDown returns an extend action", () => {
     expect(nextKeyboardNav({ ...baseInput, key: "ArrowDown", shiftKey: true })).toEqual({
-      type: "preventDefault",
+      type: "rangeSelection",
+      action: { type: "extend", direction: "down" },
     })
   })
 
-  test("Ctrl+A returns preventDefault, no move", () => {
+  test("Ctrl+Shift+ArrowRight extends to the edge", () => {
+    expect(
+      nextKeyboardNav({
+        ...baseInput,
+        key: "ArrowRight",
+        ctrlOrMeta: true,
+        shiftKey: true,
+      }),
+    ).toEqual({
+      type: "rangeSelection",
+      action: { type: "extend", direction: "right", toEdge: true },
+    })
+  })
+
+  test("Ctrl+A returns a select-all action", () => {
     expect(nextKeyboardNav({ ...baseInput, key: "a", ctrlOrMeta: true })).toEqual({
-      type: "preventDefault",
+      type: "rangeSelection",
+      action: { type: "select-all" },
     })
     // Capital A too.
     expect(nextKeyboardNav({ ...baseInput, key: "A", ctrlOrMeta: true })).toEqual({
-      type: "preventDefault",
+      type: "rangeSelection",
+      action: { type: "select-all" },
     })
   })
 
-  test("Shift+Space and Ctrl/Cmd+Space return preventDefault, no selection toggle", () => {
+  test("Shift+Space and Ctrl/Cmd+Space return row/column range actions", () => {
     expect(nextKeyboardNav({ ...baseInput, key: " ", shiftKey: true })).toEqual({
-      type: "preventDefault",
+      type: "rangeSelection",
+      action: { type: "select-row" },
     })
     expect(nextKeyboardNav({ ...baseInput, key: " ", ctrlOrMeta: true })).toEqual({
-      type: "preventDefault",
+      type: "rangeSelection",
+      action: { type: "select-column" },
+    })
+  })
+
+  test("Escape clears range selection", () => {
+    expect(nextKeyboardNav({ ...baseInput, key: "Escape" })).toEqual({
+      type: "rangeSelection",
+      action: { type: "clear" },
     })
   })
 })
@@ -226,10 +252,6 @@ describe("nextKeyboardNav — Q2-reserved keys are noop (caller falls through to
 
   test("Enter is noop", () => {
     expect(nextKeyboardNav({ ...baseInput, key: "Enter" })).toEqual({ type: "noop" })
-  })
-
-  test("Escape is noop", () => {
-    expect(nextKeyboardNav({ ...baseInput, key: "Escape" })).toEqual({ type: "noop" })
   })
 
   test("Printable character (e.g. 'a' without Ctrl) is noop", () => {

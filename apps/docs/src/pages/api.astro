@@ -140,6 +140,12 @@ const gridProps = [
   ],
   ["loading", "boolean", "implemented", "Shows the loading overlay."],
   ["loadingOverlay", "ReactNode", "implemented", "Custom loading overlay content."],
+  [
+    "rangeSelectionOptions",
+    "boolean | BcRangeSelectionOptions",
+    "implemented",
+    "Enables the cell range-selection layer and configures multi-range and row-selection interaction.",
+  ],
   ["ariaLabel", "string", "implemented", "Sets aria-label on the grid root."],
   ["ariaLabelledBy", "string", "implemented", "Sets aria-labelledby on the grid root."],
 ]
@@ -168,6 +174,12 @@ const events = [
     "(next, prev) => void",
     "partial",
     "Selection state affects aria-selected and API reads, but row-selection UI is not implemented.",
+  ],
+  [
+    "onRangeSelectionChange",
+    "(next, prev) => void",
+    "implemented",
+    "Emitted when pointer or keyboard range-selection gestures update the cell range state.",
   ],
   ["onExpansionChange", "(next, prev) => void", "reserved", "Reserved for grouped/tree data."],
   ["onGroupByChange", "(next, prev) => void", "reserved", "Reserved Q2 group-by UI."],
@@ -214,6 +226,12 @@ const statePairs = [
     "BcSelection",
     "partial",
     "State is typed and reflected for selected rows; selection interactions are later work.",
+  ],
+  [
+    "rangeSelection/defaultRangeSelection",
+    "BcRangeSelection",
+    "implemented",
+    "Controlled/uncontrolled cell range state consumed by the React overlay.",
   ],
   [
     "expansion/defaultExpansion",
@@ -470,6 +488,8 @@ const coreTypes = [
   "BcColumnStateEntry",
   "BcCellPosition",
   "BcRange",
+  "BcRangeSelection",
+  "BcRangeKeyAction",
   "BcPaginationState",
   "BcGridStateProps",
   "BcGridIdentity",
@@ -530,6 +550,7 @@ const reactTypes = [
   "BcCellEditorPrepareParams",
   "BcCellEditorProps",
   "BcCellEditCommitEvent",
+  "BcRangeSelectionOptions",
   "BcFilterDefinition",
   "BcReactFilterDefinition",
   "BcFilterEditorProps",
@@ -545,6 +566,9 @@ const reactCoreReExports = [
   "BcGridSort",
   "BcGridStateProps",
   "BcPaginationState",
+  "BcRange",
+  "BcRangeSelection",
+  "BcRangeKeyAction",
   "BcSelection",
   "BcServerGridApi",
   "BcValidationResult",
@@ -596,7 +620,12 @@ const editingProtocol = [
 ]
 
 const futureProtocol = [
-  ["BcRange", "start and end BcCellPosition.", "reserved", "Q3 range selection."],
+  [
+    "BcRange",
+    "start and end BcCellPosition.",
+    "implemented",
+    "Core range state is implemented with a React visual overlay.",
+  ],
   [
     "BcAggregation",
     "sum, count, avg, min, max, or custom aggregation.",
@@ -933,7 +962,7 @@ function statusClass(status: keyof typeof statusLabels) {
   </section>
 
   <section class="section">
-    <h2>Reserved Editing And Future Protocols</h2>
+    <h2>Editing And Protocols</h2>
     <div class="grid-two">
       <article class="panel">
         <h3>Q2 Editing</h3>
@@ -950,7 +979,7 @@ function statusClass(status: keyof typeof statusLabels) {
         </div>
       </article>
       <article class="panel">
-        <h3>Later Contracts</h3>
+        <h3>Range And Later Contracts</h3>
         <div class="compact-list">
           {
             futureProtocol.map(([name, shape, status, notes]) => (

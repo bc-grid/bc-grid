@@ -1,4 +1,13 @@
 import { flash } from "@bc-grid/animations"
+import {
+  emptyBcRangeSelection,
+  rangeKeydown,
+  rangePointerDown,
+  rangePointerMove,
+  rangePointerUp,
+  rangeSelectAll,
+  rangesContain,
+} from "@bc-grid/core"
 import type {
   BcCellPosition,
   BcColumnFilter,
@@ -7,6 +16,8 @@ import type {
   BcGridFilter,
   BcGridSort,
   BcPaginationState,
+  BcRangeKeyAction,
+  BcRangeSelection,
   BcSelection,
   ColumnId,
   RowId,
@@ -16,6 +27,8 @@ import {
   type CSSProperties,
   type FocusEvent,
   type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
   type ReactNode,
   type RefObject,
   type UIEvent,
@@ -97,6 +110,7 @@ import {
   usePersistedGridStateWriter,
   useUrlPersistedGridStateWriter,
 } from "./persistence"
+import { BcGridRangeOverlay } from "./rangeOverlay"
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
@@ -214,6 +228,27 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultSelection ?? createEmptySelection(),
     props.onSelectionChange,
   )
+  const [rangeSelectionState, setRangeSelectionState] = useControlledState<BcRangeSelection>(
+    hasProp(props, "rangeSelection"),
+    props.rangeSelection ?? emptyBcRangeSelection,
+    props.defaultRangeSelection ?? emptyBcRangeSelection,
+    props.onRangeSelectionChange,
+  )
+  const rangeSelectionRef = useRef(rangeSelectionState)
+  useEffect(() => {
+    rangeSelectionRef.current = rangeSelectionState
+  }, [rangeSelectionState])
+  const rangeDragActiveRef = useRef(false)
+  const rangeSelectionOptions =
+    props.rangeSelectionOptions === true
+      ? {}
+      : props.rangeSelectionOptions === false
+        ? undefined
+        : props.rangeSelectionOptions
+  const rangeSelectionEnabled =
+    (props.rangeSelectionOptions != null && props.rangeSelectionOptions !== false) ||
+    hasProp(props, "rangeSelection") ||
+    hasProp(props, "defaultRangeSelection")
   const emptyExpansion = useMemo(() => new Set<RowId>(), [])
   const [expansionState, setExpansionState] = useControlledState<ReadonlySet<RowId>>(
     hasProp(props, "expansion"),
@@ -415,6 +450,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       .map((entry, index) => ({ ...entry, index }))
   }, [allRowEntries, paginationEnabled, paginationWindow.endIndex, paginationWindow.startIndex])
   const aggregationRows = useMemo(() => allRowEntries.map((entry) => entry.row), [allRowEntries])
+  const rangeRowIds = useMemo(() => rowEntries.map((entry) => entry.rowId), [rowEntries])
   const getDetailHeight = useCallback(
     (entry: RowEntry<TRow>) => {
       if (!hasDetail) return 0
@@ -768,6 +804,93 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [onCellFocus, scrollToCell, setActiveCell],
   )
 
+  const commitRangeSelection = useCallback(
+    (next: BcRangeSelection) => {
+      rangeSelectionRef.current = next
+      setRangeSelectionState(next)
+    },
+    [setRangeSelectionState],
+  )
+
+  const focusRangeFrontier = useCallback(
+    (selection: BcRangeSelection) => {
+      const activeRange = selection.ranges[selection.ranges.length - 1]
+      if (!activeRange) return
+      setActiveCell(activeRange.end)
+      onCellFocus?.(activeRange.end)
+      scrollToCell(activeRange.end)
+    },
+    [onCellFocus, scrollToCell, setActiveCell],
+  )
+
+  const handleRangePointerDown = useCallback(
+    (position: BcCellPosition, event: PointerEvent<HTMLDivElement>) => {
+      if (!rangeSelectionEnabled || event.button !== 0) return
+      rangeDragActiveRef.current = true
+      const next = rangePointerDown(rangeSelectionRef.current, position, {
+        shift: event.shiftKey,
+        ctrlOrMeta: (event.ctrlKey || event.metaKey) && rangeSelectionOptions?.multiRange !== false,
+      })
+      commitRangeSelection(next)
+      setActiveCell(position)
+      onCellFocus?.(position)
+    },
+    [
+      commitRangeSelection,
+      onCellFocus,
+      rangeSelectionEnabled,
+      rangeSelectionOptions?.multiRange,
+      setActiveCell,
+    ],
+  )
+
+  const handleRangePointerEnter = useCallback(
+    (position: BcCellPosition, _event: PointerEvent<HTMLDivElement>) => {
+      if (!rangeSelectionEnabled || !rangeDragActiveRef.current) return
+      const next = rangePointerMove(
+        rangeSelectionRef.current,
+        position,
+        resolvedColumns,
+        rangeRowIds,
+      )
+      commitRangeSelection(next)
+      setActiveCell(position)
+      onCellFocus?.(position)
+    },
+    [
+      commitRangeSelection,
+      onCellFocus,
+      rangeRowIds,
+      rangeSelectionEnabled,
+      resolvedColumns,
+      setActiveCell,
+    ],
+  )
+
+  const shouldSuppressRowClickForRange = useCallback(
+    (_position: BcCellPosition, event: MouseEvent<HTMLDivElement>) =>
+      rangeSelectionEnabled &&
+      (rangeSelectionOptions?.preventRowSelection === true ||
+        event.shiftKey ||
+        event.ctrlKey ||
+        event.metaKey),
+    [rangeSelectionEnabled, rangeSelectionOptions?.preventRowSelection],
+  )
+
+  useEffect(() => {
+    const handlePointerUp = () => {
+      if (!rangeDragActiveRef.current) return
+      rangeDragActiveRef.current = false
+      commitRangeSelection(rangePointerUp(rangeSelectionRef.current))
+    }
+    document.addEventListener("pointerup", handlePointerUp, true)
+    document.addEventListener("pointercancel", handlePointerUp, true)
+    return () => {
+      document.removeEventListener("pointerup", handlePointerUp, true)
+      document.removeEventListener("pointercancel", handlePointerUp, true)
+    }
+  }, [commitRangeSelection])
+
   const api = useMemo<BcGridApi<TRow>>(
     () => ({
       scrollToRow(targetRowId, opts) {
@@ -1000,6 +1123,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (outcome.type === "noop") return
       event.preventDefault()
       if (outcome.type === "preventDefault") return
+      if (outcome.type === "rangeSelection") {
+        if (!rangeSelectionEnabled) return
+        const action = outcome.action as BcRangeKeyAction
+        const baseSelection =
+          rangeSelectionState.ranges.length > 0 || !activeCell
+            ? rangeSelectionState
+            : rangePointerDown(emptyBcRangeSelection, activeCell, {})
+        const next =
+          action.type === "select-all"
+            ? rangeSelectAll(resolvedColumns, rangeRowIds)
+            : rangeKeydown(baseSelection, action, resolvedColumns, rangeRowIds)
+        commitRangeSelection(next)
+        focusRangeFrontier(next)
+        return
+      }
       if (outcome.type === "toggleSelection") {
         const targetRow = rowEntries[currentRow]
         if (!targetRow) return
@@ -1017,10 +1155,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [
       activeCell,
       columnIndexById,
+      commitRangeSelection,
       editController,
       focusCell,
+      focusRangeFrontier,
       isRowDisabled,
       pageRowCount,
+      rangeRowIds,
+      rangeSelectionEnabled,
+      rangeSelectionState,
       resolvedColumns,
       rowEntries,
       rowIndexById,
@@ -1114,7 +1257,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   useEffect(() => {
     if (!columnMenu) return
-    const handlePointerDown = (event: PointerEvent) => {
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
       const target = event.target
       if (!(target instanceof Element)) return
       if (
@@ -1325,15 +1468,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   onRowDoubleClick?.(entry.row, event)
                 }}
               >
-                {virtualWindow.cols.map((virtualCol) =>
-                  renderBodyCell({
+                {virtualWindow.cols.map((virtualCol) => {
+                  const column = resolvedColumns[virtualCol.index]
+                  const rangeSelected =
+                    rangeSelectionEnabled && column
+                      ? rangesContain(
+                          rangeSelectionState,
+                          { rowId: entry.rowId, columnId: column.columnId },
+                          resolvedColumns,
+                          rangeRowIds,
+                        )
+                      : false
+                  return renderBodyCell({
                     activeCell,
-                    column: resolvedColumns[virtualCol.index],
+                    column,
                     domBaseId,
                     entry,
                     locale,
                     onCellFocus,
                     pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
+                    rangeSelected,
                     searchText,
                     scrollLeft: scrollOffset.left,
                     setActiveCell,
@@ -1348,8 +1502,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     hasOverlayValue: editController.hasOverlayValue,
                     getOverlayValue: editController.getOverlayValue,
                     getCellEditEntry: editController.getCellEditEntry,
-                  }),
-                )}
+                    onRangePointerDown: handleRangePointerDown,
+                    onRangePointerEnter: handleRangePointerEnter,
+                    shouldSuppressRowClick: shouldSuppressRowClickForRange,
+                  })
+                })}
                 {expanded && renderDetailPanel ? (
                   <div
                     className="bc-grid-detail-panel"
@@ -1374,6 +1531,25 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             )
           })}
         </div>
+
+        {rangeSelectionEnabled ? (
+          <BcGridRangeOverlay
+            columns={resolvedColumns}
+            rowIds={rangeRowIds}
+            selection={rangeSelectionState}
+            colCount={resolvedColumns.length}
+            pinnedLeftCols={pinnedLeftCols}
+            pinnedRightCols={pinnedRightCols}
+            scrollLeft={scrollOffset.left}
+            totalHeight={virtualWindow.totalHeight}
+            totalWidth={virtualWindow.totalWidth}
+            viewportWidth={viewport.width}
+            colOffset={(index) => virtualizer.colOffset(index)}
+            colWidth={(index) => virtualizer.colWidth(index)}
+            rowOffset={(index) => virtualizer.rowOffset(index)}
+            rowHeight={(index) => virtualizer.rowHeight(index)}
+          />
+        ) : null}
 
         <EditorPortal
           controller={editController}

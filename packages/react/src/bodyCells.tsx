@@ -1,5 +1,10 @@
 import type { BcCellPosition, ColumnId, RowId } from "@bc-grid/core"
-import type { CSSProperties, ReactNode } from "react"
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  PointerEvent as ReactPointerEvent,
+} from "react"
 import {
   type ResolvedColumn,
   type RowEntry,
@@ -27,6 +32,7 @@ interface RenderBodyCellParams<TRow> {
   locale: string | undefined
   onCellFocus: ((position: BcCellPosition) => void) | undefined
   pinnedEdge: "left" | "right" | null
+  rangeSelected: boolean
   scrollLeft: number
   searchText: string
   selected: boolean
@@ -64,6 +70,12 @@ interface RenderBodyCellParams<TRow> {
     rowId: RowId,
     columnId: ColumnId,
   ) => { pending: boolean; error?: string } | undefined
+  onRangePointerDown?: (position: BcCellPosition, event: ReactPointerEvent<HTMLDivElement>) => void
+  onRangePointerEnter?: (position: BcCellPosition, event: ReactPointerEvent<HTMLDivElement>) => void
+  shouldSuppressRowClick?: (
+    position: BcCellPosition,
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => boolean
 }
 
 export function renderBodyCell<TRow>({
@@ -74,6 +86,7 @@ export function renderBodyCell<TRow>({
   locale,
   onCellFocus,
   pinnedEdge,
+  rangeSelected,
   scrollLeft,
   searchText,
   selected,
@@ -88,6 +101,9 @@ export function renderBodyCell<TRow>({
   hasOverlayValue,
   getOverlayValue,
   getCellEditEntry,
+  onRangePointerDown,
+  onRangePointerEnter,
+  shouldSuppressRowClick,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
 
@@ -176,13 +192,14 @@ export function renderBodyCell<TRow>({
           pinnedEdgeClassName(pinnedEdge),
           column.align === "right" ? "bc-grid-cell-right" : undefined,
           active ? "bc-grid-cell-active" : undefined,
+          rangeSelected ? "bc-grid-cell-in-range" : undefined,
           coreClassName,
           reactClassName,
         )}
         role={role}
         aria-colindex={virtualCol.index + 1}
         aria-labelledby={`${headerDomId(domBaseId, column.columnId)} ${cellId}`}
-        aria-selected={selected || undefined}
+        aria-selected={selected || rangeSelected || undefined}
         aria-invalid={editError ? true : undefined}
         aria-describedby={errorId}
         aria-current={isEditingThisCell ? "true" : undefined}
@@ -202,9 +219,16 @@ export function renderBodyCell<TRow>({
           }),
           ...customStyle,
         }}
-        onClick={() => {
+        onClick={(event) => {
           setActiveCell(position)
           onCellFocus?.(position)
+          if (shouldSuppressRowClick?.(position, event)) event.stopPropagation()
+        }}
+        onPointerDown={(event) => {
+          if (!disabled) onRangePointerDown?.(position, event)
+        }}
+        onPointerEnter={(event) => {
+          if (!disabled) onRangePointerEnter?.(position, event)
         }}
       >
         {column.source.cellRenderer

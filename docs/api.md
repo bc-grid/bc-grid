@@ -467,6 +467,13 @@ export interface BcRangeSelection {
   anchor: BcCellPosition | null
 }
 
+export interface BcRangeSelectionOptions {
+  /** Allow Ctrl/Cmd pointer gestures to append disjoint ranges. Defaults to true. */
+  multiRange?: boolean
+  /** Suppress the row-selection click side effect when selecting cell ranges. Defaults to false. */
+  preventRowSelection?: boolean
+}
+
 export interface BcPaginationState {
   page: number
   pageSize: number
@@ -519,7 +526,7 @@ export interface BcGridStateProps {
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
 
-Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers; React overlay rendering, clipboard copy/paste, and fill handle behavior are Track 2 implementation tasks.
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. The React package consumes them for the cell range overlay; clipboard copy/paste and fill handle behavior remain separate Track 2 implementation tasks.
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
@@ -641,6 +648,8 @@ export interface BcFilterEditorProps<TValue = unknown> {
   searchText={searchText} onSearchTextChange={setSearchText}
   filter={filter} onFilterChange={setFilter}
   selection={selection} onSelectionChange={setSelection}
+  rangeSelectionOptions={true}
+  rangeSelection={rangeSelection} onRangeSelectionChange={setRangeSelection}
   expansion={expansion} onExpansionChange={setExpansion}
   groupBy={groupBy} onGroupByChange={setGroupBy}
   columnState={columnState} onColumnStateChange={setColumnState}
@@ -737,6 +746,9 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * `docs/design/chrome-rfc.md §Status bar`.
    */
   statusBar?: readonly BcStatusBarSegment<TRow>[]
+
+  // Range selection
+  rangeSelectionOptions?: boolean | BcRangeSelectionOptions
 
   // Master-detail
   renderDetailPanel?: (params: BcDetailPanelParams<TRow>) => React.ReactNode
@@ -1111,7 +1123,7 @@ export type {
   // React-specific
   BcReactGridColumn as BcGridColumn,
   BcGridProps, BcEditGridProps, BcServerGridProps,
-  BcGridStateProps, BcPaginationState,
+  BcGridStateProps, BcPaginationState, BcRangeSelectionOptions,
   BcGridApi, BcServerGridApi,
   BcCellRendererParams, BcGridMessages,
   BcAggregationFormatterParams, BcAggregationScope, UseAggregationsOptions,
@@ -1120,7 +1132,8 @@ export type {
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
 
   // Re-exports from @bc-grid/core
-  BcCellPosition, BcSelection, BcGridSort, BcGridFilter,
+  BcCellPosition, BcSelection, BcRange, BcRangeSelection, BcRangeKeyAction,
+  BcGridSort, BcGridFilter,
   BcColumnFilter, BcColumnFormat, BcColumnStateEntry,
   BcValidationResult, ColumnId, RowId,
 
@@ -1320,7 +1333,7 @@ Re-stated from `design.md §9` and confirmed here:
 3. **`groupableColumns` redundancy with `groupable: true` per column**: the per-column `groupable` is the source of truth; `groupableColumns` (in `BcGridProps`) is reserved if/when we want UI-side filtering of which groupables appear in the dropdown. **Decision:** keep both; `groupableColumns` defaults to `columns.filter(c => c.groupable)`.
 4. **Locale sources of truth**: grid `locale` prop vs `view.locale` (in `ServerViewState`) — for client grids, `BcGridProps.locale` is canonical. For server grids, `view.locale` is what the server sees; the grid copies the prop into the view state.
 5. **`onCellEditCommit` event timing**: pre-commit (with cancel option) or post-commit only? **Decision:** post-commit only. Pre-commit validation is `column.validate`; cancelled edits do not emit `onCellEditCommit`.
-6. **`BcRange` (range selection)**: declared in `core` for Q3. Does the v0.1 surface need to mention it at all? **Answer:** Track 2 unblocked the core state machine: `BcRangeSelection` and pure range helpers are exported from `@bc-grid/core`. React overlay rendering, clipboard copy/paste, and fill handle behavior remain separate implementation tasks.
+6. **`BcRange` (range selection)**: declared in `core` for Q3. Does the v0.1 surface need to mention it at all? **Answer:** Track 2 unblocked the core state machine and React visual layer: `BcRangeSelection` and pure range helpers are exported from `@bc-grid/core`, while `@bc-grid/react` exposes controlled/default range state plus `rangeSelectionOptions`. Clipboard copy/paste and fill handle behavior remain separate implementation tasks.
 7. **i18n message keys**: which strings are localizable at v0.1? **Proposal:** `BcGridMessages` covers loading state, no-rows, search placeholder, page-size label, group-by label, action-column label, action-menu items, sort-direction labels, accessibility live-region templates from `accessibility-rfc §Live Regions`.
 
 ---

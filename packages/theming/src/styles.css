@@ -204,9 +204,45 @@
   box-shadow: inset 3px 0 0 var(--bc-grid-dirty);
 }
 
+.bc-grid-row .bc-grid-cell.bc-grid-cell-in-range,
+.bc-grid-cell.bc-grid-cell-in-range {
+  background: hsl(var(--ring, 221 83% 53%) / 0.06);
+}
+
 .bc-grid-cell-right {
   justify-content: flex-end;
   text-align: right;
+}
+
+.bc-grid-range-overlay {
+  inset: 0 auto auto 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 4;
+}
+
+.bc-grid-range-rect {
+  background: hsl(var(--ring, 221 83% 53%) / 0.08);
+  border: 2px solid hsl(var(--ring, 221 83% 53%));
+  box-sizing: border-box;
+  position: absolute;
+}
+
+.bc-grid-range-rect[data-active="true"] {
+  border-width: 3px;
+}
+
+@media (forced-colors: active) {
+  .bc-grid-row .bc-grid-cell.bc-grid-cell-in-range,
+  .bc-grid-cell.bc-grid-cell-in-range {
+    background: transparent;
+  }
+
+  .bc-grid-range-rect {
+    background: transparent;
+    border-color: Highlight;
+    forced-color-adjust: none;
+  }
 }
 
 .bc-grid-filter-input,
