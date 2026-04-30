@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.4/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [
+    [
+      "@bc-grid/aggregations",
+      "@bc-grid/animations",
+      "@bc-grid/core",
+      "@bc-grid/editors",
+      "@bc-grid/enterprise",
+      "@bc-grid/export",
+      "@bc-grid/filters",
+      "@bc-grid/react",
+      "@bc-grid/server-row-model",
+      "@bc-grid/theming",
+      "@bc-grid/virtualizer"
+    ]
+  ],
+  "linked": [],
+  "access": "restricted",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}
