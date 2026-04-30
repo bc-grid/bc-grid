@@ -1,6 +1,12 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { type CSSProperties, useEffect, useLayoutEffect, useRef } from "react"
 
+const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
+
+type BcGridSelectElement = HTMLSelectElement & {
+  [bcGridSelectOptionValuesKey]?: readonly unknown[]
+}
+
 /**
  * Select editor — `kind: "select"`. Default for enum / one-of-many
  * columns per `editing-rfc §editor-select`.
@@ -59,6 +65,14 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   const optionsSource = (column as { options?: unknown }).options
   const options = resolveOptions(optionsSource, row)
   const initialString = optionToString(initialValue)
+
+  useEffect(() => {
+    if (selectRef.current) {
+      ;(selectRef.current as BcGridSelectElement)[bcGridSelectOptionValuesKey] = options.map(
+        (option) => option.value,
+      )
+    }
+  }, [options])
 
   return (
     <select

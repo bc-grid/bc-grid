@@ -312,6 +312,19 @@ const defaultEditorInputStyle: CSSProperties = {
 function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {
   if (focusRefCurrent instanceof HTMLInputElement) return focusRefCurrent.value
   if (focusRefCurrent instanceof HTMLTextAreaElement) return focusRefCurrent.value
-  if (focusRefCurrent instanceof HTMLSelectElement) return focusRefCurrent.value
+  if (focusRefCurrent instanceof HTMLSelectElement) {
+    const typedValues = (focusRefCurrent as BcGridSelectElement)[bcGridSelectOptionValuesKey]
+    const selectedIndex = focusRefCurrent.selectedIndex
+    if (typedValues && selectedIndex >= 0 && selectedIndex < typedValues.length) {
+      return typedValues[selectedIndex]
+    }
+    return focusRefCurrent.value
+  }
   return undefined
+}
+
+const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
+
+type BcGridSelectElement = HTMLSelectElement & {
+  [bcGridSelectOptionValuesKey]?: readonly unknown[]
 }

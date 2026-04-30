@@ -131,13 +131,13 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 - `[blocked: depends on editor-framework]` **editor-text** — text input editor. shadcn `Input` primitive. Honours `seedKey`, `pointerHint`. **Effort**: S.
 - `[blocked: depends on editor-framework]` **editor-number** — numeric input with locale-aware decimal separator. shadcn `Input` + `inputMode="decimal"`. **Effort**: S.
 - `[done: c1 #121]` **editor-date** — shadcn date-picker primitive + ISO 8601 commit. **Effort**: M.
-- `[ready]` **editor-datetime** — composes `editor-date` + time picker; ISO 8601 commit. **Effort**: M.
+- `[done: c1 #126]` **editor-datetime** — composes `editor-date` + time picker; ISO 8601 commit. **Effort**: M.
 - `[done: c1 #120]` **editor-time** — `<input type="time" />` styled with shadcn `Input`; 24h commit. **Effort**: S.
-- `[blocked: depends on editor-framework]` **editor-select** — shadcn `Select`; reads `column.options` (additive prop). Type-to-narrow via `seedKey`. **Effort**: M.
-- `[blocked: depends on editor-select]` **editor-multi-select** — shadcn multi-select; chip input + dropdown. **Effort**: M.
+- `[done: c1 #127]` **editor-select** — shadcn `Select`; reads `column.options` (additive prop). Type-to-narrow via `seedKey`. **Effort**: M.
+- `[ready]` **editor-multi-select** — shadcn multi-select; chip input + dropdown. **Effort**: M.
 - `[blocked: depends on editor-framework]` **editor-autocomplete** — shadcn `Combobox`; async via `column.fetchOptions(query, signal)`. Debounced 200ms. **Effort**: M.
 - `[blocked: depends on editor-framework]` **validation-framework** — sync + async validators with `AbortSignal` race semantics; reuses existing `BcValidationResult` from `api.md §1.2`. Can run **concurrently** with `editor-text`. **Effort**: S.
-- `[blocked: depends on validation-framework]` **dirty-tracking** — `BcEditState` map + visual states (`data-bc-grid-cell-state`); cell renderer params extension (`pending`, `editError`, `isDirty`). **Effort**: S.
+- `[done: c1 #128]` **dirty-tracking** — `BcEditState` map + visual states (`data-bc-grid-cell-state`); cell renderer params extension (`pending`, `editError`, `isDirty`). **Effort**: S.
 - `[blocked: depends on all 7 editors + validation-framework + dirty-tracking]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. **Effort**: M.
 - `[blocked: depends on bc-edit-grid-complete]` **editor-custom-recipe** — docs page in `apps/docs` with a worked custom-editor example (e.g., colour picker). **Effort**: S.
 

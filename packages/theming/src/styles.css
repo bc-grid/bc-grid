@@ -167,12 +167,18 @@
 }
 
 .bc-grid-cell[aria-invalid="true"],
-.bc-grid [aria-invalid="true"] {
+.bc-grid [aria-invalid="true"],
+.bc-grid-cell[data-bc-grid-cell-state="error"],
+.bc-grid [data-bc-grid-cell-state="error"] {
   box-shadow: inset 3px 0 0 var(--bc-grid-invalid);
 }
 
 .bc-grid-cell[data-bc-grid-dirty="true"],
-.bc-grid [data-bc-grid-dirty="true"] {
+.bc-grid [data-bc-grid-dirty="true"],
+.bc-grid-cell[data-bc-grid-cell-state="dirty"],
+.bc-grid [data-bc-grid-cell-state="dirty"],
+.bc-grid-cell[data-bc-grid-cell-state="pending"],
+.bc-grid [data-bc-grid-cell-state="pending"] {
   box-shadow: inset 3px 0 0 var(--bc-grid-dirty);
 }
 
