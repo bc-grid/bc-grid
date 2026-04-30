@@ -377,10 +377,13 @@ function usePagedServerState<TRow>(
     setRefreshVersion((version) => version + 1)
   }, [])
 
-  const invalidate = useCallback((invalidation: ServerInvalidation) => {
-    modelRef.current.invalidate(invalidation)
-    setRefreshVersion((version) => version + 1)
-  }, [])
+  const invalidate = useCallback(
+    (invalidation: ServerInvalidation) => {
+      modelRef.current.invalidate(invalidation, { rowId: props.rowId })
+      setRefreshVersion((version) => version + 1)
+    },
+    [props.rowId],
+  )
 
   const retryBlock = useCallback((blockKey: ServerBlockKey) => {
     modelRef.current.cache.delete(blockKey)
@@ -458,6 +461,7 @@ function useInfiniteServerState<TRow>(
   const modelRef = useRef(createServerRowModel<TRow>())
   const inFlightCountRef = useRef(0)
   const loadedRowsRef = useRef<TRow[]>([])
+  const visibleRangeRef = useRef({ endIndex: 0, startIndex: 0 })
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [rows, setRows] = useState<readonly TRow[]>([])
   const [rowCount, setRowCount] = useState<number | "unknown">("unknown")
@@ -585,6 +589,7 @@ function useInfiniteServerState<TRow>(
 
   const handleVisibleRowRangeChange = useCallback(
     (range: { startIndex: number; endIndex: number }) => {
+      visibleRangeRef.current = range
       if (!loadBlock) return
       ensureBlock(range.startIndex)
       ensureBlock(range.endIndex)
@@ -608,11 +613,17 @@ function useInfiniteServerState<TRow>(
 
   const invalidate = useCallback(
     (invalidation: ServerInvalidation) => {
-      modelRef.current.invalidate(invalidation)
+      modelRef.current.invalidate(invalidation, { rowId: props.rowId })
       syncRowsFromCache()
+      const range = visibleRangeRef.current
+      ensureBlock(range.startIndex)
+      ensureBlock(range.endIndex)
+      if (rowCount === "unknown" || rows.length < rowCount) {
+        ensureBlock(range.endIndex + blockSize)
+      }
       setRefreshVersion((version) => version + 1)
     },
-    [syncRowsFromCache],
+    [blockSize, ensureBlock, props.rowId, rowCount, rows.length, syncRowsFromCache],
   )
 
   const retryBlock = useCallback((blockKey: ServerBlockKey) => {
@@ -724,6 +735,7 @@ function useTreeServerState<TRow>(
         groupPath,
         loadChildren: loader,
         parentRowId,
+        rowId: props.rowId,
         view,
         viewKey,
       })
@@ -815,11 +827,14 @@ function useTreeServerState<TRow>(
     setRefreshVersion((version) => version + 1)
   }, [])
 
-  const invalidate = useCallback((invalidation: ServerInvalidation) => {
-    modelRef.current.invalidate(invalidation)
-    setTree(modelRef.current.createTreeSnapshot())
-    setRefreshVersion((version) => version + 1)
-  }, [])
+  const invalidate = useCallback(
+    (invalidation: ServerInvalidation) => {
+      modelRef.current.invalidate(invalidation, { rowId: props.rowId })
+      setTree(modelRef.current.createTreeSnapshot())
+      setRefreshVersion((version) => version + 1)
+    },
+    [props.rowId],
+  )
 
   const retryBlock = useCallback((blockKey: ServerBlockKey) => {
     modelRef.current.cache.delete(blockKey)

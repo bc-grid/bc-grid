@@ -70,6 +70,21 @@ describe("ServerBlockCache", () => {
     cache.invalidate({ scope: "all" })
     expect(cache.toMap().size).toBe(0)
   })
+
+  test("marks stale blocks without dropping rows", () => {
+    const cache = new ServerBlockCache<Row>()
+    cache.markLoaded({
+      blockKey: "infinite:v1:start:0:size:2",
+      rows: [{ id: "a" }],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+
+    expect(cache.markStale("infinite:v1:start:0:size:2")).toBe(true)
+    expect(cache.get("infinite:v1:start:0:size:2")?.state).toBe("stale")
+    expect(cache.get("infinite:v1:start:0:size:2")?.rows).toEqual([{ id: "a" }])
+  })
 })
 
 describe("createServerRowModel", () => {
@@ -346,6 +361,82 @@ describe("createServerRowModel", () => {
       "ServerTreeResult.childStart 2 does not match query childStart 0",
     )
     expect(model.cache.get(request.blockKey)?.state).toBe("error")
+  })
+
+  test("marks blocks containing invalidated rows as stale", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:2",
+      rows: [{ id: "a" }, { id: "b" }],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:2:size:2",
+      rows: [{ id: "c" }, { id: "d" }],
+      size: 2,
+      start: 2,
+      viewKey: "v1",
+    })
+
+    const result = model.invalidate({ scope: "rows", rowIds: ["b"] }, { rowId: (row) => row.id })
+
+    expect(result.affectedBlockKeys).toEqual(["paged:v1:page:0:size:2"])
+    expect(model.cache.get("paged:v1:page:0:size:2")?.state).toBe("stale")
+    expect(model.cache.get("infinite:v1:start:2:size:2")?.state).toBe("loaded")
+  })
+
+  test("evicts tree blocks for a parent recursively", async () => {
+    const model = createServerRowModel<Row>()
+    const loadRoot = model.loadTreeChildren({
+      childCount: 1,
+      childStart: 0,
+      loadChildren: () =>
+        Promise.resolve({
+          childCount: 1,
+          childStart: 0,
+          groupPath: [],
+          parentRowId: null,
+          rows: [
+            {
+              data: { id: "sales" },
+              groupKey: { columnId: "department", rowId: "group:sales", value: "Sales" },
+              hasChildren: true,
+              kind: "group",
+            },
+          ],
+        }),
+      parentRowId: null,
+      rowId: (row) => row.id,
+      view,
+      viewKey: "v1",
+    })
+    await loadRoot.promise
+    const loadChild = model.loadTreeChildren({
+      childCount: 1,
+      childStart: 0,
+      groupPath: [{ columnId: "department", rowId: "group:sales", value: "Sales" }],
+      loadChildren: () =>
+        Promise.resolve({
+          childCount: 1,
+          childStart: 0,
+          groupPath: [{ columnId: "department", rowId: "group:sales", value: "Sales" }],
+          parentRowId: "group:sales",
+          rows: [{ data: { id: "child" }, kind: "leaf" }],
+        }),
+      parentRowId: "group:sales",
+      rowId: (row) => row.id,
+      view,
+      viewKey: "v1",
+    })
+    await loadChild.promise
+
+    const result = model.invalidate({ scope: "tree", parentRowId: null, recursive: true })
+
+    expect(result.affectedBlockKeys).toEqual([loadRoot.blockKey, loadChild.blockKey])
+    expect(model.cache.get(loadRoot.blockKey)).toBeUndefined()
+    expect(model.cache.get(loadChild.blockKey)).toBeUndefined()
   })
 
   test("merges and flattens tree snapshots by expansion", () => {
