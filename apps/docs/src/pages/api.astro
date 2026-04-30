@@ -194,6 +194,12 @@ const events = [
     "implemented",
     "Post-paste hook with applied, truncated, and validation counts.",
   ],
+  [
+    "onRangeFillCommit",
+    "(event) => void",
+    "implemented",
+    "Post-fill hook with source range, target range, strategy, and validation counts.",
+  ],
   ["onExpansionChange", "(next, prev) => void", "reserved", "Reserved for grouped/tree data."],
   ["onGroupByChange", "(next, prev) => void", "reserved", "Reserved Q2 group-by UI."],
   [
@@ -244,7 +250,13 @@ const statePairs = [
     "rangeSelection/defaultRangeSelection",
     "BcRangeSelection",
     "implemented",
-    "State consumed by range clipboard copy and visual range tasks.",
+    "State consumed by range clipboard copy/paste and fill handle tasks.",
+  ],
+  [
+    "rangeSelectionOptions",
+    "BcRangeSelectionOptions",
+    "implemented",
+    "Configures range affordances such as the active-range fill handle.",
   ],
   [
     "expansion/defaultExpansion",
@@ -589,8 +601,11 @@ const reactTypes = [
   "BcRangeBeforePasteHook",
   "BcRangeCopyEvent",
   "BcRangeCopyHook",
+  "BcRangeFillEvent",
+  "BcRangeFillHook",
   "BcRangePasteEvent",
   "BcRangePasteHook",
+  "BcRangeSelectionOptions",
   "BcFilterDefinition",
   "BcReactFilterDefinition",
   "BcFilterEditorProps",
@@ -664,7 +679,7 @@ const futureProtocol = [
     "BcRange",
     "start and end BcCellPosition.",
     "implemented",
-    "Core range state, TSV/HTML clipboard copy, and TSV paste are implemented; visual overlay and fill handle are separate tasks.",
+    "Core range state, TSV/HTML clipboard copy, TSV paste, and fill handle behavior are implemented; visual overlay remains separate.",
   ],
   [
     "BcAggregation",

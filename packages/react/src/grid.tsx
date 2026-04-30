@@ -20,6 +20,7 @@ import {
   type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
   type RefObject,
   type UIEvent,
   useCallback,
@@ -39,6 +40,13 @@ import {
 import { createDetailToggleColumn } from "./detailColumn"
 import { nextActiveCellAfterEdit } from "./editingStateMachine"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
+import {
+  buildRangeFill,
+  prepareRangeFill,
+  rangeSpansPinnedBoundary,
+  resolveRangeIndexBounds,
+  targetRangeForFillDrag,
+} from "./fillHandle"
 import {
   type ColumnFilterText,
   type ColumnFilterTypeByColumnId,
@@ -67,6 +75,7 @@ import {
   isDataRowEntry,
   overlayStyle,
   pinnedEdgeFor,
+  pinnedTransformValue,
   resolveColumns,
   resolveFallbackBodyHeight,
   resolveHeaderHeight,
@@ -130,6 +139,12 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
 const DEFAULT_DETAIL_HEIGHT = 144
 const editableKeyTargetTags = new Set(["INPUT", "TEXTAREA", "SELECT"])
 
+interface FillDragState {
+  pointerId: number
+  sourceRange: BcRange
+  previewRange: BcRange
+}
+
 export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   assertNoMixedControlledProps(props)
 
@@ -158,6 +173,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     onCopy,
     onBeforePaste,
     onRangePasteCommit,
+    onRangeFillCommit,
     onVisibleRowRangeChange,
   } = props
 
@@ -292,6 +308,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultActiveCell ?? null,
     props.onActiveCellChange,
   )
+  const [fillDragState, setFillDragState] = useState<FillDragState | null>(null)
 
   // Consumer columns resolved for filter / sort lookups. The synthetic
   // selection-checkbox column (when `checkboxSelection` is on) is added
@@ -1073,6 +1090,276 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   useEffect(() => assignRef(apiRef, api), [apiRef, api])
 
+  const cellPositionFromPointer = useCallback(
+    (
+      event: Pick<PointerEvent | ReactPointerEvent, "clientX" | "clientY">,
+    ): BcCellPosition | null => {
+      const scroller = scrollerRef.current
+      if (!scroller) return null
+
+      const rect = scroller.getBoundingClientRect()
+      const localX = event.clientX - rect.left
+      const localY = event.clientY - rect.top
+      if (localX < 0 || localY < 0 || localX > rect.width || localY > rect.height) return null
+
+      const pinnedRightWidth = virtualWindow.totalWidth - virtualWindow.bodyRight
+      const pinnedRightLeft = viewport.width - pinnedRightWidth
+      const contentX =
+        localX < virtualWindow.bodyLeft
+          ? localX
+          : pinnedRightWidth > 0 && localX >= pinnedRightLeft
+            ? virtualWindow.bodyRight + (localX - pinnedRightLeft)
+            : localX + scrollOffsetRef.current.left
+      const contentY = localY + scrollOffsetRef.current.top
+      const rowIndex = virtualizer.rowAtOffset(contentY)
+      const colIndex = virtualizer.colAtOffset(contentX)
+      const entry = rowEntries[rowIndex]
+      const column = resolvedColumns[colIndex]
+      if (!entry || !column) return null
+      return { rowId: entry.rowId, columnId: column.columnId }
+    },
+    [
+      resolvedColumns,
+      rowEntries,
+      viewport.width,
+      virtualWindow.bodyLeft,
+      virtualWindow.bodyRight,
+      virtualWindow.totalWidth,
+      virtualizer,
+    ],
+  )
+
+  const commitFillFromHandle = useCallback(
+    async (dragState: FillDragState, target: BcCellPosition | null) => {
+      if (!target) return
+
+      const built = buildRangeFill({
+        sourceRange: dragState.sourceRange,
+        target,
+        columns: resolvedColumns,
+        rowEntries,
+        rowIds: rangeRowIds,
+        getSourceValue: (source) =>
+          editController.hasOverlayValue(source.rowId, source.columnId)
+            ? editController.getOverlayValue(source.rowId, source.columnId)
+            : getCellValue(source.row, source.column.source),
+      })
+      if (!built) return
+      if (rangeSpansPinnedBoundary(built.targetRange, resolvedColumns, rangeRowIds)) return
+
+      const emitFill = (appliedCount: number, validationErrors: Record<string, string>) => {
+        onRangeFillCommit?.({
+          sourceRange: built.sourceRange,
+          targetRange: built.targetRange,
+          strategy: built.strategy,
+          appliedCount,
+          truncatedCount: built.truncatedCount,
+          validationErrors,
+          perCellEventsFired: true,
+          api,
+        })
+      }
+
+      const prepared = await prepareRangeFill({
+        fill: built,
+        getPreviousValue: (targetCell) =>
+          editController.hasOverlayValue(targetCell.rowId, targetCell.columnId)
+            ? editController.getOverlayValue(targetCell.rowId, targetCell.columnId)
+            : getCellValue(targetCell.row, targetCell.column.source),
+        isEditable: (targetCell) => isCellEditable(targetCell.column, targetCell.row),
+      })
+      if (Object.keys(prepared.validationErrors).length > 0) {
+        const firstError = Object.values(prepared.validationErrors)[0] ?? "Validation failed."
+        announceAssertive(`Fill rejected. ${firstError} Nothing was changed.`)
+        emitFill(0, prepared.validationErrors)
+        return
+      }
+
+      const result = await editController.commitBatch(
+        prepared.cells.map((cell) => ({
+          rowId: cell.rowId,
+          row: cell.row,
+          columnId: cell.columnId,
+          column: cell.column.source,
+          value: cell.nextValue,
+          previousValue: cell.previousValue,
+        })),
+        "fill",
+      )
+      if (!result.applied) {
+        const error = result.error ?? "Fill commit failed."
+        announceAssertive(`Fill rejected. ${error} Nothing was changed.`)
+        emitFill(0, { "0:0": error })
+        return
+      }
+
+      setRangeSelectionState({
+        ranges: [built.targetRange],
+        anchor: dragState.sourceRange.start,
+      })
+      setActiveCell(built.targetRange.end)
+      announcePolite(
+        result.appliedCount === 1 ? "Filled 1 cell." : `Filled ${result.appliedCount} cells.`,
+      )
+      emitFill(result.appliedCount, {})
+    },
+    [
+      announceAssertive,
+      announcePolite,
+      api,
+      editController,
+      onRangeFillCommit,
+      rangeRowIds,
+      resolvedColumns,
+      rowEntries,
+      setActiveCell,
+      setRangeSelectionState,
+    ],
+  )
+
+  const handleFillHandlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const sourceRange =
+        rangeSelectionState.ranges.length === 1 ? rangeSelectionState.ranges[0] : undefined
+      if (!sourceRange) return
+      if (rangeSpansPinnedBoundary(sourceRange, resolvedColumns, rangeRowIds)) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      rootRef.current?.focus({ preventScroll: true })
+      setFillDragState({
+        pointerId: event.pointerId,
+        sourceRange,
+        previewRange: sourceRange,
+      })
+    },
+    [rangeRowIds, rangeSelectionState, resolvedColumns],
+  )
+
+  const handleFillHandlePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!fillDragState || fillDragState.pointerId !== event.pointerId) return
+
+      const target = cellPositionFromPointer(event)
+      const previewRange = target
+        ? targetRangeForFillDrag({
+            sourceRange: fillDragState.sourceRange,
+            target,
+            columns: resolvedColumns,
+            rowIds: rangeRowIds,
+          })
+        : undefined
+
+      setFillDragState((current) => {
+        if (!current || current.pointerId !== event.pointerId) return current
+        if (!previewRange || rangeSpansPinnedBoundary(previewRange, resolvedColumns, rangeRowIds)) {
+          return { ...current, previewRange: current.sourceRange }
+        }
+        return { ...current, previewRange }
+      })
+    },
+    [cellPositionFromPointer, fillDragState, rangeRowIds, resolvedColumns],
+  )
+
+  const handleFillHandlePointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!fillDragState || fillDragState.pointerId !== event.pointerId) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      const target = cellPositionFromPointer(event)
+      const dragState = fillDragState
+      setFillDragState(null)
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+      void commitFillFromHandle(dragState, target).catch((err) => {
+        const error = err instanceof Error ? err.message : "Fill commit failed."
+        announceAssertive(`Fill rejected. ${error} Nothing was changed.`)
+      })
+    },
+    [announceAssertive, cellPositionFromPointer, commitFillFromHandle, fillDragState],
+  )
+
+  const handleFillHandlePointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!fillDragState || fillDragState.pointerId !== event.pointerId) return
+      setFillDragState(null)
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+    },
+    [fillDragState],
+  )
+
+  const activeFillRange =
+    fillDragState?.previewRange ??
+    (rangeSelectionState.ranges.length === 1 ? rangeSelectionState.ranges[0] : undefined)
+  const fillHandleEnabled = props.rangeSelectionOptions?.fillHandle !== false
+  const fillHandleModel = useMemo(() => {
+    if (!fillHandleEnabled || !activeFillRange) return null
+    if (rangeSelectionState.ranges.length !== 1 && !fillDragState) return null
+    if (rangeSpansPinnedBoundary(activeFillRange, resolvedColumns, rangeRowIds)) return null
+
+    const bounds = resolveRangeIndexBounds(activeFillRange, resolvedColumns, rangeRowIds)
+    if (!bounds || bounds.rowSpan < 1 || bounds.colSpan < 1) return null
+
+    const left = virtualizer.colOffset(bounds.colEnd) + virtualizer.colWidth(bounds.colEnd) - 4
+    const top = virtualizer.rowOffset(bounds.rowEnd) + virtualizer.rowHeight(bounds.rowEnd) - 4
+    const pinned = resolvedColumns[bounds.colEnd]?.pinned ?? null
+    const transform = pinnedTransformValue(
+      pinned,
+      scrollOffset.left,
+      virtualWindow.totalWidth,
+      viewport.width,
+    )
+
+    return {
+      handleStyle: {
+        height: 8,
+        left,
+        pointerEvents: "auto",
+        position: "absolute",
+        top,
+        touchAction: "none",
+        transform,
+        width: 8,
+        zIndex: pinned ? 7 : 5,
+      } satisfies CSSProperties,
+      previewStyle: {
+        boxSizing: "border-box",
+        height:
+          virtualizer.rowOffset(bounds.rowEnd) +
+          virtualizer.rowHeight(bounds.rowEnd) -
+          virtualizer.rowOffset(bounds.rowStart),
+        left: virtualizer.colOffset(bounds.colStart),
+        outline: "2px solid var(--bc-grid-focus-ring)",
+        outlineOffset: -2,
+        pointerEvents: "none",
+        position: "absolute",
+        top: virtualizer.rowOffset(bounds.rowStart),
+        transform,
+        width:
+          virtualizer.colOffset(bounds.colEnd) +
+          virtualizer.colWidth(bounds.colEnd) -
+          virtualizer.colOffset(bounds.colStart),
+        zIndex: pinned ? 6 : 4,
+      } satisfies CSSProperties,
+    }
+  }, [
+    activeFillRange,
+    fillDragState,
+    fillHandleEnabled,
+    rangeRowIds,
+    rangeSelectionState.ranges.length,
+    resolvedColumns,
+    scrollOffset.left,
+    viewport.width,
+    virtualWindow.totalWidth,
+    virtualizer,
+  ])
+
   // Status-bar render context per `chrome-rfc §Status bar`. Aggregations
   // are intentionally empty here; `footer-aggregations` (Track 5) is the
   // task that wires `aggregationResults` through.
@@ -1719,6 +2006,29 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               </div>
             )
           })}
+
+          {fillDragState && fillHandleModel ? (
+            <div
+              aria-hidden="true"
+              className="bc-grid-fill-preview"
+              role="presentation"
+              style={fillHandleModel.previewStyle}
+            />
+          ) : null}
+
+          {fillHandleModel ? (
+            <div
+              aria-hidden="true"
+              className="bc-grid-fill-handle"
+              role="presentation"
+              data-bc-grid-fill-handle="true"
+              style={fillHandleModel.handleStyle}
+              onPointerDown={handleFillHandlePointerDown}
+              onPointerMove={handleFillHandlePointerMove}
+              onPointerUp={handleFillHandlePointerUp}
+              onPointerCancel={handleFillHandlePointerCancel}
+            />
+          ) : null}
         </div>
 
         <EditorPortal

@@ -366,6 +366,8 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       source: BcCellEditCommitEvent<TRow>["source"] = "api",
     ): Promise<BcBatchEditResult> => {
       if (candidates.length === 0) return { applied: true, appliedCount: 0 }
+      const operationLabel =
+        source === "paste" ? "Paste" : source === "fill" ? "Fill" : "Batch edit"
 
       const snapshots = candidates.map((candidate) => {
         const rowPatch = overlayRef.current.patches.get(candidate.rowId)
@@ -445,7 +447,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           }
         }
       } catch (err) {
-        return rollback(err instanceof Error ? err.message : "Paste commit failed.")
+        return rollback(err instanceof Error ? err.message : `${operationLabel} commit failed.`)
       }
 
       if (pending.length === 0) return { applied: true, appliedCount: candidates.length }
@@ -459,7 +461,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       try {
         await Promise.all(pending)
       } catch (err) {
-        return rollback(err instanceof Error ? err.message : "Paste commit failed.")
+        return rollback(err instanceof Error ? err.message : `${operationLabel} commit failed.`)
       }
 
       for (const candidate of candidates) {

@@ -516,6 +516,24 @@ export interface BcRangePasteEvent<TRow> {
 
 export type BcRangePasteHook<TRow> = (event: BcRangePasteEvent<TRow>) => void
 
+export interface BcRangeSelectionOptions {
+  /** Show the active-range fill handle. Enabled by default. */
+  fillHandle?: boolean
+}
+
+export interface BcRangeFillEvent<TRow> {
+  sourceRange: BcRange
+  targetRange: BcRange
+  strategy: "linear" | "copy"
+  appliedCount: number
+  truncatedCount: number
+  validationErrors: Record<string, string>
+  perCellEventsFired: true
+  api: BcGridApi<TRow>
+}
+
+export type BcRangeFillHook<TRow> = (event: BcRangeFillEvent<TRow>) => void
+
 export interface BcPaginationState {
   page: number
   pageSize: number
@@ -568,7 +586,7 @@ export interface BcGridStateProps {
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
 
-Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); paste reads TSV into the active range with parser/validation checks. Visual overlay and fill handle behavior remain separate Track 2 implementation tasks.
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); paste reads TSV into the active range with parser/validation checks; the fill handle extends the active range with copy/linear fill semantics. Visual range overlay remains a separate Track 2 implementation task.
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
@@ -800,6 +818,8 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onCopy?: BcRangeCopyHook
   onBeforePaste?: BcRangeBeforePasteHook<TRow>
   onRangePasteCommit?: BcRangePasteHook<TRow>
+  onRangeFillCommit?: BcRangeFillHook<TRow>
+  rangeSelectionOptions?: BcRangeSelectionOptions
 
   // Imperative
   apiRef?: React.RefObject<BcGridApi<TRow> | null>
@@ -1072,7 +1092,7 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   column: BcReactGridColumn<TRow, TValue>
   previousValue: TValue
   nextValue: TValue
-  source: "keyboard" | "pointer" | "api" | "paste"
+  source: "keyboard" | "pointer" | "api" | "paste" | "fill"
 }
 ```
 
@@ -1176,6 +1196,7 @@ export type {
   BcEditGridAction,
   BcRangeBeforeCopyEvent, BcRangeBeforeCopyHook, BcRangeCopyEvent, BcRangeCopyHook,
   BcRangeBeforePasteEvent, BcRangeBeforePasteHook, BcRangePasteEvent, BcRangePasteHook,
+  BcRangeFillEvent, BcRangeFillHook, BcRangeSelectionOptions,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
 
   // Re-exports from @bc-grid/core
@@ -1380,7 +1401,7 @@ Re-stated from `design.md §9` and confirmed here:
 3. **`groupableColumns` redundancy with `groupable: true` per column**: the per-column `groupable` is the source of truth; `groupableColumns` (in `BcGridProps`) is reserved if/when we want UI-side filtering of which groupables appear in the dropdown. **Decision:** keep both; `groupableColumns` defaults to `columns.filter(c => c.groupable)`.
 4. **Locale sources of truth**: grid `locale` prop vs `view.locale` (in `ServerViewState`) — for client grids, `BcGridProps.locale` is canonical. For server grids, `view.locale` is what the server sees; the grid copies the prop into the view state.
 5. **`onCellEditCommit` event timing**: pre-commit (with cancel option) or post-commit only? **Decision:** post-commit only. Pre-commit validation is `column.validate`; cancelled edits do not emit `onCellEditCommit`.
-6. **`BcRange` (range selection)**: declared in `core` for Q3. Does the v0.1 surface need to mention it at all? **Answer:** Track 2 unblocked the core state machine: `BcRangeSelection` and pure range helpers are exported from `@bc-grid/core`. React overlay rendering, clipboard copy/paste, and fill handle behavior remain separate implementation tasks.
+6. **`BcRange` (range selection)**: declared in `core` for Q3. Does the v0.1 surface need to mention it at all? **Answer:** Track 2 unblocked the core state machine: `BcRangeSelection` and pure range helpers are exported from `@bc-grid/core`. Clipboard copy/paste and fill handle behavior are implemented in React; full visual range overlay rendering remains a separate implementation task.
 7. **i18n message keys**: which strings are localizable at v0.1? **Proposal:** `BcGridMessages` covers loading state, no-rows, search placeholder, page-size label, group-by label, action-column label, action-menu items, sort-direction labels, accessibility live-region templates from `accessibility-rfc §Live Regions`.
 
 ---

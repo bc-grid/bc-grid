@@ -259,6 +259,17 @@
   box-shadow: inset 3px 0 0 var(--bc-grid-dirty);
 }
 
+.bc-grid-fill-preview {
+  background: transparent;
+}
+
+.bc-grid-fill-handle {
+  border: 1px solid var(--bc-grid-bg);
+  background: var(--bc-grid-focus-ring);
+  box-shadow: 0 0 0 1px var(--bc-grid-focus-ring);
+  cursor: crosshair;
+}
+
 .bc-grid-cell-right {
   justify-content: flex-end;
   text-align: right;
@@ -739,6 +750,12 @@
   .bc-grid [data-bc-grid-active-cell="true"] {
     outline: 2px solid Highlight;
     outline-offset: -2px;
+  }
+
+  .bc-grid-fill-handle {
+    border-color: Canvas;
+    background: Highlight;
+    box-shadow: 0 0 0 1px Highlight;
   }
 
   .bc-grid-status {

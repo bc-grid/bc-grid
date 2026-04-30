@@ -120,6 +120,27 @@ export interface BcRangePasteEvent<TRow> {
 
 export type BcRangePasteHook<TRow> = (event: BcRangePasteEvent<TRow>) => void
 
+export interface BcRangeSelectionOptions {
+  /**
+   * Render the drag-square at the active range bottom-right and allow
+   * pointer fill. Enabled by default.
+   */
+  fillHandle?: boolean
+}
+
+export interface BcRangeFillEvent<TRow> {
+  sourceRange: CoreBcRange
+  targetRange: CoreBcRange
+  strategy: "linear" | "copy"
+  appliedCount: number
+  truncatedCount: number
+  validationErrors: Record<string, string>
+  perCellEventsFired: true
+  api: BcGridApi<TRow>
+}
+
+export type BcRangeFillHook<TRow> = (event: BcRangeFillEvent<TRow>) => void
+
 /**
  * Render context handed to status-bar segment renderers. Rebuilt per
  * grid render so segments always reflect current row / selection /
@@ -295,6 +316,8 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onCopy?: BcRangeCopyHook
   onBeforePaste?: BcRangeBeforePasteHook<TRow>
   onRangePasteCommit?: BcRangePasteHook<TRow>
+  onRangeFillCommit?: BcRangeFillHook<TRow>
+  rangeSelectionOptions?: BcRangeSelectionOptions
 
   apiRef?: RefObject<BcGridApi<TRow> | null>
 
@@ -439,7 +462,7 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   column: BcReactGridColumn<TRow, TValue>
   previousValue: TValue
   nextValue: TValue
-  source: "keyboard" | "pointer" | "api" | "paste"
+  source: "keyboard" | "pointer" | "api" | "paste" | "fill"
 }
 
 export interface BcFilterDefinition<TValue = unknown> {
