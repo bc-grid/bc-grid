@@ -150,7 +150,7 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 - `[done: c1 #88 (folded into editor-framework)]` **validation-framework** — sync + async validators with `AbortSignal` race semantics; `useEditingController` already exposes the full pipeline. **Effort**: S.
 - `[done: c1 #128 (salvaged via #135)]` **dirty-tracking** — `BcEditState` map + visual states (`data-bc-grid-cell-state`); cell renderer params extension (`pending`, `editError`, `isDirty`). **Effort**: S.
 - `[review: worker4 #166]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. The optimistic-commit / rollback skeleton landed in #148; this PR closes the remaining RFC-level gaps audited against `editing-rfc` §Server commit + §Concurrency: per-commit `mutationId` stamping, stale-mutation guard so a re-edit during a pending Promise can't be rolled back by the older settle, overlay cleanup when consumer's `data` prop catches up to the patch, real commit-source attribution, and Delete-action disabling while a row has pending edits. **Effort**: M.
-- `[blocked: depends on bc-edit-grid-complete]` **editor-custom-recipe** — docs page in `apps/docs` with a worked custom-editor example (e.g., colour picker). **Effort**: S.
+- `[in-flight: worker4 stacked on #166]` **editor-custom-recipe** — docs page in `apps/docs` with a worked custom-editor example (e.g., colour picker). Walks the `BcCellEditor` factory contract, focusRef-in-useLayoutEffect, seedKey, prepareResult, AT name + aria-describedby, portal-marker requirement, and `column.cellEditor` wiring. **Effort**: S.
 
 #### Track 2 — Range + master-detail (Q3 surface)
 
