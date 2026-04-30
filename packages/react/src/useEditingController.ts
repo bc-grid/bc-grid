@@ -55,6 +55,39 @@ export interface UseEditingControllerOptions<TRow> {
    * Promise rejection rolls back the overlay and surfaces the error.
    */
   onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
+
+  /**
+   * Cell-edit live-region announcer per `editing-rfc §Live Regions`.
+   * Called by the controller at three points:
+   *   - committed: after the overlay update lands (or after an async
+   *     consumer hook resolves successfully).
+   *   - validationError: after `validate` returned `{ valid: false }`.
+   *   - serverError: after the consumer's `onCellEditCommit` Promise
+   *     rejected and the overlay rolled back.
+   *
+   * The grid wires this to its polite + assertive live regions; consumers
+   * supplying a controller standalone can route to their own AT layer.
+   */
+  announce?: (
+    event:
+      | {
+          kind: "committed"
+          column: BcReactGridColumn<TRow, unknown>
+          row: TRow
+          rowId: RowId
+          nextValue: unknown
+        }
+      | {
+          kind: "validationError"
+          column: BcReactGridColumn<TRow, unknown>
+          error: string
+        }
+      | {
+          kind: "serverError"
+          column: BcReactGridColumn<TRow, unknown>
+          error: string
+        },
+  ) => void
 }
 
 /**
@@ -184,7 +217,14 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       validateAbortRef.current = null
       dispatch({ type: "validateResolved", result })
 
-      if (!result.valid) return
+      if (!result.valid) {
+        options.announce?.({
+          kind: "validationError",
+          column: candidate.column,
+          error: result.error,
+        })
+        return
+      }
 
       // Optimistic overlay update — stored as the parsed value.
       const rowPatch = overlayRef.current.patches.get(candidate.rowId) ?? new Map()
@@ -199,6 +239,15 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       })
       editEntriesRef.current.set(candidate.rowId, rowEntries)
       forceRender()
+
+      const announceCommitted = () =>
+        options.announce?.({
+          kind: "committed",
+          column: candidate.column,
+          row: candidate.row,
+          rowId: candidate.rowId,
+          nextValue: parsedValue,
+        })
 
       const consumerHook = options.onCellEditCommit
       if (consumerHook) {
@@ -221,6 +270,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
             const after = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
             if (after) after.pending = false
             forceRender()
+            announceCommitted()
           } catch (err) {
             // Roll back the overlay on server-side rejection.
             const patches = overlayRef.current.patches.get(candidate.rowId)
@@ -228,16 +278,28 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
             const rollbackEntry = editEntriesRef.current
               .get(candidate.rowId)
               ?.get(candidate.columnId)
+            const rollbackError = err instanceof Error ? err.message : "Server rejected the edit."
             if (rollbackEntry) {
               rollbackEntry.pending = false
-              rollbackEntry.error = err instanceof Error ? err.message : "Server rejected the edit."
+              rollbackEntry.error = rollbackError
             }
             forceRender()
+            options.announce?.({
+              kind: "serverError",
+              column: candidate.column,
+              error: rollbackError,
+            })
           }
+        } else {
+          // Sync consumer hook — announce immediately.
+          announceCommitted()
         }
+      } else {
+        // No consumer hook — overlay update is the final state. Announce.
+        announceCommitted()
       }
     },
-    [options.validate, options.onCellEditCommit],
+    [options.validate, options.onCellEditCommit, options.announce],
   )
 
   // ------- Lifecycle dispatch shortcuts (called from editor portal) --------
