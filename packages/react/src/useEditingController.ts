@@ -1,0 +1,250 @@
+import type { BcCellPosition, BcValidationResult, ColumnId, RowId } from "@bc-grid/core"
+import { useCallback, useReducer, useRef } from "react"
+import {
+  type ActivationSource,
+  type EditEvent,
+  type EditState,
+  type MoveOnSettle,
+  reduceEditState,
+} from "./editingStateMachine"
+import type { BcCellEditCommitEvent, BcReactGridColumn } from "./types"
+
+/**
+ * Per-cell edit metadata. Held in a nested map (RowId → ColumnId → entry)
+ * to avoid the collision risk of flat string keys per `editing-rfc
+ * §Dirty Tracking`.
+ */
+export interface BcCellEditEntry {
+  /** True between commit and `onCellEditCommit` Promise resolution. */
+  pending: boolean
+  /** Validation rejection or server reject. Cleared on successful retry / cancel. */
+  error?: string
+  /** Original value before this edit cycle; used for rollback on server reject. */
+  previousValue?: unknown
+  /** Server-side mutation id once the consumer assigns one. */
+  mutationId?: string
+}
+
+export type BcEditState = Map<RowId, Map<ColumnId, BcCellEditEntry>>
+
+/**
+ * Per-row patch overlay (`editing-rfc §Row-model ownership`). Cell renderers
+ * read patched values transparently; consumers see commits via
+ * `onCellEditCommit` and can mirror into their own state.
+ */
+export interface BcEditOverlay {
+  patches: Map<RowId, Map<ColumnId, unknown>>
+}
+
+export interface UseEditingControllerOptions<TRow> {
+  /**
+   * Sync or async per-cell validator. Receives the candidate value, the
+   * row, and an optional `AbortSignal` for async-cancel. Returning a
+   * `BcValidationResult` (or Promise thereof) drives the state machine.
+   */
+  validate?: (
+    value: unknown,
+    row: TRow,
+    columnId: ColumnId,
+    signal?: AbortSignal,
+  ) => BcValidationResult | Promise<BcValidationResult>
+
+  /**
+   * Consumer commit hook. Invoked after the overlay update lands. May
+   * return a Promise — the cell stays `pending: true` until it settles.
+   * Promise rejection rolls back the overlay and surfaces the error.
+   */
+  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
+}
+
+/**
+ * Editing controller. Owns the lifecycle state machine, per-cell edit
+ * entries, and the row-overlay patch map. Exposes a small imperative API
+ * for grid.tsx to call from activation handlers and the editor portal
+ * to call from commit/cancel.
+ */
+export function useEditingController<TRow>(options: UseEditingControllerOptions<TRow> = {}) {
+  const [editState, dispatch] = useReducer(
+    reduceEditState as (state: EditState<unknown>, event: EditEvent<unknown>) => EditState<unknown>,
+    { mode: "navigation" } satisfies EditState<unknown>,
+  )
+
+  // Mutable refs hold per-cell entries + overlay patches. Mutating them
+  // directly avoids the cost of cloning a nested Map on every keystroke;
+  // the hook bumps a render counter when it needs the JSX to re-read.
+  const editEntriesRef = useRef<BcEditState>(new Map())
+  const overlayRef = useRef<BcEditOverlay>({ patches: new Map() })
+  const [, forceRender] = useReducer((x: number) => x + 1, 0)
+
+  // AbortController for the in-flight async validator. Nulled out at
+  // each new commit / cancel.
+  const validateAbortRef = useRef<AbortController | null>(null)
+
+  // ------- Read API for cell renderers + grid JSX --------------------------
+
+  const getOverlayValue = useCallback((rowId: RowId, columnId: ColumnId): unknown => {
+    const rowPatch = overlayRef.current.patches.get(rowId)
+    return rowPatch?.get(columnId)
+  }, [])
+
+  const hasOverlayValue = useCallback((rowId: RowId, columnId: ColumnId): boolean => {
+    return overlayRef.current.patches.get(rowId)?.has(columnId) ?? false
+  }, [])
+
+  const getCellEditEntry = useCallback(
+    (rowId: RowId, columnId: ColumnId): BcCellEditEntry | undefined => {
+      return editEntriesRef.current.get(rowId)?.get(columnId)
+    },
+    [],
+  )
+
+  // ------- Imperative API for activation / commit / cancel -----------------
+
+  const start = useCallback(
+    (
+      cell: BcCellPosition,
+      activation: ActivationSource,
+      opts?: { seedKey?: string; pointerHint?: { x: number; y: number } },
+    ) => {
+      dispatch({
+        type: "activate",
+        cell,
+        activation,
+        ...(opts?.seedKey != null ? { seedKey: opts.seedKey } : {}),
+        ...(opts?.pointerHint ? { pointerHint: opts.pointerHint } : {}),
+      })
+      // No prepare hook is wired in v0.1 — the controller advances
+      // straight to Mounting on the next dispatch.
+      dispatch({ type: "prepareResolved" })
+      // The editor portal dispatches `mounted` once the component's
+      // useLayoutEffect runs and focusRef is filled.
+    },
+    [],
+  )
+
+  const cancel = useCallback(() => {
+    validateAbortRef.current?.abort()
+    validateAbortRef.current = null
+    dispatch({ type: "cancel" })
+    // Caller dispatches `unmounted` after the editor unmounts via
+    // useLayoutEffect — see editorPortal.
+  }, [])
+
+  /**
+   * Commit a candidate value. Runs `validate` (sync or async). On valid,
+   * applies overlay patch + invokes `onCellEditCommit` (which may return
+   * a Promise — the cell stays `pending: true` until it settles, with
+   * rollback on rejection). On invalid, rejects the commit and re-enters
+   * Editing with the error surfaced on the editor.
+   */
+  const commit = useCallback(
+    async (
+      candidate: {
+        rowId: RowId
+        row: TRow
+        columnId: ColumnId
+        column: BcReactGridColumn<TRow, unknown>
+        value: unknown
+        previousValue: unknown
+      },
+      moveOnSettle: MoveOnSettle,
+    ): Promise<void> => {
+      // Cancel any in-flight async validation from a superseded commit.
+      validateAbortRef.current?.abort()
+      const ac = new AbortController()
+      validateAbortRef.current = ac
+
+      dispatch({ type: "commit", value: candidate.value, moveOnSettle })
+
+      const validator = options.validate
+      let result: BcValidationResult
+      try {
+        result = validator
+          ? await Promise.resolve(
+              validator(candidate.value, candidate.row, candidate.columnId, ac.signal),
+            )
+          : { valid: true }
+      } catch (err) {
+        if (ac.signal.aborted) return // superseded; downstream dispatch handles it
+        const message = err instanceof Error ? err.message : "Validation failed."
+        result = { valid: false, error: message }
+      }
+      if (ac.signal.aborted) return
+      validateAbortRef.current = null
+      dispatch({ type: "validateResolved", result })
+
+      if (!result.valid) return
+
+      // Optimistic overlay update.
+      const rowPatch = overlayRef.current.patches.get(candidate.rowId) ?? new Map()
+      rowPatch.set(candidate.columnId, candidate.value)
+      overlayRef.current.patches.set(candidate.rowId, rowPatch)
+      // Edit entry: clear error, no longer pending unless onCellEditCommit
+      // returns a Promise (set below).
+      const rowEntries = editEntriesRef.current.get(candidate.rowId) ?? new Map()
+      rowEntries.set(candidate.columnId, {
+        pending: false,
+        previousValue: candidate.previousValue,
+      })
+      editEntriesRef.current.set(candidate.rowId, rowEntries)
+      forceRender()
+
+      const consumerHook = options.onCellEditCommit
+      if (consumerHook) {
+        const settle = consumerHook({
+          rowId: candidate.rowId,
+          row: candidate.row,
+          columnId: candidate.columnId,
+          column: candidate.column,
+          previousValue: candidate.previousValue as never,
+          nextValue: candidate.value as never,
+          source: "keyboard",
+        })
+        if (settle && typeof (settle as Promise<void>).then === "function") {
+          // Mark pending until the Promise settles.
+          const entry = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
+          if (entry) entry.pending = true
+          forceRender()
+          try {
+            await settle
+            const after = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
+            if (after) after.pending = false
+            forceRender()
+          } catch (err) {
+            // Roll back the overlay on server-side rejection.
+            const patches = overlayRef.current.patches.get(candidate.rowId)
+            patches?.delete(candidate.columnId)
+            const rollbackEntry = editEntriesRef.current
+              .get(candidate.rowId)
+              ?.get(candidate.columnId)
+            if (rollbackEntry) {
+              rollbackEntry.pending = false
+              rollbackEntry.error = err instanceof Error ? err.message : "Server rejected the edit."
+            }
+            forceRender()
+          }
+        }
+      }
+    },
+    [options.validate, options.onCellEditCommit],
+  )
+
+  // ------- Lifecycle dispatch shortcuts (called from editor portal) --------
+
+  const dispatchMounted = useCallback(() => dispatch({ type: "mounted" }), [])
+  const dispatchUnmounted = useCallback(() => dispatch({ type: "unmounted" }), [])
+
+  return {
+    editState,
+    getOverlayValue,
+    hasOverlayValue,
+    getCellEditEntry,
+    start,
+    commit,
+    cancel,
+    dispatchMounted,
+    dispatchUnmounted,
+  }
+}
+
+export type EditingController<TRow> = ReturnType<typeof useEditingController<TRow>>
