@@ -957,7 +957,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   } = useColumnReorder<TRow>({
     rootRef,
     columns: consumerResolvedColumns,
+    layoutColumns: resolvedColumns,
     columnState,
+    scrollLeft: scrollOffset.left,
+    totalWidth: virtualWindow.totalWidth,
+    viewportWidth: viewport.width,
     setColumnState,
   })
   const openColumnMenu = useCallback(

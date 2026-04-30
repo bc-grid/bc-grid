@@ -198,8 +198,10 @@ export function renderHeaderCell<TRow>({
         <div
           aria-hidden="true"
           className="bc-grid-header-resize-handle"
-          data-bc-grid-resize-handle="true"
-          onPointerDown={(event) => onResizeStart(column, event)}
+          onPointerDown={(event) => {
+            event.stopPropagation()
+            onResizeStart(column, event)
+          }}
           onPointerMove={onResizeMove}
           onPointerUp={onResizeEnd}
           onPointerCancel={onResizeEnd}
