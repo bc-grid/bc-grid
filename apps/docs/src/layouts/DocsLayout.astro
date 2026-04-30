@@ -4,7 +4,14 @@ import "../styles/global.css"
 interface Props {
   title: string
   description: string
-  active: "overview" | "architecture" | "api" | "roadmap" | "migration" | "editor-custom-recipe"
+  active:
+    | "overview"
+    | "architecture"
+    | "api"
+    | "custom-filters"
+    | "editor-custom-recipe"
+    | "roadmap"
+    | "migration"
 }
 
 const { title, description, active } = Astro.props
@@ -13,6 +20,7 @@ const navItems = [
   { href: "/", id: "overview", label: "Overview" },
   { href: "/architecture/", id: "architecture", label: "Architecture" },
   { href: "/api/", id: "api", label: "API" },
+  { href: "/custom-filters/", id: "custom-filters", label: "Custom Filters" },
   { href: "/editor-custom-recipe/", id: "editor-custom-recipe", label: "Custom editor recipe" },
   { href: "/roadmap/", id: "roadmap", label: "Roadmap" },
   { href: "/migration/", id: "migration", label: "Migration" },
