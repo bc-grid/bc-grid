@@ -320,6 +320,7 @@ export interface BcRowState {
   rowId: RowId
   index: number       // absolute index in the row model
   selected: boolean
+  disabled?: boolean
   expanded?: boolean  // tree mode only
   level?: number      // tree depth (1-based)
   pending?: boolean   // optimistic edit in flight
@@ -611,6 +612,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   showInactive?: boolean
   onShowInactiveChange?: (next: boolean) => void
   rowIsInactive?: (row: TRow) => boolean
+  rowIsDisabled?: (row: TRow) => boolean
 
   // Slots
   toolbar?: React.ReactNode

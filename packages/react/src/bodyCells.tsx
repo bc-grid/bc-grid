@@ -28,6 +28,7 @@ interface RenderBodyCellParams<TRow> {
   scrollLeft: number
   searchText: string
   selected: boolean
+  disabled: boolean
   setActiveCell: (next: BcCellPosition | null) => void
   totalWidth: number
   viewportWidth: number
@@ -54,6 +55,7 @@ export function renderBodyCell<TRow>({
   scrollLeft,
   searchText,
   selected,
+  disabled,
   setActiveCell,
   totalWidth,
   viewportWidth,
@@ -73,6 +75,7 @@ export function renderBodyCell<TRow>({
     rowId: entry.rowId,
     index: entry.index,
     selected,
+    disabled,
   }
   const params = {
     value,

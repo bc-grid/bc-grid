@@ -137,6 +137,7 @@ export interface VirtualRowA11yMeta {
   /** 1-based index into the *full* dataset, per ARIA grid pattern. */
   ariaRowIndex: number
   isActive: boolean
+  disabled?: boolean
 }
 
 /**
