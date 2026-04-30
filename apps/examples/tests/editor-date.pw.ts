@@ -1,4 +1,5 @@
 import { type Page, expect, test } from "@playwright/test"
+import { customerRows } from "../src/examples"
 
 /**
  * `editor-date` (`kind: "date"`) from `@bc-grid/editors`. The
@@ -58,6 +59,21 @@ test("editor mounts with the existing cell value normalised to YYYY-MM-DD", asyn
   // editor normalises to YYYY-MM-DD.
   const value = await input.inputValue()
   expect(value).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+})
+
+test.describe("dateEditor timezone handling", () => {
+  test.use({ timezoneId: "America/New_York" })
+
+  test("preserves the ISO calendar date from UTC timestamp strings", async ({ page }) => {
+    await page.goto(URL)
+    await focusBodyCell(page, 0, DATE_COLUMN)
+    await page.keyboard.press("F2")
+
+    const input = page.locator('input[data-bc-grid-editor-input="true"]').first()
+    const expected = customerRows[0]?.lastInvoice.slice(0, 10)
+    if (!expected) throw new Error("expected first fixture row")
+    await expect(input).toHaveValue(expected)
+  })
 })
 
 test("commit persists the new date to the cell display", async ({ page }) => {
