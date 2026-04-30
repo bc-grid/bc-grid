@@ -34,7 +34,7 @@ async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
       `.bc-grid-row[data-row-index="${rowIndex}"] .bc-grid-cell[data-column-id="${columnId}"]`,
     )
     .first()
-  await cell.click()
+  await cell.evaluate((element) => (element as HTMLElement).click())
   await page.locator('[role="grid"]').first().focus()
   return cell
 }
