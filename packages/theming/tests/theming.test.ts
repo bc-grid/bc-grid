@@ -58,6 +58,50 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain('[data-bc-grid-active-cell="true"]')
   })
 
+  test("prefers-reduced-motion block zeroes out motion per accessibility-rfc §Reduced Motion", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    // Locate the last reduced-motion block (the catch-all override) and
+    // assert the three properties the RFC names: transition-duration,
+    // animation-duration, scroll-behavior.
+    const blocks = css.split("@media (prefers-reduced-motion: reduce)")
+    // Splitting on the at-rule gives [before, body1, body2, ...] — at
+    // least one body block must zero each of the three properties.
+    const bodies = blocks.slice(1)
+    expect(bodies.length).toBeGreaterThan(0)
+    const combined = bodies.join("\n")
+    expect(combined).toContain("transition-duration: 0s")
+    expect(combined).toContain("animation-duration: 0s")
+    expect(combined).toContain("scroll-behavior: auto")
+  })
+
+  test("forced-colors block maps to system colors per accessibility-rfc §Forced Colors", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf("@media (forced-colors: active)")
+    expect(idx).toBeGreaterThan(-1)
+    // Take everything after the at-rule for assertion purposes; the
+    // RFC's "Minimum forced-colors CSS contract" names these tokens.
+    const body = css.slice(idx)
+    expect(body).toContain("Canvas")
+    expect(body).toContain("CanvasText")
+    expect(body).toContain("Highlight")
+    expect(body).toContain("HighlightText")
+    // Active cell uses a real outline (not box-shadow) per the RFC's
+    // "Focus indicators use real outlines, not box shadows".
+    expect(body).toMatch(/outline:\s*2px\s+solid\s+Highlight/)
+    expect(body).toContain("outline-offset: -2px")
+  })
+
+  test("pointer: coarse block sets a 44px hit-target minimum per accessibility-rfc §Pointer and Touch Fallback", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf("@media (pointer: coarse)")
+    expect(idx).toBeGreaterThan(-1)
+    const body = css.slice(idx)
+    // Either the literal 44px or the var that's set to 44px in the same block.
+    expect(body).toContain("44px")
+    expect(body).toMatch(/min-width:\s*var\(--bc-grid-hit-target-min\)/)
+    expect(body).toMatch(/min-height:\s*var\(--bc-grid-hit-target-min\)/)
+  })
+
   test("CSS uses the kebab-case class convention from design.md", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     expect(css).toContain(".bc-grid-row")
