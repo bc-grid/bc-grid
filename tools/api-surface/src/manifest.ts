@@ -106,6 +106,7 @@ export const apiSurfaceManifest = [
       "BcGridProps",
       "BcGridSort",
       "BcGridStateProps",
+      "BcGridUrlStatePersistence",
       "BcPaginationState",
       "BcReactFilterDefinition",
       "BcReactGridColumn",

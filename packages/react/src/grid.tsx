@@ -65,7 +65,12 @@ import {
 } from "./gridInternals"
 import { type SortModifiers, renderFilterCell, renderHeaderCell } from "./headerCells"
 import { nextKeyboardNav } from "./keyboard"
-import { readPersistedGridState, usePersistedGridStateWriter } from "./persistence"
+import {
+  readPersistedGridState,
+  readUrlPersistedGridState,
+  usePersistedGridStateWriter,
+  useUrlPersistedGridStateWriter,
+} from "./persistence"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
@@ -104,6 +109,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   const messages = useMemo(() => ({ ...defaultMessages, ...props.messages }), [props.messages])
   const persistedGridState = useMemo(() => readPersistedGridState(props.gridId), [props.gridId])
+  const urlPersistedGridState = useMemo(
+    () => readUrlPersistedGridState(props.urlStatePersistence),
+    [props.urlStatePersistence],
+  )
   const density = props.density ?? persistedGridState.density ?? "normal"
   const instanceId = useId()
   const domBaseId = useMemo(
@@ -133,7 +142,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [sortState, setSortState] = useControlledState<readonly BcGridSort[]>(
     hasProp(props, "sort"),
     props.sort ?? [],
-    props.defaultSort ?? [],
+    props.defaultSort ?? urlPersistedGridState.sort ?? [],
     props.onSortChange,
   )
   const [, setFilterState] = useControlledState<BcGridFilter | null>(
@@ -166,7 +175,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
     props.columnState ?? [],
-    props.defaultColumnState ?? persistedGridState.columnState ?? [],
+    props.defaultColumnState ??
+      urlPersistedGridState.columnState ??
+      persistedGridState.columnState ??
+      [],
     props.onColumnStateChange,
   )
   const [groupByState] = useControlledState<readonly ColumnId[]>(
@@ -214,6 +226,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [density, groupByState, pageSizeState, persistedColumnState],
   )
   usePersistedGridStateWriter(props.gridId, persistenceState)
+  const urlPersistenceState = useMemo(
+    () => ({
+      columnState: persistedColumnState,
+      sort: sortState,
+    }),
+    [persistedColumnState, sortState],
+  )
+  useUrlPersistedGridStateWriter(props.urlStatePersistence, urlPersistenceState)
 
   const columnFilterTypes = useMemo<ColumnFilterTypeByColumnId>(() => {
     const next: Record<ColumnId, BcColumnFilter["type"]> = {}

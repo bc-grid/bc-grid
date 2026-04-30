@@ -87,6 +87,11 @@ function checkboxSelectionEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("checkbox") === "1"
 }
 
+function urlStatePersistenceEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("urlstate") === "1"
+}
+
 function disabledRowsEnabled(): boolean {
   if (typeof window === "undefined") return false
   return new URLSearchParams(window.location.search).get("disabled") === "1"
@@ -120,9 +125,14 @@ function CustomerGridDemo({
   const [selectedCount, setSelectedCount] = useState(0)
   const [activeCustomer, setActiveCustomer] = useState<CustomerRow | null>(customerRows[0] ?? null)
   const rows = customerRows
+  const urlStateEnabled = urlStatePersistenceEnabled()
   const disabledRows = disabledRowsEnabled()
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
+  const urlStatePersistence = useMemo(
+    () => (urlStateEnabled ? { searchParam: "grid" } : undefined),
+    [urlStateEnabled],
+  )
   const rowIsDisabled = useCallback(
     (row: CustomerRow) => disabledRows && row.account === "CUST-00005",
     [disabledRows],
@@ -352,7 +362,7 @@ function CustomerGridDemo({
         </div>
       </div>
 
-      <BcEditGrid
+      <BcEditGrid<CustomerRow>
         ariaLabel="Accounts receivable customer ledger"
         apiRef={apiRef}
         columns={columns}
@@ -360,7 +370,9 @@ function CustomerGridDemo({
         data={rows}
         density={density}
         detailPath="/accounts-receivable/customers"
-        extraActions={(row) => [{ label: "Statement", onSelect: () => handleStatement(row) }]}
+        extraActions={(row: CustomerRow) => [
+          { label: "Statement", onSelect: () => handleStatement(row) },
+        ]}
         gridId="accounts-receivable.customers"
         height={560}
         linkField="legalName"
@@ -369,7 +381,8 @@ function CustomerGridDemo({
         onRowClick={setActiveCustomer}
         onSelectionChange={handleSelectionChange}
         rowIsDisabled={rowIsDisabled}
-        rowId={(row) => row.id}
+        rowId={(row: CustomerRow) => row.id}
+        {...(urlStatePersistence ? { urlStatePersistence } : {})}
       />
 
       {activeCustomer ? <CustomerDetail row={activeCustomer} /> : null}
