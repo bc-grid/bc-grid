@@ -267,6 +267,13 @@ export const headerViewportStyle: CSSProperties = {
   zIndex: 3,
 }
 
+export const autoHeightHeaderViewportStyle: CSSProperties = {
+  ...headerViewportStyle,
+  position: "sticky",
+  top: 0,
+  zIndex: 4,
+}
+
 export function headerRowStyle(width: number, height: number, scrollLeft: number): CSSProperties {
   return {
     height,

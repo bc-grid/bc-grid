@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
   DEFAULT_BODY_HEIGHT,
+  autoHeightHeaderViewportStyle,
+  headerViewportStyle,
   resolveFallbackBodyHeight,
   rootStyle,
   scrollerStyle,
@@ -71,6 +73,27 @@ describe("scrollerStyle", () => {
     expect(style.overflowX).toBe("auto")
     expect(style.overflowY).toBe("hidden")
     expect(style).not.toHaveProperty("height")
+  })
+})
+
+describe("headerViewportStyle", () => {
+  test("fixed-height mode keeps the header in the normal grid flow", () => {
+    expect(headerViewportStyle).toMatchObject({
+      flex: "0 0 auto",
+      overflow: "hidden",
+      position: "relative",
+      zIndex: 3,
+    })
+  })
+
+  test("auto-height mode makes the header sticky above body cells", () => {
+    expect(autoHeightHeaderViewportStyle).toMatchObject({
+      flex: "0 0 auto",
+      overflow: "hidden",
+      position: "sticky",
+      top: 0,
+      zIndex: 4,
+    })
   })
 })
 

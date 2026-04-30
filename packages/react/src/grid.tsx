@@ -55,6 +55,7 @@ import {
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
+  autoHeightHeaderViewportStyle,
   canvasStyle,
   cellDomId,
   classNames,
@@ -1580,7 +1581,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
       <div className="bc-grid-main">
         <div className="bc-grid-table">
-          <div className="bc-grid-header-viewport" role="rowgroup" style={headerViewportStyle}>
+          <div
+            className="bc-grid-header-viewport"
+            role="rowgroup"
+            style={isAutoHeight ? autoHeightHeaderViewportStyle : headerViewportStyle}
+          >
             <div
               className="bc-grid-header"
               role="row"
