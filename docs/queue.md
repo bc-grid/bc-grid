@@ -199,7 +199,7 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 - `[blocked: depends on sidebar-impl]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
 - `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
 - `[ready]` **context-menu-impl** — shadcn `ContextMenu` primitive; right-click + long-press (500ms coarse pointer) + Shift+F10. 4 built-in items + custom factory function. **Effort**: M.
-- `[review: worker2 #152]` **footer-aggregations** — wire the `aggregations` status-bar segment to the aggregation-engine output. **Effort**: S.
+- `[review: worker2 #154]` **footer-aggregations** — wire the `aggregations` status-bar segment to the aggregation-engine output. **Effort**: S.
 
 #### Track 6 — Filters + Export (Q6 pulled forward)
 
