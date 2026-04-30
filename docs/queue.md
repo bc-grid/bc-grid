@@ -210,7 +210,7 @@ Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 - `[ready]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
 - `[ready]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
 - `[ready]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
-- `[ready]` **filter-number-range-impl** — between two numbers. **Effort**: S.
+- `[in-flight: worker2]` **filter-number-range-impl** — between two numbers. **Effort**: S.
 - `[ready]` **filter-text-impl-extend** — extend the existing inline text filter with operators (contains / starts-with / ends-with / equals / regex toggle / case-sensitivity toggle). **Effort**: S.
 - `[ready]` **filter-custom-extension-example** — recipe in `apps/docs` showing how to register a custom filter type. **Effort**: S.
 - `[ready]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
