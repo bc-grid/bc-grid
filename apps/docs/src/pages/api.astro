@@ -275,7 +275,12 @@ const columnProps = [
   ["comparator", "(a, b, rowA, rowB) => number", "implemented", "Custom sort comparator."],
   ["valueGetter", "(row) => TValue", "implemented", "Computes raw value."],
   ["valueFormatter", "(value, row) => string", "implemented", "Formats displayed/exportable text."],
-  ["valueParser", "(input, row) => TValue", "reserved", "Reserved Q2 editing."],
+  [
+    "valueParser",
+    "(input, row) => TValue",
+    "implemented",
+    "Bridges editor string output to typed TValue at commit. Runs before validate; bypassed when the editor produces a typed value directly.",
+  ],
   [
     "format",
     "BcColumnFormat",
@@ -283,12 +288,17 @@ const columnProps = [
     "Preset display formatting. Custom date pattern fields are accepted by the type but not yet interpreted.",
   ],
   ["cellClass", "string | function", "implemented", "Core semantic class hook."],
-  ["editable", "boolean | function", "reserved", "Reserved Q2 editing."],
+  [
+    "editable",
+    "boolean | function",
+    "implemented",
+    "Activates the editor framework on this column. F2 / Enter / printable / dblclick mounts the editor.",
+  ],
   [
     "validate",
-    "(newValue, row) => BcValidationResult",
-    "reserved",
-    "Reserved Q2 editing validation.",
+    "(newValue, row, signal?) => BcValidationResult | Promise<BcValidationResult>",
+    "implemented",
+    "Sync or async per-cell validation at commit time. The optional AbortSignal lets long-running validators cancel when superseded.",
   ],
   ["aggregation", "BcAggregation", "reserved", "Reserved Q5 aggregation work."],
   [
@@ -325,7 +335,12 @@ const reactColumnProps = [
     "implemented",
     "Inline style hook. Prefer class names for hot paths.",
   ],
-  ["cellEditor", "BcCellEditor", "reserved", "Reserved Q2 editor protocol."],
+  [
+    "cellEditor",
+    "BcCellEditor",
+    "implemented",
+    "Per-column editor factory. Use kinds from @bc-grid/editors (textEditor, numberEditor, dateEditor, timeEditor) or supply a custom BcCellEditor.",
+  ],
 ]
 
 const editGridProps = [
@@ -547,31 +562,31 @@ const editingProtocol = [
     "BcCellEditor",
     "Component, optional prepare(params), optional kind.",
     "reserved",
-    "Q2 editor factories consume this protocol.",
+    "Editor factories consume this protocol. Built-in factories ship in @bc-grid/editors.",
   ],
   [
     "BcCellEditorPrepareParams",
     "row, rowId, columnId.",
-    "reserved",
+    "implemented",
     "Passed to editor prepare before mount.",
   ],
   [
     "BcCellEditorProps",
-    "initialValue, row, rowId, column, commit, cancel, error, focusRef.",
-    "reserved",
-    "Editor component props for Q2.",
+    "initialValue, row, rowId, column, commit, cancel, error, focusRef, seedKey, pointerHint, prepareResult, pending.",
+    "implemented",
+    "Editor component props. The four trailing fields are populated by the framework's lifecycle (activation seeding, async-validation pending, etc.).",
   ],
   [
     "BcCellEditCommitEvent",
     "rowId, row, columnId, column, previousValue, nextValue, source.",
-    "reserved",
-    "Post-commit event reserved for Q2.",
+    "implemented",
+    "Post-commit event fired by BcEditGrid after the framework applies the overlay patch. Returning a Promise marks the cell pending until it settles; rejection rolls back.",
   ],
   [
     "BcValidationResult",
     "{ valid: true } or { valid: false; error }.",
-    "reserved",
-    "Column validate() result for Q2.",
+    "implemented",
+    "Column validate() result. Sync or async (Promise<BcValidationResult>) supported.",
   ],
 ]
 
@@ -660,9 +675,9 @@ const packageExports = [
   ],
   [
     "@bc-grid/editors",
-    "reserved",
-    "Reserved Q2 editor factories: textEditor, numberEditor, dateEditor, datetimeEditor, selectEditor, multiSelectEditor, autocompleteEditor.",
-    "No v0.1 runtime exports.",
+    "implemented",
+    "v0.1: textEditor, numberEditor, dateEditor, timeEditor. Pending PRs add datetimeEditor + selectEditor; multiSelectEditor + autocompleteEditor follow.",
+    "Native-input leaf editors. No library dep — theme via @bc-grid/theming CSS variables. Use via column.cellEditor.",
   ],
   ["@bc-grid/enterprise", "reserved", "Reserved Q5+ enterprise features.", "No v0.1 exports."],
 ]
