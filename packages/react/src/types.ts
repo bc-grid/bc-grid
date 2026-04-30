@@ -182,6 +182,14 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * checkbox does not trigger the row-click selection logic.
    */
   checkboxSelection?: boolean
+
+  /**
+   * Flash the cell briefly when an edit commits, per
+   * `editing-rfc §Edit-cell paint perf`. Off by default. Uses the
+   * `flash` primitive from `@bc-grid/animations`, which already
+   * respects `prefers-reduced-motion`.
+   */
+  flashOnEdit?: boolean
 }
 
 export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
