@@ -122,6 +122,7 @@ function CustomerGridDemo({
 }) {
   const apiRef = useBcGridApi<CustomerRow>()
   const [lastAction, setLastAction] = useState("Ready")
+  const [searchText, setSearchText] = useState("")
   const [selectedCount, setSelectedCount] = useState(0)
   const [activeCustomer, setActiveCustomer] = useState<CustomerRow | null>(customerRows[0] ?? null)
   const rows = customerRows
@@ -344,6 +345,15 @@ function CustomerGridDemo({
         </div>
 
         <div className="demo-controls">
+          <label className="search-control">
+            <span>Search</span>
+            <input
+              type="search"
+              value={searchText}
+              onChange={(event) => setSearchText(event.currentTarget.value)}
+              placeholder="Customer, account, collector"
+            />
+          </label>
           <SegmentedControl
             label="Mode"
             options={themeModes}
@@ -382,6 +392,7 @@ function CustomerGridDemo({
         onSelectionChange={handleSelectionChange}
         rowIsDisabled={rowIsDisabled}
         rowId={(row: CustomerRow) => row.id}
+        searchText={searchText}
         {...(urlStatePersistence ? { urlStatePersistence } : {})}
       />
 

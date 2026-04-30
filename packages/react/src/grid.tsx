@@ -71,6 +71,7 @@ import {
   usePersistedGridStateWriter,
   useUrlPersistedGridStateWriter,
 } from "./persistence"
+import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
@@ -248,6 +249,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => buildGridFilter(columnFilterText, columnFilterTypes),
     [columnFilterText, columnFilterTypes],
   )
+  const searchText = props.searchText ?? props.defaultSearchText ?? ""
 
   const rowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
     let visibleRows: TRow[] =
@@ -267,6 +269,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           const value = getCellValue(row, column.source)
           return formatCellValue(value, row, column.source, locale)
         }),
+      )
+    }
+
+    if (searchText.trim()) {
+      const searchableColumns = consumerResolvedColumns.filter(
+        (column) => column.source.filter !== false,
+      )
+      visibleRows = visibleRows.filter((row) =>
+        matchesSearchText(
+          searchText,
+          searchableColumns.map((column) => {
+            const value = getCellValue(row, column.source)
+            return formatCellValue(value, row, column.source, locale)
+          }),
+        ),
       )
     }
 
@@ -304,6 +321,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     consumerResolvedColumns,
     rowId,
     rowIsInactive,
+    searchText,
     sortState,
   ])
 
@@ -930,7 +948,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     entry,
                     locale,
                     onCellFocus,
-                    searchText: props.searchText ?? props.defaultSearchText ?? "",
+                    searchText,
                     scrollLeft: scrollOffset.left,
                     setActiveCell,
                     totalWidth: virtualWindow.totalWidth,
