@@ -97,16 +97,18 @@ export function rowsToChartData<TRow>(
     return { categories: [], series: [], truncated: false }
   }
 
+  const columnMap = columnsById(columns)
   const valueColumns = valueColumnIds
-    .map((id) => columnsById(columns).get(id))
-    .filter((column): column is BcGridColumn<TRow> => column !== undefined)
+    .map((id) => {
+      const column = columnMap.get(id)
+      return column ? { column, id } : null
+    })
+    .filter((entry): entry is { column: BcGridColumn<TRow>; id: ColumnId } => entry !== null)
   if (valueColumns.length === 0) {
     return { categories: [], series: [], truncated: false }
   }
 
-  const categoryColumn = config.categoryColumn
-    ? columnsById(columns).get(config.categoryColumn)
-    : undefined
+  const categoryColumn = config.categoryColumn ? columnMap.get(config.categoryColumn) : undefined
 
   const groups = groupRowsByCategory(rows, categoryColumn)
   const aggregateContext = config.locale ? { locale: config.locale } : {}
@@ -114,8 +116,7 @@ export function rowsToChartData<TRow>(
   const valuesByCategory = new Map<string, Map<ColumnId, number | null>>()
   for (const [category, groupRows] of groups) {
     const seriesValues = new Map<ColumnId, number | null>()
-    for (const valueColumn of valueColumns) {
-      const colId = identifyColumn(valueColumn)
+    for (const { column: valueColumn, id: colId } of valueColumns) {
       const aggregation = resolveAggregation(config, valueColumn, colId)
       const colWithAgg: BcGridColumn<TRow> = { ...valueColumn, aggregation }
       const [result] = aggregateColumns(groupRows, [colWithAgg], aggregateContext)
@@ -132,8 +133,7 @@ export function rowsToChartData<TRow>(
   const truncated = orderedCategories.length > maxCategories
   const finalCategories = truncated ? orderedCategories.slice(0, maxCategories) : orderedCategories
 
-  const series: BcChartSeries[] = valueColumns.map((valueColumn) => {
-    const colId = identifyColumn(valueColumn)
+  const series: BcChartSeries[] = valueColumns.map(({ column: valueColumn, id: colId }) => {
     const aggregation = resolveAggregation(config, valueColumn, colId)
     const values = finalCategories.map(
       (category) => valuesByCategory.get(category)?.get(colId) ?? null,

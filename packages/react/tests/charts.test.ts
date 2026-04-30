@@ -98,6 +98,29 @@ describe("rowsToChartData — flat row aggregation", () => {
     expect(result.categories).toEqual(["South", "North"])
     expect(result.series[0]?.values).toEqual([7, 12])
   })
+
+  test("preserves configured fallback ids for valueGetter-only columns", () => {
+    const getterColumns: readonly BcGridColumn<{ label: string; amount: number }>[] = [
+      { header: "Label", valueGetter: (row) => row.label },
+      { header: "Amount", valueGetter: (row) => row.amount, aggregation: { type: "sum" } },
+    ]
+    const result = rowsToChartData(
+      [
+        { label: "A", amount: 1 },
+        { label: "A", amount: 2 },
+        { label: "B", amount: 3 },
+      ],
+      getterColumns,
+      {
+        categoryColumn: "column-0",
+        valueColumns: ["column-1"],
+      },
+    )
+    expect(result.categories).toEqual(["A", "B"])
+    expect(result.series[0]?.id).toBe("column-1")
+    expect(result.series[0]?.label).toBe("Sum of Amount")
+    expect(result.series[0]?.values).toEqual([3, 3])
+  })
 })
 
 describe("rowsToChartData — aggregation overrides", () => {
