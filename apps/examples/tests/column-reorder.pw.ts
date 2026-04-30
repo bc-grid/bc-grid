@@ -29,22 +29,28 @@ test("column reorder persists through columnState storage", async ({ page }) => 
   await dragHeaderBefore(page, "Region", "Customer")
 
   await expect
-    .poll(() =>
-      page.evaluate((id) => window.localStorage.getItem(`bc-grid:${id}:columnState`), gridId),
-    )
-    .not.toBeNull()
-  const columnState = await page.evaluate((id) => {
-    const raw = window.localStorage.getItem(`bc-grid:${id}:columnState`)
-    return raw ? (JSON.parse(raw) as { columnId: string; position?: number }[]) : []
-  }, gridId)
-
-  const region = columnState.find((entry) => entry.columnId === "region")
-  const customer = columnState.find((entry) => entry.columnId === "legalName")
-  expect(region?.position).toBeLessThan(customer?.position ?? Number.POSITIVE_INFINITY)
+    .poll(async () => {
+      const columnState = await readPersistedColumnState(page)
+      const region = columnState.find((entry) => entry.columnId === "region")
+      const customer = columnState.find((entry) => entry.columnId === "legalName")
+      return (
+        typeof region?.position === "number" &&
+        typeof customer?.position === "number" &&
+        region.position < customer.position
+      )
+    })
+    .toBe(true)
 
   await page.reload()
   await expectHeaderOrder(page, ["account", "region", "legalName", "tradingName", "owner"])
 })
+
+async function readPersistedColumnState(page: Page) {
+  return page.evaluate((id) => {
+    const raw = window.localStorage.getItem(`bc-grid:${id}:columnState`)
+    return raw ? (JSON.parse(raw) as { columnId: string; position?: number }[]) : []
+  }, gridId)
+}
 
 async function dragHeaderBefore(page: Page, sourceName: string, targetName: string) {
   const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
