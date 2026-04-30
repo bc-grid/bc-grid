@@ -101,6 +101,7 @@ import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
+import { BcStatusBar } from "./statusBar"
 import type { BcCellEditCommitEvent, BcGridProps, BcReactGridColumn } from "./types"
 import { useEditingController } from "./useEditingController"
 import { formatCellValue, getCellValue } from "./value"
@@ -839,6 +840,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   useEffect(() => assignRef(apiRef, api), [apiRef, api])
 
+  // Status-bar render context per `chrome-rfc §Status bar`. Aggregations
+  // are intentionally empty here; `footer-aggregations` (Track 5) is the
+  // task that wires `aggregationResults` through.
+  const statusBarContext = useMemo(
+    () => ({
+      api,
+      totalRowCount: data.length,
+      filteredRowCount: allRowEntries.length,
+      selectedRowCount: computeSelectedRowCount(selectionState, data.length, allRowEntries.length),
+      aggregations: [] as const,
+    }),
+    [api, allRowEntries.length, data.length, selectionState],
+  )
+
   const handlePaginationChange = useCallback(
     (next: BcPaginationState) => {
       const normalized = getPaginationWindow(allRowEntries.length, next.page, next.pageSize)
@@ -1398,6 +1413,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         />
       ) : null}
 
+      {props.statusBar && props.statusBar.length > 0 ? (
+        <BcStatusBar
+          segments={props.statusBar}
+          ctx={statusBarContext}
+          ariaLabel={messages.statusBarLabel}
+        />
+      ) : null}
+
       {columnMenu ? (
         <ColumnVisibilityMenu
           anchor={columnMenu}
@@ -1480,6 +1503,20 @@ function isCellEditable<TRow>(
   const editable = column.source.editable
   if (typeof editable === "function") return editable(row)
   return editable === true
+}
+
+/**
+ * Selected-row count for the status bar across selection modes:
+ * `explicit` → set size; `all`/`filtered` → population minus exceptions.
+ */
+function computeSelectedRowCount(
+  selection: BcSelection,
+  totalRows: number,
+  filteredRows: number,
+): number {
+  if (selection.mode === "explicit") return selection.rowIds.size
+  const population = selection.mode === "all" ? totalRows : filteredRows
+  return Math.max(0, population - selection.except.size)
 }
 
 function buildColumnVisibilityItems<TRow>(

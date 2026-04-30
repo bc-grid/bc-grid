@@ -55,6 +55,7 @@ export const defaultMessages: BcGridMessages = {
   actionColumnLabel: "Actions",
   editLabel: "Edit",
   deleteLabel: "Delete",
+  statusBarLabel: "Grid status",
   sortAnnounce: ({ columnLabel, direction }) =>
     `Sorted by ${columnLabel} ${direction === "asc" ? "ascending" : "descending"}.`,
   sortClearedAnnounce: () => "Sorting cleared.",

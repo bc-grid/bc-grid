@@ -28,6 +28,10 @@
   --bc-grid-header-font-size: 0.75rem;
   --bc-grid-columns: minmax(7rem, 0.8fr) minmax(12rem, 1.4fr) minmax(6rem, 0.75fr)
     minmax(7rem, 0.75fr) minmax(7rem, 0.8fr);
+  --bc-grid-statusbar-height: 32px;
+  --bc-grid-statusbar-bg: var(--bc-grid-muted);
+  --bc-grid-statusbar-fg: var(--bc-grid-muted-fg);
+  --bc-grid-statusbar-border-top: var(--bc-grid-border);
 
   overflow: hidden;
   border: 1px solid var(--bc-grid-border);
@@ -43,6 +47,7 @@
   --bc-grid-header-height: 34px;
   --bc-grid-cell-padding-x: 8px;
   --bc-grid-font-size: 0.8125rem;
+  --bc-grid-statusbar-height: 28px;
 }
 
 .bc-grid--normal,
@@ -50,6 +55,7 @@
   --bc-grid-row-height: 36px;
   --bc-grid-header-height: 40px;
   --bc-grid-cell-padding-x: 12px;
+  --bc-grid-statusbar-height: 32px;
 }
 
 .bc-grid--comfortable,
@@ -58,6 +64,7 @@
   --bc-grid-header-height: 48px;
   --bc-grid-cell-padding-x: 16px;
   --bc-grid-font-size: 0.9375rem;
+  --bc-grid-statusbar-height: 36px;
 }
 
 .bc-grid-header,
@@ -660,6 +667,9 @@
     --bc-grid-status-posted-fg: CanvasText;
     --bc-grid-status-held-bg: Canvas;
     --bc-grid-status-held-fg: CanvasText;
+    --bc-grid-statusbar-bg: Canvas;
+    --bc-grid-statusbar-fg: CanvasText;
+    --bc-grid-statusbar-border-top: CanvasText;
   }
 
   .bc-grid,
@@ -679,4 +689,65 @@
   .bc-grid-status {
     border: 1px solid CanvasText;
   }
+
+  .bc-grid-statusbar {
+    border-top: 1px solid CanvasText;
+  }
+
+  .bc-grid-statusbar-segment + .bc-grid-statusbar-segment {
+    border-left: 1px solid ButtonText;
+  }
+}
+
+/*
+ * Footer status bar per `chrome-rfc §Status bar`. Renders below the
+ * scroller (and the in-grid aggregation footer row) and above any
+ * consumer `footer` slot. Pure visual surface — announcements route
+ * through the central polite live region, not aria-live on this root.
+ */
+.bc-grid-statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: var(--bc-grid-statusbar-height);
+  padding-inline: var(--bc-grid-cell-padding-x);
+  gap: 0.75rem;
+  background: var(--bc-grid-statusbar-bg);
+  border-top: 1px solid var(--bc-grid-statusbar-border-top);
+  color: var(--bc-grid-statusbar-fg);
+  font-size: var(--bc-grid-header-font-size);
+  line-height: 1.2;
+}
+
+.bc-grid-statusbar-segment {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding-block: 0.25rem;
+}
+
+.bc-grid-statusbar-segment[data-align="right"] {
+  margin-left: auto;
+}
+
+.bc-grid-statusbar-segment-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.bc-grid-statusbar-aggregation + .bc-grid-statusbar-aggregation {
+  margin-left: 0.25rem;
+}
+
+.bc-grid-statusbar-aggregation-label {
+  color: var(--bc-grid-statusbar-fg);
+  text-transform: uppercase;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+
+.bc-grid-statusbar-aggregation-value {
+  color: var(--bc-grid-fg);
+  font-variant-numeric: tabular-nums;
 }
