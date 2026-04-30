@@ -78,6 +78,7 @@ import {
 } from "./gridInternals"
 import {
   type ColumnMenuAnchor,
+  FilterPopup,
   type SortModifiers,
   renderFilterCell,
   renderHeaderCell,
@@ -199,6 +200,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // canonical `BcGridFilter` shape via `buildGridFilter` and surfaced
   // through `setFilterState` whenever it changes.
   const [columnFilterText, setColumnFilterText] = useState<ColumnFilterText>({})
+  // Filter-popup anchor + columnId for `column.filter.variant === "popup"`
+  // columns per `filter-popup-variant`. Null when no popup is open.
+  const [filterPopupState, setFilterPopupState] = useState<{
+    columnId: ColumnId
+    anchor: DOMRect
+  } | null>(null)
   const [selectionState, setSelectionState] = useControlledState<BcSelection>(
     hasProp(props, "selection"),
     props.selection ?? createEmptySelection(),
@@ -472,6 +479,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     selection: selectionState,
   })
   const hasAggregationFooter = aggregationResults.length > 0
+
+  // Whether the inline filter row should render at all. Per
+  // `filter-popup-variant`: when every filterable column is variant="popup"
+  // (or filter:false), the inline row collapses entirely. Any other case —
+  // mixed inline/popup or all inline — keeps the row.
+  const hasInlineFilters = useMemo(
+    () =>
+      resolvedColumns.some(
+        (column) =>
+          column.source.filter !== false &&
+          column.source.filter != null &&
+          (column.source.filter as BcColumnFilter).variant !== "popup",
+      ),
+    [resolvedColumns],
+  )
 
   const columnIndexById = useMemo(() => {
     const map = new Map<(typeof resolvedColumns)[number]["columnId"], number>()
@@ -1102,7 +1124,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       role="grid"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
-      aria-rowcount={rowEntries.length + 2 + (hasAggregationFooter ? 1 : 0)}
+      aria-rowcount={
+        rowEntries.length + (hasInlineFilters ? 2 : 1) + (hasAggregationFooter ? 1 : 0)
+      }
       aria-colcount={resolvedColumns.length}
       aria-activedescendant={activeCellId}
       tabIndex={0}
@@ -1140,6 +1164,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               sortState,
               totalWidth: virtualWindow.totalWidth,
               viewportWidth: viewport.width,
+              filterText: columnFilterText[column.columnId] ?? "",
+              filterPopupOpen: filterPopupState?.columnId === column.columnId,
+              onOpenFilterPopup: (col, anchor) =>
+                setFilterPopupState((prev) =>
+                  prev?.columnId === col.columnId ? null : { columnId: col.columnId, anchor },
+                ),
             }),
           )}
         </div>
@@ -1153,28 +1183,30 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             }}
           />
         ) : null}
-        <div
-          className="bc-grid-filter-row"
-          role="row"
-          aria-rowindex={2}
-          style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
-        >
-          {resolvedColumns.map((column, index) =>
-            renderFilterCell({
-              column,
-              domBaseId,
-              filterText: columnFilterText[column.columnId] ?? "",
-              headerHeight,
-              index,
-              onFilterChange: (next) =>
-                setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
-              pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
-              scrollLeft: scrollOffset.left,
-              totalWidth: virtualWindow.totalWidth,
-              viewportWidth: viewport.width,
-            }),
-          )}
-        </div>
+        {hasInlineFilters ? (
+          <div
+            className="bc-grid-filter-row"
+            role="row"
+            aria-rowindex={2}
+            style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
+          >
+            {resolvedColumns.map((column, index) =>
+              renderFilterCell({
+                column,
+                domBaseId,
+                filterText: columnFilterText[column.columnId] ?? "",
+                headerHeight,
+                index,
+                onFilterChange: (next) =>
+                  setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
+                pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
+                scrollLeft: scrollOffset.left,
+                totalWidth: virtualWindow.totalWidth,
+                viewportWidth: viewport.width,
+              }),
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -1379,6 +1411,38 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       >
         {assertiveMessage}
       </div>
+      {filterPopupState
+        ? (() => {
+            const popupColumn = resolvedColumns.find(
+              (column) => column.columnId === filterPopupState.columnId,
+            )
+            if (!popupColumn) return null
+            const popupFilter = popupColumn.source.filter
+            if (!popupFilter) return null
+            const popupColumnId = filterPopupState.columnId
+            const popupLabel = `Filter ${typeof popupColumn.source.header === "string" ? popupColumn.source.header : popupColumnId}`
+            return (
+              <FilterPopup
+                anchor={filterPopupState.anchor}
+                columnId={popupColumnId}
+                filterType={popupFilter.type}
+                filterText={columnFilterText[popupColumnId] ?? ""}
+                filterLabel={popupLabel}
+                onFilterChange={(next) =>
+                  setColumnFilterText((prev) => ({ ...prev, [popupColumnId]: next }))
+                }
+                onClear={() => {
+                  setColumnFilterText((prev) => {
+                    const { [popupColumnId]: _drop, ...rest } = prev
+                    return rest
+                  })
+                  setFilterPopupState(null)
+                }}
+                onClose={() => setFilterPopupState(null)}
+              />
+            )
+          })()
+        : null}
     </div>
   )
 }
