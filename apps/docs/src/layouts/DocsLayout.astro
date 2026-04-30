@@ -4,7 +4,7 @@ import "../styles/global.css"
 interface Props {
   title: string
   description: string
-  active: "overview" | "architecture" | "api" | "roadmap"
+  active: "overview" | "architecture" | "api" | "roadmap" | "migration"
 }
 
 const { title, description, active } = Astro.props
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/architecture/", id: "architecture", label: "Architecture" },
   { href: "/api/", id: "api", label: "API" },
   { href: "/roadmap/", id: "roadmap", label: "Roadmap" },
+  { href: "/migration/", id: "migration", label: "Migration" },
 ]
 ---
 
