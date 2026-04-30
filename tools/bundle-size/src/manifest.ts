@@ -14,7 +14,11 @@ export interface BundleSizeManifest {
 export const bundleSizeManifest: BundleSizeManifest = {
   name: "core+virtualizer+animations+react",
   budgetGzipBytes: 60 * 1024,
-  maxRegressionPercent: 5,
+  // 10% during the v1 parity sprint (per `design.md §13` 2026-04-30 entry):
+  // the API surface is intentionally growing; +5% per PR was blocking
+  // legitimate feature work. Tightens back to 5% once we're at 80% of
+  // the 60 KB total budget OR the sprint ends, whichever comes first.
+  maxRegressionPercent: 10,
   entries: [
     {
       packageName: "@bc-grid/core",
