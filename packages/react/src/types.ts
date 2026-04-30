@@ -80,13 +80,14 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
   aggregationFormatter?: (params: BcAggregationFormatterParams<TRow, TValue>) => ReactNode
   /**
    * Static or per-row option list for `editor-select` / `editor-multi-select`
-   * / `editor-autocomplete` per `editing-rfc §editor-select`. Either a flat
-   * array (same options on every row) or a row-fn (per-row options driven
-   * by the row's other fields).
+   * / `editor-autocomplete` per `editing-rfc §editor-select`. Option values
+   * are string-backed because native `<select>` commits through
+   * HTMLSelectElement.value; use column.valueParser to map to non-string
+   * domain values.
    */
   options?:
-    | readonly { value: TValue; label: string }[]
-    | ((row: TRow) => readonly { value: TValue; label: string }[])
+    | readonly { value: string; label: string }[]
+    | ((row: TRow) => readonly { value: string; label: string }[])
 }
 
 export type BcGridColumn<TRow, TValue = unknown> = BcReactGridColumn<TRow, TValue>

@@ -19,10 +19,9 @@ import { type CSSProperties, useEffect, useLayoutEffect, useRef } from "react"
  *     current value isn't in the options list, the select renders with
  *     no selection (browsers typically default to the first option's
  *     visual state but preserve the empty internal value).
- *   - Commit produces the selected option's `value` (typed `TValue`).
- *     This is a typed editor — `valueParser` doesn't fire on commit
- *     (the framework only runs valueParser when the editor produces
- *     a string).
+ *   - Commit produces the selected option's string `value`. Consumers
+ *     with non-string domain values can use `column.valueParser` to map
+ *     that string back to `TValue` before validation / commit.
  *
  * No library dep. Browser variance: Chrome / Firefox use a styled
  * dropdown; Safari uses a native popover; mobile browsers use the
@@ -58,7 +57,8 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   // supply options.
   const optionsSource = (column as { options?: unknown }).options
   const options = resolveOptions(optionsSource, row)
-  const initialString = optionToString(initialValue)
+  const initialString = valueToSelectString(initialValue)
+  const hasInitialOption = options.some((option) => option.value === initialString)
 
   return (
     <select
@@ -70,8 +70,13 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
       data-bc-grid-editor-kind="select"
       style={selectStyle}
     >
+      {!hasInitialOption ? (
+        <option value="" disabled hidden>
+          Select...
+        </option>
+      ) : null}
       {options.map((option) => (
-        <option key={optionToString(option.value)} value={optionToString(option.value)}>
+        <option key={option.value} value={option.value}>
           {option.label}
         </option>
       ))}
@@ -82,12 +87,12 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
 function resolveOptions(
   source: unknown,
   row: unknown,
-): readonly { value: unknown; label: string }[] {
-  if (Array.isArray(source)) return source as { value: unknown; label: string }[]
+): readonly { value: string; label: string }[] {
+  if (Array.isArray(source)) return normaliseOptions(source)
   if (typeof source === "function") {
     try {
       const resolved = (source as (row: unknown) => unknown)(row)
-      if (Array.isArray(resolved)) return resolved as { value: unknown; label: string }[]
+      if (Array.isArray(resolved)) return normaliseOptions(resolved)
     } catch {
       // Bad option-fn — render no options rather than crashing the cell.
     }
@@ -95,16 +100,20 @@ function resolveOptions(
   return []
 }
 
-/**
- * `<option value="...">` requires a string. Coerce the typed value
- * for the DOM attr; the framework's commit path uses the matching
- * option's `.value` (the typed value), not this string.
- */
-function optionToString(value: unknown): string {
+function normaliseOptions(source: readonly unknown[]): readonly { value: string; label: string }[] {
+  return source.flatMap((option) => {
+    if (!option || typeof option !== "object") return []
+    const value = (option as { value?: unknown }).value
+    const label = (option as { label?: unknown }).label
+    if (typeof value !== "string" || typeof label !== "string") return []
+    return [{ value, label }]
+  })
+}
+
+function valueToSelectString(value: unknown): string {
   if (value == null) return ""
   if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
-  return JSON.stringify(value)
+  return String(value)
 }
 
 const selectStyle: CSSProperties = {
