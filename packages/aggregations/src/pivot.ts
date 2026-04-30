@@ -123,7 +123,7 @@ function resolvePivotValues<TRow>(
       {
         aggregation: aggregation as Aggregation<TRow, unknown, unknown, unknown>,
         column,
-        ctx: createAggregationContext(column, options),
+        ctx: { ...createAggregationContext(column, options), columnId: value.columnId },
       },
     ]
   })

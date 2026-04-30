@@ -134,4 +134,23 @@ describe("pivot", () => {
     expect(resultValue(data, ["East"], [], 0)).toBe(350)
     expect(resultValue(data, ["East"], [], 1)).toBe(3)
   })
+
+  test("preserves generated IDs for valueGetter-only pivot values", () => {
+    const computedColumns = [
+      {
+        aggregation: { type: "sum" },
+        header: "Computed Amount",
+        valueGetter: (row: SaleRow) => row.amount * 2,
+      },
+    ] satisfies readonly BcGridColumn<SaleRow>[]
+
+    const data = pivot(rows, computedColumns, {
+      colGroups: [],
+      rowGroups: [],
+      values: [{ columnId: "column-0" }],
+    })
+
+    expect(data.cells[0]?.results[0]?.columnId).toBe("column-0")
+    expect(data.cells[0]?.results[0]?.value).toBe(750)
+  })
 })
