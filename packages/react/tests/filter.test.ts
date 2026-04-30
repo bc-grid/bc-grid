@@ -251,6 +251,22 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(betweenFilter, lookup({ lastInvoice: "Apr 1, 2026" }))).toBe(false)
   })
 
+  test("date filters prefer raw values over locale-formatted display values", () => {
+    const filter = buildGridFilter(
+      { lastInvoice: encodeDateFilterInput({ op: "is", value: "2026-03-31" }) },
+      { lastInvoice: "date" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "31.03.2026",
+        rawValue: "2026-03-31T00:00:00.000Z",
+      })),
+    ).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "31.03.2026" }))).toBe(false)
+  })
+
   test("unknown op is rejected (Q2 follow-up)", () => {
     const filter = {
       kind: "column" as const,

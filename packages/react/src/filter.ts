@@ -31,6 +31,13 @@ export interface NumberFilterInput {
   valueTo?: string
 }
 
+export type FilterCellValue =
+  | string
+  | {
+      formattedValue: string
+      rawValue?: unknown
+    }
+
 type DateColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "date" }
 type NumberColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "number" }
 
@@ -79,23 +86,24 @@ export function buildGridFilter(
  * Unsupported types / ops fall through to "no match" so new public API
  * shapes can be introduced intentionally.
  */
-function matchesColumnFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
+function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFilter): boolean {
+  const value = normaliseFilterCellValue(cellValue)
   if (filter.type === "boolean") {
     if (filter.op !== "is") return false
-    const actual = parseFormattedBoolean(formattedValue)
+    const actual = parseFormattedBoolean(value.formattedValue)
     return actual != null && actual === Boolean(filter.value)
   }
   if (filter.type === "number") {
-    return matchesNumberFilter(formattedValue, filter)
+    return matchesNumberFilter(value.formattedValue, filter)
   }
   if (filter.type === "date") {
-    return matchesDateFilter(formattedValue, filter)
+    return matchesDateFilter(value, filter)
   }
   if (filter.type !== "text") return false
   if (filter.op !== "contains") return false
   const needle = String(filter.value ?? "").toLowerCase()
   if (needle.length === 0) return true
-  return formattedValue.toLowerCase().includes(needle)
+  return value.formattedValue.toLowerCase().includes(needle)
 }
 
 /**
@@ -106,19 +114,22 @@ function matchesColumnFilter(formattedValue: string, filter: ServerColumnFilter)
  */
 export function matchesGridFilter(
   filter: BcGridFilter,
-  formattedValueByColumnId: (columnId: ColumnId) => string,
+  valueByColumnId: (columnId: ColumnId) => FilterCellValue,
 ): boolean {
   if (filter.kind === "column") {
-    return matchesColumnFilter(formattedValueByColumnId(filter.columnId), filter)
+    return matchesColumnFilter(valueByColumnId(filter.columnId), filter)
   }
   if (filter.op === "and") {
-    return filter.filters.every((child: ServerFilter) =>
-      matchesGridFilter(child, formattedValueByColumnId),
-    )
+    return filter.filters.every((child: ServerFilter) => matchesGridFilter(child, valueByColumnId))
   }
-  return filter.filters.some((child: ServerFilter) =>
-    matchesGridFilter(child, formattedValueByColumnId),
-  )
+  return filter.filters.some((child: ServerFilter) => matchesGridFilter(child, valueByColumnId))
+}
+
+function normaliseFilterCellValue(value: FilterCellValue): {
+  formattedValue: string
+  rawValue?: unknown
+} {
+  return typeof value === "string" ? { formattedValue: value } : value
 }
 
 function parseFormattedBoolean(value: string): boolean | null {
@@ -226,21 +237,24 @@ function normaliseNumberFilterInput(input: Partial<NumberFilterInput>): NumberFi
   }
 }
 
-function matchesDateFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
-  const actual = parseFilterDate(formattedValue)
+function matchesDateFilter(
+  cellValue: { formattedValue: string; rawValue?: unknown },
+  filter: ServerColumnFilter,
+): boolean {
+  const actual = parseFilterDate(cellValue.rawValue) ?? parseFilterDate(cellValue.formattedValue)
   if (!actual) return false
 
   if (filter.op === "between") {
     const [firstRaw, secondRaw] = filter.values ?? []
-    const first = parseFilterDate(String(firstRaw ?? ""))
-    const second = parseFilterDate(String(secondRaw ?? ""))
+    const first = parseFilterDate(firstRaw)
+    const second = parseFilterDate(secondRaw)
     if (!first || !second) return false
     const min = first <= second ? first : second
     const max = first <= second ? second : first
     return actual >= min && actual <= max
   }
 
-  const expected = parseFilterDate(String(filter.value ?? ""))
+  const expected = parseFilterDate(filter.value)
   if (!expected) return false
   if (filter.op === "is") return actual === expected
   if (filter.op === "before") return actual < expected
@@ -276,8 +290,16 @@ function parseFormattedNumber(value: string): number | null {
   return parseFilterNumber(cleaned)
 }
 
-function parseFilterDate(value: string): string | null {
-  const trimmed = value.trim()
+function parseFilterDate(value: unknown): string | null {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.valueOf())) return null
+    return toDateInputValue(value)
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null
+    return toDateInputValue(new Date(value))
+  }
+  const trimmed = String(value ?? "").trim()
   if (!trimmed) return null
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
   if (dateOnly) {
