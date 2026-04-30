@@ -233,6 +233,7 @@ Spec pending: `docs/design/charts-rfc.md` (c2 to author; user confirmed peer-dep
 - `[review: worker5 #190]` **animation-polish** — review every transition (sort / filter / expand / collapse / insert / remove / cell-flash); tune to 60fps; document the motion system. **Effort**: M.
 - `[ready]` **browser-compat-matrix** — full Chromium / FF / WebKit / Safari / Edge pass on the AR Customers demo + standalone tests. Document any known issues. **Effort**: S.
 - `[review: x1 #108]` **migration-guide** — from AG Grid Community + Enterprise to bc-grid; documented patterns; side-by-side examples; no codemod (out-of-scope). Lives in `apps/docs`. **Effort**: M.
+- `[in-flight: worker4]` **v020-readiness-refresh** — refresh `docs/coordination/release-milestone-roadmap.md` for the post-merge v0.2 state: #198 / #199 / #200 merged → recently-landed list, #202 remaining as the last open milestone-gate blocker, source-version skew alert kept accurate (still `0.1.0-alpha.2`), short v0.2 release-gate checklist preserved. **Supersedes #201** (open, but stale relative to #200's merge). **Docs only.** **Effort**: XS.
 
 ### Quality + infra (parallel throughout Q1)
 
