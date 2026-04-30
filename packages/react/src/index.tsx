@@ -1,8 +1,11 @@
+export { useAggregations } from "./aggregations"
 export { BcEditGrid } from "./editGrid"
 export { BcGrid, useBcGridApi } from "./grid"
 export { BcServerGrid } from "./serverGrid"
 
 export type {
+  BcAggregationFormatterParams,
+  BcAggregationScope,
   BcCellEditCommitEvent,
   BcCellEditor,
   BcCellEditorPrepareParams,
@@ -45,3 +48,4 @@ export type {
   ServerTreeQuery,
   ServerTreeResult,
 } from "./types"
+export type { UseAggregationsOptions } from "./aggregations"

@@ -75,7 +75,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[review: x1 #94]` **aria-disabled-rows** — `accessibility-rfc §VirtualRowA11yMeta.disabled` flag plus a `BcGridProps.rowIsDisabled` predicate; disabled rows: `aria-disabled="true"`, `.bc-grid-row-disabled`, ignored by selection gestures, focusable but no edit/sort actions. **Effort**: XS.
 - `[done: x2 #71]` **row-select-keyboard** — Space toggles selection on the focused row (`Space` is unreserved per `accessibility-rfc §Selection Extension Points`; only `Shift+Space` and `Ctrl+Space` are Q3-reserved). Keyboard parity with the mouse gestures from #37. **Branch**: `agent/x2/row-select-keyboard`. **Effort**: S.
 - `[review: x1 #109]` **number-filter-ui** — operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `between`. Inline UI per the existing text-filter pattern. Q2-reserved → pulled forward. **Effort**: S.
-- `[ready]` **date-filter-ui** — operators: `is`, `before`, `after`, `between`. Use shadcn date picker primitive. Q2-reserved → pulled forward. **Effort**: S.
+- `[done: x1 #116]` **date-filter-ui** — operators: `is`, `before`, `after`, `between`. Use shadcn date picker primitive. Q2-reserved → pulled forward. **Effort**: S.
 - `[blocked: depends on filter-registry-rfc]` **set-filter-ui** — multi-select dropdown of distinct values from the column. Lazy-loaded (computed on first open from current row model). Q2-reserved → pulled forward. **Effort**: M.
 - `[review: x1 #91]` **boolean-filter-ui** — three-state: any / yes / no. Q2-reserved → pulled forward. **Effort**: XS.
 
@@ -171,8 +171,8 @@ Spec already exists: `docs/design/server-query-rfc.md` (PR #2). No new RFC neede
 Specs: `docs/design/aggregation-rfc.md` (PR #51) + `pivot-rfc.md` (PR #52).
 
 - `[done: c2 #51]` **aggregation-rfc** — engine contract for `@bc-grid/aggregations` + React adapter. **Effort**: 1 day.
-- `[review: x2 #93]` **aggregation-engine** — `@bc-grid/aggregations` package (currently stub). `sum`, `count`, `avg`, `min`, `max`, `registerAggregation`. Pure functions; no DOM. Per `design.md §4.2`. **Branch**: `agent/x2/aggregation-engine`. **Effort**: M.
-- `[blocked: depends on aggregation-engine]` **aggregation-react-adapter** — footer aggregation row + group-row aggregation rendering in `@bc-grid/react`. Wires `column.aggregation` (already declared `api.md §1.1`) to the engine. **Effort**: M.
+- `[done: integrator #112]` **aggregation-engine** — `@bc-grid/aggregations` package (currently stub). `sum`, `count`, `avg`, `min`, `max`, `registerAggregation`. Pure functions; no DOM. Per `design.md §4.2`. **Branch**: `agent/x2/aggregation-engine`. **Effort**: M.
+- `[done: x2 #117]` **aggregation-react-adapter** — footer aggregation row + group-row aggregation rendering in `@bc-grid/react`. Wires `column.aggregation` (already declared `api.md §1.1`) to the engine. **Effort**: M.
 - `[done: c2 #52]` **pivot-rfc** — engine vs React split; drag-to-pivot UI; row/col/values dimensions; treegrid output. **Effort**: 1 day.
 - `[blocked: depends on pivot-rfc + aggregation-engine]` **pivot-engine** — engine layer in `@bc-grid/aggregations` (or a separate `@bc-grid/pivots` if the RFC decides to split). Computes pivot table from rows + dimensions. **Effort**: L.
 - `[blocked: depends on pivot-engine]` **pivot-ui-drag-zones** — Pivot tool panel in the sidebar (Track 5) with row/col/values drop zones. **Effort**: M.

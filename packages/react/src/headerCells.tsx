@@ -1,8 +1,11 @@
 import type { BcGridSort } from "@bc-grid/core"
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react"
 import {
+  type DateFilterOperator,
   type NumberFilterOperator,
+  decodeDateFilterInput,
   decodeNumberFilterInput,
+  encodeDateFilterInput,
   encodeNumberFilterInput,
 } from "./filter"
 import {
@@ -242,7 +245,6 @@ export function renderFilterCell<TRow>({
           onChange={(event) => onFilterChange(event.currentTarget.value)}
           onKeyDown={(event) => event.stopPropagation()}
           id={filterId}
-          style={filterControlStyle}
         >
           <option value="">Any</option>
           <option value="true">Yes</option>
@@ -250,6 +252,13 @@ export function renderFilterCell<TRow>({
         </select>
       ) : filterType === "number" ? (
         <NumberFilterControl
+          filterId={filterId}
+          filterLabel={filterLabel}
+          filterText={filterText}
+          onFilterChange={onFilterChange}
+        />
+      ) : filterType === "date" ? (
+        <DateFilterControl
           filterId={filterId}
           filterLabel={filterLabel}
           filterText={filterText}
@@ -267,9 +276,62 @@ export function renderFilterCell<TRow>({
           onKeyDown={(event) => event.stopPropagation()}
           id={filterId}
           placeholder="Filter"
-          style={filterControlStyle}
         />
       )}
+    </div>
+  )
+}
+
+function DateFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+}): ReactNode {
+  const input = decodeDateFilterInput(filterText)
+  const update = (next: Partial<typeof input>) => {
+    const merged = { ...input, ...next }
+    onFilterChange(encodeDateFilterInput(merged))
+  }
+
+  return (
+    <div className="bc-grid-filter-date">
+      <select
+        aria-label={`${filterLabel} operator`}
+        className="bc-grid-filter-select"
+        value={input.op}
+        onChange={(event) => update({ op: event.currentTarget.value as DateFilterOperator })}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <option value="is">Is</option>
+        <option value="before">Before</option>
+        <option value="after">After</option>
+        <option value="between">Between</option>
+      </select>
+      <input
+        aria-label={filterLabel}
+        className="bc-grid-filter-input"
+        id={filterId}
+        type="date"
+        value={input.value}
+        onChange={(event) => update({ value: event.currentTarget.value })}
+        onKeyDown={(event) => event.stopPropagation()}
+      />
+      {input.op === "between" ? (
+        <input
+          aria-label={`${filterLabel} end date`}
+          className="bc-grid-filter-input"
+          type="date"
+          value={input.valueTo ?? ""}
+          onChange={(event) => update({ valueTo: event.currentTarget.value })}
+          onKeyDown={(event) => event.stopPropagation()}
+        />
+      ) : null}
     </div>
   )
 }
@@ -292,14 +354,13 @@ function NumberFilterControl({
   }
 
   return (
-    <div className="bc-grid-filter-number" style={numberFilterStyle}>
+    <div className="bc-grid-filter-number">
       <select
         aria-label={`${filterLabel} operator`}
         className="bc-grid-filter-select"
         value={input.op}
         onChange={(event) => update({ op: event.currentTarget.value as NumberFilterOperator })}
         onKeyDown={(event) => event.stopPropagation()}
-        style={numberFilterOperatorStyle}
       >
         <option value="=">=</option>
         <option value="!=">!=</option>
@@ -319,7 +380,6 @@ function NumberFilterControl({
         onChange={(event) => update({ value: event.currentTarget.value })}
         onKeyDown={(event) => event.stopPropagation()}
         placeholder={input.op === "between" ? "Min" : "Value"}
-        style={numberFilterInputStyle}
       />
       {input.op === "between" ? (
         <input
@@ -331,43 +391,8 @@ function NumberFilterControl({
           onChange={(event) => update({ valueTo: event.currentTarget.value })}
           onKeyDown={(event) => event.stopPropagation()}
           placeholder="Max"
-          style={numberFilterInputStyle}
         />
       ) : null}
     </div>
   )
-}
-
-const filterControlStyle: CSSProperties = {
-  width: "100%",
-  height: "70%",
-  border: "1px solid hsl(var(--border, 220 13% 91%))",
-  borderRadius: "calc(var(--radius, 0.375rem) - 2px)",
-  background: "hsl(var(--background, 0 0% 100%))",
-  color: "inherit",
-  padding: "0 0.5rem",
-  font: "inherit",
-  fontSize: "0.8125rem",
-  outline: "none",
-}
-
-const numberFilterStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 4,
-  width: "100%",
-  height: "70%",
-}
-
-const numberFilterOperatorStyle: CSSProperties = {
-  ...filterControlStyle,
-  width: 58,
-  flex: "0 0 58px",
-  padding: "0 0.25rem",
-}
-
-const numberFilterInputStyle: CSSProperties = {
-  ...filterControlStyle,
-  minWidth: 0,
-  flex: "1 1 0",
 }
