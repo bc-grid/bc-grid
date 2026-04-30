@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import type { ColumnId } from "@bc-grid/core"
-import { buildGridFilter, encodeNumberFilterInput, matchesGridFilter } from "../src/filter"
+import {
+  buildGridFilter,
+  encodeDateFilterInput,
+  encodeNumberFilterInput,
+  matchesGridFilter,
+} from "../src/filter"
 
 describe("buildGridFilter", () => {
   test("empty input → null", () => {
@@ -92,6 +97,57 @@ describe("buildGridFilter", () => {
     ).toBeNull()
   })
 
+  test("date inputs produce date ServerColumnFilter objects", () => {
+    expect(
+      buildGridFilter(
+        { lastInvoice: encodeDateFilterInput({ op: "before", value: "2026-03-01" }) },
+        { lastInvoice: "date" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "lastInvoice",
+      type: "date",
+      op: "before",
+      value: "2026-03-01",
+    })
+  })
+
+  test("between date inputs produce inclusive min/max values", () => {
+    expect(
+      buildGridFilter(
+        {
+          lastInvoice: encodeDateFilterInput({
+            op: "between",
+            value: "2026-03-31",
+            valueTo: "2026-03-01",
+          }),
+        },
+        { lastInvoice: "date" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "lastInvoice",
+      type: "date",
+      op: "between",
+      values: ["2026-03-01", "2026-03-31"],
+    })
+  })
+
+  test("incomplete date inputs do not activate a filter", () => {
+    expect(
+      buildGridFilter(
+        {
+          lastInvoice: encodeDateFilterInput({
+            op: "between",
+            value: "2026-03-01",
+            valueTo: "",
+          }),
+        },
+        { lastInvoice: "date" },
+      ),
+    ).toBeNull()
+  })
+
   test("trims trailing/leading whitespace on values", () => {
     const result = buildGridFilter({ name: "  John  " })
     if (result?.kind === "column") {
@@ -137,9 +193,9 @@ describe("matchesGridFilter — column", () => {
     const filter = {
       kind: "column" as const,
       columnId: "lastInvoice",
-      type: "date" as const,
-      op: "before",
-      value: "2026-01-01",
+      type: "custom" as const,
+      op: "domain-specific",
+      value: "x",
     }
     expect(matchesGridFilter(filter, lookup({ lastInvoice: "2025-01-01" }))).toBe(false)
   })
@@ -170,6 +226,29 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(gtFilter, lookup({ balance: "$950" }))).toBe(false)
     expect(matchesGridFilter(betweenFilter, lookup({ balance: "$2,500" }))).toBe(true)
     expect(matchesGridFilter(betweenFilter, lookup({ balance: "$2,501" }))).toBe(false)
+  })
+
+  test("date filters compare formatted date values", () => {
+    const beforeFilter = buildGridFilter(
+      { lastInvoice: encodeDateFilterInput({ op: "before", value: "2026-03-01" }) },
+      { lastInvoice: "date" },
+    )
+    const betweenFilter = buildGridFilter(
+      {
+        lastInvoice: encodeDateFilterInput({
+          op: "between",
+          value: "2026-03-01",
+          valueTo: "2026-03-31",
+        }),
+      },
+      { lastInvoice: "date" },
+    )
+    if (!beforeFilter || !betweenFilter) throw new Error("expected filters")
+
+    expect(matchesGridFilter(beforeFilter, lookup({ lastInvoice: "Feb 28, 2026" }))).toBe(true)
+    expect(matchesGridFilter(beforeFilter, lookup({ lastInvoice: "Mar 1, 2026" }))).toBe(false)
+    expect(matchesGridFilter(betweenFilter, lookup({ lastInvoice: "Mar 31, 2026" }))).toBe(true)
+    expect(matchesGridFilter(betweenFilter, lookup({ lastInvoice: "Apr 1, 2026" }))).toBe(false)
   })
 
   test("unknown op is rejected (Q2 follow-up)", () => {
