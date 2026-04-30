@@ -822,6 +822,37 @@ describe("createServerRowModel", () => {
     ).toEqual(new Map([["m1", { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" }]]))
   })
 
+  test("queues mutations over stale cached rows", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:0:size:1",
+      rows: [{ id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.cache.markStale("infinite:v1:start:0:size:1")
+
+    const queued = model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    expect(queued.updatedRows).toBe(1)
+    expect(model.cache.get("infinite:v1:start:0:size:1")?.state).toBe("stale")
+    expect(model.cache.get("infinite:v1:start:0:size:1")?.rows).toEqual([
+      { id: "a", name: "optimistic" },
+    ])
+
+    model.settleMutation({
+      result: { mutationId: "m1", reason: "validation", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+
+    expect(model.cache.get("infinite:v1:start:0:size:1")?.state).toBe("stale")
+    expect(model.cache.get("infinite:v1:start:0:size:1")?.rows).toEqual([{ id: "a", name: "old" }])
+  })
+
   test("applies pending mutations to rows loaded after the mutation was queued", async () => {
     const model = createServerRowModel<Row>()
     const queued = model.queueMutation({
