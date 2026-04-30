@@ -178,7 +178,15 @@ export type ColumnId = string
 export type RowId = string
 
 export interface BcColumnFilter {
-  type: "text" | "number" | "number-range" | "date" | "set" | "boolean" | "custom"
+  type:
+    | "text"
+    | "number"
+    | "number-range"
+    | "date"
+    | "date-range"
+    | "set"
+    | "boolean"
+    | "custom"
   /** Optional starting value. */
   defaultValue?: unknown
   /** Optional UI variant. */
@@ -592,7 +600,7 @@ The matched substring is exposed to `cellRenderer` via `params.searchText` so th
 
 Per-column `filter` declares **what kind of filter UI to show** and what parser to use; the actual filter state is in `BcGridFilter` (which mirrors `ServerFilter` from `server-query-rfc` for parity with server grids).
 
-Built-in filter types: `text`, `number`, `number-range`, `date`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. The `number-range` type is a convenience over `number` `between` that renders two `inputMode="decimal"` fields and always emits `op: "between"`; partial input (only one bound filled, or non-numeric content) is treated as inactive so typing doesn't narrow the row set mid-keystroke. Set filters are multi-select editors over distinct scalar column values, loaded on first open, and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
+Built-in filter types: `text`, `number`, `number-range`, `date`, `date-range`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. The `number-range` type is a convenience over `number` `between` that renders two `inputMode="decimal"` fields and always emits `op: "between"`; partial input (only one bound filled, or non-numeric content) is treated as inactive so typing doesn't narrow the row set mid-keystroke. The `date-range` type mirrors `number-range` for ISO 8601 dates: two `<input type="date">` fields separated by an em-dash, no operator dropdown, and `op: "between"` with the bounds normalised so consumers can type either edge first. Set filters are multi-select editors over distinct scalar column values, loaded on first open, and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
 
 ```ts
 // from @bc-grid/filters (engine)

@@ -43,6 +43,18 @@ export interface NumberRangeFilterInput {
   valueTo: string
 }
 
+/**
+ * Two-input from/to filter for `BcColumnFilter.type === "date-range"`.
+ * Convenience over `date` `between` per `filter-registry-rfc §date-range`:
+ * always emits `op: "between"` so the predicate path collapses into the
+ * existing `matchesDateFilter` between branch. ISO 8601 (yyyy-mm-dd)
+ * day-precision strings, sourced directly from `<input type="date">`.
+ */
+export interface DateRangeFilterInput {
+  value: string
+  valueTo: string
+}
+
 export interface SetFilterInput {
   op: SetFilterOperator
   values: readonly string[]
@@ -61,6 +73,9 @@ export type FilterCellValue =
     }
 
 type DateColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "date" }
+type DateRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
+  type: "date-range"
+}
 type NumberColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "number" }
 type NumberRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
   type: "number-range"
@@ -106,6 +121,12 @@ export function buildGridFilter(
       filters.push({ ...parsed, columnId })
       continue
     }
+    if (filterType === "date-range") {
+      const parsed = parseDateRangeFilterInput(value)
+      if (!parsed) continue
+      filters.push({ ...parsed, columnId })
+      continue
+    }
     if (filterType === "set") {
       const parsed = parseSetFilterInput(value)
       if (!parsed) continue
@@ -140,6 +161,11 @@ function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFil
     return matchesNumberFilter(value.formattedValue, filter)
   }
   if (filter.type === "date") {
+    return matchesDateFilter(value, filter)
+  }
+  if (filter.type === "date-range") {
+    // The date-range filter always emits op="between"; the predicate
+    // path is identical to `date`'s between branch.
     return matchesDateFilter(value, filter)
   }
   if (filter.type === "set") {
@@ -198,6 +224,22 @@ export function encodeNumberRangeFilterInput(input: NumberRangeFilterInput): str
 export function decodeNumberRangeFilterInput(raw: string): NumberRangeFilterInput {
   try {
     const parsed = JSON.parse(raw) as Partial<NumberRangeFilterInput>
+    return {
+      value: typeof parsed.value === "string" ? parsed.value : "",
+      valueTo: typeof parsed.valueTo === "string" ? parsed.valueTo : "",
+    }
+  } catch {
+    return { value: "", valueTo: "" }
+  }
+}
+
+export function encodeDateRangeFilterInput(input: DateRangeFilterInput): string {
+  return JSON.stringify(input)
+}
+
+export function decodeDateRangeFilterInput(raw: string): DateRangeFilterInput {
+  try {
+    const parsed = JSON.parse(raw) as Partial<DateRangeFilterInput>
     return {
       value: typeof parsed.value === "string" ? parsed.value : "",
       valueTo: typeof parsed.valueTo === "string" ? parsed.valueTo : "",
@@ -308,6 +350,30 @@ function parseNumberRangeFilterInput(raw: string): NumberRangeColumnFilterDraft 
   return {
     kind: "column",
     type: "number-range",
+    op: "between",
+    values: [min, max],
+  }
+}
+
+/**
+ * Parse a `date-range` filter draft into the canonical `between`
+ * `ServerColumnFilter` shape. Both inputs must parse to ISO 8601 dates;
+ * if either is missing or unparseable, the filter is dropped (treated as
+ * "not yet active") so partial typing doesn't narrow the row set.
+ * Swapped from/to are normalised so consumers can type either edge
+ * first. Lexical ISO comparison is sufficient because dates are
+ * `YYYY-MM-DD`.
+ */
+function parseDateRangeFilterInput(raw: string): DateRangeColumnFilterDraft | null {
+  const input = decodeDateRangeFilterInput(raw)
+  const lo = parseFilterDate(input.value)
+  const hi = parseFilterDate(input.valueTo)
+  if (!lo || !hi) return null
+  const min = lo <= hi ? lo : hi
+  const max = lo <= hi ? hi : lo
+  return {
+    kind: "column",
+    type: "date-range",
     op: "between",
     values: [min, max],
   }

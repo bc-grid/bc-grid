@@ -43,7 +43,7 @@ export interface BcGridColumn<TRow, TValue = unknown> {
 }
 
 export interface BcColumnFilter {
-  type: "text" | "number" | "number-range" | "date" | "set" | "boolean" | "custom"
+  type: "text" | "number" | "number-range" | "date" | "date-range" | "set" | "boolean" | "custom"
   defaultValue?: unknown
   variant?: "popup" | "inline"
 }
@@ -305,7 +305,7 @@ export interface ServerFilterGroup {
 export interface ServerColumnFilter {
   kind: "column"
   columnId: ColumnId
-  type: "text" | "number" | "number-range" | "date" | "set" | "boolean" | "custom"
+  type: "text" | "number" | "number-range" | "date" | "date-range" | "set" | "boolean" | "custom"
   op: string
   value?: unknown
   values?: unknown[]
