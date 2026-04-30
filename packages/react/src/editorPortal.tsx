@@ -142,6 +142,10 @@ function EditorMount<TRow>({
     editState.mode === "mounting" || editState.mode === "editing"
       ? editState.pointerHint
       : undefined
+  const prepareResult =
+    editState.mode === "mounting" || editState.mode === "editing"
+      ? editState.prepareResult
+      : undefined
   const error = editState.mode === "editing" ? editState.error : undefined
   const pending = editState.mode === "validating"
 
@@ -193,6 +197,33 @@ function EditorMount<TRow>({
       moveOnSettle,
     )
   }
+  // Stable ref to handleCommit so the document-level pointerdown
+  // listener can invoke the latest closure without re-binding the
+  // handler on every render (re-binding would race with mid-edit
+  // state churn).
+  const handleCommitRef = useRef<(value: unknown, move: MoveOnSettle) => void>(handleCommit)
+  handleCommitRef.current = handleCommit
+
+  // Portal-aware click-outside per `editing-rfc §Portal click-outside rules`.
+  // Pointerdown anywhere outside the editor or any descendant marked
+  // `data-bc-grid-editor-root` / `data-bc-grid-editor-portal` commits
+  // the current value with `stay` move semantics — the user picked the
+  // outside target, so don't drift the active cell on top of that.
+  // Clicks on the editor's wrapper or on portaled popovers (date/select/
+  // autocomplete) are ignored — the editor still has focus.
+  useEffect(() => {
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest("[data-bc-grid-editor-root], [data-bc-grid-editor-portal]")) return
+      const value = readEditorInputValue(focusRef.current)
+      handleCommitRef.current?.(value, "stay")
+    }
+    document.addEventListener("pointerdown", handlePointerDown, true)
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true)
+    }
+  }, [])
 
   // Wrapper-level keyboard intercepts. The editor input handles printable
   // keys / arrow keys / Backspace via browser default; only the Q1
@@ -241,6 +272,7 @@ function EditorMount<TRow>({
     focusRef?: RefObject<HTMLElement | null>
     seedKey?: string
     pointerHint?: { x: number; y: number }
+    prepareResult?: unknown
     pending?: boolean
   }>
 
@@ -262,6 +294,7 @@ function EditorMount<TRow>({
         focusRef={focusRef}
         {...(seedKey != null ? { seedKey } : {})}
         {...(pointerHint ? { pointerHint } : {})}
+        {...(prepareResult !== undefined ? { prepareResult } : {})}
         {...(error != null ? { error } : {})}
         {...(pending ? { pending } : {})}
       />

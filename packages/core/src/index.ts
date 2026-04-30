@@ -28,7 +28,11 @@ export interface BcGridColumn<TRow, TValue = unknown> {
   cellClass?: string | ((value: TValue, row: TRow) => string | undefined)
 
   editable?: boolean | ((row: TRow) => boolean)
-  validate?: (newValue: TValue, row: TRow) => BcValidationResult
+  validate?: (
+    newValue: TValue,
+    row: TRow,
+    signal?: AbortSignal,
+  ) => BcValidationResult | Promise<BcValidationResult>
 
   aggregation?: BcAggregation
 

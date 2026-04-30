@@ -293,3 +293,37 @@ export function isEditorMounted(mode: EditMode): boolean {
 export function isGridKeyboardActive(mode: EditMode): boolean {
   return mode === "navigation"
 }
+
+/**
+ * Compute the post-edit active cell index from the move-on-settle hint
+ * and grid extents. Pure so the wrap behaviour is unit-testable without
+ * mounting the grid. Per `editing-rfc §Keyboard model in edit mode`:
+ *
+ *   - "down" / "up" advance one row, clamped at extents.
+ *   - "right" advances one column; at last column, wraps to next row's
+ *     first column. At the absolute last cell, stays put.
+ *   - "left" advances one column back; at first column, wraps to
+ *     previous row's last column. At the absolute first cell, stays put.
+ *   - "stay" or unrecognised → no movement.
+ *
+ * Returns `{ row, col }` indices into the row + column lists.
+ */
+export function nextActiveCellAfterEdit(
+  rowIndex: number,
+  colIndex: number,
+  lastRow: number,
+  lastCol: number,
+  move: MoveOnSettle,
+): { row: number; col: number } {
+  if (move === "down" && rowIndex < lastRow) return { row: rowIndex + 1, col: colIndex }
+  if (move === "up" && rowIndex > 0) return { row: rowIndex - 1, col: colIndex }
+  if (move === "right") {
+    if (colIndex < lastCol) return { row: rowIndex, col: colIndex + 1 }
+    if (rowIndex < lastRow) return { row: rowIndex + 1, col: 0 }
+  }
+  if (move === "left") {
+    if (colIndex > 0) return { row: rowIndex, col: colIndex - 1 }
+    if (rowIndex > 0) return { row: rowIndex - 1, col: lastCol }
+  }
+  return { row: rowIndex, col: colIndex }
+}

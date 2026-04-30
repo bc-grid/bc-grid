@@ -500,11 +500,25 @@ export function useLiveRegionAnnouncements<TRow>({
 } {
   const [politeMessage, setPoliteMessage] = useState("")
   const [assertiveMessage, setAssertiveMessage] = useState("")
+  // Polite-region debounce per `editing-rfc §Live Region announcements`:
+  // Tab-through-10-cells emits 10 commits in rapid succession; without a
+  // tail debounce the AT queue would announce all of them and lag behind
+  // the user. 250ms tail; the latest message wins. Assertive announcements
+  // are deliberately not debounced — errors are individually important.
+  const politeAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const announcePolite = useCallback((message: string) => {
-    setPoliteMessage(message)
+    if (politeAnnounceTimerRef.current) clearTimeout(politeAnnounceTimerRef.current)
+    politeAnnounceTimerRef.current = setTimeout(() => {
+      setPoliteMessage(message)
+    }, 250)
   }, [])
   const announceAssertive = useCallback((message: string) => {
     setAssertiveMessage(message)
+  }, [])
+  useEffect(() => {
+    return () => {
+      if (politeAnnounceTimerRef.current) clearTimeout(politeAnnounceTimerRef.current)
+    }
   }, [])
 
   // Announce sort changes. Compares to a ref of the previous sort state so

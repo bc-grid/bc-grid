@@ -34,6 +34,7 @@ import {
   type ColumnVisibilityMenuAnchor,
 } from "./columnVisibility"
 import { createDetailToggleColumn } from "./detailColumn"
+import { nextActiveCellAfterEdit } from "./editingStateMachine"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
 import {
   type ColumnFilterText,
@@ -603,10 +604,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   ).onCellEditCommit
   const editController = useEditingController<TRow>({
     ...(onCellEditCommitProp ? { onCellEditCommit: onCellEditCommitProp } : {}),
-    validate: (value, row, columnId) => {
+    validate: (value, row, columnId, signal) => {
       const column = consumerResolvedColumns.find((c) => c.columnId === columnId)
       if (!column?.source.validate) return { valid: true }
-      return column.source.validate(value as never, row)
+      return column.source.validate(value as never, row, signal)
     },
     // Live-region announce per `editing-rfc §Live Regions`. The
     // controller fires committed / validationError / serverError; the
@@ -656,14 +657,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const cellEl = document.getElementById(cellDomId(domBaseId, cell.rowId, cell.columnId))
       if (cellEl) flash(cellEl)
     }
-    let nextRow = rowIndex
-    let nextCol = colIndex
     const lastRow = rowEntries.length - 1
     const lastCol = resolvedColumns.length - 1
-    if (next.move === "down" && rowIndex < lastRow) nextRow = rowIndex + 1
-    else if (next.move === "up" && rowIndex > 0) nextRow = rowIndex - 1
-    else if (next.move === "right" && colIndex < lastCol) nextCol = colIndex + 1
-    else if (next.move === "left" && colIndex > 0) nextCol = colIndex - 1
+    const { row: nextRow, col: nextCol } = nextActiveCellAfterEdit(
+      rowIndex,
+      colIndex,
+      lastRow,
+      lastCol,
+      next.move,
+    )
     const targetRow = rowEntries[nextRow]
     const targetCol = resolvedColumns[nextCol]
     if (targetRow && targetCol) {
@@ -858,9 +860,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       />
     ) : null)
 
-  const activeCellId = activeCell
-    ? cellDomId(domBaseId, activeCell.rowId, activeCell.columnId)
-    : undefined
+  // While editing, the editor input owns DOM focus; aria-activedescendant
+  // is suspended (set to "") so AT doesn't try to point at a cell that's
+  // now hosting an `<input>`. Per `editing-rfc §a11y for edit mode`.
+  const editingCell =
+    editController.editState.mode === "navigation" ? null : editController.editState.cell
+  const activeCellId = editingCell
+    ? ""
+    : activeCell
+      ? cellDomId(domBaseId, activeCell.rowId, activeCell.columnId)
+      : undefined
 
   const rootHeight = typeof height === "number" ? height : undefined
   const bodyHeight =
@@ -922,14 +931,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         !isRowDisabled(cellRow.row) &&
         isCellEditable(cellColumn, cellRow.row)
       ) {
+        const editorForActivation = cellColumn.source.cellEditor ?? defaultTextEditor
+        const startOpts = {
+          editor: editorForActivation as never,
+          row: cellRow.row,
+          rowId: cellRow.rowId,
+        }
         if (event.key === "F2" || event.key === "Enter") {
           event.preventDefault()
-          editController.start(cellTarget, event.key === "F2" ? "f2" : "enter")
+          editController.start(cellTarget, event.key === "F2" ? "f2" : "enter", startOpts)
           return
         }
         if (isPrintable) {
           event.preventDefault()
-          editController.start(cellTarget, "printable", { seedKey: event.key })
+          editController.start(cellTarget, "printable", { ...startOpts, seedKey: event.key })
           return
         }
       }
@@ -1247,10 +1262,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   if (!disabled && columnId) {
                     const column = resolvedColumns.find((c) => c.columnId === columnId)
                     if (column && isCellEditable(column, entry.row)) {
+                      const editor = (column.source.cellEditor ?? defaultTextEditor) as never
                       editController.start(
                         { rowId: entry.rowId, columnId: column.columnId },
                         "doubleclick",
-                        { pointerHint: { x: event.clientX, y: event.clientY } },
+                        {
+                          pointerHint: { x: event.clientX, y: event.clientY },
+                          editor,
+                          row: entry.row,
+                          rowId: entry.rowId,
+                        },
                       )
                     }
                   }
@@ -1276,6 +1297,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     selected,
                     disabled,
                     expanded,
+                    editingCell,
                     hasOverlayValue: editController.hasOverlayValue,
                     getOverlayValue: editController.getOverlayValue,
                     getCellEditEntry: editController.getCellEditEntry,
