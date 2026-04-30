@@ -517,9 +517,9 @@ Bulk edit/delete:
 
 ## Streaming Row Updates
 
-Streaming implementation is deferred to Q7 / v1.3, but reserve the event shape now so the cache model does not block it.
-
-Product checkpoint: if bc-next needs real-time audit/status updates before v1.0, keep the type shape below but ship manual invalidation first. Do not add a subscription API to the v1.0 public surface without a separate RFC.
+Track 7 promotes the reserved event shape into v1.0 for consumer-provided push
+sources. The grid does not open a websocket/SSE transport; apps bridge their
+own push source into the server row model.
 
 ```ts
 export type ServerRowUpdate<TRow> =
@@ -531,9 +531,11 @@ export type ServerRowUpdate<TRow> =
 
 v1.0 behavior:
 
-- No built-in subscription API.
-- Consumers may manually call invalidation APIs when server push events arrive.
-- The reserved type may appear in docs as future-facing but should not be required by Q4 implementation.
+- No built-in transport or server subscription client.
+- Consumers may call `applyServerRowUpdate` directly or use the React
+  `useServerRowUpdates(apiRef, subscribe)` bridge.
+- Loaded or stale cached blocks are updated by row identity; `viewInvalidated`
+  purges matching cached view blocks.
 
 ## State Machine
 
@@ -684,7 +686,8 @@ Cached blocks remain visible as stale data. New unloaded fetches fail visibly an
 
 ### Streaming in v1.0?
 
-Deferred. Reserve `ServerRowUpdate` types, but v1.0 uses manual invalidation/refresh unless a product review promotes real-time updates before the v1.0 API freeze.
+Yes for consumer-provided push sources. The row update types, API method, and
+React hook are public; websocket/SSE transport remains app-owned.
 
 ## Test Plan
 
