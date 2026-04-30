@@ -221,10 +221,10 @@ function matchesTextFilter(formattedValue: string, filter: ServerColumnFilter): 
   const caseSensitive = filter.caseSensitive === true
   const haystack = caseSensitive ? formattedValue : formattedValue.toLowerCase()
   const needle = caseSensitive ? needleRaw : needleRaw.toLowerCase()
+  if (!isTextFilterOperator(filter.op)) return false
   if (filter.op === "starts-with") return haystack.startsWith(needle)
   if (filter.op === "ends-with") return haystack.endsWith(needle)
   if (filter.op === "equals") return haystack === needle
-  // Default + unknown ops: contains.
   return haystack.includes(needle)
 }
 

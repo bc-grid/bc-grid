@@ -829,8 +829,8 @@ describe("matchesGridFilter — column", () => {
       kind: "column" as const,
       columnId: "name",
       type: "text" as const,
-      op: "regex",
-      value: "^J",
+      op: "unknown",
+      value: "John",
     }
     expect(matchesGridFilter(filter, lookup({ name: "John" }))).toBe(false)
   })
