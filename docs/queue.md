@@ -3,6 +3,15 @@
 The single source of truth for "what's available to be picked up." Read `AGENTS.md §5` for how to claim work.
 
 > **Active sprint — 2026-04-29:** `docs/coordination/v1-parity-sprint.md` is the orchestration plan. Phase A (Q1.5 hardening) tasks live below in `### Phase 5.5 — Q1.5 Hardening`. Phase B feature tracks live below in `### Phase 6 — v1.0 Parity Sprint` and land alongside their RFCs as those PRs ship. Read the sprint plan before claiming any Phase B work.
+>
+> **⭐ Demo-critical (week 2 — bsncraft funding demo on 2026-05-30):** the consumer migration from AG Grid → bc-grid in `~/work/bsncraft` is live but four AG-Grid-feel features are still missing. Agents please prioritise these, marked ⭐ in the queue:
+>
+> - `filter-popup-variant` — header-icon → Popover (consume existing filter editors)
+> - `filter-set-impl` — multi-select distinct values (operators: in / not-in / blank)
+> - `group-by-client` — runtime row grouping with expand/collapse + count
+> - `range-state-machine` + `visual-selection-layer` + `clipboard-copy-tsv-html` — the Track 2 stack, all three need to land for AG-Grid-style range copy to work
+>
+> Cut a release after each demo-critical PR merges; bsncraft pulls the new version + a c2 follow-up updates wrappers. Coordinator: c2 (auditor / merge integrator).
 
 **Status legend:**
 - `[ready]` — task spec written, no blockers, claim by editing this file + branching
@@ -76,7 +85,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: x2 #71]` **row-select-keyboard** — Space toggles selection on the focused row (`Space` is unreserved per `accessibility-rfc §Selection Extension Points`; only `Shift+Space` and `Ctrl+Space` are Q3-reserved). Keyboard parity with the mouse gestures from #37. **Branch**: `agent/x2/row-select-keyboard`. **Effort**: S.
 - `[review: x1 #109]` **number-filter-ui** — operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `between`. Inline UI per the existing text-filter pattern. Q2-reserved → pulled forward. **Effort**: S.
 - `[done: x1 #116]` **date-filter-ui** — operators: `is`, `before`, `after`, `between`. Use shadcn date picker primitive. Q2-reserved → pulled forward. **Effort**: S.
-- `[blocked: depends on filter-registry-rfc]` **set-filter-ui** — multi-select dropdown of distinct values from the column. Lazy-loaded (computed on first open from current row model). Q2-reserved → pulled forward. **Effort**: M.
+- `[ready]` **set-filter-ui** — multi-select dropdown of distinct values from the column. Lazy-loaded (computed on first open from current row model). Q2-reserved → pulled forward. **Effort**: M.
 - `[review: x1 #91]` **boolean-filter-ui** — three-state: any / yes / no. Q2-reserved → pulled forward. **Effort**: XS.
 
 **Phase 5.5 health metrics (not blocking gates beyond `grid-tsx-file-split`):** `grid.tsx` split → unblocks parallel Phase 6 React-layer work. Smoke perf + bundle size CI → keeps quality bars enforced on every Phase 6 PR. Q1 vertical-slice gate **already cleared as of PR #42** (AR Customers ledger in `apps/examples`); a real bc-next integration cutover is a separate post-1.0 follow-up. Tooltip / persistence / filter-UI items are independent and land any time.
@@ -146,7 +155,7 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 Spec pending: `docs/design/range-rfc.md` (c2 to author).
 
 - `[done: c2 #49]` **range-rfc** — design doc covering range model, anchor/extend semantics, multi-range, clipboard contract, fill handle. **Effort**: 1 day.
-- `[blocked: depends on range-rfc]` **range-state-machine** — `BcRange` (already declared `api.md §reserved Q3`) state in `core/range.ts`; anchor + extend + multi-range. **Effort**: M.
+- `[ready]` **range-state-machine** — `BcRange` (already declared `api.md §reserved Q3`) state in `core/range.ts`; anchor + extend + multi-range. **Effort**: M.
 - `[blocked: depends on range-state-machine]` **visual-selection-layer** — absolute-positioned overlay rendering range rectangles; works through virtualization. **Effort**: M.
 - `[blocked: depends on range-state-machine]` **clipboard-copy-tsv-html** — Ctrl/Cmd+C serializes range to TSV (text/plain) + HTML (text/html) on the clipboard. **Effort**: S.
 - `[blocked: depends on clipboard-copy-tsv-html]` **clipboard-paste-from-excel** — Ctrl/Cmd+V parses clipboard TSV; applies cell-by-cell with per-column `valueParser` + `validate`; atomic apply (all-or-rollback). **Effort**: M.
@@ -183,11 +192,11 @@ Specs: `docs/design/aggregation-rfc.md` (PR #51) + `pivot-rfc.md` (PR #52).
 Spec: `docs/design/chrome-rfc.md` (PR #46).
 
 - `[done: c2 #46]` **chrome-rfc** — design doc; covers status-bar / sidebar tablist / context-menu.
-- `[blocked: depends on chrome-rfc]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
-- `[blocked: depends on chrome-rfc]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
+- `[ready]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
+- `[ready]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
 - `[blocked: depends on sidebar-impl]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
 - `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
-- `[blocked: depends on chrome-rfc]` **context-menu-impl** — shadcn `ContextMenu` primitive; right-click + long-press (500ms coarse pointer) + Shift+F10. 4 built-in items + custom factory function. **Effort**: M.
+- `[ready]` **context-menu-impl** — shadcn `ContextMenu` primitive; right-click + long-press (500ms coarse pointer) + Shift+F10. 4 built-in items + custom factory function. **Effort**: M.
 - `[blocked: depends on aggregation-engine + status-bar-impl]` **footer-aggregations** — wire the `aggregations` status-bar segment to the aggregation-engine output. **Effort**: S.
 
 #### Track 6 — Filters + Export (Q6 pulled forward)
@@ -195,13 +204,14 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 
 - `[done: c2 #48]` **filter-registry-rfc** — extension protocol; `BcFilterDefinition` / `BcReactFilterDefinition`; persistence shape; 7 built-in filter specs. **Effort**: 1 day.
-- `[blocked: depends on filter-registry-rfc]` **filter-set-impl** — multi-select dropdown of distinct values. Lazy-loaded on first open. **Effort**: M.
-- `[blocked: depends on filter-registry-rfc]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
-- `[blocked: depends on filter-registry-rfc]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
-- `[blocked: depends on filter-registry-rfc]` **filter-number-range-impl** — between two numbers. **Effort**: S.
-- `[blocked: depends on filter-registry-rfc]` **filter-text-impl-extend** — extend the existing inline text filter with operators (contains / starts-with / ends-with / equals / regex toggle / case-sensitivity toggle). **Effort**: S.
-- `[blocked: depends on filter-registry-rfc]` **filter-custom-extension-example** — recipe in `apps/docs` showing how to register a custom filter type. **Effort**: S.
-- `[blocked: depends on filter-registry-rfc]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
+- `[ready]` **filter-popup-variant** ⭐ — When `column.filter.variant === "popup"`, render a header-icon (funnel) that opens a shadcn `Popover` with the existing text/number/date/boolean filter editor inside, instead of the inline-row input. Active state: solid/blue funnel + underline on the header, cleared by an `×` in the popover footer. The inline row collapses for that column when popup is active; if every column is popup-variant the row disappears entirely. AG-Grid-feel. Reuses existing filter editors — no logic duplication. **Demo-critical** (week 2). **Effort**: M.
+- `[ready]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
+- `[ready]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
+- `[ready]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
+- `[ready]` **filter-number-range-impl** — between two numbers. **Effort**: S.
+- `[ready]` **filter-text-impl-extend** — extend the existing inline text filter with operators (contains / starts-with / ends-with / equals / regex toggle / case-sensitivity toggle). **Effort**: S.
+- `[ready]` **filter-custom-extension-example** — recipe in `apps/docs` showing how to register a custom filter type. **Effort**: S.
+- `[ready]` **filter-persistence** — URL state + `localStorage` backends for filter state. Pairs with the column-state persistence work in Track 0. **Effort**: S.
 - `[done: x2 #72]` **export-csv-impl** — `@bc-grid/export.toCsv(rows, columns)` per `api.md §9`. No external deps; pure serializer. **Branch**: `agent/x2/export-csv-impl`. **Effort**: S.
 - `[done: x2 #75]` **export-xlsx-impl** — peer-dep on **ExcelJS** (confirmed in coordination plan). `toExcel(rows, columns)`. **Branch**: `agent/x2/export-xlsx-impl`. **Effort**: M.
 - `[review: x2 #77]` **export-pdf-impl** — peer-dep on **jsPDF** (confirmed in coordination plan; alternative `react-pdf` if jsPDF doesn't fit; first PR picks the winner). `toPdf(rows, columns)`. **Branch**: `agent/x2/export-pdf-impl`. **Effort**: M.
