@@ -13,6 +13,33 @@ import { type Page, expect, test } from "@playwright/test"
 const URL = "/?edit=1"
 const EDITABLE_COLUMN = "tradingName"
 
+async function installFlashRecorder(page: Page) {
+  await page.addInitScript(() => {
+    const originalAnimate = Element.prototype.animate
+
+    Element.prototype.animate = function (
+      this: Element,
+      ...args: Parameters<typeof originalAnimate>
+    ) {
+      const [keyframes] = args
+      const frames = Array.isArray(keyframes) ? keyframes : []
+      const firstFrame = frames[0]
+      const lastFrame = frames[frames.length - 1]
+      const isFlash =
+        firstFrame?.opacity === 0.72 &&
+        lastFrame?.opacity === 1 &&
+        !("transform" in firstFrame) &&
+        !("transform" in lastFrame)
+
+      if (isFlash) {
+        this.setAttribute("data-test-flash-animation", "true")
+      }
+
+      return originalAnimate.apply(this, args)
+    }
+  })
+}
+
 async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   const cell = page
     .locator(
@@ -25,6 +52,7 @@ async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
 }
 
 test("a successful commit triggers a Web Animations flash on the edited cell", async ({ page }) => {
+  await installFlashRecorder(page)
   await page.goto(URL)
   await focusBodyCell(page, 0, EDITABLE_COLUMN)
   await page.keyboard.press("F2")
@@ -32,20 +60,15 @@ test("a successful commit triggers a Web Animations flash on the edited cell", a
   await editor.fill("Flashed")
   await page.keyboard.press("Enter")
 
-  // The cell now displays the new value AND has had a flash animation
-  // started. element.getAnimations() returns ≥1 in-flight animation
-  // immediately after commit (the flash spec is 160ms).
   const cell = page
     .locator(`.bc-grid-row[data-row-index="0"] .bc-grid-cell[data-column-id="${EDITABLE_COLUMN}"]`)
     .first()
-  // Wait for the editor to unmount so the cell DOM is the underlying body cell.
   await expect(page.locator('[data-bc-grid-editor-input="true"]')).toHaveCount(0)
-  // Read animations within ~80ms of the commit (well inside the 160ms flash).
-  const animationCount = await cell.evaluate((el) => el.getAnimations().length)
-  expect(animationCount).toBeGreaterThanOrEqual(1)
+  await expect(cell).toHaveAttribute("data-test-flash-animation", "true")
 })
 
 test("validation rejection does NOT trigger a flash (no commit landed)", async ({ page }) => {
+  await installFlashRecorder(page)
   await page.goto(URL)
   const cell = await focusBodyCell(page, 0, EDITABLE_COLUMN)
   await page.keyboard.press("F2")
@@ -53,24 +76,21 @@ test("validation rejection does NOT trigger a flash (no commit landed)", async (
   await editor.fill("")
   await page.keyboard.press("Enter")
 
-  // Editor stays open on rejection — no commit, no overlay update,
-  // no flash. The underlying cell DOM is still there (covered by the
-  // editor portal via z-index); its animations list should be empty.
+  // Editor stays open on rejection, so no commit or flash should land.
   await expect(editor).toBeAttached()
   await expect(editor).toHaveAttribute("aria-invalid", "true")
-  const animationCount = await cell.evaluate((el) => el.getAnimations().length)
-  expect(animationCount).toBe(0)
+  await expect(cell).not.toHaveAttribute("data-test-flash-animation", "true")
 })
 
-test("flashOnEdit=false (default URL) → no flash on successful commit", async ({ page }) => {
-  // Default URL has no ?edit=1 → flashOnEdit is false. But default URL
+test("flashOnEdit=false default URL renders without edit-triggered flash", async ({ page }) => {
+  // Default URL has no ?edit=1, so flashOnEdit is false. But default URL
   // also doesn't have editable columns. So instead, exercise the same
-  // grid with ?edit=0 to keep flashOnEdit off but still — actually the
+  // grid with ?edit=0 to keep flashOnEdit off but still - actually the
   // demo only enables editing when ?edit=1 is on, which also enables
   // flashOnEdit, so opt-out is implicit. This test just confirms the
   // default-state behaviour is "no flash because nothing committed."
   await page.goto("/")
-  // No edit possible, no flash possible — assert peace.
+  // No edit possible, no flash possible.
   const renderedRows = await page.locator(".bc-grid-row[data-row-index]").count()
   expect(renderedRows).toBeGreaterThan(0)
 })
