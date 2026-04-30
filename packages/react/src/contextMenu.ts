@@ -9,6 +9,7 @@ import type {
 export const DEFAULT_CONTEXT_MENU_ITEMS: readonly BcContextMenuBuiltinItem[] = [
   "copy",
   "copy-with-headers",
+  "separator",
   "export-csv",
   "export-xlsx",
 ]
@@ -50,6 +51,12 @@ export function isCustomContextMenuItem<TRow>(
   return typeof item === "object"
 }
 
+export function contextMenuItemKey<TRow>(item: BcContextMenuItem<TRow>, index: number): string {
+  if (isCustomContextMenuItem(item)) return item.id
+  if (isContextMenuSeparator(item)) return `separator-${index}`
+  return item
+}
+
 export function contextMenuItemLabel<TRow>(item: BcContextMenuItem<TRow>): string {
   if (isCustomContextMenuItem(item)) return item.label
   return builtInLabels[item] ?? ""
@@ -73,4 +80,8 @@ export function contextMenuItemDisabled<TRow>(
     return context.cell == null || context.row == null || context.column == null
   }
   return true
+}
+
+export function contextMenuItemDestructive<TRow>(item: BcContextMenuItem<TRow>): boolean {
+  return isCustomContextMenuItem(item) && item.destructive === true
 }
