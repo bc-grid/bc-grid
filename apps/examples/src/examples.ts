@@ -19,6 +19,12 @@ export interface CustomerRow {
   status: CustomerStatus
   lastInvoice: string
   lastPayment: string
+  /**
+   * Daily invoice cutoff time in `HH:mm` 24h form. Orders placed after
+   * this time roll into the next day's invoicing batch — a realistic
+   * ERP scheduling field. Used by the editor-time demo + e2e.
+   */
+  cutoffTime: string
 }
 
 const customerNames = [
@@ -108,6 +114,15 @@ function createCustomerRows(count: number): CustomerRow[] {
       status: statuses[Math.floor(random() * statuses.length)] ?? "Open",
       lastInvoice: new Date(start + (820 - invoiceOffset) * dayMs).toISOString(),
       lastPayment: new Date(start + (820 - paymentOffset) * dayMs).toISOString(),
+      // Cutoff times bunch around regional patterns: 14:00 / 15:00 / 16:00
+      // / 17:00 with 0/15/30/45 minute marks. Derived from `index` (NOT
+      // the seeded RNG) so adding this field doesn't shift the seeded
+      // values used by every other column — keeps existing e2e
+      // assertions on those fields stable.
+      cutoffTime: `${String(14 + (index % 4)).padStart(2, "0")}:${String((index % 4) * 15).padStart(
+        2,
+        "0",
+      )}`,
     }
   })
 }

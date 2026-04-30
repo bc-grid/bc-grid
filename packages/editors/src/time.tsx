@@ -1,0 +1,100 @@
+import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
+import { type CSSProperties, useEffect, useLayoutEffect, useRef } from "react"
+
+/**
+ * Time editor — `kind: "time"`. Default for time-of-day columns per
+ * `editing-rfc §editor-time`.
+ *
+ * Behaviour:
+ *   - Native `<input type="time">` — browser provides the time picker
+ *     (24h or 12h depending on locale + OS settings).
+ *   - Format: `HH:mm` (24h) on commit. Display via `Intl.DateTimeFormat`
+ *     with `timeStyle: "short"` is the consumer's responsibility (cell
+ *     renderer / column.format).
+ *   - F2 / Enter: opens the picker / focuses the input.
+ *   - Printable activation: numeric seeds focus the hours field.
+ *   - Commit produces a string in `HH:mm` form; consumers may add a
+ *     `valueParser` if they need a different shape (e.g., a Date).
+ *
+ * No library dep — native input. Browser variance: Safari renders a
+ * spinner, Chrome a popover, Firefox a clock-style picker. All emit
+ * the same `HH:mm` value via `input.value`.
+ */
+export const timeEditor: BcCellEditor<unknown, unknown> = {
+  Component: TimeEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
+  kind: "time",
+}
+
+function TimeEditor(props: BcCellEditorProps<unknown, unknown>) {
+  const { initialValue, error, focusRef, seedKey, pending } = props
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (focusRef && inputRef.current) {
+      ;(focusRef as { current: HTMLElement | null }).current = inputRef.current
+    }
+  }, [focusRef])
+
+  // No select-all on time inputs — the browser owns the field structure
+  // (HH | mm) and select() is a no-op on `type="time"` in most browsers.
+  // We just focus the input; clicking / arrowing into a sub-field is
+  // user-driven from there.
+  useLayoutEffect(() => {
+    inputRef.current?.focus({ preventScroll: true })
+  }, [])
+
+  // seedKey: `<input type="time">` doesn't accept arbitrary seeds — its
+  // value is parsed as HH:mm. Numeric seeds will move into the hours
+  // field naturally on focus; non-numeric seeds are ignored. We don't
+  // try to inject seedKey into the input value.
+  void seedKey
+
+  const seeded = normalizeTimeValue(initialValue)
+
+  return (
+    <input
+      ref={inputRef}
+      type="time"
+      defaultValue={seeded}
+      disabled={pending}
+      aria-invalid={error ? true : undefined}
+      data-bc-grid-editor-input="true"
+      data-bc-grid-editor-kind="time"
+      style={inputStyle}
+    />
+  )
+}
+
+/**
+ * Coerce arbitrary cell values to the `HH:mm` shape expected by
+ * `<input type="time">`. Accepts:
+ *   - already-formatted "HH:mm" or "HH:mm:ss" strings
+ *   - Date instances (extracts hours/minutes in local time)
+ *   - anything else → empty (lets the picker render unset)
+ */
+function normalizeTimeValue(value: unknown): string {
+  if (value == null) return ""
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{2}):(\d{2})/)
+    return match ? `${match[1]}:${match[2]}` : ""
+  }
+  if (value instanceof Date && !Number.isNaN(value.valueOf())) {
+    const hh = String(value.getHours()).padStart(2, "0")
+    const mm = String(value.getMinutes()).padStart(2, "0")
+    return `${hh}:${mm}`
+  }
+  return ""
+}
+
+const inputStyle: CSSProperties = {
+  width: "100%",
+  height: "100%",
+  border: "2px solid hsl(var(--ring, 217 91% 60%))",
+  borderRadius: "calc(var(--radius, 0.375rem) - 1px)",
+  background: "hsl(var(--background, 0 0% 100%))",
+  color: "inherit",
+  font: "inherit",
+  paddingInline: "var(--bc-grid-cell-padding-x, 12px)",
+  outline: "none",
+  boxSizing: "border-box",
+}

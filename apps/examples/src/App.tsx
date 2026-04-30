@@ -1,4 +1,4 @@
-import { numberEditor, textEditor } from "@bc-grid/editors"
+import { dateEditor, numberEditor, textEditor, timeEditor } from "@bc-grid/editors"
 import {
   type BcCellEditor,
   BcEditGrid,
@@ -343,6 +343,27 @@ function CustomerGridDemo({
         width: 260,
         format: "date",
         filter: { type: "date" },
+        // ?edit=1: editable date field. Native <input type="date"> emits
+        // YYYY-MM-DD; valueParser keeps that as-is. validate enforces the
+        // realistic ERP constraint that an invoice can't be dated in the future.
+        editable: editorFrameworkEnabled(),
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: dateEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        valueParser: (input: string) => input,
+        validate: (next: unknown) => {
+          if (typeof next !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(next)) {
+            return { valid: false as const, error: "Date must be YYYY-MM-DD." }
+          }
+          const date = new Date(next)
+          if (Number.isNaN(date.valueOf())) {
+            return { valid: false as const, error: "Invalid date." }
+          }
+          if (date.valueOf() > Date.now()) {
+            return { valid: false as const, error: "Invoice date can't be in the future." }
+          }
+          return { valid: true as const }
+        },
       },
       {
         columnId: "lastPayment",
@@ -351,6 +372,35 @@ function CustomerGridDemo({
         width: 260,
         format: "date",
         filter: { type: "date" },
+      },
+      {
+        columnId: "cutoffTime",
+        field: "cutoffTime",
+        header: "Cutoff",
+        width: 110,
+        align: "right",
+        // ?edit=1: editable time field. The native `<input type="time">`
+        // emits `HH:mm`; an identity valueParser keeps the value as-is.
+        // validate enforces a working-hours bound (08:00–22:00).
+        editable: editorFrameworkEnabled(),
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: timeEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        valueParser: (input: string) => input,
+        validate: (next: unknown) => {
+          if (typeof next !== "string" || !/^\d{2}:\d{2}$/.test(next)) {
+            return { valid: false as const, error: "Time must be HH:mm." }
+          }
+          const [hh, mm] = next.split(":").map(Number)
+          if (hh == null || mm == null) {
+            return { valid: false as const, error: "Time must be HH:mm." }
+          }
+          const minutes = hh * 60 + mm
+          if (minutes < 8 * 60 || minutes > 22 * 60) {
+            return { valid: false as const, error: "Cutoff must be between 08:00 and 22:00." }
+          }
+          return { valid: true as const }
+        },
       },
     ],
     [aggregationDemo],

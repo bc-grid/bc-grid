@@ -27,11 +27,17 @@ export interface SortModifiers {
   ctrlOrMeta: boolean
 }
 
+export interface ColumnMenuAnchor {
+  x: number
+  y: number
+}
+
 interface RenderHeaderCellParams<TRow> {
   column: ResolvedColumn<TRow>
   domBaseId: string
   headerHeight: number
   index: number
+  onColumnMenu: (column: ResolvedColumn<TRow>, anchor: ColumnMenuAnchor) => void
   onResizeEnd: (event: PointerEvent<HTMLDivElement>) => void
   onResizeMove: (event: PointerEvent<HTMLDivElement>) => void
   onResizeStart: (column: ResolvedColumn<TRow>, event: PointerEvent<HTMLDivElement>) => void
@@ -48,6 +54,7 @@ export function renderHeaderCell<TRow>({
   domBaseId,
   headerHeight,
   index,
+  onColumnMenu,
   onResizeEnd,
   onResizeMove,
   onResizeStart,
@@ -71,6 +78,8 @@ export function renderHeaderCell<TRow>({
   // Show the 1-based sort-order index when more than one column is sorted,
   // so users can see the priority order they composed via Shift+click.
   const showSortOrder = sort != null && sortState.length > 1
+  const headerLabel =
+    typeof column.source.header === "string" ? column.source.header : column.columnId
 
   const handleClick = sortable
     ? (event: MouseEvent<HTMLDivElement>) => {
@@ -112,6 +121,11 @@ export function renderHeaderCell<TRow>({
       aria-sort={ariaSort}
       tabIndex={sortable ? 0 : undefined}
       onClick={handleClick}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onColumnMenu(column, { x: event.clientX, y: event.clientY })
+      }}
       onKeyDown={handleKeyDown}
       style={cellStyle({
         align: column.align,
@@ -125,6 +139,7 @@ export function renderHeaderCell<TRow>({
         zIndex: column.pinned ? 4 : 3,
       })}
       data-column-id={column.columnId}
+      aria-label={headerLabel}
     >
       <span className="bc-grid-header-label">{column.source.header}</span>
       {sort ? (
@@ -139,6 +154,22 @@ export function renderHeaderCell<TRow>({
           ) : null}
         </span>
       ) : null}
+      <button
+        aria-haspopup="menu"
+        aria-label={`Column options for ${headerLabel}`}
+        className="bc-grid-header-menu-button"
+        data-bc-grid-column-menu-button="true"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          const rect = event.currentTarget.getBoundingClientRect()
+          onColumnMenu(column, { x: rect.left, y: rect.bottom + 4 })
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        type="button"
+      >
+        ...
+      </button>
       {column.source.resizable === false ? null : (
         // Drag handle pinned to the right edge of the header cell. Pointer
         // events with setPointerCapture so the drag survives the cursor

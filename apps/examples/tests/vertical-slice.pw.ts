@@ -10,7 +10,7 @@ test("AR customer vertical slice exposes the Q1 grid contract", async ({ page })
   const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
   await expect(grid).toBeVisible()
   await expect(grid).toHaveAttribute("aria-rowcount", "5002")
-  await expect(grid).toHaveAttribute("aria-colcount", "19")
+  await expect(grid).toHaveAttribute("aria-colcount", "20")
 
   const renderedRows = await grid.locator(".bc-grid-row").count()
   expect(renderedRows).toBeGreaterThan(0)
