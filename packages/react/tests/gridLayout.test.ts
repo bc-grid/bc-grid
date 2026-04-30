@@ -57,7 +57,8 @@ describe("scrollerStyle", () => {
 
   test("page-flow mode hands the scrollbar back to the document", () => {
     const style = scrollerStyle(undefined, true)
-    expect(style.overflow).toBe("visible")
+    expect(style.overflowX).toBe("auto")
+    expect(style.overflowY).toBe("hidden")
     expect(style.flex).toBe("0 0 auto")
     // No fixed height + no minHeight: the scroller grows with its canvas.
     expect(style).not.toHaveProperty("height")
@@ -67,7 +68,8 @@ describe("scrollerStyle", () => {
   test("page-flow mode ignores any body-height hint", () => {
     // Even if a numeric bodyHeight bleeds through, page-flow takes priority.
     const style = scrollerStyle(360, true)
-    expect(style.overflow).toBe("visible")
+    expect(style.overflowX).toBe("auto")
+    expect(style.overflowY).toBe("hidden")
     expect(style).not.toHaveProperty("height")
   })
 })

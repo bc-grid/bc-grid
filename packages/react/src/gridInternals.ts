@@ -279,14 +279,14 @@ export function headerRowStyle(width: number, height: number, scrollLeft: number
 
 export function scrollerStyle(bodyHeight: number | undefined, pageFlow = false): CSSProperties {
   if (pageFlow) {
-    // Auto-height mode: the scroller does not own its own scrollbar —
+    // Auto-height mode: the scroller does not own vertical scrolling —
     // it grows to match its canvas content height and the page scrolls
-    // through it. Header alignment + horizontal scroll still come from
-    // the same translate3d transform the body uses, so this only
-    // changes vertical layout.
+    // through it. It still owns horizontal scrolling so header/body
+    // scrollLeft synchronization continues to use the same element.
     return {
       flex: "0 0 auto",
-      overflow: "visible",
+      overflowX: "auto",
+      overflowY: "hidden",
       position: "relative",
     }
   }

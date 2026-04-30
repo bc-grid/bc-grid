@@ -775,8 +775,10 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * `"auto"` — page-flow mode. The grid grows to its rendered canvas
    *   height and gives the scrollbar back to the document; the page
    *   scrolls naturally through the rows. The header sticks to the top
-   *   of the viewport via `position: sticky`. This is the right default
-   *   when the grid is the primary surface on a long-form page.
+   *   of the viewport via `position: sticky`, while the body scroller
+   *   still owns horizontal overflow so wide tables keep a standard
+   *   horizontal scrollbar. This is the right default when the grid is
+   *   the primary surface on a long-form page.
    *   Trade-off: virtualization no longer windows on row scroll — the
    *   ResizeObserver expands the virtualizer's viewport to the full
    *   canvas height, so every row is in the DOM. Use a numeric height
