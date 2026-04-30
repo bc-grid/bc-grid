@@ -124,7 +124,7 @@ Track 3 (server-row-model) reuses `server-query-rfc` (PR #2, merged) and needs n
 
 These tasks are pure `@bc-grid/react` UI on top of existing state shapes. **No RFC needed** — `api.md §1.1` and `§3.2` already declare the supporting types. Anyone can claim these immediately after `grid-tsx-file-split`. Suggested owner: c1 or whoever is between bigger pieces.
 
-- `[review: c1 #136]` **column-reorder** — drag a column header to reorder. State already supported via `BcColumnStateEntry.position` (`api.md §3.2`). UI: pointer-driven drag with a drop-indicator line; keyboard alternative via column tool panel (Track 5). Honour controlled/uncontrolled `columnState` from `api.md §3.1`. **Effort**: M.
+- `[done: c1 #136]` **column-reorder** — drag a column header to reorder. State already supported via `BcColumnStateEntry.position` (`api.md §3.2`). UI: pointer-driven drag with a drop-indicator line; keyboard alternative via column tool panel (Track 5). Honour controlled/uncontrolled `columnState` from `api.md §3.1`. **Effort**: M.
 - `[done: x1 #122]` **column-visibility-ui** — show/hide affordance per column. State already supported via `BcColumnStateEntry.hidden`. UI: header-cell context-menu item OR via the Columns tool panel in Track 5. (Header context-menu lands here; tool panel lands in `tool-panel-columns`.) **Effort**: S.
 - `[review: x1 #97]` **column-state-url-persistence** — encode `columnState` (visibility, order, width, sort) into URL search params for shareable links. Pairs with `localstorage-gridid-persistence` (Phase 5.5). Consumer opts in via `BcGridProps.urlStatePersistence?: { searchParam: string }`. **Effort**: S.
 - `[review: x1 #98]` **search-complete** — apply `searchText` as a row filter (case-insensitive substring across `valueFormatter` results for searchable columns per `api.md §4.3`). Pairs with `search-highlighting` (Phase 5.5) which renders the `<mark>` in cells. **Effort**: S.
@@ -143,7 +143,7 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 - `[done: c1 #126]` **editor-datetime** — composes `editor-date` + time picker; ISO 8601 commit. **Effort**: M.
 - `[done: c1 #120]` **editor-time** — `<input type="time" />` styled with shadcn `Input`; 24h commit. **Effort**: S.
 - `[done: c1 #127 (salvaged via #135)]` **editor-select** — native `<select>` (not shadcn); reads `column.options` (additive prop). Type-to-narrow via `seedKey`. **Effort**: M.
-- `[review: c1]` **editor-multi-select** — native `<select multiple>` (not shadcn); reuses `column.options`. Returns `readonly TValue[]`. **Effort**: M.
+- `[done: c1 #138]` **editor-multi-select** — native `<select multiple>` (not shadcn); reuses `column.options`. Returns `readonly TValue[]`. **Effort**: M.
 - `[ready]` **editor-autocomplete** — native `<input list>` + `<datalist>` (not shadcn); async via `column.fetchOptions(query, signal)`. Debounced 200ms. **Effort**: M. **Unblocked: editor-framework done.**
 - `[done: c1 #88 (folded into editor-framework)]` **validation-framework** — sync + async validators with `AbortSignal` race semantics; `useEditingController` already exposes the full pipeline. **Effort**: S.
 - `[done: c1 #128 (salvaged via #135)]` **dirty-tracking** — `BcEditState` map + visual states (`data-bc-grid-cell-state`); cell renderer params extension (`pending`, `editError`, `isDirty`). **Effort**: S.
@@ -160,7 +160,7 @@ Spec pending: `docs/design/range-rfc.md` (c2 to author).
 - `[blocked: depends on range-state-machine]` **clipboard-copy-tsv-html** — Ctrl/Cmd+C serializes range to TSV (text/plain) + HTML (text/html) on the clipboard. **Effort**: S.
 - `[blocked: depends on clipboard-copy-tsv-html]` **clipboard-paste-from-excel** — Ctrl/Cmd+V parses clipboard TSV; applies cell-by-cell with per-column `valueParser` + `validate`; atomic apply (all-or-rollback). **Effort**: M.
 - `[blocked: depends on clipboard-paste-from-excel]` **fill-handle** — drag-square at bottom-right of active range; drag to extend; release to fill (linear / copy / smart-fill). **Effort**: M.
-- `[review: c1 #140]` **master-detail** — expandable row that mounts a consumer-supplied detail component below the row. State via `expansion: ReadonlySet<RowId>` (already declared). `aria-level` + `role="treegrid"` when active. Independent of range work; can run in parallel. **Effort**: M.
+- `[done: c1 #140]` **master-detail** — expandable row that mounts a consumer-supplied detail component below the row. State via `expansion: ReadonlySet<RowId>` (already declared). `aria-level` + `role="treegrid"` when active. Independent of range work; can run in parallel. **Effort**: M.
 - `[ready]` **column-groups-multi-row-headers** — multi-row column headers (e.g., parent header "Q1 Sales" with children "Jan / Feb / Mar"). Surface: `BcReactGridColumn.children?: BcReactGridColumn[]` (additive). Renders header rows for each level with `aria-colspan`. Independent; can run in parallel. **Effort**: M.
 - `[review: x1 #110]` **sticky-header-polish** — refine the existing pinned-top header to maintain scroll-shadow + correct z-index against pinned-left/-right corners. Independent; can run in parallel. **Effort**: S.
 
