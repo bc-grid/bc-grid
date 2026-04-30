@@ -928,6 +928,23 @@ filter narrows the row count, `selected` only when a selection is active, and
 `aggregations` only when at least one aggregation result is available. Custom
 segments render unconditionally — visibility is the consumer's responsibility.
 
+The `sidebar` prop registers right-edge tool panel tabs by id. Built-in panels
+share the grid's existing column and filter state APIs, so consumers opt in with
+the same grid instance instead of adding a separate provider:
+
+```tsx
+<BcGrid
+  // ...
+  sidebar={["columns", "filters"]}
+  defaultSidebarPanel="columns"
+  sidebarWidth={320}
+/>
+```
+
+`defaultSidebarPanel` opens any registered panel id on mount; omit it or pass
+`null` to start collapsed. `sidebarWidth` controls the open panel width in
+pixels and falls back to `280`.
+
 ```ts
 type BcStatusBarSegment<TRow = unknown> =
   | "total"

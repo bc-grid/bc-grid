@@ -14,6 +14,7 @@ import {
   type BcGridColumn,
   type BcGridDensity,
   type BcSelection,
+  type BcSidebarPanel,
   useBcGridApi,
 } from "@bc-grid/react"
 import { useCallback, useMemo, useState } from "react"
@@ -37,6 +38,18 @@ const themeModes = [
   { id: "light", label: "Light" },
   { id: "dark", label: "Dark" },
 ] as const satisfies readonly { id: ThemeMode; label: string }[]
+
+const customerGridSidebarPanels = [
+  "columns",
+  "filters",
+] as const satisfies readonly BcSidebarPanel<CustomerRow>[]
+
+const customerGridGroupableColumns = [
+  { columnId: "region", header: "Region" },
+  { columnId: "owner", header: "Collector" },
+  { columnId: "terms", header: "Terms" },
+  { columnId: "status", header: "Status" },
+] as const
 
 const statusLabels: Record<CustomerStatus, string> = {
   Open: "open",
@@ -707,7 +720,9 @@ function CustomerGridDemo({
         extraActions={(row: CustomerRow) => [
           { label: "Statement", onSelect: () => handleStatement(row) },
         ]}
+        defaultSidebarPanel="columns"
         gridId="accounts-receivable.customers"
+        groupableColumns={customerGridGroupableColumns}
         height={gridHeight}
         linkField="legalName"
         locale="en-US"
@@ -728,6 +743,8 @@ function CustomerGridDemo({
         rowIsDisabled={rowIsDisabled}
         rowId={(row: CustomerRow) => row.id}
         searchText={searchText}
+        sidebar={customerGridSidebarPanels}
+        sidebarWidth={320}
         {...(urlStatePersistence ? { urlStatePersistence } : {})}
       />
 
