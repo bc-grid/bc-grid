@@ -163,7 +163,7 @@ Spec already exists: `docs/design/server-query-rfc.md` (PR #2). No new RFC neede
 - `[done: x2 #85]` **infinite-mode-block-cache** — `rowModel="infinite"`: `ServerBlockCache` with LRU eviction; `LoadServerBlock` integration; viewport-driven block fetching with prefetch ahead. **Branch**: `agent/x2/infinite-mode-block-cache`. **Effort**: L (3-5 hours).
 - `[review: x2 #90]` **server-tree-mode** — `rowModel="tree"`: lazy children fetching via `LoadServerTreeChildren`; expand/collapse triggers fetch; `ServerTreeRow` rendering. **Branch**: `agent/x2/server-tree-mode`. **Effort**: L.
 - `[review: x2 #89]` **mutation-pipeline** — `ServerRowPatch` apply path; optimistic UI with `pendingMutations` map; `ServerMutationResult` settle handling. Integrates with Track 1's `bc-edit-grid-complete`. **Branch**: `agent/x2/mutation-pipeline`. **Effort**: M.
-- `[ready]` **invalidation-impl** — `ServerInvalidation` scopes (all / view / blocks / rows / tree). Refetch + cache eviction logic. **Effort**: M.
+- `[review: x2 #92]` **invalidation-impl** — `ServerInvalidation` scopes (all / view / blocks / rows / tree). Refetch + cache eviction logic. **Branch**: `agent/x2/invalidation-impl`. **Effort**: M.
 - `[blocked: depends on infinite-mode-block-cache + mutation-pipeline]` **server-row-model-perf-tuning** — measure block fetch latency, debounce settings, cache hit rate at 100k+ rows. Add to nightly perf harness. **Effort**: M.
 
 #### Track 4 — Aggregations + Pivots (Q5 pulled forward)

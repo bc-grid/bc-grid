@@ -117,6 +117,7 @@ type LoadTreeChildrenInput<TRow> = {
   childStart: number
   groupPath?: ServerTreeQuery["groupPath"]
   parentRowId: RowId | null
+  rowId?: IndexedRowIdGetter<TRow>
   view: ServerViewState
   viewKey?: string
 }
@@ -189,6 +190,14 @@ type StateSnapshotInput = {
   selection: ServerSelection
   view: ServerViewState
   viewKey: string
+}
+
+type InvalidateInput<TRow> = {
+  rowId?: IndexedRowIdGetter<TRow>
+}
+
+type InvalidateResult = {
+  affectedBlockKeys: ServerBlockKey[]
 }
 
 type ViewStateInput = {
@@ -315,22 +324,37 @@ export class ServerBlockCache<TRow> {
     this.#accessOrder.clear()
   }
 
-  invalidate(invalidation: ServerInvalidation): void {
+  invalidate(invalidation: ServerInvalidation): ServerBlockKey[] {
     if (invalidation.scope === "all") {
+      const blockKeys = [...this.#blocks.keys()]
       this.clear()
-      return
+      return blockKeys
     }
     if (invalidation.scope === "view") {
+      const invalidated: ServerBlockKey[] = []
       for (const [blockKey, block] of this.#blocks) {
         if (!invalidation.viewKey || block.viewKey === invalidation.viewKey) {
-          this.delete(blockKey)
+          if (this.delete(blockKey)) invalidated.push(blockKey)
         }
       }
-      return
+      return invalidated
     }
     if (invalidation.scope === "blocks") {
-      for (const blockKey of invalidation.blockKeys) this.delete(blockKey)
+      const invalidated: ServerBlockKey[] = []
+      for (const blockKey of invalidation.blockKeys) {
+        if (this.delete(blockKey)) invalidated.push(blockKey)
+      }
+      return invalidated
     }
+    return []
+  }
+
+  markStale(blockKey: ServerBlockKey): boolean {
+    const block = this.#blocks.get(blockKey)
+    if (!block || block.state === "fetching" || block.state === "queued") return false
+    this.#blocks.set(blockKey, { ...block, state: "stale" })
+    this.#accessOrder.delete(blockKey)
+    return true
   }
 
   toMap(): Map<ServerBlockKey, ServerCacheBlock<TRow>> {
@@ -399,6 +423,10 @@ class ServerRowModelController<TRow> {
   #pendingMutations = new Map<string, ServerRowPatch>()
   #requestSequence = 0
   #mutationRowIdGetter: RowIdGetter<TRow> | null = null
+  #treeBlockKeysByParent = new Map<RowId | null, Set<ServerBlockKey>>()
+  #treeChildRowIdsByBlock = new Map<ServerBlockKey, Set<RowId>>()
+  #treeChildRowIdsByParent = new Map<RowId | null, Set<RowId>>()
+  #treeParentByBlock = new Map<ServerBlockKey, RowId | null>()
 
   createViewKey(view: ServerViewState): string {
     return `view:${stableStringify(view)}`
@@ -618,6 +646,13 @@ class ServerRowModelController<TRow> {
           viewKey: result.viewKey ?? viewKey,
           ...(result.revision ? { revision: result.revision } : {}),
         })
+        this.rememberTreeBlock({
+          blockKey,
+          getRowId: input.rowId,
+          parentRowId: input.parentRowId,
+          result,
+          viewKey: result.viewKey ?? viewKey,
+        })
         if (rows === resultRows) return result
         return {
           ...result,
@@ -675,8 +710,23 @@ class ServerRowModelController<TRow> {
     this.#inFlightTree.clear()
   }
 
-  invalidate(invalidation: ServerInvalidation): void {
-    this.cache.invalidate(invalidation)
+  invalidate(
+    invalidation: ServerInvalidation,
+    input: InvalidateInput<TRow> = {},
+  ): InvalidateResult {
+    if (invalidation.scope === "rows") {
+      return { affectedBlockKeys: this.invalidateRows(invalidation.rowIds, input.rowId) }
+    }
+    if (invalidation.scope === "tree") {
+      return {
+        affectedBlockKeys: this.invalidateTree(invalidation.parentRowId, !!invalidation.recursive),
+      }
+    }
+
+    const affectedBlockKeys = this.cache.invalidate(invalidation)
+    if (invalidation.scope === "all") this.clearTreeIndex()
+    else this.forgetTreeBlocks(affectedBlockKeys)
+    return { affectedBlockKeys }
   }
 
   queueMutation(input: QueueMutationInput<TRow>): QueueMutationResult {
@@ -770,7 +820,10 @@ class ServerRowModelController<TRow> {
 
   collectContiguousInfiniteRows(viewKey: string): TRow[] {
     const loadedBlocks = [...this.cache.toMap().values()]
-      .filter((block) => block.viewKey === viewKey && block.state === "loaded")
+      .filter(
+        (block) =>
+          block.viewKey === viewKey && (block.state === "loaded" || block.state === "stale"),
+      )
       .sort((a, b) => a.start - b.start)
     const rows: TRow[] = []
     let expectedStart = 0
@@ -963,6 +1016,123 @@ class ServerRowModelController<TRow> {
       return `group:${input.viewKey}:${stableStringify(input.groupPath)}`
     }
     return input.getRowId(input.row.data, input.index)
+  }
+
+  private explicitTreeRowId(row: ServerTreeRow<TRow>): RowId | null {
+    if (row.rowId) return row.rowId
+    if (row.kind === "group" && row.groupKey?.rowId) return row.groupKey.rowId
+    return null
+  }
+
+  private rememberTreeBlock(input: {
+    blockKey: ServerBlockKey
+    getRowId: IndexedRowIdGetter<TRow> | undefined
+    parentRowId: RowId | null
+    result: ServerTreeResult<TRow>
+    viewKey: string
+  }): void {
+    this.forgetTreeBlocks([input.blockKey])
+
+    const parentBlocks = this.#treeBlockKeysByParent.get(input.parentRowId) ?? new Set()
+    parentBlocks.add(input.blockKey)
+    this.#treeBlockKeysByParent.set(input.parentRowId, parentBlocks)
+    this.#treeParentByBlock.set(input.blockKey, input.parentRowId)
+
+    const childRowIds = new Set<RowId>()
+    input.result.rows.forEach((row, index) => {
+      const rowId = input.getRowId
+        ? this.treeRowId({
+            getRowId: input.getRowId,
+            groupPath:
+              row.kind === "group" && row.groupKey
+                ? [...input.result.groupPath, row.groupKey]
+                : input.result.groupPath,
+            index: input.result.childStart + index,
+            row,
+            viewKey: input.viewKey,
+          })
+        : this.explicitTreeRowId(row)
+      if (rowId) childRowIds.add(rowId)
+    })
+    this.#treeChildRowIdsByBlock.set(input.blockKey, childRowIds)
+    this.rebuildTreeChildrenForParent(input.parentRowId)
+  }
+
+  private forgetTreeBlocks(blockKeys: readonly ServerBlockKey[]): void {
+    const affectedParents = new Set<RowId | null>()
+    for (const blockKey of blockKeys) {
+      const parentRowId = this.#treeParentByBlock.get(blockKey)
+      if (parentRowId === undefined) continue
+      affectedParents.add(parentRowId)
+      this.#treeParentByBlock.delete(blockKey)
+      this.#treeChildRowIdsByBlock.delete(blockKey)
+      const parentBlocks = this.#treeBlockKeysByParent.get(parentRowId)
+      if (parentBlocks) {
+        parentBlocks.delete(blockKey)
+        if (parentBlocks.size === 0) this.#treeBlockKeysByParent.delete(parentRowId)
+      }
+    }
+    for (const parentRowId of affectedParents) this.rebuildTreeChildrenForParent(parentRowId)
+  }
+
+  private rebuildTreeChildrenForParent(parentRowId: RowId | null): void {
+    const childRowIds = new Set<RowId>()
+    for (const blockKey of this.#treeBlockKeysByParent.get(parentRowId) ?? []) {
+      for (const rowId of this.#treeChildRowIdsByBlock.get(blockKey) ?? []) childRowIds.add(rowId)
+    }
+    if (childRowIds.size > 0) this.#treeChildRowIdsByParent.set(parentRowId, childRowIds)
+    else this.#treeChildRowIdsByParent.delete(parentRowId)
+  }
+
+  private clearTreeIndex(): void {
+    this.#treeBlockKeysByParent.clear()
+    this.#treeChildRowIdsByBlock.clear()
+    this.#treeChildRowIdsByParent.clear()
+    this.#treeParentByBlock.clear()
+  }
+
+  private invalidateRows(
+    rowIds: readonly RowId[],
+    rowIdGetter: IndexedRowIdGetter<TRow> | undefined,
+  ): ServerBlockKey[] {
+    if (!rowIdGetter || rowIds.length === 0) return []
+    const targetRowIds = new Set(rowIds)
+    const affectedBlockKeys: ServerBlockKey[] = []
+
+    for (const block of this.cache.toMap().values()) {
+      if (block.state !== "loaded" && block.state !== "stale") continue
+      const containsInvalidatedRow = block.rows.some((row, index) =>
+        targetRowIds.has(rowIdGetter(row, block.start + index)),
+      )
+      if (containsInvalidatedRow && this.cache.markStale(block.key)) {
+        affectedBlockKeys.push(block.key)
+      }
+    }
+
+    return affectedBlockKeys
+  }
+
+  private invalidateTree(parentRowId: RowId | null, recursive: boolean): ServerBlockKey[] {
+    const parentRowIds = new Set<RowId | null>([parentRowId])
+    if (recursive) {
+      const queue: Array<RowId | null> = [parentRowId]
+      for (const currentParentId of queue) {
+        for (const childRowId of this.#treeChildRowIdsByParent.get(currentParentId) ?? []) {
+          if (parentRowIds.has(childRowId)) continue
+          parentRowIds.add(childRowId)
+          queue.push(childRowId)
+        }
+      }
+    }
+
+    const affectedBlockKeys: ServerBlockKey[] = []
+    for (const currentParentId of parentRowIds) {
+      for (const blockKey of this.#treeBlockKeysByParent.get(currentParentId) ?? []) {
+        if (this.cache.delete(blockKey)) affectedBlockKeys.push(blockKey)
+      }
+    }
+    this.forgetTreeBlocks(affectedBlockKeys)
+    return affectedBlockKeys
   }
 
   private startInfiniteRequest(input: {
