@@ -206,7 +206,15 @@ export type BcColumnFormat =
 
 export interface BcAggregation {
   type: "sum" | "count" | "avg" | "min" | "max" | "custom"
-  custom?: (rows: unknown[]) => unknown
+  custom?:
+    | (rows: unknown[]) => unknown
+    | {
+        id: string
+        init(ctx: unknown): unknown
+        step(acc: unknown, value: unknown, row: unknown, ctx: unknown): unknown
+        merge(a: unknown, b: unknown, ctx: unknown): unknown
+        finalize(acc: unknown, ctx: unknown): unknown
+      }
 }
 
 export type BcValidationResult =
@@ -1034,8 +1042,19 @@ import "@bc-grid/theming/styles.css"
 ### `@bc-grid/aggregations`
 
 ```ts
-export { sum, count, avg, min, max, registerAggregation }
-export type { Aggregation, AggregationContext, AggregationResult }
+export {
+  aggregate,
+  aggregateColumns,
+  aggregateGroups,
+  aggregationRegistry,
+  sum,
+  count,
+  avg,
+  min,
+  max,
+  registerAggregation,
+}
+export type { AggregateOptions, Aggregation, AggregationContext, AggregationResult }
 ```
 
 ### `@bc-grid/filters`
