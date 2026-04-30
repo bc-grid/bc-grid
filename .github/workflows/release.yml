@@ -34,7 +34,7 @@ jobs:
         run: bun run test
 
       - name: Build all packages
-        run: bun run --filter './packages/*' build
+        run: bun run build:packages
 
       - name: Bundle-size gate
         run: bun run bundle-size

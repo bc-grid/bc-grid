@@ -1,5 +1,17 @@
 import { defineConfig, devices } from "@playwright/test"
 
+function portFromEnv(name: string, fallback: number): number {
+  const value = process.env[name]
+  if (!value) return fallback
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const benchmarksPort = portFromEnv("BC_GRID_BENCHMARKS_PORT", 5174)
+const examplesPort = portFromEnv("BC_GRID_EXAMPLES_PORT", 5175)
+const benchmarksBaseURL = `http://localhost:${benchmarksPort}`
+const examplesBaseURL = `http://localhost:${examplesPort}`
+
 /**
  * Root Playwright config for bc-grid e2e tests.
  *
@@ -35,45 +47,45 @@ export default defineConfig({
     {
       name: "spike-chromium",
       testDir: "./apps/benchmarks/tests",
-      use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:5174" },
+      use: { ...devices["Desktop Chrome"], baseURL: benchmarksBaseURL },
     },
     {
       name: "spike-firefox",
       testDir: "./apps/benchmarks/tests",
-      use: { ...devices["Desktop Firefox"], baseURL: "http://localhost:5174" },
+      use: { ...devices["Desktop Firefox"], baseURL: benchmarksBaseURL },
     },
     {
       name: "spike-webkit",
       testDir: "./apps/benchmarks/tests",
-      use: { ...devices["Desktop Safari"], baseURL: "http://localhost:5174" },
+      use: { ...devices["Desktop Safari"], baseURL: benchmarksBaseURL },
     },
     // ---- React demo (apps/examples) ----
     {
       name: "examples-chromium",
       testDir: "./apps/examples/tests",
-      use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:5175" },
+      use: { ...devices["Desktop Chrome"], baseURL: examplesBaseURL },
     },
     {
       name: "examples-firefox",
       testDir: "./apps/examples/tests",
-      use: { ...devices["Desktop Firefox"], baseURL: "http://localhost:5175" },
+      use: { ...devices["Desktop Firefox"], baseURL: examplesBaseURL },
     },
     {
       name: "examples-webkit",
       testDir: "./apps/examples/tests",
-      use: { ...devices["Desktop Safari"], baseURL: "http://localhost:5175" },
+      use: { ...devices["Desktop Safari"], baseURL: examplesBaseURL },
     },
   ],
   webServer: [
     {
-      command: "bun run --cwd apps/benchmarks dev",
-      url: "http://localhost:5174",
+      command: `bun run --cwd apps/benchmarks dev -- --port ${benchmarksPort}`,
+      url: benchmarksBaseURL,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
     {
-      command: "bun run --cwd apps/examples dev",
-      url: "http://localhost:5175",
+      command: `bun run --cwd apps/examples dev -- --port ${examplesPort}`,
+      url: examplesBaseURL,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
