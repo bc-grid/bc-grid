@@ -1,10 +1,11 @@
 # v1 Parity Sprint — orchestration plan
 
-**Owner:** c2 (auditor + coordinator)
+**Owner:** Codex in `~/work/bc-grid` (auditor + coordinator + merge integrator + Playwright owner)
 **Decision date:** 2026-04-29
 **Authorising:** JohnC
 **Supersedes (timeline only):** `docs/roadmap.md` Q5-Q8 — feature scope from those quarters is pulled forward into this sprint; the original quarter-by-quarter calendar is replaced by the parallel-track plan below.
 **Does NOT supersede:** `docs/AGENTS.md` golden rules, `docs/design.md` architectural decisions (§13), `docs/api.md` v0.1 surface, `docs/PARALLEL_WORK.md` worktree scheme. All still binding.
+**Worker execution plan:** `docs/coordination/five-worker-v1-execution-plan.md`
 
 ---
 
@@ -12,13 +13,13 @@
 
 **Old goal:** AG Grid Enterprise replacement for ~80-90% of ERP use cases over a 2-year, 8-quarter timeline.
 
-**New goal:** Functional parity with AG Grid Enterprise for ERP workloads over a **2-week parallel sprint with 4 max-tier agents**, leveraging best-of-class agent velocity demonstrated on day 0 (Q1 vertical-slice gate cleared via #42).
+**New goal:** Functional parity with AG Grid Enterprise for ERP workloads over a **2-week parallel sprint with 5 worker agents plus a Codex coordinator**, leveraging best-of-class agent velocity demonstrated on day 0 (Q1 vertical-slice gate cleared via #42).
 
 ### Why this is plausible
 
 On day 0 (~5 hours of focused work), **13 substantive PRs** landed at sustained quality (q1-pinned-cols, api-surface-diff, docs-q1-content, row-selection, nightly-perf-harness, filter-cell-role fix, live-regions, audit, etc.) — sustained ~2 PRs/hour with three implementer agents + one auditor. That pace ships ~10-20% of the original 2-year scope on day 0.
 
-**At 4 max-tier parallel agents × ~10 hours/day × 14 days, the budget is ~560 agent-hours.** The remaining v1.0 scope (Tracks 1-7) is roughly 50-80 impl PRs of 1-3 hours each plus integration / e2e / perf hardening — a comfortable fit if the RFCs land cleanly and the queue stays parallel-safe. Bug-for-bug parity with AG Grid's 7+ years of polish remains a post-sprint backlog.
+**At 5 max-tier worker agents × ~10 hours/day × 14 days, the budget is ~700 worker-hours, plus coordinator time for review, merge, release, and Playwright validation.** The remaining v1.0 scope (Tracks 1-7) is roughly 50-80 impl PRs of 1-3 hours each plus integration / e2e / perf hardening — a comfortable fit if the RFCs land cleanly and the queue stays parallel-safe. Bug-for-bug parity with AG Grid's 7+ years of polish remains a post-sprint backlog.
 
 **Target:** v1.0-rc1 by day 12; v1.0 tag by day 14.
 
@@ -208,27 +209,46 @@ Each track has one suggested owner; agents are free to swap based on availabilit
 
 ## Cross-cutting concerns (continuous, not per-track)
 
-- **Reviews** — every PR gets a non-author review. c2 is default reviewer; agents rotate as backup. Self-merge prohibited per `AGENTS.md §3.7`.
+- **Coordinator / worker split** — Codex in `~/work/bc-grid` coordinates the sprint, reviews PRs, fixes merge-train issues, merges PRs, cuts releases, and runs Playwright / smoke-perf / benchmarks. Worker agents should spend their cycles coding, unit tests, type-checks, builds, and concise PR handoffs. Workers must not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs.
+- **Reviews** — every PR gets a non-author review. The Codex coordinator is default reviewer; agents rotate as backup when explicitly assigned. Self-merge prohibited for worker PRs per `AGENTS.md §3.7`.
 - **Smoke perf on every PR** — once `smoke-perf-ci` lands in Phase A, every PR runs cold-mount/sort-10k/scroll-10k locally + in CI.
 - **Bundle size budget** — `core+virtualizer+animations+react` < 60KB gzipped per `design.md §3.2`. Once `bundle-size-ci-gate` lands, drift fails the build.
 - **API surface manifest** — every public-export change bumps `tools/api-surface/src/manifest.ts` in the same PR. Already enforced.
 - **Decision log discipline** — every cross-cutting decision gets a `design.md §13` entry in the PR that introduces it, not after the fact.
-- **`docs/queue.md` hygiene** — claim transitions: `[ready]` → `[in-flight: <agent>]` (when branch created) → `[review: <agent> #N]` (when PR opened) → `[done: <agent> #N]` (when merged). Each transition lands in a commit on the branch making the change. c2 audits drift in periodic queue-sync PRs.
-- **Audit cadence** — c2 runs an end-to-end audit every ~10 merged PRs (`docs/audit-c2-NNN.md`). Rolling.
+- **`docs/queue.md` hygiene** — claim transitions: `[ready]` → `[in-flight: <agent>]` (when branch created) → `[review: <agent> #N]` (when PR opened) → `[done: <agent> #N]` (when merged). Each transition lands in a commit on the branch making the change. The Codex coordinator audits drift in periodic queue-sync PRs.
+- **Audit cadence** — the Codex coordinator runs an end-to-end audit every ~10 merged PRs (`docs/audit-c2-NNN.md`). Rolling.
 
 ---
 
-## Suggested initial agent assignments
+## Current 5-worker launch plan
 
-| Agent | Worktree | First task | Track |
-|---|---|---|---|
-| c1 | `bcg-worker2` | `grid-tsx-file-split` (Phase A blocker) → `q1-vertical-slice-demo` → Track 1 (editing) | 1 |
-| x1 | `bcg-worker1` | `bundle-size-ci-gate` → `smoke-perf-ci` → Track 6 (filters/export) → Track 7 polish | 6 + 7 |
-| x2 | `bcg-worker3` | `screenreader-spot-check` (S; warm up) → Track 3 (server-row-model) → Track 4 (aggregations + pivots) | 3 + 4 |
-| x3 | (TBD) | Track 5 (chrome — status-bar, sidebar, context-menu) → migration-guide | 5 |
-| c2 | `bcg-worker4` | RFC authoring (this PR queues 6 RFCs); review every incoming PR; integration testing | coordinator |
+All workers start clean from their parking branches:
 
-Agents free to swap. `docs/queue.md` is the source of truth.
+| Worker | Model | Worktree | First claim | Why |
+|---|---|---|---|---|
+| worker1 | Codex | `~/work/bcg-worker1` | `range-state-machine` | Demo-critical unblocker for range copy; mostly core logic, low conflict risk. |
+| worker2 | Claude | `~/work/bcg-worker2` | `filter-set-impl` | Demo-critical; pairs with `filter-popup-variant` after coordinator merges/rebases it. |
+| worker3 | Codex | `~/work/bcg-worker3` | `group-by-client` | Demo-critical and independent of filter popup/set work. |
+| worker4 | Claude | `~/work/bcg-worker4` | `editor-framework` | Critical-path unblocker for the remaining editing surface. |
+| worker5 | Codex | `~/work/bcg-worker5` | `sidebar-impl` | Unblocks columns/filter tool panels and pivot drag zones. |
+
+The table above is the preferred launch order, not a pre-claim. Each worker still claims by editing `docs/queue.md` from `[ready]` to `[in-flight: workerN]`, creates `agent/workerN/<task-slug>`, and opens a PR. If a worker arrives after a task has already been claimed, it picks the next highest-priority `[ready]` task from the same plan.
+
+Coordinator first actions before workers begin:
+
+1. Review and merge any green demo-critical PRs already open.
+2. Reset all worker worktrees to `worker1` through `worker5` at `origin/main`.
+3. Tell workers to start from their parking branch, pull latest `origin/main`, read `CLAUDE.md` / `docs/AGENTS.md`, then claim from `docs/queue.md`.
+
+Wave 2 after the first PRs merge:
+
+| Unlock | Next tasks |
+|---|---|
+| `range-state-machine` merged | `visual-selection-layer`, `clipboard-copy-tsv-html` |
+| `filter-set-impl` merged | `filter-multi-impl`, `filter-persistence`, popup/set integration polish |
+| `group-by-client` merged | `tool-panel-columns` group-by drop zone once `sidebar-impl` lands |
+| `editor-framework` merged | `editor-text`, `editor-number`, `bc-edit-grid-complete` once dependencies clear |
+| `sidebar-impl` merged | `tool-panel-columns`, `tool-panel-filters`, `pivot-ui-drag-zones` |
 
 ---
 

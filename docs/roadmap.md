@@ -1,8 +1,8 @@
 # bc-grid Roadmap — 2-Week Sprint to v1.0
 
-**Goal (revised 2026-04-29):** ship a 1.0 release with **functional parity with AG Grid Enterprise for ERP workloads** over a **2-week parallel sprint with 4 max-tier agents**, leveraging the agent velocity demonstrated on day 0.
+**Goal (revised 2026-04-29, updated for 5 workers on 2026-04-30):** ship a 1.0 release with **functional parity with AG Grid Enterprise for ERP workloads** over a **2-week parallel sprint with 5 worker agents plus a Codex coordinator**, leveraging the agent velocity demonstrated on day 0.
 
-> **Status — 2026-04-29:** original 2-year quarterly cadence below was compressed to a 2-week calendar after the day-0 vertical-slice gate (PR #42) demonstrated ~10-20% of the original 2-year scope shipped in a single day. Q5-Q7 feature scope is pulled forward into the same sprint as Q2-Q4, plus a new charts integration track. **Active orchestration plan: `docs/coordination/v1-parity-sprint.md`** — read it before claiming Phase 6 work. **Alpha gate plan: `docs/coordination/v0.1-alpha-release-plan.md`**. The scope+timeline pivot is recorded in `design.md §13`.
+> **Status — 2026-04-30:** original 2-year quarterly cadence below was compressed to a 2-week calendar after the day-0 vertical-slice gate (PR #42) demonstrated ~10-20% of the original 2-year scope shipped in a single day. Q5-Q7 feature scope is pulled forward into the same sprint as Q2-Q4, plus a new charts integration track. Current execution uses 5 clean worker worktrees (`worker1`-`worker5`) plus Codex in `~/work/bc-grid` as coordinator / PR reviewer / merge integrator / Playwright owner. **Active orchestration plan: `docs/coordination/v1-parity-sprint.md`** — read it before claiming Phase 6 work. **Alpha gate plan: `docs/coordination/v0.1-alpha-release-plan.md`**. The scope+timeline pivot is recorded in `design.md §13`.
 
 The Q1-Q8 phase NAMES below are preserved as feature buckets / acceptance-criteria inventory. The **calendar** is rewritten in days. Many quarters now run in parallel (multiple tracks at once) per `coordination/v1-parity-sprint.md`'s 7-track structure.
 

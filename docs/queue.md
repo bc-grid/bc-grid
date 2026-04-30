@@ -11,7 +11,9 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 > - `group-by-client` — runtime row grouping with expand/collapse + count
 > - `range-state-machine` + `visual-selection-layer` + `clipboard-copy-tsv-html` — the Track 2 stack, all three need to land for AG-Grid-style range copy to work
 >
-> Cut a release after each demo-critical PR merges; bsncraft pulls the new version + a c2 follow-up updates wrappers. Coordinator: c2 (auditor / merge integrator).
+> Cut a release after each demo-critical PR merges; bsncraft pulls the new version + a follow-up updates wrappers. Coordinator: Codex in `~/work/bc-grid` (auditor / merge integrator / Playwright owner).
+>
+> **5-worker launch plan (2026-04-30):** all workers start clean from parking branches. `worker1` = Codex, `worker2` = Claude, `worker3` = Codex, `worker4` = Claude, `worker5` = Codex. Codex in `~/work/bc-grid` coordinates PR review, merge, releases, and Playwright. Preferred first claims: `worker1/range-state-machine`, `worker2/filter-set-impl`, `worker3/group-by-client`, `worker4/editor-framework`, `worker5/sidebar-impl`. These are not pre-claimed; each worker must still edit this queue from `[ready]` to `[in-flight: workerN]` before coding. If a preferred task is already claimed, choose the next highest-priority `[ready]` task from `docs/coordination/five-worker-v1-execution-plan.md`.
 
 **Status legend:**
 - `[ready]` — task spec written, no blockers, claim by editing this file + branching
@@ -124,7 +126,7 @@ Track 3 (server-row-model) reuses `server-query-rfc` (PR #2, merged) and needs n
 
 These tasks are pure `@bc-grid/react` UI on top of existing state shapes. **No RFC needed** — `api.md §1.1` and `§3.2` already declare the supporting types. Anyone can claim these immediately after `grid-tsx-file-split`. Suggested owner: c1 or whoever is between bigger pieces.
 
-- `[review: c1 #136]` **column-reorder** — drag a column header to reorder. State already supported via `BcColumnStateEntry.position` (`api.md §3.2`). UI: pointer-driven drag with a drop-indicator line; keyboard alternative via column tool panel (Track 5). Honour controlled/uncontrolled `columnState` from `api.md §3.1`. **Effort**: M.
+- `[done: c1 #136]` **column-reorder** — drag a column header to reorder. State already supported via `BcColumnStateEntry.position` (`api.md §3.2`). UI: pointer-driven drag with a drop-indicator line; keyboard alternative via column tool panel (Track 5). Honour controlled/uncontrolled `columnState` from `api.md §3.1`. **Effort**: M.
 - `[done: x1 #122]` **column-visibility-ui** — show/hide affordance per column. State already supported via `BcColumnStateEntry.hidden`. UI: header-cell context-menu item OR via the Columns tool panel in Track 5. (Header context-menu lands here; tool panel lands in `tool-panel-columns`.) **Effort**: S.
 - `[review: x1 #97]` **column-state-url-persistence** — encode `columnState` (visibility, order, width, sort) into URL search params for shareable links. Pairs with `localstorage-gridid-persistence` (Phase 5.5). Consumer opts in via `BcGridProps.urlStatePersistence?: { searchParam: string }`. **Effort**: S.
 - `[review: x1 #98]` **search-complete** — apply `searchText` as a row filter (case-insensitive substring across `valueFormatter` results for searchable columns per `api.md §4.3`). Pairs with `search-highlighting` (Phase 5.5) which renders the `<mark>` in cells. **Effort**: S.
@@ -143,11 +145,11 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 - `[done: c1 #126]` **editor-datetime** — composes `editor-date` + time picker; ISO 8601 commit. **Effort**: M.
 - `[done: c1 #120]` **editor-time** — `<input type="time" />` styled with shadcn `Input`; 24h commit. **Effort**: S.
 - `[done: c1 #127 (salvaged via #135)]` **editor-select** — native `<select>` (not shadcn); reads `column.options` (additive prop). Type-to-narrow via `seedKey`. **Effort**: M.
-- `[review: c1]` **editor-multi-select** — native `<select multiple>` (not shadcn); reuses `column.options`. Returns `readonly TValue[]`. **Effort**: M.
-- `[ready]` **editor-autocomplete** — native `<input list>` + `<datalist>` (not shadcn); async via `column.fetchOptions(query, signal)`. Debounced 200ms. **Effort**: M. **Unblocked: editor-framework done.**
+- `[done: c1 #138]` **editor-multi-select** — native `<select multiple>` (not shadcn); reuses `column.options`. Returns `readonly TValue[]`. **Effort**: M.
+- `[done: c1 #143]` **editor-autocomplete** — native `<input list>` + `<datalist>` (not shadcn); async via `column.fetchOptions(query, signal)`. Debounced 200ms. AbortSignal races superseded fetches. **Effort**: M.
 - `[done: c1 #88 (folded into editor-framework)]` **validation-framework** — sync + async validators with `AbortSignal` race semantics; `useEditingController` already exposes the full pipeline. **Effort**: S.
 - `[done: c1 #128 (salvaged via #135)]` **dirty-tracking** — `BcEditState` map + visual states (`data-bc-grid-cell-state`); cell renderer params extension (`pending`, `editError`, `isDirty`). **Effort**: S.
-- `[blocked: depends on editor-multi-select + editor-autocomplete]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. **Effort**: M.
+- `[blocked: depends on editor-autocomplete merging]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. **Effort**: M.
 - `[blocked: depends on bc-edit-grid-complete]` **editor-custom-recipe** — docs page in `apps/docs` with a worked custom-editor example (e.g., colour picker). **Effort**: S.
 
 #### Track 2 — Range + master-detail (Q3 surface)
@@ -160,7 +162,7 @@ Spec pending: `docs/design/range-rfc.md` (c2 to author).
 - `[blocked: depends on range-state-machine]` **clipboard-copy-tsv-html** — Ctrl/Cmd+C serializes range to TSV (text/plain) + HTML (text/html) on the clipboard. **Effort**: S.
 - `[blocked: depends on clipboard-copy-tsv-html]` **clipboard-paste-from-excel** — Ctrl/Cmd+V parses clipboard TSV; applies cell-by-cell with per-column `valueParser` + `validate`; atomic apply (all-or-rollback). **Effort**: M.
 - `[blocked: depends on clipboard-paste-from-excel]` **fill-handle** — drag-square at bottom-right of active range; drag to extend; release to fill (linear / copy / smart-fill). **Effort**: M.
-- `[review: c1 #140]` **master-detail** — expandable row that mounts a consumer-supplied detail component below the row. State via `expansion: ReadonlySet<RowId>` (already declared). `aria-level` + `role="treegrid"` when active. Independent of range work; can run in parallel. **Effort**: M.
+- `[done: c1 #140]` **master-detail** — expandable row that mounts a consumer-supplied detail component below the row. State via `expansion: ReadonlySet<RowId>` (already declared). `aria-level` + `role="treegrid"` when active. Independent of range work; can run in parallel. **Effort**: M.
 - `[ready]` **column-groups-multi-row-headers** — multi-row column headers (e.g., parent header "Q1 Sales" with children "Jan / Feb / Mar"). Surface: `BcReactGridColumn.children?: BcReactGridColumn[]` (additive). Renders header rows for each level with `aria-colspan`. Independent; can run in parallel. **Effort**: M.
 - `[review: x1 #110]` **sticky-header-polish** — refine the existing pinned-top header to maintain scroll-shadow + correct z-index against pinned-left/-right corners. Independent; can run in parallel. **Effort**: S.
 
@@ -204,7 +206,7 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 
 - `[done: c2 #48]` **filter-registry-rfc** — extension protocol; `BcFilterDefinition` / `BcReactFilterDefinition`; persistence shape; 7 built-in filter specs. **Effort**: 1 day.
-- `[review: c1]` **filter-popup-variant** ⭐ — When `column.filter.variant === "popup"`, render a header-icon (funnel) that opens a fixed-position floating Popover with the existing text/number/date/boolean filter editor inside, instead of the inline-row input. Active state: solid/blue funnel, cleared by an `×` in the popover footer. The inline filter row hides entirely when every filterable column is popup-variant. AG-Grid-feel. Native HTML — no shadcn runtime. Reuses the existing filter editor body (extracted to `FilterEditorBody`) — no logic duplication. **Demo-critical** (week 2). **Effort**: M.
+- `[review: c1 #145]` **filter-popup-variant** ⭐ — When `column.filter.variant === "popup"`, render a header-icon (funnel) that opens a shadcn `Popover` with the existing text/number/date/boolean filter editor inside, instead of the inline-row input. Active state: solid/blue funnel + underline on the header, cleared by an `×` in the popover footer. The inline row collapses for that column when popup is active; if every column is popup-variant the row disappears entirely. AG-Grid-feel. Reuses existing filter editors — no logic duplication. **Demo-critical** (week 2). **Effort**: M.
 - `[ready]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
 - `[ready]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
 - `[ready]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.

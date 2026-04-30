@@ -1,4 +1,5 @@
 import {
+  autocompleteEditor,
   dateEditor,
   datetimeEditor,
   multiSelectEditor,
@@ -65,6 +66,68 @@ const FLAG_LABELS: Record<CustomerFlag, string> = {
   "tax-exempt": "Tax Exempt",
   "manual-review": "Manual Review",
   vip: "VIP",
+}
+
+/**
+ * Master collector roster for the editor-autocomplete demo. The seeded
+ * data only uses the first 8 names; this 30-name roster is what the
+ * autocomplete fetchOptions resolver searches. A realistic ERP scenario:
+ * the existing assignment is one of the active collectors, but the
+ * autocomplete lets the AR clerk reassign to anyone in HR.
+ */
+const COLLECTOR_ROSTER: readonly string[] = [
+  "Alex Chen",
+  "Maya Singh",
+  "Jordan Lee",
+  "Priya Nair",
+  "Taylor Brooks",
+  "Morgan Reed",
+  "Sam Carter",
+  "Jamie Patel",
+  "Avery Thompson",
+  "Casey Morgan",
+  "Drew Bennett",
+  "Elliot Park",
+  "Frances Walsh",
+  "Harper Singh",
+  "Indira Rao",
+  "Jules Cabrera",
+  "Kai Nakamura",
+  "Lena Whitfield",
+  "Marcus Okafor",
+  "Nora Albright",
+  "Owen Vasquez",
+  "Pia Lindqvist",
+  "Quinn Holloway",
+  "Reese McAllister",
+  "Sofia Delgado",
+  "Tomas Kovac",
+  "Una Romero",
+  "Victor Hartwell",
+  "Wren Beaumont",
+  "Yusuf Bashir",
+]
+
+async function fetchCollectorOptions(
+  query: string,
+  signal: AbortSignal,
+): Promise<readonly { value: string; label: string }[]> {
+  // Simulate a server round-trip — keeps the editor-autocomplete demo
+  // honest about debounce + abort semantics. 50ms is small enough not to
+  // visibly stall keystrokes.
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, 50)
+    signal.addEventListener("abort", () => {
+      clearTimeout(timer)
+      reject(new DOMException("aborted", "AbortError"))
+    })
+  })
+  if (signal.aborted) throw new DOMException("aborted", "AbortError")
+  const needle = query.trim().toLowerCase()
+  const matches = needle
+    ? COLLECTOR_ROSTER.filter((name) => name.toLowerCase().includes(needle))
+    : COLLECTOR_ROSTER
+  return matches.slice(0, 10).map((name) => ({ value: name, label: name }))
 }
 
 export function App() {
@@ -280,6 +343,22 @@ function CustomerGridDemo({
         width: 170,
         filter: { type: "text" },
         tooltip: (row) => `Collector: ${row.owner}`,
+        // ?edit=1: editable free-form name with autocomplete suggestions
+        // sourced from a 30-name roster via async fetchOptions. AbortSignal
+        // races superseded keystrokes — keeps the network honest under
+        // fast typing.
+        editable: editorFrameworkEnabled(),
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: autocompleteEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        fetchOptions: fetchCollectorOptions,
+        valueParser: (input: string) => input.trim(),
+        validate: (next: unknown) => {
+          const stringValue = typeof next === "string" ? next : String(next ?? "")
+          return stringValue.length === 0
+            ? { valid: false as const, error: "Collector is required." }
+            : { valid: true as const }
+        },
       },
       {
         columnId: "terms",

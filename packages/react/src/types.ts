@@ -101,6 +101,18 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
   options?:
     | readonly { value: TValue; label: string }[]
     | ((row: TRow) => readonly { value: TValue; label: string }[])
+  /**
+   * Async option fetch for `editor-autocomplete` per
+   * `editing-rfc §editor-autocomplete`. Called every time the user types
+   * (debounced 200ms inside the editor). The `signal` is aborted when a
+   * subsequent keystroke supersedes the request — implementations should
+   * pass it to `fetch` / `AbortSignal`-aware loaders so superseded
+   * requests don't waste server work or race the latest result.
+   */
+  fetchOptions?: (
+    query: string,
+    signal: AbortSignal,
+  ) => Promise<readonly { value: TValue; label: string }[]>
 }
 
 export type BcGridColumn<TRow, TValue = unknown> = BcReactGridColumn<TRow, TValue>

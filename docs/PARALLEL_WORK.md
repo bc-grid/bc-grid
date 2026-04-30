@@ -17,14 +17,27 @@ Layout on disk:
 
 ```
 ~/work/
-├── bc-grid/                       # main worktree (architect / integrator) — branch: main
+├── bc-grid/                       # main worktree (Codex coordinator / integrator) — branch: main
 ├── bcg-worker1/                   # parking branch: worker1
 ├── bcg-worker2/                   # parking branch: worker2
 ├── bcg-worker3/                   # parking branch: worker3
-└── bcg-worker4/                   # parking branch: worker4
+├── bcg-worker4/                   # parking branch: worker4
+└── bcg-worker5/                   # parking branch: worker5
 ```
 
-**Naming convention:** worktrees are agent-agnostic (`bcg-worker1`–`bcg-worker4`). Any agent — Claude or Codex — can work in any worktree. The agent's identity goes in the **branch name** (`agent/c1/<task-slug>` for Claude session 1, `agent/x1/<task-slug>` for Codex session 1) so logs and PRs make it clear who did what.
+**Current sprint assignment:** the five worker slots are fixed so the coordinator can reason about capacity and avoid duplicate claims.
+
+| Worktree | Model | Role |
+|---|---|---|
+| `~/work/bcg-worker1` | Codex | worker1 implementer |
+| `~/work/bcg-worker2` | Claude | worker2 implementer |
+| `~/work/bcg-worker3` | Codex | worker3 implementer |
+| `~/work/bcg-worker4` | Claude | worker4 implementer |
+| `~/work/bcg-worker5` | Codex | worker5 implementer |
+
+**Coordinator:** Codex in `~/work/bc-grid` owns PR review, merge train, queue hygiene, release cuts, Playwright, smoke-perf, and benchmark runs. Worker agents should focus on implementation, unit/type/build validation, and PR handoff notes. Workers must not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs.
+
+**Naming convention:** worktrees are assigned by worker slot, and the agent's identity goes in the **branch name** (`agent/worker1/<task-slug>` or an existing historical id such as `agent/c1/<task-slug>`). Branches and PR bodies must include the task slug from `docs/queue.md` so the coordinator can trace ownership.
 
 **Parking branches:** each worktree starts on a `worker1`/`worker2`/etc. branch. These are stable parking spots — agents switch off them when claiming a task and switch back when finished. Don't commit work directly to a parking branch.
 
@@ -51,9 +64,9 @@ git reset --hard origin/main
 # Ready for the next task
 ```
 
-## 3. Setting up additional worktrees (beyond the initial 4)
+## 3. Worktree availability
 
-If a 5th worker is needed:
+All five worker worktrees already exist in the current setup. If a future checkout is missing `worker5`, create it with:
 
 ```bash
 # Create the new worktree on a fresh parking branch
@@ -72,9 +85,18 @@ git -C ~/work/bc-grid branch -d worker5
 git -C ~/work/bc-grid branch -d agent/c2/<task-slug>   # local cleanup
 ```
 
-## 3. Phase-by-phase parallelism
+Before assigning work, the coordinator should verify:
 
-> **Note (2026-04-29 scope+timeline pivot):** the original calendar below described Q1-Q8 in months over a 2-year build. The actual sprint is now compressed to **2 weeks with 4 max-tier parallel agents**. The Q1-Q8 phase NAMES are preserved as feature buckets; the calendar below is rewritten in days. See `docs/coordination/v1-parity-sprint.md` for the active orchestration; that doc's 7 parallel feature tracks supersede the strict quarter-by-quarter sequencing below.
+```bash
+git -C ~/work/bc-grid worktree list
+gh pr list --limit 30
+```
+
+Agents must not switch branches inside another worker's worktree.
+
+## 4. Phase-by-phase parallelism
+
+> **Note (2026-04-29 scope+timeline pivot; updated 2026-04-30):** the original calendar below described Q1-Q8 in months over a 2-year build. The actual sprint is now compressed to **2 weeks with 5 worker agents plus a Codex coordinator**. The Q1-Q8 phase NAMES are preserved as feature buckets; the calendar below is rewritten in days. See `docs/coordination/v1-parity-sprint.md` for the active orchestration; that doc's 7 parallel feature tracks supersede the strict quarter-by-quarter sequencing below.
 
 The split below assumes Q1's foundation work is complete (architecture, package skeletons, perf spikes — done day 0).
 
@@ -97,7 +119,7 @@ After the editor framework lands (architect-driven, day 1 morning), parallel age
 - **Agent C2**: text + number editors (`editors/text`, `editors/number`)
 - **Agent X1**: date + datetime + time editors (`editors/date`, `editors/datetime`, `editors/time`)
 - **Agent X2**: select + multi-select + autocomplete editors (`editors/select`, `editors/multi-select`, `editors/autocomplete`)
-- **Agent X3**: validation framework + dirty tracking + e2e edit tests
+- **Agent X3**: validation framework + dirty tracking + unit/integration edit tests; coordinator runs any e2e edit tests
 
 Each agent owns a leaf package or two; PRs land independently; reviewer agent rotates.
 
@@ -134,11 +156,11 @@ Days 11-13: charts adapter + streaming row updates + mobile/touch fallback + WCA
 
 `docs/queue.md` tracks task-level assignments. Architects can shuffle as priorities shift.
 
-## 4. Coordination protocol
+## 5. Coordination protocol
 
-### 4.1 The work queue
+### 5.1 The work queue
 
-`docs/queue.md` is the single source of truth for "what's available to claim". Format:
+`docs/queue.md` is the single source of truth for "what's available to claim". `CLAUDE.md` mirrors `docs/AGENTS.md` exactly so Claude and Codex agents are operating from the same process rules. Format:
 
 ```
 ## Q2 Tasks
@@ -151,7 +173,7 @@ Days 11-13: charts adapter + streaming row updates + mobile/touch fallback + WCA
 
 When you claim a task, you edit this file. The edit goes via PR or via the integrator's worktree (architect approval if no integrator online).
 
-### 4.2 Daily integration
+### 5.2 Daily integration
 
 Once per day (or per work-cycle), the integrator:
 
@@ -163,14 +185,14 @@ Once per day (or per work-cycle), the integrator:
 
 If no human integrator: a designated agent does this on a cron via Claude Code's `loop` skill, with a final human review for the merge action.
 
-### 4.3 Cross-agent communication
+### 5.3 Cross-agent communication
 
 - **Github issues** for design questions, bug reports, blockers.
 - **PR comments** for code-specific discussion.
 - **`docs/design/<feature>.md`** for any new feature's spec — written before code, reviewed by another agent.
 - **Never read another agent's WIP branch** to "see what they're doing." If you need to coordinate, file an issue or wait for their PR.
 
-### 4.4 Conflict resolution
+### 5.4 Conflict resolution
 
 If two PRs touch the same file (rare with strict module boundaries, but happens):
 
@@ -180,7 +202,7 @@ If two PRs touch the same file (rare with strict module boundaries, but happens)
 
 If two PRs disagree on architecture: stop; architect resolves; one or both PRs may need rework.
 
-## 5. Agent roles per session
+## 6. Agent roles per session
 
 Not every agent does every kind of work. Recommended specialization:
 
@@ -192,7 +214,7 @@ Not every agent does every kind of work. Recommended specialization:
 
 A 5-agent setup typically: 1 architect/integrator + 1 test-infra + 1 docs + 2 feature engineers. Or 1 architect + 4 feature engineers in heavy parallelism phases.
 
-## 6. Worktree hygiene
+## 7. Worktree hygiene
 
 - **Each worktree has its own `node_modules`.** `bun install` once per worktree.
 - **Each worktree may have its own `.env.local`** — don't commit, never share secrets between worktrees.
@@ -200,11 +222,11 @@ A 5-agent setup typically: 1 architect/integrator + 1 test-infra + 1 docs + 2 fe
 - **Stale worktrees**: if an agent's session ends mid-task, the architect can `git worktree remove` and the branch lives on for the next agent to pick up.
 - **Deleting a worktree doesn't delete the branch.** Branches are deleted explicitly with `git branch -d`.
 
-## 7. CI per worktree
+## 8. CI per worktree
 
 Every worktree pushes to GitHub; CI runs per branch. The agent does NOT need to run the full perf suite locally — CI catches it. They DO need to run `bun run type-check` and `bun test` locally before pushing.
 
-## 8. When parallelism breaks down
+## 9. When parallelism breaks down
 
 Signs the parallelism scheme is failing:
 
