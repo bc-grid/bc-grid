@@ -407,6 +407,32 @@ describe("buildGridFilter", () => {
       value: "Acme",
     })
   })
+
+  test("clearing the editor value drops the text filter (null when last)", () => {
+    // Preserves the clear-state behavior from #200: when every text
+    // filter slot is empty, buildGridFilter must emit null. The
+    // operator + modifier toggles are irrelevant to the empty-value
+    // short-circuit — an empty needle is treated as match-all and
+    // dropped at parseTextFilterInput's value trim guard.
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "starts-with", value: "" }),
+      }),
+    ).toBeNull()
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "contains", value: "   ", caseSensitive: true }),
+      }),
+    ).toBeNull()
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "equals", value: "", regex: true }),
+      }),
+    ).toBeNull()
+    // Legacy plain-string clear path still emits null.
+    expect(buildGridFilter({ name: "" })).toBeNull()
+    expect(buildGridFilter({ name: "  " })).toBeNull()
+  })
 })
 
 describe("columnFilterTextFromGridFilter", () => {
