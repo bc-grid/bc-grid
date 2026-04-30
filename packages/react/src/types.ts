@@ -102,6 +102,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onRowClick?: (row: TRow, event: MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: MouseEvent) => void
   onCellFocus?: (position: BcCellPosition) => void
+  onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
 
   apiRef?: RefObject<BcGridApi<TRow> | null>
 
