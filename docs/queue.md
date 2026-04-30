@@ -130,7 +130,7 @@ These tasks are pure `@bc-grid/react` UI on top of existing state shapes. **No R
 - `[done: x1 #122]` **column-visibility-ui** — show/hide affordance per column. State already supported via `BcColumnStateEntry.hidden`. UI: header-cell context-menu item OR via the Columns tool panel in Track 5. (Header context-menu lands here; tool panel lands in `tool-panel-columns`.) **Effort**: S.
 - `[review: x1 #97]` **column-state-url-persistence** — encode `columnState` (visibility, order, width, sort) into URL search params for shareable links. Pairs with `localstorage-gridid-persistence` (Phase 5.5). Consumer opts in via `BcGridProps.urlStatePersistence?: { searchParam: string }`. **Effort**: S.
 - `[review: x1 #98]` **search-complete** — apply `searchText` as a row filter (case-insensitive substring across `valueFormatter` results for searchable columns per `api.md §4.3`). Pairs with `search-highlighting` (Phase 5.5) which renders the `<mark>` in cells. **Effort**: S.
-- `[ready]` **group-by-client** — client-side row grouping by one or more columns. Group rows render as a header row with expand/collapse chevron + count. Tree-mode rendering uses `aria-level` + `role="treegrid"` per `accessibility-rfc §grid vs treegrid`. State via `BcGridProps.groupBy` (already declared). **Effort**: M.
+- `[review: worker3 #147]` **group-by-client** — client-side row grouping by one or more columns. Group rows render as a header row with expand/collapse chevron + count. Tree-mode rendering uses `aria-level` + `role="treegrid"` per `accessibility-rfc §grid vs treegrid`. State via `BcGridProps.groupBy` (already declared). **Effort**: M.
 - `[review: x1 #105]` **pagination-client-ui** — client-side pager controls (first / prev / next / last + page-size dropdown). State already supported via `BcGridProps.page`/`pageSize`/`onPaginationChange`. Renders in `BcGridProps.footer` slot by default; consumer can opt out. **Effort**: S.
 
 #### Track 1 — Editing (Q2 editing surface)
@@ -138,7 +138,7 @@ These tasks are pure `@bc-grid/react` UI on top of existing state shapes. **No R
 Spec: `docs/design/editing-rfc.md` (PR #45).
 
 - `[done: c2 #45]` **editing-rfc** — design doc; covers lifecycle, keyboard, validation, dirty tracking, server commit, 7 built-in editor specs. **Editor framework + 8 editors + validation + dirty tracking + bc-edit-grid-complete now claimable.**
-- `[ready]` **editor-framework** — `BcCellEditor` lifecycle + state machine + validation pipeline + DOM focus shift + live region announcements (extend `useLiveRegionAnnouncements` to return `announceAssertive` — currently only polite, see audit-c2-002 §F1). Single owner. **Effort**: M. **Unblocked: editing-rfc merged in #45.**
+- `[review: worker4 #148]` **editor-framework** — `BcCellEditor` lifecycle + state machine + validation pipeline + DOM focus shift. **Note:** assertive live region plumbing (audit-c2-002 §F1) already landed; this task closes the remaining RFC gaps — `editor.prepare()` wiring, async-validate signal in `column.validate`, portal-aware click-outside, `aria-activedescendant` suspension during edit, `aria-current` / `aria-describedby` on the editing cell, polite-region 250ms debounce, Tab/Shift+Tab wrap at last/first cell. Single owner. **Effort**: M. **Unblocked: editing-rfc merged in #45.**
 - `[blocked: depends on editor-framework]` **editor-text** — text input editor. shadcn `Input` primitive. Honours `seedKey`, `pointerHint`. **Effort**: S.
 - `[blocked: depends on editor-framework]` **editor-number** — numeric input with locale-aware decimal separator. shadcn `Input` + `inputMode="decimal"`. **Effort**: S.
 - `[done: c1 #121]` **editor-date** — shadcn date-picker primitive + ISO 8601 commit. **Effort**: M.
@@ -157,7 +157,7 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 Spec pending: `docs/design/range-rfc.md` (c2 to author).
 
 - `[done: c2 #49]` **range-rfc** — design doc covering range model, anchor/extend semantics, multi-range, clipboard contract, fill handle. **Effort**: 1 day.
-- `[ready]` **range-state-machine** — `BcRange` (already declared `api.md §reserved Q3`) state in `core/range.ts`; anchor + extend + multi-range. **Effort**: M.
+- `[review: worker1 #146]` **range-state-machine** — `BcRange` (already declared `api.md §reserved Q3`) state in `core/range.ts`; anchor + extend + multi-range. **Effort**: M.
 - `[blocked: depends on range-state-machine]` **visual-selection-layer** — absolute-positioned overlay rendering range rectangles; works through virtualization. **Effort**: M.
 - `[blocked: depends on range-state-machine]` **clipboard-copy-tsv-html** — Ctrl/Cmd+C serializes range to TSV (text/plain) + HTML (text/html) on the clipboard. **Effort**: S.
 - `[blocked: depends on clipboard-copy-tsv-html]` **clipboard-paste-from-excel** — Ctrl/Cmd+V parses clipboard TSV; applies cell-by-cell with per-column `valueParser` + `validate`; atomic apply (all-or-rollback). **Effort**: M.
@@ -194,7 +194,7 @@ Specs: `docs/design/aggregation-rfc.md` (PR #51) + `pivot-rfc.md` (PR #52).
 Spec: `docs/design/chrome-rfc.md` (PR #46).
 
 - `[done: c2 #46]` **chrome-rfc** — design doc; covers status-bar / sidebar tablist / context-menu.
-- `[ready]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
+- `[review: worker2 #151]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
 - `[ready]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
 - `[blocked: depends on sidebar-impl]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
 - `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.

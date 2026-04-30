@@ -1,3 +1,5 @@
+import type { BcRangeSelection } from "./range"
+
 export type ColumnId = string
 export type RowId = string
 
@@ -28,7 +30,11 @@ export interface BcGridColumn<TRow, TValue = unknown> {
   cellClass?: string | ((value: TValue, row: TRow) => string | undefined)
 
   editable?: boolean | ((row: TRow) => boolean)
-  validate?: (newValue: TValue, row: TRow) => BcValidationResult
+  validate?: (
+    newValue: TValue,
+    row: TRow,
+    signal?: AbortSignal,
+  ) => BcValidationResult | Promise<BcValidationResult>
 
   aggregation?: BcAggregation
 
@@ -173,6 +179,24 @@ export interface BcRange {
   end: BcCellPosition
 }
 
+export {
+  emptyBcRangeSelection,
+  expandRangeTo,
+  newRangeAt,
+  parseRangeSelection,
+  rangeBounds,
+  rangeClear,
+  rangeContains,
+  rangeKeydown,
+  rangePointerDown,
+  rangePointerMove,
+  rangePointerUp,
+  rangeSelectAll,
+  rangesContain,
+  serializeRangeSelection,
+} from "./range"
+export type { BcRangeKeyAction, BcRangeSelection } from "./range"
+
 export interface BcPaginationState {
   page: number
   pageSize: number
@@ -194,6 +218,10 @@ export interface BcGridStateProps {
   selection?: BcSelection
   defaultSelection?: BcSelection
   onSelectionChange?: (next: BcSelection, prev: BcSelection) => void
+
+  rangeSelection?: BcRangeSelection
+  defaultRangeSelection?: BcRangeSelection
+  onRangeSelectionChange?: (next: BcRangeSelection, prev: BcRangeSelection) => void
 
   expansion?: ReadonlySet<RowId>
   defaultExpansion?: ReadonlySet<RowId>
