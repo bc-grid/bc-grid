@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Build, gate, and publish to GitHub Packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type-check
+        run: bun run type-check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Test
+        run: bun run test
+
+      - name: Build all packages
+        run: bun run --filter './packages/*' build
+
+      - name: Bundle-size gate
+        run: bun run bundle-size
+
+      - name: API surface check
+        run: bun run api-surface
+
+      - name: Configure GitHub Packages registry
+        run: |
+          cat > ~/.npmrc <<EOF
+          @bc-grid:registry=https://npm.pkg.github.com
+          //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
+          EOF
+
+      - name: Publish all packages
+        run: |
+          set -e
+          for pkg in packages/*/; do
+            echo "::group::Publishing $pkg"
+            (cd "$pkg" && bun publish --access restricted)
+            echo "::endgroup::"
+          done
