@@ -163,6 +163,7 @@ export interface CellStyleParams {
   totalWidth: number
   viewportWidth: number
   width: number
+  zIndex?: number
 }
 
 export function cellStyle({
@@ -174,6 +175,7 @@ export function cellStyle({
   totalWidth,
   viewportWidth,
   width,
+  zIndex,
 }: CellStyleParams): CSSProperties {
   return {
     alignItems: "center",
@@ -191,7 +193,7 @@ export function cellStyle({
     transform: pinnedTransformValue(pinned, scrollLeft, totalWidth, viewportWidth),
     whiteSpace: "nowrap",
     width,
-    zIndex: pinned ? 2 : 1,
+    zIndex: zIndex ?? (pinned ? 2 : 1),
   }
 }
 
@@ -210,6 +212,7 @@ export const headerViewportStyle: CSSProperties = {
   flex: "0 0 auto",
   overflow: "hidden",
   position: "relative",
+  zIndex: 3,
 }
 
 export function headerRowStyle(width: number, height: number, scrollLeft: number): CSSProperties {
@@ -309,6 +312,23 @@ export function classNames(...values: Array<string | undefined>): string {
 export function pinnedClassName(pinned: "left" | "right" | null): string | undefined {
   if (pinned === "left") return "bc-grid-cell-pinned-left"
   if (pinned === "right") return "bc-grid-cell-pinned-right"
+  return undefined
+}
+
+export function pinnedEdgeFor(
+  columns: readonly { pinned: "left" | "right" | null }[],
+  index: number,
+): "left" | "right" | null {
+  const column = columns[index]
+  if (!column?.pinned) return null
+  if (column.pinned === "left" && columns[index + 1]?.pinned !== "left") return "left"
+  if (column.pinned === "right" && columns[index - 1]?.pinned !== "right") return "right"
+  return null
+}
+
+export function pinnedEdgeClassName(edge: "left" | "right" | null): string | undefined {
+  if (edge === "left") return "bc-grid-cell-pinned-left-edge"
+  if (edge === "right") return "bc-grid-cell-pinned-right-edge"
   return undefined
 }
 

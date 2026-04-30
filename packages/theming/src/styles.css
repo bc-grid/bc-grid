@@ -233,11 +233,11 @@
  * are anchored and there's content moving beneath them.
  *
  * The grid root sets `data-scrolled-left` / `data-scrolled-right` based
- * on scroll position; the shadows are pseudo-elements on the leftmost
- * pinned-left cell and rightmost pinned-right cell respectively. They
- * fade in/out on the data-attr toggle.
+ * on scroll position; the shadows are pseudo-elements on the seam edge
+ * cells for each pinned group, including the pinned header/filter
+ * corners. They fade in/out on the data-attr toggle.
  */
-.bc-grid-cell-pinned-left::after {
+.bc-grid-cell-pinned-left-edge::after {
   content: "";
   position: absolute;
   top: 0;
@@ -250,7 +250,7 @@
   transition: opacity 150ms ease-out;
 }
 
-.bc-grid-cell-pinned-right::before {
+.bc-grid-cell-pinned-right-edge::before {
   content: "";
   position: absolute;
   top: 0;
@@ -263,17 +263,17 @@
   transition: opacity 150ms ease-out;
 }
 
-.bc-grid[data-scrolled-left="true"] .bc-grid-cell-pinned-left::after {
+.bc-grid[data-scrolled-left="true"] .bc-grid-cell-pinned-left-edge::after {
   opacity: 1;
 }
 
-.bc-grid[data-scrolled-right="true"] .bc-grid-cell-pinned-right::before {
+.bc-grid[data-scrolled-right="true"] .bc-grid-cell-pinned-right-edge::before {
   opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bc-grid-cell-pinned-left::after,
-  .bc-grid-cell-pinned-right::before {
+  .bc-grid-cell-pinned-left-edge::after,
+  .bc-grid-cell-pinned-right-edge::before {
     transition: none;
   }
 }
