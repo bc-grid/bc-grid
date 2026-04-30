@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Buffer } from "node:buffer"
-import type { BcGridColumn } from "@bc-grid/core"
-import { toCsv, toExcel, toPdf } from "../src"
+import type { BcGridColumn, ServerExportQuery } from "@bc-grid/core"
+import { exportServerRows, toCsv, toExcel, toPdf } from "../src"
 
 interface InvoiceRow {
   id: string
@@ -209,6 +209,91 @@ describe("@bc-grid/export toPdf", () => {
   })
 })
 
+describe("@bc-grid/export exportServerRows", () => {
+  const columns: BcGridColumn<InvoiceRow>[] = [
+    { columnId: "customer", header: "Customer", field: "customer" },
+    { columnId: "amount", header: "Amount", field: "amount" },
+    { columnId: "internalCode", header: "Internal Code", field: "internalCode" },
+  ]
+
+  test("prefers the server exportRows handler and forwards context", async () => {
+    const signal = new AbortController().signal
+    let seenQuery: ServerExportQuery | undefined
+    let seenSignal: AbortSignal | undefined
+    const serverResult = { kind: "url" as const, url: "https://example.test/export.csv" }
+
+    const result = await exportServerRows(csvServerQuery(), columns, {
+      maxRows: 250,
+      signal,
+      exportRows: async (query, context) => {
+        seenQuery = query
+        seenSignal = context.signal
+        return serverResult
+      },
+      loadAllRows: async () => {
+        throw new Error("loadAllRows should not run when exportRows is supplied")
+      },
+    })
+
+    expect(result).toBe(serverResult)
+    expect(seenQuery?.maxRows).toBe(250)
+    expect(seenSignal).toBe(signal)
+  })
+
+  test("accepts blob, url, and job server results but rejects incomplete variants", async () => {
+    const blob = new Blob(["ready"], { type: "text/plain" })
+    await expect(
+      exportServerRows(csvServerQuery(), columns, {
+        exportRows: async () => ({ kind: "blob", blob }),
+      }),
+    ).resolves.toEqual({ kind: "blob", blob })
+    await expect(
+      exportServerRows(csvServerQuery(), columns, {
+        exportRows: async () => ({ kind: "job", jobId: "job-123" }),
+      }),
+    ).resolves.toEqual({ kind: "job", jobId: "job-123" })
+    await expect(
+      exportServerRows(csvServerQuery(), columns, {
+        exportRows: async () => ({ kind: "url" }),
+      }),
+    ).rejects.toThrow('expected a "url" result with url')
+  })
+
+  test("falls back to loadAllRows and serializes through local exporters", async () => {
+    let seenMaxRows: number | undefined
+    const result = await exportServerRows(
+      { ...csvServerQuery(), columns: ["amount", "customer"] },
+      columns,
+      {
+        loadAllRows: async (query) => {
+          seenMaxRows = query.maxRows
+          return { rows: rows.slice(0, 1), totalRows: 1 }
+        },
+      },
+    )
+
+    expect(result.kind).toBe("blob")
+    expect(result.blob?.type).toBe("text/csv;charset=utf-8")
+    expect(await result.blob?.text()).toBe('Amount,Customer\n1234.5,"Acme, Inc"')
+    expect(seenMaxRows).toBe(50_000)
+  })
+
+  test("enforces the fallback maxRows cap", async () => {
+    await expect(
+      exportServerRows(csvServerQuery(), columns, {
+        maxRows: 1,
+        loadAllRows: async () => ({ rows, totalRows: rows.length }),
+      }),
+    ).rejects.toThrow("maxRows is 1")
+  })
+
+  test("requires either exportRows or loadAllRows", async () => {
+    await expect(exportServerRows(csvServerQuery(), columns)).rejects.toThrow(
+      "requires either exportRows or loadAllRows",
+    )
+  })
+})
+
 async function loadWorkbook(content: string | Uint8Array) {
   const ExcelJS = await import("exceljs")
   const workbook = new ExcelJS.Workbook()
@@ -221,4 +306,16 @@ function expectBinaryContent(content: string | Uint8Array): Uint8Array {
     throw new Error("Expected binary export content")
   }
   return content
+}
+
+function csvServerQuery(): ServerExportQuery {
+  return {
+    columns: ["customer", "amount"],
+    format: "csv",
+    view: {
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["customer", "amount"],
+    },
+  }
 }
