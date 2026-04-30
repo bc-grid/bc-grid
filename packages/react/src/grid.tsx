@@ -44,9 +44,8 @@ import {
   type ColumnFilterTypeByColumnId,
   type SetFilterOption,
   buildGridFilter,
-  isBlankSetFilterValue,
   matchesGridFilter,
-  setFilterValueKey,
+  setFilterValueKeys,
 } from "./filter"
 import {
   DEFAULT_BODY_HEIGHT,
@@ -641,14 +640,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         }
 
         const rawValue = getCellValue(row, column.source)
-        if (isBlankSetFilterValue(rawValue)) continue
-
-        const value = setFilterValueKey(rawValue)
-        if (value.length === 0 || optionsByValue.has(value)) continue
-
+        const values = setFilterValueKeys(rawValue)
+        if (values.length === 0) continue
         const formattedValue = formatCellValue(rawValue, row, column.source, locale)
-        const label = formattedValue.trim().length > 0 ? formattedValue : value
-        optionsByValue.set(value, { value, label })
+
+        for (const value of values) {
+          if (optionsByValue.has(value)) continue
+          const label =
+            Array.isArray(rawValue) || formattedValue.trim().length === 0 ? value : formattedValue
+          optionsByValue.set(value, { value, label })
+        }
       }
 
       return Array.from(optionsByValue.values()).sort((a, b) =>
