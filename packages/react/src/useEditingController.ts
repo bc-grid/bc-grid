@@ -7,7 +7,7 @@ import {
   type MoveOnSettle,
   reduceEditState,
 } from "./editingStateMachine"
-import type { BcCellEditCommitEvent, BcReactGridColumn } from "./types"
+import type { BcCellEditCommitEvent, BcCellEditor, BcReactGridColumn } from "./types"
 
 /**
  * Per-cell edit metadata. Held in a nested map (RowId → ColumnId → entry)
@@ -113,6 +113,12 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
   // each new commit / cancel.
   const validateAbortRef = useRef<AbortController | null>(null)
 
+  // Monotonic token guarding the in-flight `editor.prepare()` Promise.
+  // Bumped on cancel and on each new `start()`; the prepare resolver
+  // only dispatches if it still matches the current token. Per
+  // `editing-rfc §Lifecycle` open question on prepare-rejection.
+  const prepareTokenRef = useRef(0)
+
   // ------- Read API for cell renderers + grid JSX --------------------------
 
   const getOverlayValue = useCallback((rowId: RowId, columnId: ColumnId): unknown => {
@@ -133,11 +139,26 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
 
   // ------- Imperative API for activation / commit / cancel -----------------
 
+  /**
+   * Begin an edit. Dispatches `activate` (Navigation → Preparing), then
+   * fires `editor.prepare()` if the editor declared one. On resolve,
+   * dispatches `prepareResolved` (Preparing → Mounting). On reject,
+   * dispatches `prepareRejected` and the machine returns to Navigation.
+   * Editors without a `prepare` hook skip straight to Mounting.
+   *
+   * Per `editing-rfc §Lifecycle` (Preparing state).
+   */
   const start = useCallback(
     (
       cell: BcCellPosition,
       activation: ActivationSource,
-      opts?: { seedKey?: string; pointerHint?: { x: number; y: number } },
+      opts?: {
+        seedKey?: string
+        pointerHint?: { x: number; y: number }
+        editor?: BcCellEditor<TRow>
+        row?: TRow
+        rowId?: RowId
+      },
     ) => {
       dispatch({
         type: "activate",
@@ -146,11 +167,31 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
         ...(opts?.seedKey != null ? { seedKey: opts.seedKey } : {}),
         ...(opts?.pointerHint ? { pointerHint: opts.pointerHint } : {}),
       })
-      // No prepare hook is wired in v0.1 — the controller advances
-      // straight to Mounting on the next dispatch.
-      dispatch({ type: "prepareResolved" })
-      // The editor portal dispatches `mounted` once the component's
-      // useLayoutEffect runs and focusRef is filled.
+
+      const prepare = opts?.editor?.prepare
+      const prepareRow = opts?.row
+      const prepareRowId = opts?.rowId
+      if (!prepare || prepareRow === undefined || prepareRowId === undefined) {
+        // No prepare hook (or caller didn't pass row context) → advance
+        // straight to Mounting.
+        dispatch({ type: "prepareResolved" })
+        return
+      }
+      // Optional prepare: race-safe via a token captured at fire time.
+      // If the user cancels while prepare is in flight, the machine has
+      // already returned to Navigation; we suppress the late dispatch.
+      const token = ++prepareTokenRef.current
+      Promise.resolve()
+        .then(() => prepare({ row: prepareRow, rowId: prepareRowId, columnId: cell.columnId }))
+        .then((prepareResult) => {
+          if (token !== prepareTokenRef.current) return
+          dispatch({ type: "prepareResolved", prepareResult })
+        })
+        .catch((err) => {
+          if (token !== prepareTokenRef.current) return
+          const message = err instanceof Error ? err.message : "Editor failed to prepare."
+          dispatch({ type: "prepareRejected", error: message })
+        })
     },
     [],
   )
@@ -158,6 +199,8 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
   const cancel = useCallback(() => {
     validateAbortRef.current?.abort()
     validateAbortRef.current = null
+    // Invalidate any in-flight prepare so its late resolution is dropped.
+    prepareTokenRef.current++
     dispatch({ type: "cancel" })
     // Caller dispatches `unmounted` after the editor unmounts via
     // useLayoutEffect — see editorPortal.
@@ -214,7 +257,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
         result = { valid: false, error: message }
       }
       if (ac.signal.aborted) return
-      validateAbortRef.current = null
+      if (validateAbortRef.current === ac) validateAbortRef.current = null
       dispatch({ type: "validateResolved", result })
 
       if (!result.valid) {

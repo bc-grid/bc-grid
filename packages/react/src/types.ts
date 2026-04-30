@@ -39,6 +39,7 @@ export interface BcGridMessages {
   actionColumnLabel: string
   editLabel: string
   deleteLabel: string
+  statusBarLabel: string
 
   /**
    * Live-region announcement templates. Functions return the localised
@@ -71,6 +72,48 @@ export interface BcGridUrlStatePersistence {
 }
 
 export type BcAggregationScope = "filtered" | "all" | "selected"
+
+/**
+ * Render context handed to status-bar segment renderers. Rebuilt per
+ * grid render so segments always reflect current row / selection /
+ * aggregation state. Per `chrome-rfc §Status bar`.
+ */
+export interface BcStatusBarContext<TRow = unknown> {
+  /**
+   * Total dataset size. `"unknown"` for server row models with
+   * `rowcount=-1` (paged/infinite without a known total).
+   */
+  totalRowCount: number | "unknown"
+  filteredRowCount: number
+  selectedRowCount: number
+  /**
+   * Current aggregation results. Empty until `footer-aggregations`
+   * wires the engine output through; the chrome RFC types this as
+   * `readonly AggregationResult[]` so consumers can read it now.
+   */
+  aggregations: readonly AggregationResult[]
+  api: BcGridApi<TRow>
+}
+
+export interface BcStatusBarCustomSegment<TRow = unknown> {
+  id: string
+  render: (ctx: BcStatusBarContext<TRow>) => ReactNode
+  align?: "left" | "right"
+}
+
+/**
+ * Status-bar segment shape per `chrome-rfc §Status bar`. Strings
+ * resolve to built-ins; objects render the consumer-supplied node.
+ * Built-ins: `total` always shown when listed; `filtered` shows only
+ * when a filter is active; `selected` shows only when selectionSize >
+ * 0; `aggregations` shows when results are non-empty.
+ */
+export type BcStatusBarSegment<TRow = unknown> =
+  | "total"
+  | "filtered"
+  | "selected"
+  | "aggregations"
+  | BcStatusBarCustomSegment<TRow>
 
 export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
   value: unknown
@@ -175,6 +218,14 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   toolbar?: ReactNode
   footer?: ReactNode
+  /**
+   * Footer status bar segments rendered below the body, above any
+   * `footer` slot. Built-in segment IDs (`total`, `filtered`,
+   * `selected`, `aggregations`) opt in to the standard renderers;
+   * `BcStatusBarCustomSegment` objects render consumer-supplied
+   * content. Per `chrome-rfc §Status bar`.
+   */
+  statusBar?: readonly BcStatusBarSegment<TRow>[]
 
   /**
    * Master-detail render hook. When supplied, the grid renders a pinned-left

@@ -138,7 +138,7 @@ These tasks are pure `@bc-grid/react` UI on top of existing state shapes. **No R
 Spec: `docs/design/editing-rfc.md` (PR #45).
 
 - `[done: c2 #45]` **editing-rfc** — design doc; covers lifecycle, keyboard, validation, dirty tracking, server commit, 7 built-in editor specs. **Editor framework + 8 editors + validation + dirty tracking + bc-edit-grid-complete now claimable.**
-- `[ready]` **editor-framework** — `BcCellEditor` lifecycle + state machine + validation pipeline + DOM focus shift + live region announcements (extend `useLiveRegionAnnouncements` to return `announceAssertive` — currently only polite, see audit-c2-002 §F1). Single owner. **Effort**: M. **Unblocked: editing-rfc merged in #45.**
+- `[review: worker4 #148]` **editor-framework** — `BcCellEditor` lifecycle + state machine + validation pipeline + DOM focus shift. **Note:** assertive live region plumbing (audit-c2-002 §F1) already landed; this task closes the remaining RFC gaps — `editor.prepare()` wiring, async-validate signal in `column.validate`, portal-aware click-outside, `aria-activedescendant` suspension during edit, `aria-current` / `aria-describedby` on the editing cell, polite-region 250ms debounce, Tab/Shift+Tab wrap at last/first cell. Single owner. **Effort**: M. **Unblocked: editing-rfc merged in #45.**
 - `[blocked: depends on editor-framework]` **editor-text** — text input editor. shadcn `Input` primitive. Honours `seedKey`, `pointerHint`. **Effort**: S.
 - `[blocked: depends on editor-framework]` **editor-number** — numeric input with locale-aware decimal separator. shadcn `Input` + `inputMode="decimal"`. **Effort**: S.
 - `[done: c1 #121]` **editor-date** — shadcn date-picker primitive + ISO 8601 commit. **Effort**: M.
@@ -194,7 +194,7 @@ Specs: `docs/design/aggregation-rfc.md` (PR #51) + `pivot-rfc.md` (PR #52).
 Spec: `docs/design/chrome-rfc.md` (PR #46).
 
 - `[done: c2 #46]` **chrome-rfc** — design doc; covers status-bar / sidebar tablist / context-menu.
-- `[ready]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
+- `[review: worker2 #151]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
 - `[ready]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
 - `[blocked: depends on sidebar-impl]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
 - `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
