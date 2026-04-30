@@ -26,6 +26,11 @@ import {
 } from "react"
 import { BcGridAggregationFooterRow, useAggregations } from "./aggregations"
 import { renderBodyCell } from "./bodyCells"
+import {
+  type ColumnVisibilityItem,
+  ColumnVisibilityMenu,
+  type ColumnVisibilityMenuAnchor,
+} from "./columnVisibility"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
 import {
   type ColumnFilterText,
@@ -43,6 +48,7 @@ import {
   canvasStyle,
   cellDomId,
   classNames,
+  columnIdFor,
   createEmptySelection,
   defaultMessages,
   deriveColumnState,
@@ -66,7 +72,12 @@ import {
   useViewportSync,
   visuallyHiddenStyle,
 } from "./gridInternals"
-import { type SortModifiers, renderFilterCell, renderHeaderCell } from "./headerCells"
+import {
+  type ColumnMenuAnchor,
+  type SortModifiers,
+  renderFilterCell,
+  renderHeaderCell,
+} from "./headerCells"
 import { nextKeyboardNav } from "./keyboard"
 import {
   BcGridPagination,
@@ -84,7 +95,7 @@ import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
-import type { BcCellEditCommitEvent, BcGridProps } from "./types"
+import type { BcCellEditCommitEvent, BcGridProps, BcReactGridColumn } from "./types"
 import { useEditingController } from "./useEditingController"
 import { formatCellValue, getCellValue } from "./value"
 
@@ -185,6 +196,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // click; consumed (and reset) by shift-click. Held in a ref so we don't
   // re-render the grid just to update the anchor.
   const selectionAnchorRef = useRef<RowId | null>(null)
+  const [columnMenu, setColumnMenu] = useState<ColumnVisibilityMenuAnchor | null>(null)
 
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
@@ -235,6 +247,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const persistedColumnState = useMemo(
     () => deriveColumnState(consumerResolvedColumns, columnState),
     [columnState, consumerResolvedColumns],
+  )
+  const columnVisibilityItems = useMemo(
+    () => buildColumnVisibilityItems(columns, columnState),
+    [columns, columnState],
   )
   const persistenceState = useMemo(
     () => ({
@@ -881,6 +897,64 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     columnState,
     setColumnState,
   })
+  const openColumnMenu = useCallback(
+    (_column: (typeof resolvedColumns)[number], anchor: ColumnMenuAnchor) => {
+      const margin = 8
+      const menuWidth = 260
+      const menuHeight = 360
+      const viewportWidth = typeof window === "undefined" ? menuWidth : window.innerWidth
+      const viewportHeight = typeof window === "undefined" ? menuHeight : window.innerHeight
+      setColumnMenu({
+        x: Math.min(
+          Math.max(margin, anchor.x),
+          Math.max(margin, viewportWidth - menuWidth - margin),
+        ),
+        y: Math.min(
+          Math.max(margin, anchor.y),
+          Math.max(margin, viewportHeight - menuHeight - margin),
+        ),
+      })
+    },
+    [],
+  )
+  const closeColumnMenu = useCallback(() => setColumnMenu(null), [])
+  const toggleColumnHidden = useCallback(
+    (columnId: ColumnId, hidden: boolean) => {
+      if (hidden) {
+        const item = columnVisibilityItems.find((entry) => entry.columnId === columnId)
+        if (item?.hideDisabled) return
+      }
+      const next = columnState.some((entry) => entry.columnId === columnId)
+        ? columnState.map((entry) => (entry.columnId === columnId ? { ...entry, hidden } : entry))
+        : [...columnState, { columnId, hidden }]
+      setColumnState(next)
+    },
+    [columnState, columnVisibilityItems, setColumnState],
+  )
+
+  useEffect(() => {
+    if (!columnMenu) return
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (
+        target.closest(".bc-grid-column-menu") ||
+        target.closest('[data-bc-grid-column-menu-button="true"]')
+      ) {
+        return
+      }
+      setColumnMenu(null)
+    }
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setColumnMenu(null)
+    }
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [columnMenu])
 
   // Pinned-edge scroll-shadow indicators. Surfaces as data attrs on the
   // grid root so theming can render shadows when content has scrolled
@@ -923,6 +997,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               domBaseId,
               headerHeight,
               index,
+              onColumnMenu: openColumnMenu,
               onResizeEnd: endResize,
               onResizeMove: handleResizePointerMove,
               onResizeStart: handleResizePointerDown,
@@ -1096,6 +1171,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         />
       ) : null}
 
+      {columnMenu ? (
+        <ColumnVisibilityMenu
+          anchor={columnMenu}
+          items={columnVisibilityItems}
+          onClose={closeColumnMenu}
+          onToggle={toggleColumnHidden}
+        />
+      ) : null}
+
       {renderedFooter ? <div className="bc-grid-footer">{renderedFooter}</div> : null}
 
       {/*
@@ -1135,4 +1219,29 @@ function isCellEditable<TRow>(
   const editable = column.source.editable
   if (typeof editable === "function") return editable(row)
   return editable === true
+}
+
+function buildColumnVisibilityItems<TRow>(
+  columns: readonly BcReactGridColumn<TRow>[],
+  columnState: readonly BcColumnStateEntry[],
+): readonly ColumnVisibilityItem[] {
+  const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
+  const items = columns.map((column, index) => {
+    const columnId = columnIdFor(column, index)
+    const hidden = stateById.get(columnId)?.hidden ?? column.hidden ?? false
+    return {
+      columnId,
+      hidden,
+      label: columnVisibilityLabel(column, columnId),
+    }
+  })
+  const visibleCount = items.filter((item) => !item.hidden).length
+  return items.map((item) => ({
+    ...item,
+    hideDisabled: !item.hidden && visibleCount <= 1,
+  }))
+}
+
+function columnVisibilityLabel<TRow>(column: BcReactGridColumn<TRow>, columnId: ColumnId): string {
+  return typeof column.header === "string" ? column.header : columnId
 }

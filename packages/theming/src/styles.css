@@ -102,6 +102,35 @@
   background: var(--bc-grid-header-bg);
 }
 
+.bc-grid-header-menu-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  margin-left: auto;
+  background: transparent;
+  color: var(--bc-grid-header-fg);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  opacity: 0;
+  padding: 0;
+}
+
+.bc-grid-header-cell:hover .bc-grid-header-menu-button,
+.bc-grid-header-menu-button:focus-visible {
+  opacity: 1;
+}
+
+.bc-grid-header-menu-button:hover {
+  background: var(--bc-grid-row-hover);
+  color: var(--bc-grid-fg);
+}
+
 .bc-grid-row .bc-grid-cell {
   background: var(--bc-grid-bg);
 }
@@ -203,6 +232,74 @@
 .bc-grid-filter-select:focus-visible {
   outline: 2px solid var(--bc-grid-focus-ring);
   outline-offset: 1px;
+}
+
+.bc-grid-column-menu {
+  position: fixed;
+  z-index: 60;
+  width: min(16rem, calc(100vw - 16px));
+  border: 1px solid var(--bc-grid-border);
+  border-radius: var(--bc-grid-radius);
+  background: var(--bc-grid-bg);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+  color: var(--bc-grid-fg);
+  padding: 0.375rem;
+}
+
+.bc-grid-column-menu-title {
+  color: var(--bc-grid-muted-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.375rem 0.5rem;
+}
+
+.bc-grid-column-menu-item,
+.bc-grid-column-menu-close {
+  display: flex;
+  width: 100%;
+  min-height: 2rem;
+  align-items: center;
+  border: 0;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  gap: 0.5rem;
+  padding: 0 0.5rem;
+  text-align: left;
+}
+
+.bc-grid-column-menu-item:hover,
+.bc-grid-column-menu-item:focus-visible,
+.bc-grid-column-menu-close:hover,
+.bc-grid-column-menu-close:focus-visible {
+  background: var(--bc-grid-row-hover);
+  outline: none;
+}
+
+.bc-grid-column-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.bc-grid-column-menu-check {
+  width: 1rem;
+  flex: 0 0 1rem;
+  text-align: center;
+}
+
+.bc-grid-column-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bc-grid-column-menu-close {
+  margin-top: 0.25rem;
+  justify-content: center;
+  color: var(--bc-grid-muted-fg);
 }
 
 .bc-grid-tooltip-content {
