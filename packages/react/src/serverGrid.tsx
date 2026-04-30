@@ -664,17 +664,20 @@ function useTreeServerState<TRow>(
   visibleColumns: readonly ColumnId[],
 ): TreeServerState<TRow> {
   const modelRef = useRef(createServerRowModel<TRow>())
+  const rootLoadSequenceRef = useRef(0)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [tree, setTree] = useState<TreeSnapshot<TRow>>(() => modelRef.current.createTreeSnapshot())
   const [error, setError] = useState<unknown>(null)
+  const [rootLoading, setRootLoading] = useState(() => props.rowModel === "tree")
 
   const resetTreeRows = useCallback(() => {
     modelRef.current.abortAll()
     modelRef.current.cache.clear()
     setTree(modelRef.current.createTreeSnapshot())
     setError(null)
+    setRootLoading(props.rowModel === "tree")
     setRefreshVersion((version) => version + 1)
-  }, [])
+  }, [props.rowModel])
 
   const { filterState, handleFilterChange, handleSortChange, sortState } = useServerSortFilterState(
     props,
@@ -726,6 +729,7 @@ function useTreeServerState<TRow>(
   const loadTreeChildren = useCallback(
     (node: TreeNode<TRow> | null) => {
       if (!loadChildRows) return
+      const rootLoadId = node ? null : ++rootLoadSequenceRef.current
       const loader = node ? loadChildRows : (loadRootRows ?? loadChildRows)
       const parentRowId = node?.rowId ?? null
       const groupPath = node?.groupPath ?? []
@@ -745,6 +749,8 @@ function useTreeServerState<TRow>(
         setTree((prev) =>
           modelRef.current.updateTreeNode(prev, node.rowId, { loading: true, error: null }),
         )
+      } else {
+        setRootLoading(true)
       }
 
       request.promise
@@ -770,6 +776,11 @@ function useTreeServerState<TRow>(
                 loading: false,
               }),
             )
+          }
+        })
+        .finally(() => {
+          if (rootLoadId != null && rootLoadSequenceRef.current === rootLoadId) {
+            setRootLoading(false)
           }
         })
     },
@@ -860,7 +871,7 @@ function useTreeServerState<TRow>(
     handleFilterChange,
     handleSortChange,
     invalidate,
-    loading: props.rowModel === "tree" && rows.length === 0 && !error,
+    loading: props.rowModel === "tree" && rootLoading && rows.length === 0 && !error,
     refresh,
     retryBlock,
     rowCount: props.rowModel === "tree" ? rows.length : "unknown",
