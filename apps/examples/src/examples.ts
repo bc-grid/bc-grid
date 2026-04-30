@@ -119,9 +119,10 @@ function createCustomerRows(count: number): CustomerRow[] {
       // the seeded RNG) so adding this field doesn't shift the seeded
       // values used by every other column — keeps existing e2e
       // assertions on those fields stable.
-      cutoffTime: `${String(14 + (index % 4)).padStart(2, "0")}:${String(
-        (index % 4) * 15,
-      ).padStart(2, "0")}`,
+      cutoffTime: `${String(14 + (index % 4)).padStart(2, "0")}:${String((index % 4) * 15).padStart(
+        2,
+        "0",
+      )}`,
     }
   })
 }
