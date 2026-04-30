@@ -408,6 +408,65 @@ describe("columnFilterTextFromGridFilter", () => {
       }),
     ).toEqual({})
   })
+
+  test("projects number-range filters into inline range inputs", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "balance",
+      type: "number-range" as const,
+      op: "between" as const,
+      values: [100, 5000],
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.balance ? decodeNumberRangeFilterInput(text.balance) : null).toEqual({
+      value: "100",
+      valueTo: "5000",
+    })
+    // Round-trip: text → buildGridFilter → matches the original filter.
+    expect(buildGridFilter(text, { balance: "number-range" })).toEqual(filter)
+  })
+
+  test("projects number 'between' filters into inline number inputs", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "balance",
+      type: "number" as const,
+      op: "between" as const,
+      values: [100, 5000],
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.balance ? decodeNumberFilterInput(text.balance) : null).toEqual({
+      op: "between",
+      value: "100",
+      valueTo: "5000",
+    })
+    expect(buildGridFilter(text, { balance: "number" })).toEqual(filter)
+  })
+
+  test("ignores filters whose declared type doesn't match the operator shape", () => {
+    // number filter with a non-numeric value (rejected by scalarFilterInputValue)
+    expect(
+      columnFilterTextFromGridFilter({
+        kind: "column",
+        columnId: "balance",
+        type: "number",
+        op: ">",
+        value: { wrong: "shape" } as unknown as string,
+      }),
+    ).toEqual({})
+    // set filter with a non-string value drops the bad entry but keeps valid ones
+    expect(
+      columnFilterTextFromGridFilter({
+        kind: "column",
+        columnId: "status",
+        type: "set",
+        op: "in",
+        values: ["Open", 42 as unknown as string, null as unknown as string, "Past Due"],
+      }),
+    ).toEqual({
+      status: encodeSetFilterInput({ op: "in", values: ["Open", "Past Due"] }),
+    })
+  })
 })
 
 describe("encodeNumberRangeFilterInput / decodeNumberRangeFilterInput", () => {

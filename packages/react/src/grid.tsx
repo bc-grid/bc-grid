@@ -45,7 +45,6 @@ import {
   type SetFilterOption,
   buildGridFilter,
   columnFilterTextFromGridFilter,
-  isBlankSetFilterValue,
   matchesGridFilter,
   setFilterValueKeys,
 } from "./filter"
