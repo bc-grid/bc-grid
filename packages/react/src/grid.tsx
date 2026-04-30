@@ -42,8 +42,11 @@ import { EditorPortal, defaultTextEditor } from "./editorPortal"
 import {
   type ColumnFilterText,
   type ColumnFilterTypeByColumnId,
+  type SetFilterOption,
   buildGridFilter,
+  isBlankSetFilterValue,
   matchesGridFilter,
+  setFilterValueKey,
 } from "./filter"
 import {
   DEFAULT_BODY_HEIGHT,
@@ -567,6 +570,78 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [resolvedColumns],
   )
 
+  const loadSetFilterOptions = useCallback(
+    (columnId: ColumnId): readonly SetFilterOption[] => {
+      const column = resolvedColumns.find((candidate) => candidate.columnId === columnId)
+      if (!column) return []
+
+      const { [columnId]: _currentFilter, ...otherFilterText } = columnFilterText
+      const otherFilter = buildGridFilter(otherFilterText, columnFilterTypes)
+      const columnsById = new Map(
+        consumerResolvedColumns.map((candidate) => [candidate.columnId, candidate]),
+      )
+      const searchableColumns = consumerResolvedColumns.filter(
+        (candidate) => candidate.source.filter !== false,
+      )
+      const optionsByValue = new Map<string, SetFilterOption>()
+
+      for (const row of data) {
+        if (props.showInactive === false && rowIsInactive?.(row)) continue
+        if (
+          otherFilter &&
+          !matchesGridFilter(otherFilter, (filterColumnId) => {
+            const filterColumn = columnsById.get(filterColumnId)
+            if (!filterColumn) return ""
+            const value = getCellValue(row, filterColumn.source)
+            return {
+              formattedValue: formatCellValue(value, row, filterColumn.source, locale),
+              rawValue: value,
+            }
+          })
+        ) {
+          continue
+        }
+        if (
+          searchText.trim() &&
+          !matchesSearchText(
+            searchText,
+            searchableColumns.map((searchColumn) => {
+              const value = getCellValue(row, searchColumn.source)
+              return formatCellValue(value, row, searchColumn.source, locale)
+            }),
+          )
+        ) {
+          continue
+        }
+
+        const rawValue = getCellValue(row, column.source)
+        if (isBlankSetFilterValue(rawValue)) continue
+
+        const value = setFilterValueKey(rawValue)
+        if (value.length === 0 || optionsByValue.has(value)) continue
+
+        const formattedValue = formatCellValue(rawValue, row, column.source, locale)
+        const label = formattedValue.trim().length > 0 ? formattedValue : value
+        optionsByValue.set(value, { value, label })
+      }
+
+      return Array.from(optionsByValue.values()).sort((a, b) =>
+        a.label.localeCompare(b.label, locale, { numeric: true, sensitivity: "base" }),
+      )
+    },
+    [
+      columnFilterText,
+      columnFilterTypes,
+      consumerResolvedColumns,
+      data,
+      locale,
+      props.showInactive,
+      resolvedColumns,
+      rowIsInactive,
+      searchText,
+    ],
+  )
+
   const columnIndexById = useMemo(() => {
     const map = new Map<(typeof resolvedColumns)[number]["columnId"], number>()
     resolvedColumns.forEach((column, index) => map.set(column.columnId, index))
@@ -972,18 +1047,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   useEffect(() => assignRef(apiRef, api), [apiRef, api])
 
-  // Status-bar render context per `chrome-rfc §Status bar`. Aggregations
-  // are intentionally empty here; `footer-aggregations` (Track 5) is the
-  // task that wires `aggregationResults` through.
+  // Status-bar render context per `chrome-rfc §Status bar`. The
+  // `aggregations` segment consumes the same `useAggregations` output
+  // already feeding the in-grid aggregation footer row, so the segment
+  // and the row stay in sync at zero extra cost.
   const statusBarContext = useMemo(
     () => ({
       api,
       totalRowCount: data.length,
       filteredRowCount: allRowEntries.length,
       selectedRowCount: computeSelectedRowCount(selectionState, data.length, allRowEntries.length),
-      aggregations: [] as const,
+      aggregations: aggregationResults,
     }),
-    [api, allRowEntries.length, data.length, selectionState],
+    [api, aggregationResults, allRowEntries.length, data.length, selectionState],
   )
 
   const handlePaginationChange = useCallback(
@@ -1427,6 +1503,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 filterText: columnFilterText[column.columnId] ?? "",
                 headerHeight,
                 index,
+                loadSetFilterOptions,
                 onFilterChange: (next) =>
                   setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
                 pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
@@ -1709,6 +1786,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 filterType={popupFilter.type}
                 filterText={columnFilterText[popupColumnId] ?? ""}
                 filterLabel={popupLabel}
+                getSetFilterOptions={() => loadSetFilterOptions(popupColumnId)}
                 onFilterChange={(next) =>
                   setColumnFilterText((prev) => ({ ...prev, [popupColumnId]: next }))
                 }

@@ -1,5 +1,5 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { type CSSProperties, useEffect, useLayoutEffect, useRef } from "react"
+import { type CSSProperties, useId, useLayoutEffect, useRef } from "react"
 
 /**
  * Text editor — `kind: "text"`. The default for string-typed columns
@@ -27,15 +27,43 @@ export const textEditor: BcCellEditor<unknown, unknown> = {
   kind: "text",
 }
 
-function TextEditor(props: BcCellEditorProps<unknown, string>) {
-  const { initialValue, error, focusRef, seedKey, pending } = props
-  const inputRef = useRef<HTMLInputElement | null>(null)
+/**
+ * Compute the value that mounts on the input.
+ *   - `seedKey` (printable activation) wins — replaces cell content.
+ *   - else fall back to the existing cell value, coerced safely.
+ *   - null / undefined → empty string so the input is empty (not "null").
+ *
+ * Pure so the seed semantics are unit-testable per `editing-rfc
+ * §Activation` without mounting React.
+ */
+export function resolveTextEditorSeed(initialValue: unknown, seedKey: string | undefined): string {
+  if (seedKey != null) return seedKey
+  if (initialValue == null) return ""
+  return String(initialValue)
+}
 
-  // Hand the input element back to the framework via `focusRef`. The
-  // framework's editor portal uses this to call .focus() after mount.
-  useEffect(() => {
+function TextEditor(props: BcCellEditorProps<unknown, string>) {
+  const { initialValue, error, focusRef, seedKey, pending, column } = props
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  // Stable id per-editor-instance so aria-describedby can target the
+  // hidden error message text. `useId()` is stable across renders.
+  const errorId = useId()
+
+  // Hand the input element back to the framework via `focusRef`. This
+  // assignment runs in `useLayoutEffect` so it lands BEFORE the
+  // framework's parent `useLayoutEffect` (children fire first in the
+  // commit phase). With `useEffect` here the framework's mount-focus
+  // call would see `focusRef.current === null` and the input would
+  // never receive focus on real interaction. Per `editing-rfc §a11y
+  // for edit mode` ("real focus shifts to focusRef.current").
+  useLayoutEffect(() => {
     if (focusRef && inputRef.current) {
       ;(focusRef as { current: HTMLElement | null }).current = inputRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
     }
   }, [focusRef])
 
@@ -55,25 +83,39 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
     }
   }, [seedKey])
 
-  // Compute the value the input mounts with. seedKey wins (printable
-  // activation replaced the cell value); else render the existing value.
-  const seeded = seedKey != null ? seedKey : (initialValue ?? "")
+  const seeded = resolveTextEditorSeed(initialValue, seedKey)
+  // Column header for the input's AT name. Falls back to `column.field`
+  // when the header is not a plain string (e.g., header is a render
+  // function). Per `editing-rfc §ARIA states on the cell` — the input
+  // inherits its name from the column context so AT announces "{column}
+  // edit text" instead of just "edit text".
+  const accessibleName =
+    typeof column.header === "string" ? column.header : (column.field ?? column.columnId ?? "")
 
   // v0.1 commit/cancel happens via Enter / Tab / Escape on the framework's
   // editor portal — the input is uncontrolled and the portal reads
-  // `inputRef.current.value` at commit time. The portal-aware click-outside
-  // path (commit on blur) lands with the portal-click-outside follow-up.
+  // `inputRef.current.value` at commit time. Document-level click-outside
+  // commits via the portal's pointerdown listener.
   return (
-    <input
-      ref={inputRef}
-      type="text"
-      defaultValue={seeded}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="text"
-      style={inputStyle}
-    />
+    <>
+      <input
+        ref={inputRef}
+        type="text"
+        defaultValue={seeded}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-label={accessibleName || undefined}
+        aria-describedby={error ? errorId : undefined}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="text"
+        style={inputStyle}
+      />
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
   )
 }
 
@@ -88,4 +130,16 @@ const inputStyle: CSSProperties = {
   paddingInline: "var(--bc-grid-cell-padding-x, 12px)",
   outline: "none",
   boxSizing: "border-box",
+}
+
+const visuallyHiddenStyle: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0,
 }

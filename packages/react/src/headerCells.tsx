@@ -7,15 +7,23 @@ import {
   type ReactNode,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
+  useState,
 } from "react"
 import {
   type DateFilterOperator,
   type NumberFilterOperator,
+  type SetFilterOperator,
+  type SetFilterOption,
   decodeDateFilterInput,
   decodeNumberFilterInput,
+  decodeNumberRangeFilterInput,
+  decodeSetFilterInput,
   encodeDateFilterInput,
   encodeNumberFilterInput,
+  encodeNumberRangeFilterInput,
+  encodeSetFilterInput,
 } from "./filter"
 import {
   type ResolvedColumn,
@@ -283,6 +291,7 @@ interface RenderFilterCellParams<TRow> {
   filterText: string
   headerHeight: number
   index: number
+  loadSetFilterOptions?: ((columnId: ColumnId) => readonly SetFilterOption[]) | undefined
   onFilterChange: (next: string) => void
   pinnedEdge: "left" | "right" | null
   scrollLeft: number
@@ -296,6 +305,7 @@ export function renderFilterCell<TRow>({
   filterText,
   headerHeight,
   index,
+  loadSetFilterOptions,
   onFilterChange,
   pinnedEdge,
   scrollLeft,
@@ -346,12 +356,17 @@ export function renderFilterCell<TRow>({
           filterText={filterText}
           filterId={filterId}
           filterLabel={filterLabel}
+          getSetFilterOptions={
+            loadSetFilterOptions ? () => loadSetFilterOptions(column.columnId) : undefined
+          }
           onFilterChange={onFilterChange}
         />
       )}
     </div>
   )
 }
+
+type FilterFocusElement = HTMLInputElement | HTMLSelectElement | HTMLButtonElement
 
 function DateFilterControl({
   filterId,
@@ -364,7 +379,7 @@ function DateFilterControl({
   filterLabel: string
   filterText: string
   onFilterChange: (next: string) => void
-  primaryRef?: { current: HTMLInputElement | HTMLSelectElement | null }
+  primaryRef?: { current: FilterFocusElement | null }
 }): ReactNode {
   const input = decodeDateFilterInput(filterText)
   const update = (next: Partial<typeof input>) => {
@@ -407,6 +422,198 @@ function DateFilterControl({
           onChange={(event) => update({ valueTo: event.currentTarget.value })}
           onKeyDown={(event) => event.stopPropagation()}
         />
+      ) : null}
+    </div>
+  )
+}
+
+function SetFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  getSetFilterOptions,
+  onFilterChange,
+  primaryRef,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  getSetFilterOptions?: (() => readonly SetFilterOption[]) | undefined
+  onFilterChange: (next: string) => void
+  primaryRef?: { current: FilterFocusElement | null }
+}): ReactNode {
+  const input = decodeSetFilterInput(filterText)
+  const [draftOp, setDraftOp] = useState<SetFilterOperator>(input.op)
+  const [open, setOpen] = useState(false)
+  const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number } | null>(
+    null,
+  )
+  const [options, setOptions] = useState<readonly SetFilterOption[] | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (filterText.length > 0) setDraftOp(input.op)
+  }, [filterText.length, input.op])
+
+  useEffect(() => {
+    if (!open) return
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      const target = event.target as Node | null
+      if (target && rootRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    document.addEventListener("pointerdown", handlePointerDown, true)
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true)
+  }, [open])
+
+  const op = filterText.length > 0 ? input.op : draftOp
+  const selectedValues = useMemo(() => new Set(input.values), [input.values])
+  const menuOptions = useMemo(() => {
+    const byValue = new Map<string, SetFilterOption>()
+    for (const option of options ?? []) byValue.set(option.value, option)
+    for (const value of input.values) {
+      if (!byValue.has(value)) byValue.set(value, { value, label: value })
+    }
+    return Array.from(byValue.values())
+  }, [input.values, options])
+
+  const commit = (next: { op: SetFilterOperator; values: readonly string[] }) => {
+    setDraftOp(next.op)
+    const values = Array.from(new Set(next.values.filter((value) => value.length > 0)))
+    if (next.op === "blank") {
+      onFilterChange(encodeSetFilterInput({ op: "blank", values: [] }))
+      return
+    }
+    if (values.length === 0) {
+      onFilterChange("")
+      return
+    }
+    onFilterChange(encodeSetFilterInput({ op: next.op, values }))
+  }
+
+  const loadOptions = () => {
+    setOptions(getSetFilterOptions ? getSetFilterOptions() : [])
+  }
+
+  const openMenu = (button: HTMLButtonElement) => {
+    const rect = button.getBoundingClientRect()
+    setMenuRect({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    loadOptions()
+    setOpen(true)
+  }
+
+  const toggleValue = (value: string) => {
+    const values = selectedValues.has(value)
+      ? input.values.filter((selected) => selected !== value)
+      : [...input.values, value]
+    commit({ op, values })
+  }
+
+  const summary =
+    op === "blank"
+      ? "Blank rows"
+      : input.values.length === 0
+        ? "Select values"
+        : `${input.values.length} selected`
+  const menuId = `${filterId}-set-menu`
+  const pickerDisabled = op === "blank"
+
+  return (
+    <div ref={rootRef} className="bc-grid-filter-set">
+      <select
+        aria-label={`${filterLabel} operator`}
+        className="bc-grid-filter-select"
+        value={op}
+        onChange={(event) =>
+          commit({ op: event.currentTarget.value as SetFilterOperator, values: input.values })
+        }
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <option value="in">In</option>
+        <option value="not-in">Not in</option>
+        <option value="blank">Blank</option>
+      </select>
+      <button
+        ref={(el) => {
+          if (primaryRef) primaryRef.current = el
+        }}
+        aria-controls={open ? menuId : undefined}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`${filterLabel} values`}
+        className="bc-grid-filter-set-button"
+        disabled={pickerDisabled}
+        id={filterId}
+        onClick={(event) => {
+          event.preventDefault()
+          if (open) {
+            setOpen(false)
+          } else {
+            openMenu(event.currentTarget)
+          }
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation()
+          if (event.key === "Escape") setOpen(false)
+          if (event.key === "ArrowDown" && !open) {
+            event.preventDefault()
+            openMenu(event.currentTarget)
+          }
+        }}
+        type="button"
+      >
+        <span className="bc-grid-filter-set-button-label">{summary}</span>
+        <span aria-hidden="true" className="bc-grid-filter-set-button-caret">
+          ▾
+        </span>
+      </button>
+      {open && menuRect ? (
+        <div
+          id={menuId}
+          className="bc-grid-filter-set-menu"
+          role="group"
+          aria-label={`${filterLabel} values`}
+          style={{
+            position: "fixed",
+            top: menuRect.top,
+            left: menuRect.left,
+            minWidth: Math.max(180, menuRect.width),
+            zIndex: 110,
+          }}
+        >
+          {menuOptions.length === 0 ? (
+            <div className="bc-grid-filter-set-empty">No values</div>
+          ) : (
+            menuOptions.map((option) => {
+              const checked = selectedValues.has(option.value)
+              return (
+                <label
+                  key={option.value}
+                  className="bc-grid-filter-set-option"
+                  data-selected={checked ? "true" : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleValue(option.value)}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              )
+            })
+          )}
+          {input.values.length > 0 ? (
+            <button
+              type="button"
+              className="bc-grid-filter-set-clear"
+              onClick={() => commit({ op, values: [] })}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              Clear selection
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
@@ -461,6 +668,7 @@ export function FilterEditorBody({
   filterText,
   filterId,
   filterLabel,
+  getSetFilterOptions,
   onFilterChange,
   autoFocus,
 }: {
@@ -468,10 +676,11 @@ export function FilterEditorBody({
   filterText: string
   filterId: string
   filterLabel: string
+  getSetFilterOptions?: (() => readonly SetFilterOption[]) | undefined
   onFilterChange: (next: string) => void
   autoFocus?: boolean
 }): ReactNode {
-  const focusRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null)
+  const focusRef = useRef<FilterFocusElement | null>(null)
   useLayoutEffect(() => {
     if (autoFocus) focusRef.current?.focus()
   }, [autoFocus])
@@ -506,12 +715,35 @@ export function FilterEditorBody({
       />
     )
   }
+  if (filterType === "number-range") {
+    return (
+      <NumberRangeFilterControl
+        filterId={filterId}
+        filterLabel={filterLabel}
+        filterText={filterText}
+        onFilterChange={onFilterChange}
+        primaryRef={focusRef}
+      />
+    )
+  }
   if (filterType === "date") {
     return (
       <DateFilterControl
         filterId={filterId}
         filterLabel={filterLabel}
         filterText={filterText}
+        onFilterChange={onFilterChange}
+        primaryRef={focusRef}
+      />
+    )
+  }
+  if (filterType === "set") {
+    return (
+      <SetFilterControl
+        filterId={filterId}
+        filterLabel={filterLabel}
+        filterText={filterText}
+        getSetFilterOptions={getSetFilterOptions}
         onFilterChange={onFilterChange}
         primaryRef={focusRef}
       />
@@ -540,6 +772,7 @@ interface FilterPopupProps {
   filterType: BcColumnFilter["type"]
   filterText: string
   filterLabel: string
+  getSetFilterOptions?: (() => readonly SetFilterOption[]) | undefined
   onFilterChange: (next: string) => void
   onClear: () => void
   onClose: () => void
@@ -560,6 +793,7 @@ export function FilterPopup({
   filterType,
   filterText,
   filterLabel,
+  getSetFilterOptions,
   onFilterChange,
   onClear,
   onClose,
@@ -619,6 +853,7 @@ export function FilterPopup({
         filterText={filterText}
         filterId={filterId}
         filterLabel={filterLabel}
+        getSetFilterOptions={getSetFilterOptions}
         onFilterChange={onFilterChange}
         autoFocus
       />
@@ -665,7 +900,7 @@ function NumberFilterControl({
   filterLabel: string
   filterText: string
   onFilterChange: (next: string) => void
-  primaryRef?: { current: HTMLInputElement | HTMLSelectElement | null }
+  primaryRef?: { current: FilterFocusElement | null }
 }): ReactNode {
   const input = decodeNumberFilterInput(filterText)
   const update = (next: Partial<typeof input>) => {
@@ -716,6 +951,64 @@ function NumberFilterControl({
           placeholder="Max"
         />
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * Two-input min/max filter for `BcColumnFilter.type === "number-range"`.
+ * Convenience over the `number` filter's `between` operator: no operator
+ * dropdown, two `inputMode="decimal"` fields separated by an em-dash.
+ * Per `filter-registry-rfc §number-range`.
+ */
+function NumberRangeFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+  primaryRef,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+  primaryRef?: { current: FilterFocusElement | null }
+}): ReactNode {
+  const input = decodeNumberRangeFilterInput(filterText)
+  const update = (next: Partial<typeof input>) => {
+    const merged = { ...input, ...next }
+    onFilterChange(encodeNumberRangeFilterInput(merged))
+  }
+
+  return (
+    <div className="bc-grid-filter-number-range">
+      <input
+        ref={(el) => {
+          if (primaryRef) primaryRef.current = el
+        }}
+        aria-label={`${filterLabel} minimum`}
+        className="bc-grid-filter-input"
+        id={filterId}
+        type="number"
+        inputMode="decimal"
+        value={input.value}
+        onChange={(event) => update({ value: event.currentTarget.value })}
+        onKeyDown={(event) => event.stopPropagation()}
+        placeholder="Min"
+      />
+      <span aria-hidden="true" className="bc-grid-filter-number-range-separator">
+        —
+      </span>
+      <input
+        aria-label={`${filterLabel} maximum`}
+        className="bc-grid-filter-input"
+        type="number"
+        inputMode="decimal"
+        value={input.valueTo}
+        onChange={(event) => update({ valueTo: event.currentTarget.value })}
+        onKeyDown={(event) => event.stopPropagation()}
+        placeholder="Max"
+      />
     </div>
   )
 }
