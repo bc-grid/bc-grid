@@ -1,0 +1,214 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const installSnippet = `npm install recharts
+# or any peer chart library — bc-grid does not bundle one`
+
+const hookSnippet = `import { BcGrid, useBcGridApi, useBcGridChartData } from "@bc-grid/react"
+import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+
+export function CustomerBalanceByQuarter({ rows, columns }) {
+  const apiRef = useBcGridApi()
+
+  // v1 surface: pass the rows you want to chart. Pre-filter / pre-select
+  // upstream of the hook (or via React state mirrored from the grid's
+  // controlled-state callbacks). The richer apiRef-based reactive
+  // variant lands when charts-api-subscribe ships.
+  const chartData = useBcGridChartData(rows, columns, {
+    categoryColumn: "quarter",
+    valueColumns: ["balance"],
+    aggregations: { balance: { type: "sum" } },
+    maxCategories: 12,
+  })
+
+  return (
+    <div role="img" aria-label="Customer balance by quarter">
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={toRechartsData(chartData)}>
+          <XAxis dataKey="category" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          {chartData.series.map((s) => (
+            <Bar key={s.id} dataKey={s.id} name={s.label} />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+      <BcGrid apiRef={apiRef} columns={columns} data={rows} rowId={(row) => row.id} />
+    </div>
+  )
+}
+
+// One-off shape converter — bc-grid → recharts.
+function toRechartsData(d) {
+  return d.categories.map((category, i) => {
+    const obj = { category }
+    for (const s of d.series) obj[s.id] = s.values[i]
+    return obj
+  })
+}`
+
+const echartsSnippet = `import ReactECharts from "echarts-for-react"
+import { useBcGridChartData } from "@bc-grid/react"
+
+export function CustomerBalanceByQuarterECharts({ rows, columns }) {
+  const chartData = useBcGridChartData(rows, columns, {
+    categoryColumn: "quarter",
+    valueColumns: ["balance"],
+  })
+
+  const option = {
+    xAxis: { type: "category", data: chartData.categories },
+    yAxis: { type: "value" },
+    series: chartData.series.map((s) => ({ name: s.label, type: "bar", data: s.values })),
+    tooltip: { trigger: "axis" },
+    legend: { data: chartData.series.map((s) => s.label) },
+  }
+
+  return (
+    <div role="img" aria-label="Customer balance by quarter">
+      <ReactECharts option={option} style={{ height: 300 }} />
+    </div>
+  )
+}`
+
+const visxSnippet = `import { Group } from "@visx/group"
+import { Bar } from "@visx/shape"
+import { scaleBand, scaleLinear } from "@visx/scale"
+import { useBcGridChartData } from "@bc-grid/react"
+
+export function CustomerBalanceByQuarterVisx({ rows, columns, width = 480, height = 300 }) {
+  const chartData = useBcGridChartData(rows, columns, {
+    categoryColumn: "quarter",
+    valueColumns: ["balance"],
+  })
+
+  const xScale = scaleBand({
+    range: [0, width],
+    domain: [...chartData.categories],
+    padding: 0.2,
+  })
+  const yScale = scaleLinear({
+    range: [height, 0],
+    domain: [0, Math.max(...chartData.series.flatMap((s) => s.values.map((v) => v ?? 0)))],
+  })
+
+  const series = chartData.series[0]
+
+  return (
+    <svg width={width} height={height} role="img" aria-label="Customer balance by quarter">
+      <Group>
+        {chartData.categories.map((category, i) => {
+          const value = series?.values[i] ?? 0
+          return (
+            <Bar
+              key={category}
+              x={xScale(category)}
+              y={yScale(value)}
+              width={xScale.bandwidth()}
+              height={height - yScale(value)}
+              fill="#6366f1"
+            />
+          )
+        })}
+      </Group>
+    </svg>
+  )
+}`
+
+const purePipelineSnippet = `import { rowsToChartData } from "@bc-grid/react"
+
+// Use rowsToChartData outside React for SSR / web-worker / headless test.
+const data = rowsToChartData(filteredRows, columns, {
+  categoryColumn: "quarter",
+  valueColumns: ["balance", "creditExposure"],
+})
+console.log(data.categories, data.series)`
+---
+
+<DocsLayout
+  title="Charts (peer-dep)"
+  description="Compose bc-grid with recharts, echarts, or visx. The grid emits chart-ready data; you render with the library you already use."
+  active="charts"
+>
+  <section class="section">
+    <h2>Why peer-dep?</h2>
+    <p class="section-note">
+      Charting libraries are large (recharts ~50&thinsp;KB gz, echarts ~250&thinsp;KB gz). Bundling
+      one would inflate every consumer. Instead bc-grid ships <strong>zero chart runtime</strong>:
+      consumers pick the library they already use, install it as a peer dep, and bc-grid hands them
+      <code>BcChartData</code> (categories + series + truncation flag) ready to feed in.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>install</span>
+        <span>peer-dep</span>
+      </div>
+      <Code code={installSnippet} lang="bash" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>recharts (default recipe)</h2>
+    <p class="section-note">
+      <code>useBcGridChartData(rows, columns, config)</code> memoises a chart-ready data shape from
+      whatever rows you pass it. A 5-line shape converter (<code>toRechartsData</code>) turns it
+      into the row-of-objects shape recharts wants. The chart container uses
+      <code>role="img"</code> + <code>aria-label</code> by default — see the a11y note in the RFC.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>CustomerBalanceByQuarter.tsx</span>
+        <span>recharts</span>
+      </div>
+      <Code code={hookSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>echarts-for-react (alternative)</h2>
+    <p class="section-note">
+      The same <code>BcChartData</code> output feeds straight into echarts' option object. Useful
+      when you need heatmap / funnel / sankey / treemap that recharts doesn't ship.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>CustomerBalanceByQuarterECharts.tsx</span>
+        <span>echarts-for-react</span>
+      </div>
+      <Code code={echartsSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>visx (custom design)</h2>
+    <p class="section-note">
+      visx primitives let you compose a chart pixel-by-pixel against the same
+      <code>BcChartData</code> input. Good for design-heavy product surfaces where canned chart
+      libraries don't fit.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>CustomerBalanceByQuarterVisx.tsx</span>
+        <span>visx</span>
+      </div>
+      <Code code={visxSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Headless pipeline</h2>
+    <p class="section-note">
+      For SSR, web workers, or unit tests, call the pure helper <code>rowsToChartData</code> with
+      no React in scope. The hook is just <code>useMemo</code> over this helper.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>headless-chart-data.ts</span>
+        <span>rowsToChartData</span>
+      </div>
+      <Code code={purePipelineSnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+</DocsLayout>

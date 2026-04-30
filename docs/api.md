@@ -1179,10 +1179,10 @@ The machine-checkable manifest for this package lives in `tools/api-surface/src/
 export { BcGrid, BcEditGrid, BcServerGrid, BcStatusBar }
 
 // Hooks
-export { useBcGridApi, useAggregations, useServerRowUpdates }
+export { useBcGridApi, useAggregations, useBcGridChartData, useServerRowUpdates }
 
 // Helpers
-export { resolveVisibleSegments }
+export { resolveVisibleSegments, rowsToChartData }
 
 // React-aware types plus @bc-grid/core re-exports for consumer convenience.
 // (Re-exports let consumers import every column / state / loader type from one place.)
@@ -1200,6 +1200,7 @@ export type {
   BcServerRowUpdateHandler, BcServerRowUpdateSubscribe, BcServerRowUpdateUnsubscribe,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
   BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarCustomPanel, BcSidebarPanel,
+  BcChartConfig, BcChartData, BcChartScope, BcChartSeries,
 
   // Re-exports from @bc-grid/core
   BcCellPosition, BcSelection, BcRange, BcRangeSelection, BcRangeKeyAction,

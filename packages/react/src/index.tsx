@@ -1,4 +1,5 @@
 export { useAggregations } from "./aggregations"
+export { rowsToChartData, useBcGridChartData } from "./charts"
 export { BcEditGrid } from "./editGrid"
 export { BcGrid, useBcGridApi } from "./grid"
 export { BcServerGrid } from "./serverGrid"
@@ -68,6 +69,7 @@ export type {
   ServerTreeResult,
 } from "./types"
 export type { UseAggregationsOptions } from "./aggregations"
+export type { BcChartConfig, BcChartData, BcChartScope, BcChartSeries } from "./charts"
 export type {
   BcServerRowUpdateHandler,
   BcServerRowUpdateSubscribe,
