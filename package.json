@@ -20,7 +20,8 @@
     "bench": "bun run --filter './apps/benchmarks' bench",
     "changeset": "changeset",
     "changeset:version": "changeset version && bun install --lockfile-only",
-    "publish:packages": "for pkg in packages/*/; do (cd \"$pkg\" && bun publish); done"
+    "publish:packages": "for pkg in packages/*/; do (cd \"$pkg\" && bun publish); done",
+    "tarball-smoke": "bun run --filter '@bc-grid/tarball-smoke' check"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

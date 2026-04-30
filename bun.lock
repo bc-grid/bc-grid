@@ -168,6 +168,13 @@
       "name": "@bc-grid/bundle-size",
       "version": "0.0.0",
     },
+    "tools/tarball-smoke": {
+      "name": "@bc-grid/tarball-smoke",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/node": "^22.0.0",
+      },
+    },
   },
   "packages": {
     "@astrojs/compiler": ["@astrojs/compiler@2.13.1", "", {}, "sha512-f3FN83d2G/v32ipNClRKgYv30onQlMZX1vCeZMjPsMMPl1mDpmbl0+N5BYo4S/ofzqJyS5hvwacEo0CCVDn/Qg=="],
@@ -249,6 +256,8 @@
     "@bc-grid/react": ["@bc-grid/react@workspace:packages/react"],
 
     "@bc-grid/server-row-model": ["@bc-grid/server-row-model@workspace:packages/server-row-model"],
+
+    "@bc-grid/tarball-smoke": ["@bc-grid/tarball-smoke@workspace:tools/tarball-smoke"],
 
     "@bc-grid/theming": ["@bc-grid/theming@workspace:packages/theming"],
 
