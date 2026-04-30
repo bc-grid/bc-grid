@@ -62,6 +62,16 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain('[data-bc-grid-active-cell="true"]')
   })
 
+  test("CSS exposes a token-based header resize affordance", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain("--bc-grid-column-resize-affordance")
+    expect(css).toContain("--bc-grid-column-resize-affordance-hover")
+    expect(css).toContain(".bc-grid-header-cell-resizable::before")
+    expect(css).toContain("pointer-events: none")
+    expect(css).not.toContain(".bc-grid-header-resize-handle::before")
+  })
+
   test("prefers-reduced-motion block zeroes out motion per accessibility-rfc §Reduced Motion", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     // Locate the last reduced-motion block (the catch-all override) and
