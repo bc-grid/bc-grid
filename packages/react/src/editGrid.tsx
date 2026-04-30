@@ -114,7 +114,7 @@ function createActionsColumn<TRow>(options: {
                 "bc-grid-action",
                 action.destructive ? "bc-grid-action-destructive" : undefined,
               )}
-              disabled={isActionDisabled(action, params.row)}
+              disabled={params.rowState.disabled || isActionDisabled(action, params.row)}
               onClick={(event) => {
                 event.stopPropagation()
                 action.onSelect(params.row)
