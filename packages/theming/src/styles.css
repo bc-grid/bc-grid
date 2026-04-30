@@ -14,6 +14,16 @@
     var(--bc-grid-border) 72%,
     var(--bc-grid-header-fg) 28%
   );
+  --bc-grid-column-resize-affordance: color-mix(
+    in srgb,
+    var(--bc-grid-column-separator) 72%,
+    transparent
+  );
+  --bc-grid-column-resize-affordance-hover: color-mix(
+    in srgb,
+    var(--bc-grid-focus-ring) 58%,
+    var(--bc-grid-column-separator)
+  );
   --bc-grid-focus-ring: hsl(var(--ring, 221 83% 53%));
   --bc-grid-invalid: hsl(var(--destructive, 0 84% 60%));
   --bc-grid-dirty: hsl(37 92% 50%);
@@ -184,10 +194,41 @@
   pointer-events: none;
 }
 
+.bc-grid-header-cell-resizable::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 0;
+  z-index: 1;
+  width: 6px;
+  height: calc(100% - 12px);
+  border-right: 1px solid var(--bc-grid-column-resize-affordance);
+  background: linear-gradient(
+    to right,
+    transparent 0 3px,
+    var(--bc-grid-column-resize-affordance) 3px 4px,
+    transparent 4px
+  );
+  opacity: 0.82;
+  pointer-events: none;
+}
+
 .bc-grid-header-cell:hover::after,
 .bc-grid-header-cell:focus-within::after {
   width: 2px;
   background: var(--bc-grid-focus-ring);
+  opacity: 1;
+}
+
+.bc-grid-header-cell-resizable:hover::before,
+.bc-grid-header-cell-resizable:focus-within::before {
+  border-right-color: var(--bc-grid-column-resize-affordance-hover);
+  background: linear-gradient(
+    to right,
+    transparent 0 3px,
+    var(--bc-grid-column-resize-affordance-hover) 3px 4px,
+    transparent 4px
+  );
   opacity: 1;
 }
 
@@ -1161,6 +1202,8 @@
     --bc-grid-header-bg: Canvas;
     --bc-grid-header-fg: CanvasText;
     --bc-grid-column-separator: CanvasText;
+    --bc-grid-column-resize-affordance: CanvasText;
+    --bc-grid-column-resize-affordance-hover: Highlight;
     --bc-grid-focus-ring: Highlight;
     --bc-grid-invalid: ButtonText;
     --bc-grid-dirty: ButtonText;
