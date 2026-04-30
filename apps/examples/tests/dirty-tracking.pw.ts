@@ -3,7 +3,7 @@ import { type Page, expect, test } from "@playwright/test"
 /**
  * `dirty-tracking` plumbs editor state onto cell renderer params:
  *   - `pending: boolean`         — async commit in flight
- *   - `editError?: string`        — validation rejection / server reject
+ *   - `editError?: string`        — async commit / server reject
  *   - `isDirty: boolean`          — committed locally this session
  *
  * The cell DOM exposes the same state via the `data-bc-grid-cell-state`
