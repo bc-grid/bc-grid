@@ -116,7 +116,7 @@ Track 3 (server-row-model) reuses `server-query-rfc` (PR #2, merged) and needs n
 These tasks are pure `@bc-grid/react` UI on top of existing state shapes. **No RFC needed** — `api.md §1.1` and `§3.2` already declare the supporting types. Anyone can claim these immediately after `grid-tsx-file-split`. Suggested owner: c1 or whoever is between bigger pieces.
 
 - `[ready]` **column-reorder** — drag a column header to reorder. State already supported via `BcColumnStateEntry.position` (`api.md §3.2`). UI: pointer-driven drag with a drop-indicator line; keyboard alternative via column tool panel (Track 5). Honour controlled/uncontrolled `columnState` from `api.md §3.1`. **Effort**: M.
-- `[ready]` **column-visibility-ui** — show/hide affordance per column. State already supported via `BcColumnStateEntry.hidden`. UI: header-cell context-menu item OR via the Columns tool panel in Track 5. (Header context-menu lands here; tool panel lands in `tool-panel-columns`.) **Effort**: S.
+- `[done: x1 #122]` **column-visibility-ui** — show/hide affordance per column. State already supported via `BcColumnStateEntry.hidden`. UI: header-cell context-menu item OR via the Columns tool panel in Track 5. (Header context-menu lands here; tool panel lands in `tool-panel-columns`.) **Effort**: S.
 - `[review: x1 #97]` **column-state-url-persistence** — encode `columnState` (visibility, order, width, sort) into URL search params for shareable links. Pairs with `localstorage-gridid-persistence` (Phase 5.5). Consumer opts in via `BcGridProps.urlStatePersistence?: { searchParam: string }`. **Effort**: S.
 - `[review: x1 #98]` **search-complete** — apply `searchText` as a row filter (case-insensitive substring across `valueFormatter` results for searchable columns per `api.md §4.3`). Pairs with `search-highlighting` (Phase 5.5) which renders the `<mark>` in cells. **Effort**: S.
 - `[ready]` **group-by-client** — client-side row grouping by one or more columns. Group rows render as a header row with expand/collapse chevron + count. Tree-mode rendering uses `aria-level` + `role="treegrid"` per `accessibility-rfc §grid vs treegrid`. State via `BcGridProps.groupBy` (already declared). **Effort**: M.
@@ -130,9 +130,9 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 - `[ready]` **editor-framework** — `BcCellEditor` lifecycle + state machine + validation pipeline + DOM focus shift + live region announcements (extend `useLiveRegionAnnouncements` to return `announceAssertive` — currently only polite, see audit-c2-002 §F1). Single owner. **Effort**: M. **Unblocked: editing-rfc merged in #45.**
 - `[blocked: depends on editor-framework]` **editor-text** — text input editor. shadcn `Input` primitive. Honours `seedKey`, `pointerHint`. **Effort**: S.
 - `[blocked: depends on editor-framework]` **editor-number** — numeric input with locale-aware decimal separator. shadcn `Input` + `inputMode="decimal"`. **Effort**: S.
-- `[blocked: depends on editor-framework]` **editor-date** — shadcn date-picker primitive + ISO 8601 commit. **Effort**: M.
-- `[blocked: depends on editor-date]` **editor-datetime** — composes `editor-date` + time picker; ISO 8601 commit. **Effort**: M.
-- `[blocked: depends on editor-framework]` **editor-time** — `<input type="time" />` styled with shadcn `Input`; 24h commit. **Effort**: S.
+- `[done: c1 #121]` **editor-date** — shadcn date-picker primitive + ISO 8601 commit. **Effort**: M.
+- `[ready]` **editor-datetime** — composes `editor-date` + time picker; ISO 8601 commit. **Effort**: M.
+- `[done: c1 #120]` **editor-time** — `<input type="time" />` styled with shadcn `Input`; 24h commit. **Effort**: S.
 - `[blocked: depends on editor-framework]` **editor-select** — shadcn `Select`; reads `column.options` (additive prop). Type-to-narrow via `seedKey`. **Effort**: M.
 - `[blocked: depends on editor-select]` **editor-multi-select** — shadcn multi-select; chip input + dropdown. **Effort**: M.
 - `[blocked: depends on editor-framework]` **editor-autocomplete** — shadcn `Combobox`; async via `column.fetchOptions(query, signal)`. Debounced 200ms. **Effort**: M.
@@ -174,9 +174,9 @@ Specs: `docs/design/aggregation-rfc.md` (PR #51) + `pivot-rfc.md` (PR #52).
 - `[done: integrator #112]` **aggregation-engine** — `@bc-grid/aggregations` package (currently stub). `sum`, `count`, `avg`, `min`, `max`, `registerAggregation`. Pure functions; no DOM. Per `design.md §4.2`. **Branch**: `agent/x2/aggregation-engine`. **Effort**: M.
 - `[done: x2 #117]` **aggregation-react-adapter** — footer aggregation row + group-row aggregation rendering in `@bc-grid/react`. Wires `column.aggregation` (already declared `api.md §1.1`) to the engine. **Effort**: M.
 - `[done: c2 #52]` **pivot-rfc** — engine vs React split; drag-to-pivot UI; row/col/values dimensions; treegrid output. **Effort**: 1 day.
-- `[review: x2 #118]` **pivot-engine** — engine layer in `@bc-grid/aggregations` (or a separate `@bc-grid/pivots` if the RFC decides to split). Computes pivot table from rows + dimensions. **Effort**: L.
-- `[blocked: depends on pivot-engine]` **pivot-ui-drag-zones** — Pivot tool panel in the sidebar (Track 5) with row/col/values drop zones. **Effort**: M.
-- `[blocked: depends on pivot-engine]` **pivot-row-col-groups** — render the pivoted output: row-group axis, col-group axis, value cells. **Effort**: M.
+- `[done: x2 #118]` **pivot-engine** — engine layer in `@bc-grid/aggregations` (or a separate `@bc-grid/pivots` if the RFC decides to split). Computes pivot table from rows + dimensions. **Effort**: L.
+- `[ready]` **pivot-ui-drag-zones** — Pivot tool panel in the sidebar (Track 5) with row/col/values drop zones. **Effort**: M.
+- `[ready]` **pivot-row-col-groups** — render the pivoted output: row-group axis, col-group axis, value cells. **Effort**: M.
 
 #### Track 5 — Chrome (Q6 pulled forward)
 
