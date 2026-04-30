@@ -326,6 +326,13 @@ export type BcReactGridColumn<TRow, TValue = unknown> =
      * @reserved Q2
      */
     cellEditor?: BcCellEditor<TRow, TValue>
+
+    /**
+     * Child columns for grouped, multi-row headers. Group columns render a
+     * header spanning their visible leaf descendants; only leaf columns
+     * render body cells and participate in sort/filter/edit state.
+     */
+    children?: readonly BcReactGridColumn<TRow>[]
   }
 
 export interface BcCellRendererParams<TRow, TValue = unknown> {

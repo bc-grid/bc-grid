@@ -219,6 +219,12 @@
   cursor: grabbing;
 }
 
+.bc-grid-header-group-cell {
+  justify-content: center;
+  box-shadow: inset -1px 0 0 var(--bc-grid-border), inset 0 -1px 0 var(--bc-grid-border);
+  text-align: center;
+}
+
 .bc-grid-column-drop-indicator {
   position: absolute;
   top: 0;

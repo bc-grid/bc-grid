@@ -28,6 +28,7 @@ import {
   encodeSetFilterInput,
 } from "./filter"
 import {
+  type HeaderCellLayout,
   type ResolvedColumn,
   cellStyle,
   classNames,
@@ -108,6 +109,7 @@ interface RenderHeaderCellParams<TRow> {
   filterText?: string
   filterPopupOpen?: boolean
   onOpenFilterPopup?: (column: ResolvedColumn<TRow>, anchor: DOMRect) => void
+  rowSpan?: number
 }
 
 export function renderHeaderCell<TRow>({
@@ -133,6 +135,7 @@ export function renderHeaderCell<TRow>({
   filterText,
   filterPopupOpen,
   onOpenFilterPopup,
+  rowSpan = 1,
 }: RenderHeaderCellParams<TRow>): ReactNode {
   const sortIndex = sortState.findIndex((entry) => entry.columnId === column.columnId)
   const sort = sortIndex >= 0 ? sortState[sortIndex] : undefined
@@ -187,6 +190,7 @@ export function renderHeaderCell<TRow>({
       )}
       role="columnheader"
       aria-colindex={index + 1}
+      aria-rowspan={rowSpan > 1 ? rowSpan : undefined}
       aria-sort={ariaSort}
       tabIndex={sortable ? 0 : undefined}
       onClick={handleClick}
@@ -202,7 +206,7 @@ export function renderHeaderCell<TRow>({
       onPointerCancel={onReorderEnd}
       style={cellStyle({
         align: column.align,
-        height: headerHeight,
+        height: headerHeight * rowSpan,
         left: column.left,
         pinned: column.pinned,
         scrollLeft,
@@ -285,6 +289,60 @@ export function renderHeaderCell<TRow>({
           style={resizeHandleStyle}
         />
       )}
+    </div>
+  )
+}
+
+interface RenderHeaderGroupCellParams<TRow> {
+  cell: Extract<HeaderCellLayout<TRow>, { kind: "group" }>
+  domBaseId: string
+  headerHeight: number
+  scrollLeft: number
+  totalWidth: number
+  viewportWidth: number
+}
+
+export function renderHeaderGroupCell<TRow>({
+  cell,
+  domBaseId,
+  headerHeight,
+  scrollLeft,
+  totalWidth,
+  viewportWidth,
+}: RenderHeaderGroupCellParams<TRow>): ReactNode {
+  const headerLabel = typeof cell.source.header === "string" ? cell.source.header : cell.id
+  const align = cell.source.align ?? "center"
+
+  return (
+    <div
+      key={cell.id}
+      id={`${domBaseId}-header-${domToken(cell.id)}`}
+      className={classNames(
+        "bc-grid-cell",
+        "bc-grid-header-cell",
+        "bc-grid-header-group-cell",
+        pinnedClassName(cell.pinned),
+        pinnedEdgeClassName(cell.pinnedEdge),
+      )}
+      role="columnheader"
+      aria-colindex={cell.colStart + 1}
+      aria-colspan={cell.colSpan}
+      aria-label={headerLabel}
+      data-bc-grid-column-group="true"
+      data-column-group-id={cell.id}
+      style={cellStyle({
+        align,
+        height: headerHeight,
+        left: cell.left,
+        pinned: cell.pinned,
+        scrollLeft,
+        totalWidth,
+        viewportWidth,
+        width: cell.width,
+        zIndex: cell.pinned ? 4 : 3,
+      })}
+    >
+      <span className="bc-grid-header-label">{cell.source.header}</span>
     </div>
   )
 }

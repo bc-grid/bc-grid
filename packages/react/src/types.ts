@@ -197,6 +197,12 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
     query: string,
     signal: AbortSignal,
   ) => Promise<readonly { value: TValue; label: string }[]>
+  /**
+   * Child columns for grouped, multi-row headers. Group columns render a
+   * header cell spanning their visible leaf descendants; only leaf columns
+   * participate in body cells, sorting, filtering, editing, and state.
+   */
+  children?: readonly BcReactGridColumn<TRow>[]
 }
 
 export type BcGridColumn<TRow, TValue = unknown> = BcReactGridColumn<TRow, TValue>
