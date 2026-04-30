@@ -8,15 +8,19 @@ This is the binding process for all agents (Claude Max, Codex Max, or any other)
 
 Build a high-performance shadcn-native data grid that competes with AG Grid Enterprise. See `design.md` for the architecture, `roadmap.md` for the **2-week parallel sprint to v1.0** (compressed from the original 2-year plan; see `design.md §13` for the 2026-04-29 scope+timeline pivot), `queue.md` for the current task list, and `coordination/v1-parity-sprint.md` for the active orchestration.
 
+**Coordinator release memory:** the Codex coordinator must keep `docs/coordination/release-milestone-roadmap.md` current. When a milestone's checklist and release gates are complete, the coordinator should recommend bumping the package version and publishing the next release. AG Grid comparisons must follow `docs/coordination/ag-grid-clean-room-audit-plan.md`; do not inspect or clone AG Grid source.
+
 ## 2. Reading order on first session
 
 1. `README.md` — project mission and non-goals
 2. `docs/design.md` — architecture in depth (~30 min read; binding)
 3. `docs/roadmap.md` — phase plan (~5 min)
-4. `docs/AGENTS.md` (this file) — process (~5 min)
-5. `docs/PARALLEL_WORK.md` — worktree scheme (~5 min)
-6. `docs/queue.md` — open tasks (~2 min)
-7. `docs/api.md` — public API spec (frozen after Q1)
+4. `docs/coordination/release-milestone-roadmap.md` — coordinator release gates (~5 min)
+5. `docs/coordination/ag-grid-clean-room-audit-plan.md` — comparison-audit guardrails (~3 min)
+6. `docs/AGENTS.md` (this file) — process (~5 min)
+7. `docs/PARALLEL_WORK.md` — worktree scheme (~5 min)
+8. `docs/queue.md` — open tasks (~2 min)
+9. `docs/api.md` — public API spec (frozen after Q1)
 
 After Q1, every session: re-read `queue.md` + the design doc for the package you're touching.
 
