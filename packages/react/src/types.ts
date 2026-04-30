@@ -11,6 +11,7 @@ import type {
   BcGridSort,
   BcGridStateProps,
   BcPaginationState,
+  BcPivotState,
   BcRowId,
   BcRowState,
   BcSelection,
@@ -257,7 +258,10 @@ export interface BcSidebarContext<TRow = unknown> {
   groupBy: readonly ColumnId[]
   setGroupBy: (state: readonly ColumnId[]) => void
   groupableColumns: readonly { columnId: ColumnId; header: string }[]
-  pivot?: unknown
+  pivot?: {
+    state: BcPivotState
+    setState: (state: BcPivotState) => void
+  }
 }
 
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {

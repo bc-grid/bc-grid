@@ -1,5 +1,5 @@
 import { AnimationBudget, flash } from "@bc-grid/animations"
-import { emptyBcRangeSelection, rangeClear } from "@bc-grid/core"
+import { emptyBcPivotState, emptyBcRangeSelection, rangeClear } from "@bc-grid/core"
 import type {
   BcCellPosition,
   BcColumnFilter,
@@ -8,6 +8,7 @@ import type {
   BcGridFilter,
   BcGridSort,
   BcPaginationState,
+  BcPivotState,
   BcRange,
   BcRangeSelection,
   BcSelection,
@@ -284,6 +285,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultGroupBy ?? persistedGridState.groupBy ?? [],
     props.onGroupByChange,
   )
+  const [pivotState, setPivotState] = useState<BcPivotState>(emptyBcPivotState)
   const [pageState, setPageState] = useControlledState<number>(
     hasProp(props, "page"),
     props.page ?? 0,
@@ -1530,6 +1532,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       filterState: activeFilter,
       groupableColumns: props.groupableColumns ?? [],
       groupBy: groupByState,
+      pivot: {
+        setState: setPivotState,
+        state: pivotState,
+      },
       setColumnState,
       setFilterState,
       setGroupBy: setGroupByState,
@@ -1540,6 +1546,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       columnState,
       columns,
       groupByState,
+      pivotState,
       props.groupableColumns,
       setColumnState,
       setFilterState,

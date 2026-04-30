@@ -10,6 +10,7 @@ import {
 } from "react"
 import { BcColumnsToolPanel } from "./columnToolPanel"
 import { domToken } from "./gridInternals"
+import { BcPivotToolPanel } from "./pivotToolPanel"
 import type { BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarPanel } from "./types"
 
 export const DEFAULT_SIDEBAR_WIDTH = 280
@@ -224,12 +225,11 @@ function resolveBuiltInPanel<TRow>(panelId: BcSidebarBuiltInPanel): ResolvedSide
     id: panelId,
     label: config.label,
     Icon: config.Icon,
-    render: (context) =>
-      panelId === "columns" ? (
-        <BcColumnsToolPanel context={context} />
-      ) : (
-        <BuiltInPanelSlot panelId={panelId} label={config.label} />
-      ),
+    render: (context) => {
+      if (panelId === "columns") return <BcColumnsToolPanel context={context} />
+      if (panelId === "pivot") return <BcPivotToolPanel context={context} />
+      return <BuiltInPanelSlot panelId={panelId} label={config.label} />
+    },
   }
 }
 
