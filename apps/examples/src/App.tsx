@@ -236,6 +236,7 @@ function CustomerGridDemo({
         align: "right",
         width: 140,
         format: { type: "currency", currency: "USD", precision: 0 },
+        filter: { type: "number" },
         // ?edit=1: editable numeric column. valueParser strips locale
         // thousands separators (commas, spaces) and runs parseFloat.
         // validate enforces a non-negative bound (credit limits can't
@@ -263,6 +264,7 @@ function CustomerGridDemo({
         align: "right",
         width: 144,
         format: { type: "currency", currency: "USD", precision: 0 },
+        filter: { type: "number" },
       },
       {
         columnId: "current",

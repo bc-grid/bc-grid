@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { ColumnId } from "@bc-grid/core"
-import { buildGridFilter, matchesGridFilter } from "../src/filter"
+import { buildGridFilter, encodeNumberFilterInput, matchesGridFilter } from "../src/filter"
 
 describe("buildGridFilter", () => {
   test("empty input → null", () => {
@@ -53,6 +53,45 @@ describe("buildGridFilter", () => {
     expect(buildGridFilter({ creditHold: "" }, { creditHold: "boolean" })).toBeNull()
   })
 
+  test("number inputs produce number ServerColumnFilter objects", () => {
+    expect(
+      buildGridFilter(
+        { balance: encodeNumberFilterInput({ op: ">=", value: "1000" }) },
+        { balance: "number" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "balance",
+      type: "number",
+      op: ">=",
+      value: 1000,
+    })
+  })
+
+  test("between number inputs produce inclusive min/max values", () => {
+    expect(
+      buildGridFilter(
+        { balance: encodeNumberFilterInput({ op: "between", value: "2500", valueTo: "1000" }) },
+        { balance: "number" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "balance",
+      type: "number",
+      op: "between",
+      values: [1000, 2500],
+    })
+  })
+
+  test("incomplete number inputs do not activate a filter", () => {
+    expect(
+      buildGridFilter(
+        { balance: encodeNumberFilterInput({ op: "between", value: "1000", valueTo: "" }) },
+        { balance: "number" },
+      ),
+    ).toBeNull()
+  })
+
   test("trims trailing/leading whitespace on values", () => {
     const result = buildGridFilter({ name: "  John  " })
     if (result?.kind === "column") {
@@ -94,15 +133,15 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(filter, lookup({}))).toBe(false)
   })
 
-  test("non-text type is rejected (Q2 follow-up)", () => {
+  test("unsupported non-text types are rejected (Q2 follow-up)", () => {
     const filter = {
       kind: "column" as const,
-      columnId: "balance",
-      type: "number" as const,
-      op: ">",
-      value: 1000,
+      columnId: "lastInvoice",
+      type: "date" as const,
+      op: "before",
+      value: "2026-01-01",
     }
-    expect(matchesGridFilter(filter, lookup({ balance: "$5,000" }))).toBe(false)
+    expect(matchesGridFilter(filter, lookup({ lastInvoice: "2025-01-01" }))).toBe(false)
   })
 
   test("boolean filters match formatted yes/no values", () => {
@@ -114,6 +153,23 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(yesFilter, lookup({ creditHold: "No" }))).toBe(false)
     expect(matchesGridFilter(noFilter, lookup({ creditHold: "No" }))).toBe(true)
     expect(matchesGridFilter(noFilter, lookup({ creditHold: "Yes" }))).toBe(false)
+  })
+
+  test("number filters compare formatted numeric and currency values", () => {
+    const gtFilter = buildGridFilter(
+      { balance: encodeNumberFilterInput({ op: ">", value: "1000" }) },
+      { balance: "number" },
+    )
+    const betweenFilter = buildGridFilter(
+      { balance: encodeNumberFilterInput({ op: "between", value: "1000", valueTo: "2500" }) },
+      { balance: "number" },
+    )
+    if (!gtFilter || !betweenFilter) throw new Error("expected filters")
+
+    expect(matchesGridFilter(gtFilter, lookup({ balance: "$1,250" }))).toBe(true)
+    expect(matchesGridFilter(gtFilter, lookup({ balance: "$950" }))).toBe(false)
+    expect(matchesGridFilter(betweenFilter, lookup({ balance: "$2,500" }))).toBe(true)
+    expect(matchesGridFilter(betweenFilter, lookup({ balance: "$2,501" }))).toBe(false)
   })
 
   test("unknown op is rejected (Q2 follow-up)", () => {
