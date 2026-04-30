@@ -278,6 +278,25 @@
   }
 }
 
+.bc-grid-aggregation-footer-viewport {
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-top: 1px solid var(--bc-grid-border);
+  background: var(--bc-grid-muted);
+  position: relative;
+  z-index: 2;
+}
+
+.bc-grid-aggregation-footer-row {
+  background: var(--bc-grid-muted);
+  color: var(--bc-grid-fg);
+  font-weight: 700;
+}
+
+.bc-grid-aggregation-footer-cell {
+  background: var(--bc-grid-muted);
+}
+
 .bc-grid-pagination {
   display: flex;
   min-width: 0;

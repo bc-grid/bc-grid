@@ -154,13 +154,10 @@ export interface BcGridColumn<TRow, TValue = unknown> {
    */
   validate?: (newValue: TValue, row: TRow) => BcValidationResult
 
-  // --- Aggregation (reserved for Q5) --------------------------------------
+  // --- Aggregation --------------------------------------------------------
 
   /**
    * Footer / group-row aggregation for this column.
-   * Q1 + Q2 do not surface aggregation in the grid; this property is
-   * declared here so the API doesn't break when Q5 ships.
-   * @reserved Q5
    */
   aggregation?: BcAggregation
 
@@ -259,6 +256,12 @@ export type BcReactGridColumn<TRow, TValue = unknown> =
     cellStyle?: React.CSSProperties | ((params: BcCellRendererParams<TRow, TValue>) => React.CSSProperties | undefined)
 
     /**
+     * Optional React renderer for an aggregate result in the footer row.
+     * Defaults to the column's preset `format`, then `String(result.value)`.
+     */
+    aggregationFormatter?: (params: BcAggregationFormatterParams<TRow, TValue>) => React.ReactNode
+
+    /**
      * Cell editor component. Required when `editable` is true and the column
      * is part of a `BcEditGrid`.
      * @reserved Q2
@@ -283,6 +286,14 @@ export interface BcCellRendererParams<TRow, TValue = unknown> {
   rowState: BcRowState
   /** Whether this cell is currently in edit mode. Reserved Q2. */
   editing: boolean
+}
+
+export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
+  value: unknown
+  formattedValue: string
+  result: AggregationResult
+  column: BcReactGridColumn<TRow, TValue>
+  locale?: string
 }
 ```
 
@@ -574,6 +585,9 @@ export interface BcFilterEditorProps<TValue = unknown> {
   pagination={true}        // false to disable; default true if data > pageSize threshold
   pageSizeOptions={[25, 50, 100, 250]}
 
+  // Aggregations
+  aggregationScope="filtered" // "filtered" | "all" | "selected"
+
   // Grouping
   groupableColumns={[{ columnId: "region", header: "Region" }]}
   groupsExpandedByDefault={true}
@@ -621,6 +635,9 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   // Pagination
   pagination?: boolean
   pageSizeOptions?: number[]
+
+  // Aggregations
+  aggregationScope?: "filtered" | "all" | "selected"
 
   // Grouping
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
@@ -938,7 +955,7 @@ The machine-checkable manifest for this package lives in `tools/api-surface/src/
 export { BcGrid, BcEditGrid, BcServerGrid }
 
 // Hooks
-export { useBcGridApi }
+export { useBcGridApi, useAggregations }
 
 // React-aware types plus @bc-grid/core re-exports for consumer convenience.
 // (Re-exports let consumers import every column / state / loader type from one place.)
@@ -949,6 +966,7 @@ export type {
   BcGridStateProps, BcPaginationState,
   BcGridApi, BcServerGridApi,
   BcCellRendererParams, BcGridMessages,
+  BcAggregationFormatterParams, BcAggregationScope, UseAggregationsOptions,
   BcCellEditor, BcCellEditorProps, BcCellEditorPrepareParams, BcCellEditCommitEvent,
   BcEditGridAction,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
