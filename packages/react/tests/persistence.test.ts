@@ -34,6 +34,9 @@ describe("grid state persistence", () => {
     expect(gridStorageKey("accounts-receivable.customers", "pageSize")).toBe(
       "bc-grid:accounts-receivable.customers:pageSize",
     )
+    expect(gridStorageKey("accounts-receivable.customers", "sidebarPanel")).toBe(
+      "bc-grid:accounts-receivable.customers:sidebarPanel",
+    )
   })
 
   test("reads and validates persisted grid state", () => {
@@ -62,6 +65,7 @@ describe("grid state persistence", () => {
     storage.setItem(gridStorageKey(gridId, "pageSize"), JSON.stringify(100))
     storage.setItem(gridStorageKey(gridId, "density"), JSON.stringify("compact"))
     storage.setItem(gridStorageKey(gridId, "groupBy"), JSON.stringify(["tier", "status"]))
+    storage.setItem(gridStorageKey(gridId, "sidebarPanel"), JSON.stringify("columns"))
 
     expect(readPersistedGridState(gridId, storage)).toEqual({
       columnState: [
@@ -79,6 +83,7 @@ describe("grid state persistence", () => {
       density: "compact",
       groupBy: ["tier", "status"],
       pageSize: 100,
+      sidebarPanel: "columns",
     })
   })
 
@@ -89,12 +94,14 @@ describe("grid state persistence", () => {
     storage.setItem(gridStorageKey(gridId, "pageSize"), JSON.stringify(0))
     storage.setItem(gridStorageKey(gridId, "density"), JSON.stringify("dense"))
     storage.setItem(gridStorageKey(gridId, "groupBy"), JSON.stringify(["tier", 42]))
+    storage.setItem(gridStorageKey(gridId, "sidebarPanel"), JSON.stringify(""))
 
     const state = readPersistedGridState(gridId, storage)
     expect(state.columnState).toBeUndefined()
     expect(state.pageSize).toBeUndefined()
     expect(state.density).toBeUndefined()
     expect(state.groupBy).toBeUndefined()
+    expect(state.sidebarPanel).toBeUndefined()
   })
 
   test("writes state and removes omitted keys", () => {
@@ -108,6 +115,7 @@ describe("grid state persistence", () => {
         density: "comfortable",
         groupBy: ["tier"],
         pageSize: 50,
+        sidebarPanel: "filters",
       },
       storage,
     )
@@ -118,6 +126,7 @@ describe("grid state persistence", () => {
     expect(storage.getItem(gridStorageKey(gridId, "pageSize"))).toBe(JSON.stringify(50))
     expect(storage.getItem(gridStorageKey(gridId, "density"))).toBe(JSON.stringify("comfortable"))
     expect(storage.getItem(gridStorageKey(gridId, "groupBy"))).toBe(JSON.stringify(["tier"]))
+    expect(storage.getItem(gridStorageKey(gridId, "sidebarPanel"))).toBe(JSON.stringify("filters"))
 
     writePersistedGridState(gridId, {}, storage)
 
@@ -125,6 +134,7 @@ describe("grid state persistence", () => {
     expect(storage.getItem(gridStorageKey(gridId, "pageSize"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "density"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "groupBy"))).toBeNull()
+    expect(storage.getItem(gridStorageKey(gridId, "sidebarPanel"))).toBeNull()
   })
 
   test("treats browser storage as best effort", () => {
