@@ -24,9 +24,7 @@ async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   return cell
 }
 
-test("a successful commit triggers a Web Animations flash on the edited cell", async ({
-  page,
-}) => {
+test("a successful commit triggers a Web Animations flash on the edited cell", async ({ page }) => {
   await page.goto(URL)
   await focusBodyCell(page, 0, EDITABLE_COLUMN)
   await page.keyboard.press("F2")
