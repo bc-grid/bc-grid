@@ -98,6 +98,28 @@ export interface BcRangeCopyEvent {
 
 export type BcRangeCopyHook = (event: BcRangeCopyEvent) => void
 
+export interface BcRangeBeforePasteEvent<TRow> {
+  targetRange: CoreBcRange
+  cells: readonly (readonly string[])[]
+  api: BcGridApi<TRow>
+}
+
+export type BcRangeBeforePasteHook<TRow> = (
+  event: BcRangeBeforePasteEvent<TRow>,
+) => boolean | undefined
+
+export interface BcRangePasteEvent<TRow> {
+  targetRange: CoreBcRange
+  cells: readonly (readonly string[])[]
+  appliedCount: number
+  truncatedCount: number
+  validationErrors: Record<string, string>
+  perCellEventsFired: true
+  rows: readonly TRow[]
+}
+
+export type BcRangePasteHook<TRow> = (event: BcRangePasteEvent<TRow>) => void
+
 /**
  * Render context handed to status-bar segment renderers. Rebuilt per
  * grid render so segments always reflect current row / selection /
@@ -271,6 +293,8 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
+  onBeforePaste?: BcRangeBeforePasteHook<TRow>
+  onRangePasteCommit?: BcRangePasteHook<TRow>
 
   apiRef?: RefObject<BcGridApi<TRow> | null>
 
@@ -415,7 +439,7 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   column: BcReactGridColumn<TRow, TValue>
   previousValue: TValue
   nextValue: TValue
-  source: "keyboard" | "pointer" | "api"
+  source: "keyboard" | "pointer" | "api" | "paste"
 }
 
 export interface BcFilterDefinition<TValue = unknown> {

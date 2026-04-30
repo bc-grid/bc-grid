@@ -108,6 +108,12 @@ import {
   normaliseClipboardPayload,
   writeClipboardPayload,
 } from "./rangeClipboard"
+import {
+  buildRangePaste,
+  parseClipboardTsv,
+  prepareRangePaste,
+  readClipboardTsv,
+} from "./rangePaste"
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
@@ -150,6 +156,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     onCellFocus,
     onBeforeCopy,
     onCopy,
+    onBeforePaste,
+    onRangePasteCommit,
     onVisibleRowRangeChange,
   } = props
 
@@ -886,6 +894,99 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [locale, onBeforeCopy, onCopy, rangeRowIds, rangeSelectionState, resolvedColumns, rowEntries],
   )
 
+  const pasteRangeFromClipboard = useCallback(
+    async (gridApi: BcGridApi<TRow>) => {
+      const anchor =
+        rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]?.start ?? activeCell
+      if (!anchor) return
+
+      const cells = parseClipboardTsv(await readClipboardTsv())
+      const built = buildRangePaste({
+        anchor,
+        cells,
+        columns: resolvedColumns,
+        rowEntries,
+        rowIds: rangeRowIds,
+      })
+      if (!built) return
+
+      const rows = Array.from(
+        new Map(built.targets.map((target) => [target.rowId, target.row])).values(),
+      )
+      const emitPaste = (appliedCount: number, validationErrors: Record<string, string>) => {
+        onRangePasteCommit?.({
+          targetRange: built.targetRange,
+          cells: built.cells,
+          appliedCount,
+          truncatedCount: built.truncatedCount,
+          validationErrors,
+          perCellEventsFired: true,
+          rows,
+        })
+      }
+
+      if (
+        onBeforePaste?.({
+          targetRange: built.targetRange,
+          cells: built.cells,
+          api: gridApi,
+        }) === false
+      ) {
+        return
+      }
+
+      const prepared = await prepareRangePaste({
+        paste: built,
+        getPreviousValue: (target) =>
+          editController.hasOverlayValue(target.rowId, target.columnId)
+            ? editController.getOverlayValue(target.rowId, target.columnId)
+            : getCellValue(target.row, target.column.source),
+        isEditable: (target) => isCellEditable(target.column, target.row),
+      })
+      if (Object.keys(prepared.validationErrors).length > 0) {
+        const firstError = Object.values(prepared.validationErrors)[0] ?? "Validation failed."
+        announceAssertive(`Paste rejected. ${firstError} Nothing was changed.`)
+        emitPaste(0, prepared.validationErrors)
+        return
+      }
+
+      const result = await editController.commitBatch(
+        prepared.cells.map((cell) => ({
+          rowId: cell.rowId,
+          row: cell.row,
+          columnId: cell.columnId,
+          column: cell.column.source,
+          value: cell.nextValue,
+          previousValue: cell.previousValue,
+        })),
+        "paste",
+      )
+      if (!result.applied) {
+        const error = result.error ?? "Paste commit failed."
+        announceAssertive(`Paste rejected. ${error} Nothing was changed.`)
+        emitPaste(0, { "0:0": error })
+        return
+      }
+
+      announcePolite(
+        result.appliedCount === 1 ? "Pasted 1 cell." : `Pasted ${result.appliedCount} cells.`,
+      )
+      emitPaste(result.appliedCount, {})
+    },
+    [
+      activeCell,
+      announceAssertive,
+      announcePolite,
+      editController,
+      onBeforePaste,
+      onRangePasteCommit,
+      rangeRowIds,
+      rangeSelectionState,
+      resolvedColumns,
+      rowEntries,
+    ],
+  )
+
   const api = useMemo<BcGridApi<TRow>>(() => {
     const nextApi: BcGridApi<TRow> = {
       scrollToRow(targetRowId, opts) {
@@ -1177,6 +1278,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         return
       }
 
+      if ((event.ctrlKey || event.metaKey) && (event.key === "v" || event.key === "V")) {
+        const activeRange = rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]
+        if (!activeRange && !activeCell) return
+        event.preventDefault()
+        void pasteRangeFromClipboard(api).catch(() => undefined)
+        return
+      }
+
       const outcome = nextKeyboardNav({
         key: event.key,
         ctrlOrMeta: event.ctrlKey || event.metaKey,
@@ -1217,6 +1326,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       focusCell,
       isRowDisabled,
       pageRowCount,
+      pasteRangeFromClipboard,
       rangeSelectionState,
       resolvedColumns,
       rowEntries,

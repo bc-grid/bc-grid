@@ -160,7 +160,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;")
 }
 
-function parseTsv(tsv: string): string[][] {
+export function parseTsv(tsv: string): string[][] {
   const rows: string[][] = []
   let row: string[] = []
   let cell = ""

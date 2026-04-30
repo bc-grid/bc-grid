@@ -36,6 +36,21 @@ export interface BcEditOverlay {
   patches: Map<RowId, Map<ColumnId, unknown>>
 }
 
+export interface BcBatchEditCandidate<TRow> {
+  rowId: RowId
+  row: TRow
+  columnId: ColumnId
+  column: BcReactGridColumn<TRow, unknown>
+  value: unknown
+  previousValue: unknown
+}
+
+export interface BcBatchEditResult {
+  applied: boolean
+  appliedCount: number
+  error?: string
+}
+
 export interface UseEditingControllerOptions<TRow> {
   /**
    * Sync or async per-cell validator. Receives the candidate value, the
@@ -345,6 +360,118 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     [options.validate, options.onCellEditCommit, options.announce],
   )
 
+  const commitBatch = useCallback(
+    async (
+      candidates: readonly BcBatchEditCandidate<TRow>[],
+      source: BcCellEditCommitEvent<TRow>["source"] = "api",
+    ): Promise<BcBatchEditResult> => {
+      if (candidates.length === 0) return { applied: true, appliedCount: 0 }
+
+      const snapshots = candidates.map((candidate) => {
+        const rowPatch = overlayRef.current.patches.get(candidate.rowId)
+        const rowEntries = editEntriesRef.current.get(candidate.rowId)
+        const entry = rowEntries?.get(candidate.columnId)
+        return {
+          rowId: candidate.rowId,
+          columnId: candidate.columnId,
+          hadOverlay: rowPatch?.has(candidate.columnId) ?? false,
+          overlayValue: rowPatch?.get(candidate.columnId),
+          hadEntry: rowEntries?.has(candidate.columnId) ?? false,
+          entry: entry ? { ...entry } : undefined,
+        }
+      })
+
+      const rollback = (error: string): BcBatchEditResult => {
+        for (const snapshot of snapshots) {
+          let rowPatch = overlayRef.current.patches.get(snapshot.rowId)
+          if (snapshot.hadOverlay) {
+            if (!rowPatch) {
+              rowPatch = new Map()
+              overlayRef.current.patches.set(snapshot.rowId, rowPatch)
+            }
+            rowPatch.set(snapshot.columnId, snapshot.overlayValue)
+          } else {
+            rowPatch?.delete(snapshot.columnId)
+            if (rowPatch?.size === 0) overlayRef.current.patches.delete(snapshot.rowId)
+          }
+
+          let rowEntries = editEntriesRef.current.get(snapshot.rowId)
+          if (snapshot.hadEntry && snapshot.entry) {
+            if (!rowEntries) {
+              rowEntries = new Map()
+              editEntriesRef.current.set(snapshot.rowId, rowEntries)
+            }
+            rowEntries.set(snapshot.columnId, snapshot.entry)
+          } else {
+            rowEntries?.delete(snapshot.columnId)
+            if (rowEntries?.size === 0) editEntriesRef.current.delete(snapshot.rowId)
+          }
+        }
+        forceRender()
+        return { applied: false, appliedCount: 0, error }
+      }
+
+      for (const candidate of candidates) {
+        const rowPatch = overlayRef.current.patches.get(candidate.rowId) ?? new Map()
+        rowPatch.set(candidate.columnId, candidate.value)
+        overlayRef.current.patches.set(candidate.rowId, rowPatch)
+
+        const rowEntries = editEntriesRef.current.get(candidate.rowId) ?? new Map()
+        rowEntries.set(candidate.columnId, {
+          pending: false,
+          previousValue: candidate.previousValue,
+        })
+        editEntriesRef.current.set(candidate.rowId, rowEntries)
+      }
+      forceRender()
+
+      const consumerHook = options.onCellEditCommit
+      if (!consumerHook) return { applied: true, appliedCount: candidates.length }
+
+      const pending: Promise<void>[] = []
+      try {
+        for (const candidate of candidates) {
+          const settle = consumerHook({
+            rowId: candidate.rowId,
+            row: candidate.row,
+            columnId: candidate.columnId,
+            column: candidate.column,
+            previousValue: candidate.previousValue as never,
+            nextValue: candidate.value as never,
+            source,
+          })
+          if (settle && typeof (settle as Promise<void>).then === "function") {
+            pending.push(settle as Promise<void>)
+          }
+        }
+      } catch (err) {
+        return rollback(err instanceof Error ? err.message : "Paste commit failed.")
+      }
+
+      if (pending.length === 0) return { applied: true, appliedCount: candidates.length }
+
+      for (const candidate of candidates) {
+        const entry = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
+        if (entry) entry.pending = true
+      }
+      forceRender()
+
+      try {
+        await Promise.all(pending)
+      } catch (err) {
+        return rollback(err instanceof Error ? err.message : "Paste commit failed.")
+      }
+
+      for (const candidate of candidates) {
+        const entry = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
+        if (entry) entry.pending = false
+      }
+      forceRender()
+      return { applied: true, appliedCount: candidates.length }
+    },
+    [options.onCellEditCommit],
+  )
+
   // ------- Lifecycle dispatch shortcuts (called from editor portal) --------
 
   const dispatchMounted = useCallback(() => dispatch({ type: "mounted" }), [])
@@ -357,6 +484,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     getCellEditEntry,
     start,
     commit,
+    commitBatch,
     cancel,
     dispatchMounted,
     dispatchUnmounted,
