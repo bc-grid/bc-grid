@@ -274,7 +274,7 @@ function EditorMount<TRow>({
     row: TRow
     rowId: typeof cell.rowId
     column: typeof column.source
-    commit: (next: unknown) => void
+    commit: (next: unknown, opts?: { moveOnSettle?: MoveOnSettle }) => void
     cancel: () => void
     error?: string
     focusRef?: RefObject<HTMLElement | null>
@@ -297,7 +297,7 @@ function EditorMount<TRow>({
         row={rowEntry.row}
         rowId={cell.rowId}
         column={column.source}
-        commit={(next) => handleCommit(next)}
+        commit={(next, opts) => handleCommit(next, opts?.moveOnSettle ?? "down", "keyboard")}
         cancel={cancel}
         focusRef={focusRef}
         {...(seedKey != null ? { seedKey } : {})}
