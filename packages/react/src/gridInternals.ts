@@ -237,8 +237,24 @@ export function rootStyle(height: number | undefined): CSSProperties {
     height,
     minHeight: height ? undefined : 0,
     outline: "none",
+    overflow: "hidden",
     position: "relative",
   }
+}
+
+export const mainStyle: CSSProperties = {
+  display: "flex",
+  flex: "1 1 auto",
+  minHeight: 0,
+  minWidth: 0,
+}
+
+export const tableStyle: CSSProperties = {
+  display: "flex",
+  flex: "1 1 auto",
+  flexDirection: "column",
+  minHeight: 0,
+  minWidth: 0,
 }
 
 export const headerViewportStyle: CSSProperties = {

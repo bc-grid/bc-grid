@@ -1,5 +1,11 @@
 # @bc-grid/react
 
+## 0.1.0-alpha.5
+
+### Patch Changes
+
+- Keep fixed-height grids scrollable even when a host app has not loaded the theme stylesheet by inlining layout-critical root, main, and table styles.
+
 ## 0.1.0-alpha.4
 
 ### Patch Changes

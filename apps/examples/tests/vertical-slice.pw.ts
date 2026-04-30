@@ -28,16 +28,25 @@ test("fixed-height grid owns vertical scrolling and can reveal the final record"
 
   const metrics = await scroller.evaluate((node) => {
     const table = node.closest(".bc-grid-table")
+    const main = node.closest(".bc-grid-main")
     const root = node.closest(".bc-grid")
     return {
       clientHeight: node.clientHeight,
       scrollHeight: node.scrollHeight,
       rootHeight: root?.getBoundingClientRect().height ?? 0,
+      mainInlineDisplay: main?.style.display ?? "",
+      rootInlineOverflow: root?.style.overflow ?? "",
       tableMinHeight: table ? getComputedStyle(table).minHeight : "",
+      tableInlineDisplay: table?.style.display ?? "",
+      tableInlineFlexDirection: table?.style.flexDirection ?? "",
     }
   })
 
   expect(metrics.rootHeight).toBeGreaterThan(500)
+  expect(metrics.rootInlineOverflow).toBe("hidden")
+  expect(metrics.mainInlineDisplay).toBe("flex")
+  expect(metrics.tableInlineDisplay).toBe("flex")
+  expect(metrics.tableInlineFlexDirection).toBe("column")
   expect(metrics.clientHeight).toBeLessThan(metrics.rootHeight)
   expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight + 1_000)
   expect(metrics.tableMinHeight).toBe("0px")

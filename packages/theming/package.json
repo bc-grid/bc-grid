@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/theming",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "description": "shadcn-native theming layer for bc-grid (CSS tokens + density classes)",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
@@ -36,6 +36,6 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
-    "@bc-grid/core": "0.1.0-alpha.4"
+    "@bc-grid/core": "0.1.0-alpha.5"
   }
 }

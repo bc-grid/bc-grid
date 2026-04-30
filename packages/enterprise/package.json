@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/enterprise",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "description": "Enterprise-only bc-grid extensions (planned; v0.1 ships placeholder)",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
@@ -34,8 +34,8 @@
     "type-check": "tsc -b"
   },
   "dependencies": {
-    "@bc-grid/core": "0.1.0-alpha.4",
-    "@bc-grid/react": "0.1.0-alpha.4"
+    "@bc-grid/core": "0.1.0-alpha.5",
+    "@bc-grid/react": "0.1.0-alpha.5"
   },
   "peerDependencies": {
     "react": "^19.0.0"

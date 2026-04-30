@@ -68,6 +68,7 @@ import {
   headerRowStyle,
   headerViewportStyle,
   isDataRowEntry,
+  mainStyle,
   overlayStyle,
   pinnedEdgeFor,
   resolveColumns,
@@ -77,6 +78,7 @@ import {
   rootStyle,
   rowStyle,
   scrollerStyle,
+  tableStyle,
   useColumnReorder,
   useColumnResize,
   useControlledState,
@@ -1512,8 +1514,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     >
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
 
-      <div className="bc-grid-main">
-        <div className="bc-grid-table">
+      <div className="bc-grid-main" style={mainStyle}>
+        <div className="bc-grid-table" style={tableStyle}>
           <div className="bc-grid-header-viewport" role="rowgroup" style={headerViewportStyle}>
             <div
               className="bc-grid-header"

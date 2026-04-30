@@ -1,5 +1,11 @@
 # @bc-grid/theming
 
+## 0.1.0-alpha.5
+
+### Patch Changes
+
+- Keep internal @bc-grid package versions aligned for alpha.5.
+
 ## 0.1.0-alpha.4
 
 ### Patch Changes
