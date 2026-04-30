@@ -645,6 +645,21 @@
   flex-direction: column;
 }
 
+/*
+ * Auto-height / page-flow mode (consumer set `<BcGrid height="auto">`).
+ * The grid grows to fit its rendered canvas, the scroller hands its
+ * scrollbar back to the document, and the header sticks to the page
+ * scroll position via the React inline header style so columns stay
+ * labelled while the user scrolls.
+ *
+ * Numeric / undefined heights keep their internal scroller; this rule
+ * is keyed on the root data-attribute so it never affects them.
+ */
+.bc-grid[data-bc-grid-height-mode="auto"] {
+  /* `min-width: 0` keeps the grid shrinkable inside flex / grid parents. */
+  min-width: 0;
+}
+
 .bc-grid-sidebar {
   --bc-grid-sidebar-width: 280px;
   --bc-grid-sidebar-rail-width: 40px;

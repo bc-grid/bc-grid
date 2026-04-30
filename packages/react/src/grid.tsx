@@ -47,18 +47,19 @@ import {
   type ColumnFilterTypeByColumnId,
   type SetFilterOption,
   buildGridFilter,
+  columnFilterTextEqual,
   columnFilterTextFromGridFilter,
   matchesGridFilter,
   setFilterValueKeys,
 } from "./filter"
 import {
-  DEFAULT_BODY_HEIGHT,
   DEFAULT_COL_WIDTH,
   type DataRowEntry,
   type GroupRowEntry,
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
+  autoHeightHeaderViewportStyle,
   canvasStyle,
   cellDomId,
   classNames,
@@ -220,22 +221,41 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
   const defaultFilterState =
     props.defaultFilter ?? urlPersistedGridState.filter ?? persistedGridState.filter ?? null
+  const filterControlled = hasProp(props, "filter")
   const [filterState, setFilterState] = useControlledState<BcGridFilter | null>(
-    hasProp(props, "filter"),
+    filterControlled,
     props.filter ?? null,
     defaultFilterState,
-    props.onFilterChange
-      ? (next, prev) => {
-          if (next) props.onFilterChange?.(next, prev ?? next)
-        }
-      : undefined,
+    props.onFilterChange,
   )
 
   // Per-column text-filter inputs. Internal state — projected into the
   // canonical `BcGridFilter` shape via `buildGridFilter` and surfaced
   // through `setFilterState` whenever it changes.
   const [columnFilterText, setColumnFilterText] = useState<ColumnFilterText>(() =>
-    columnFilterTextFromGridFilter(hasProp(props, "filter") ? props.filter : defaultFilterState),
+    columnFilterTextFromGridFilter(filterControlled ? props.filter : defaultFilterState),
+  )
+  // External filter writes also project into editor text; avoid echoing that
+  // projection back through `onFilterChange` as a duplicate user edit.
+  const suppressNextInlineFilterCommitRef = useRef(false)
+  const syncColumnFilterTextFromFilter = useCallback((nextFilter: BcGridFilter | null) => {
+    const nextColumnFilterText = columnFilterTextFromGridFilter(nextFilter)
+    setColumnFilterText((prev) => {
+      if (columnFilterTextEqual(prev, nextColumnFilterText)) return prev
+      suppressNextInlineFilterCommitRef.current = true
+      return nextColumnFilterText
+    })
+  }, [])
+  useEffect(() => {
+    if (!filterControlled) return
+    syncColumnFilterTextFromFilter(props.filter ?? null)
+  }, [filterControlled, props.filter, syncColumnFilterTextFromFilter])
+  const applyFilterState = useCallback(
+    (next: BcGridFilter | null) => {
+      syncColumnFilterTextFromFilter(next)
+      setFilterState(next)
+    },
+    [setFilterState, syncColumnFilterTextFromFilter],
   )
   // Filter-popup anchor + columnId for `column.filter.variant === "popup"`
   // columns per `filter-popup-variant`. Null when no popup is open.
@@ -713,6 +733,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       filterTextHydratedRef.current = true
       return
     }
+    if (suppressNextInlineFilterCommitRef.current) {
+      suppressNextInlineFilterCommitRef.current = false
+      return
+    }
     setFilterState(inlineFilter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inlineFilter])
@@ -1077,7 +1101,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         setSortState(next)
       },
       setFilter(next) {
-        setFilterState(next)
+        applyFilterState(next)
       },
       setRangeSelection(next) {
         setRangeSelectionState(next)
@@ -1118,7 +1142,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     selectionState,
     setColumnState,
     setExpansionState,
-    setFilterState,
+    applyFilterState,
     setRangeSelectionState,
     setSortState,
     virtualizer,
@@ -1231,9 +1255,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       ? cellDomId(domBaseId, activeDescendantCell.rowId, activeDescendantCell.columnId)
       : undefined
 
+  const isAutoHeight = height === "auto"
+  // Numeric height takes the root; "auto" lets the grid grow to its
+  // canvas height; undefined falls through to the parent's flex space.
   const rootHeight = typeof height === "number" ? height : undefined
-  const bodyHeight =
-    height === "auto" ? Math.min(virtualWindow.totalHeight, DEFAULT_BODY_HEIGHT) : undefined
+  // Auto-height & undefined both leave the scroller height to layout
+  // (page-flow vs. parent-flex respectively, controlled by `pageFlow`
+  // below). Only numeric height paths could benefit from a clamp here,
+  // and the existing root flex column already enforces that.
+  const bodyHeight: number | undefined = undefined
 
   const handleScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -1541,7 +1571,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       groupableColumns: props.groupableColumns ?? [],
       groupBy: groupByState,
       setColumnState,
-      setFilterState,
+      setFilterState: applyFilterState,
       setGroupBy: setGroupByState,
     }),
     [
@@ -1551,8 +1581,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       columns,
       groupByState,
       props.groupableColumns,
+      applyFilterState,
       setColumnState,
-      setFilterState,
       setGroupByState,
     ],
   )
@@ -1581,13 +1611,18 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       tabIndex={0}
       onFocus={handleFocus}
       onKeyDown={handleKeyDown}
-      style={rootStyle(rootHeight)}
+      style={rootStyle(isAutoHeight ? "auto" : rootHeight)}
+      data-bc-grid-height-mode={isAutoHeight ? "auto" : "fixed"}
     >
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
 
       <div className="bc-grid-main">
         <div className="bc-grid-table">
-          <div className="bc-grid-header-viewport" role="rowgroup" style={headerViewportStyle}>
+          <div
+            className="bc-grid-header-viewport"
+            role="rowgroup"
+            style={isAutoHeight ? autoHeightHeaderViewportStyle : headerViewportStyle}
+          >
             <div
               className="bc-grid-header"
               role="row"
@@ -1667,7 +1702,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             className="bc-grid-scroller"
             role="rowgroup"
             onScroll={handleScroll}
-            style={scrollerStyle(bodyHeight)}
+            style={scrollerStyle(bodyHeight, isAutoHeight)}
           >
             <div
               className="bc-grid-canvas"
