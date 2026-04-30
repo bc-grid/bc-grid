@@ -99,6 +99,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   showInactive?: boolean
   onShowInactiveChange?: (next: boolean) => void
   rowIsInactive?: (row: TRow) => boolean
+  rowIsDisabled?: (row: TRow) => boolean
 
   toolbar?: ReactNode
   footer?: ReactNode

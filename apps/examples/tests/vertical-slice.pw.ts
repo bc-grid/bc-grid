@@ -10,7 +10,7 @@ test("AR customer vertical slice exposes the Q1 grid contract", async ({ page })
   const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
   await expect(grid).toBeVisible()
   await expect(grid).toHaveAttribute("aria-rowcount", "5002")
-  await expect(grid).toHaveAttribute("aria-colcount", "18")
+  await expect(grid).toHaveAttribute("aria-colcount", "19")
 
   const renderedRows = await grid.locator(".bc-grid-row").count()
   expect(renderedRows).toBeGreaterThan(0)
@@ -26,6 +26,24 @@ test("AR customer filters narrow the ledger to a single account", async ({ page 
   await grid.getByLabel("Filter Account").fill("CUST-00042")
   await expect(grid).toHaveAttribute("aria-rowcount", "3")
   await expect(grid.locator(".bc-grid-row").first()).toContainText("CUST-00042")
+})
+
+test("AR customer boolean filter narrows credit-hold accounts", async ({ page }) => {
+  await page.goto("/")
+
+  const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
+  await expect(grid).toBeVisible()
+
+  await grid.getByLabel("Filter Credit Hold?").selectOption("true")
+  const yesRowCount = Number(await grid.getAttribute("aria-rowcount"))
+  expect(yesRowCount).toBeGreaterThan(2)
+  expect(yesRowCount).toBeLessThan(5002)
+  await expect(grid.locator(".bc-grid-row").first()).toContainText("Yes")
+
+  await grid.getByLabel("Filter Credit Hold?").selectOption("false")
+  const noRowCount = Number(await grid.getAttribute("aria-rowcount"))
+  expect(noRowCount).toBeGreaterThan(yesRowCount)
+  await expect(grid.locator(".bc-grid-row").first()).toContainText("No")
 })
 
 test("AR customer row click updates selection summary and account detail", async ({ page }) => {

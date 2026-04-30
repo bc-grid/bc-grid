@@ -92,6 +92,11 @@ function urlStatePersistenceEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("urlstate") === "1"
 }
 
+function disabledRowsEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("disabled") === "1"
+}
+
 /**
  * `?edit=1` URL flag opts the AR Customers grid into the
  * `editor-framework` demo. Selected columns gain `editable: true` so
@@ -121,11 +126,16 @@ function CustomerGridDemo({
   const [activeCustomer, setActiveCustomer] = useState<CustomerRow | null>(customerRows[0] ?? null)
   const rows = customerRows
   const urlStateEnabled = urlStatePersistenceEnabled()
+  const disabledRows = disabledRowsEnabled()
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
   const urlStatePersistence = useMemo(
     () => (urlStateEnabled ? { searchParam: "grid" } : undefined),
     [urlStateEnabled],
+  )
+  const rowIsDisabled = useCallback(
+    (row: CustomerRow) => disabledRows && row.account === "CUST-00005",
+    [disabledRows],
   )
 
   const columns = useMemo<readonly BcGridColumn<CustomerRow>[]>(
@@ -187,6 +197,17 @@ function CustomerGridDemo({
         header: "Terms",
         width: 118,
         filter: { type: "text" },
+      },
+      {
+        columnId: "creditHold",
+        header: "Credit Hold?",
+        align: "center",
+        width: 128,
+        format: "boolean",
+        filter: { type: "boolean" },
+        valueGetter(row) {
+          return row.status === "Credit Hold"
+        },
       },
       {
         columnId: "creditLimit",
@@ -359,6 +380,7 @@ function CustomerGridDemo({
         onEdit={handleEdit}
         onRowClick={setActiveCustomer}
         onSelectionChange={handleSelectionChange}
+        rowIsDisabled={rowIsDisabled}
         rowId={(row: CustomerRow) => row.id}
         {...(urlStatePersistence ? { urlStatePersistence } : {})}
       />

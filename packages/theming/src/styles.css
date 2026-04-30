@@ -94,6 +94,10 @@
   color: var(--bc-grid-row-selected-fg);
 }
 
+.bc-grid-row-disabled {
+  color: var(--bc-grid-muted-fg);
+}
+
 .bc-grid-header .bc-grid-cell {
   background: var(--bc-grid-header-bg);
 }
@@ -110,6 +114,10 @@
 .bc-grid-cell[aria-selected="true"] {
   background: var(--bc-grid-row-selected);
   color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-row-disabled .bc-grid-cell {
+  color: var(--bc-grid-muted-fg);
 }
 
 .bc-grid-cell {

@@ -1,7 +1,22 @@
 {
   "name": "@bc-grid/react",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.1",
+  "description": "React layer for bc-grid — high-performance shadcn-native data grid",
+  "license": "UNLICENSED",
+  "author": "John Cottrell <john@cot.dev>",
+  "homepage": "https://github.com/johncotdev/bc-grid",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johncotdev/bc-grid.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/johncotdev/bc-grid/issues"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -30,8 +45,7 @@
   },
   "peerDependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@tanstack/react-table": "^8.20.0"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

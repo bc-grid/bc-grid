@@ -189,6 +189,8 @@ export function renderFilterCell<TRow>({
   viewportWidth,
 }: RenderFilterCellParams<TRow>): ReactNode {
   const filterDisabled = column.source.filter === false
+  const filterType = column.source.filter ? column.source.filter.type : "text"
+  const filterLabel = `Filter ${typeof column.source.header === "string" ? column.source.header : column.columnId}`
   return (
     <div
       key={`filter-${column.columnId}`}
@@ -217,9 +219,23 @@ export function renderFilterCell<TRow>({
         event.stopPropagation()
       }}
     >
-      {filterDisabled ? null : (
+      {filterDisabled ? null : filterType === "boolean" ? (
+        <select
+          aria-label={filterLabel}
+          className="bc-grid-filter-select"
+          value={filterText}
+          onChange={(event) => onFilterChange(event.currentTarget.value)}
+          onKeyDown={(event) => event.stopPropagation()}
+          id={`${domBaseId}-filter-${domToken(column.columnId)}`}
+          style={filterControlStyle}
+        >
+          <option value="">Any</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      ) : (
         <input
-          aria-label={`Filter ${typeof column.source.header === "string" ? column.source.header : column.columnId}`}
+          aria-label={filterLabel}
           className="bc-grid-filter-input"
           type="text"
           value={filterText}
@@ -229,14 +245,14 @@ export function renderFilterCell<TRow>({
           onKeyDown={(event) => event.stopPropagation()}
           id={`${domBaseId}-filter-${domToken(column.columnId)}`}
           placeholder="Filter"
-          style={filterInputStyle}
+          style={filterControlStyle}
         />
       )}
     </div>
   )
 }
 
-const filterInputStyle: CSSProperties = {
+const filterControlStyle: CSSProperties = {
   width: "100%",
   height: "70%",
   border: "1px solid hsl(var(--border, 220 13% 91%))",

@@ -51,10 +51,16 @@ export function createSelectionCheckboxColumn<TRow>(
     cellRenderer(params) {
       const { rowId, rowState } = params
       const handleChange = (): void => {
+        if (rowState.disabled) return
         setSelectionState(toggleRow(selectionState, rowId))
       }
       return (
-        <SelectionCellCheckbox rowId={rowId} checked={rowState.selected} onChange={handleChange} />
+        <SelectionCellCheckbox
+          rowId={rowId}
+          checked={rowState.selected}
+          disabled={rowState.disabled ?? false}
+          onChange={handleChange}
+        />
       )
     },
   }
@@ -95,10 +101,11 @@ function SelectionHeaderCheckbox({ state, onChange }: SelectionHeaderCheckboxPro
 interface SelectionCellCheckboxProps {
   rowId: RowId
   checked: boolean
+  disabled: boolean
   onChange: () => void
 }
 
-function SelectionCellCheckbox({ rowId, checked, onChange }: SelectionCellCheckboxProps) {
+function SelectionCellCheckbox({ rowId, checked, disabled, onChange }: SelectionCellCheckboxProps) {
   const handleChange = useCallback(() => onChange(), [onChange])
   // The wrapper fills the cell so clicks anywhere in the synthetic
   // checkbox column don't bubble to the row's selection-by-click handler.
@@ -119,6 +126,7 @@ function SelectionCellCheckbox({ rowId, checked, onChange }: SelectionCellCheckb
         data-bc-grid-selection-row={rowId}
         aria-label={`Select row ${rowId}`}
         checked={checked}
+        disabled={disabled}
         onChange={handleChange}
         onClick={stopPropagation}
         style={checkboxStyle}

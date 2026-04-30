@@ -72,14 +72,27 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: x1 #73]` **localstorage-gridid-persistence** — `api.md §3.3` declares `gridId` triggers automatic `localStorage` persistence of `columnState`, `pageSize`, `density`, `groupBy`. Currently typed but no read/write happens. Implement read on mount, write on state change (debounced ≥ 500ms). Storage key convention: `bc-grid:{gridId}:{state}`. **Effort**: S.
 - `[done: x2 #64]` **search-highlighting** — `BcCellRendererParams.searchText` exists; default cell renderer should highlight matched substrings (case-insensitive). Wrap matched runs in `<mark>` with `data-bc-grid-search-match`. **Branch**: `agent/x2/search-highlighting`. **Effort**: S.
 - `[done: c2 #79]` **selection-checkbox-column** — opt-in pinned-left checkbox column toggled by `<BcGrid checkboxSelection>` prop. Header checkbox toggles all-on-page; row checkboxes toggle single. Lives alongside the existing click-to-select gestures (no conflict). (Originally c1 #58; salvaged onto current main as #79.) **Effort**: S.
-- `[ready]` **aria-disabled-rows** — `accessibility-rfc §VirtualRowA11yMeta.disabled` flag plus a `BcGridProps.rowIsDisabled` predicate; disabled rows: `aria-disabled="true"`, `.bc-grid-row-disabled`, ignored by selection gestures, focusable but no edit/sort actions. **Effort**: XS.
+- `[review: x1 #94]` **aria-disabled-rows** — `accessibility-rfc §VirtualRowA11yMeta.disabled` flag plus a `BcGridProps.rowIsDisabled` predicate; disabled rows: `aria-disabled="true"`, `.bc-grid-row-disabled`, ignored by selection gestures, focusable but no edit/sort actions. **Effort**: XS.
 - `[done: x2 #71]` **row-select-keyboard** — Space toggles selection on the focused row (`Space` is unreserved per `accessibility-rfc §Selection Extension Points`; only `Shift+Space` and `Ctrl+Space` are Q3-reserved). Keyboard parity with the mouse gestures from #37. **Branch**: `agent/x2/row-select-keyboard`. **Effort**: S.
 - `[ready]` **number-filter-ui** — operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `between`. Inline UI per the existing text-filter pattern. Q2-reserved → pulled forward. **Effort**: S.
 - `[ready]` **date-filter-ui** — operators: `is`, `before`, `after`, `between`. Use shadcn date picker primitive. Q2-reserved → pulled forward. **Effort**: S.
 - `[blocked: depends on filter-registry-rfc]` **set-filter-ui** — multi-select dropdown of distinct values from the column. Lazy-loaded (computed on first open from current row model). Q2-reserved → pulled forward. **Effort**: M.
-- `[ready]` **boolean-filter-ui** — three-state: any / yes / no. Q2-reserved → pulled forward. **Effort**: XS.
+- `[review: x1 #91]` **boolean-filter-ui** — three-state: any / yes / no. Q2-reserved → pulled forward. **Effort**: XS.
 
 **Phase 5.5 health metrics (not blocking gates beyond `grid-tsx-file-split`):** `grid.tsx` split → unblocks parallel Phase 6 React-layer work. Smoke perf + bundle size CI → keeps quality bars enforced on every Phase 6 PR. Q1 vertical-slice gate **already cleared as of PR #42** (AR Customers ledger in `apps/examples`); a real bc-next integration cutover is a separate post-1.0 follow-up. Tooltip / persistence / filter-UI items are independent and land any time.
+
+### Phase 5.6 — Publishing (private GitHub Packages)
+
+Spec: `docs/design/publish-rfc.md`. Distribution channel pinned: GitHub Packages, private repo, Classic PAT for consumer reads. 8 tasks; can run in parallel except where ordering is noted.
+
+- `[ready]` **publish-config-pass-1** — drop `private: true`, set version `0.1.0-alpha.1`, add `publishConfig`/`repository`/`homepage`/`bugs`/`license`/`author` fields across all 11 `packages/*/package.json`. Also drop the unused `@tanstack/react-table` peerDependency from `@bc-grid/react` (no source imports). **Effort**: S.
+- `[ready]` **license-file** — root `LICENSE` file with `UNLICENSED` proprietary text. **Effort**: XS.
+- `[ready]` **package-readmes** — per-package `README.md` files (full README for `@bc-grid/react` + `@bc-grid/theming`; one-paragraph stub for each of the other 9). **Effort**: S.
+- `[ready]` **changesets-setup** — install `@changesets/cli`, run `bun run changeset init`, configure for GitHub Packages restricted access. **Effort**: S.
+- `[blocked: depends on publish-config-pass-1 + license-file + changesets-setup]` **release-workflow** — `.github/workflows/release.yml` per `publish-rfc.md §Release workflow shape`. Runs full quality gate then `bun publish` per package. Triggered by `v*` tag push. **Effort**: S.
+- `[ready]` **consumer-install-doc** — README section in root + `.npmrc.example` template + step-by-step PAT creation guide. **Effort**: S.
+- `[blocked: depends on publish-config-pass-1]` **tarball-smoke-test** — pre-publish script: `bun pack` each package, install into a clean tmp project, verify `import { BcGrid }` resolves and CSS import works. Catches missing `exports`/`workspace:*` leaks. **Effort**: M.
+- `[blocked: depends on release-workflow + tarball-smoke-test]` **first-release** — cut tag `v0.1.0-alpha.1`, verify the workflow publishes successfully, install from bc-next as a smoke test. **Effort**: S.
 
 ### Phase 6 — v1.0 Parity Sprint (Phase B feature tracks)
 
