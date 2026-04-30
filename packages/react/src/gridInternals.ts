@@ -703,6 +703,265 @@ export function useColumnResize<TRow>({ columnState, setColumnState }: UseColumn
 }
 
 // ---------------------------------------------------------------------------
+// Column reorder gesture.
+// ---------------------------------------------------------------------------
+
+export interface ColumnReorderPreview {
+  sourceColumnId: ColumnId
+  targetColumnId: ColumnId
+  placement: "before" | "after"
+  indicatorLeft: number
+}
+
+interface ColumnReorderSession {
+  sourceColumnId: ColumnId
+  sourcePinned: "left" | "right" | null
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  dragging: boolean
+}
+
+export interface UseColumnReorderParams<TRow> {
+  rootRef: RefObject<HTMLDivElement | null>
+  columns: readonly ResolvedColumn<TRow>[]
+  layoutColumns: readonly ResolvedColumn<TRow>[]
+  columnState: readonly BcColumnStateEntry[]
+  scrollLeft: number
+  totalWidth: number
+  viewportWidth: number
+  setColumnState: (next: readonly BcColumnStateEntry[]) => void
+}
+
+export function useColumnReorder<TRow>({
+  rootRef,
+  columns,
+  layoutColumns,
+  columnState,
+  scrollLeft,
+  totalWidth,
+  viewportWidth,
+  setColumnState,
+}: UseColumnReorderParams<TRow>): {
+  columnReorderPreview: ColumnReorderPreview | null
+  consumeColumnReorderClickSuppression: () => boolean
+  handleReorderPointerDown: (
+    column: ResolvedColumn<TRow>,
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => void
+  handleReorderPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void
+  endReorder: (event: ReactPointerEvent<HTMLDivElement>) => void
+} {
+  const reorderSessionRef = useRef<ColumnReorderSession | null>(null)
+  const previewRef = useRef<ColumnReorderPreview | null>(null)
+  const suppressNextHeaderClickRef = useRef(false)
+  const [columnReorderPreview, setColumnReorderPreview] = useState<ColumnReorderPreview | null>(
+    null,
+  )
+
+  const updatePreview = useCallback((next: ColumnReorderPreview | null) => {
+    previewRef.current = next
+    setColumnReorderPreview(next)
+  }, [])
+
+  const consumeColumnReorderClickSuppression = useCallback(() => {
+    if (!suppressNextHeaderClickRef.current) return false
+    suppressNextHeaderClickRef.current = false
+    return true
+  }, [])
+
+  const handleReorderPointerDown = useCallback(
+    (column: ResolvedColumn<TRow>, event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return
+      if (!columns.some((entry) => entry.columnId === column.columnId)) return
+      reorderSessionRef.current = {
+        sourceColumnId: column.columnId,
+        sourcePinned: column.pinned,
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        dragging: false,
+      }
+      event.currentTarget.setPointerCapture(event.pointerId)
+    },
+    [columns],
+  )
+
+  const handleReorderPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const session = reorderSessionRef.current
+      if (!session || session.pointerId !== event.pointerId) return
+
+      const deltaX = Math.abs(event.clientX - session.startClientX)
+      const deltaY = Math.abs(event.clientY - session.startClientY)
+      if (!session.dragging && Math.max(deltaX, deltaY) < 6) return
+
+      session.dragging = true
+      suppressNextHeaderClickRef.current = true
+      event.preventDefault()
+
+      const target = findColumnReorderTarget({
+        clientX: event.clientX,
+        columns,
+        layoutColumns,
+        root: rootRef.current,
+        scrollLeft,
+        sourceColumnId: session.sourceColumnId,
+        sourcePinned: session.sourcePinned,
+        totalWidth,
+        viewportWidth,
+      })
+      updatePreview(target)
+    },
+    [columns, layoutColumns, rootRef, scrollLeft, totalWidth, updatePreview, viewportWidth],
+  )
+
+  const endReorder = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const session = reorderSessionRef.current
+      if (!session || session.pointerId !== event.pointerId) return
+      reorderSessionRef.current = null
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+      const preview = previewRef.current
+      updatePreview(null)
+      if (event.type === "pointercancel") return
+      if (!session.dragging || !preview) return
+      event.preventDefault()
+      const next = reorderColumnState({
+        columns,
+        columnState,
+        placement: preview.placement,
+        sourceColumnId: session.sourceColumnId,
+        targetColumnId: preview.targetColumnId,
+      })
+      if (next !== columnState) setColumnState(next)
+    },
+    [columnState, columns, setColumnState, updatePreview],
+  )
+
+  return {
+    columnReorderPreview,
+    consumeColumnReorderClickSuppression,
+    handleReorderPointerDown,
+    handleReorderPointerMove,
+    endReorder,
+  }
+}
+
+interface FindColumnReorderTargetParams<TRow> {
+  clientX: number
+  columns: readonly ResolvedColumn<TRow>[]
+  layoutColumns: readonly ResolvedColumn<TRow>[]
+  root: HTMLDivElement | null
+  scrollLeft: number
+  sourceColumnId: ColumnId
+  sourcePinned: "left" | "right" | null
+  totalWidth: number
+  viewportWidth: number
+}
+
+function findColumnReorderTarget<TRow>({
+  clientX,
+  columns,
+  layoutColumns,
+  root,
+  scrollLeft,
+  sourceColumnId,
+  sourcePinned,
+  totalWidth,
+  viewportWidth,
+}: FindColumnReorderTargetParams<TRow>): ColumnReorderPreview | null {
+  if (!root) return null
+  const viewportLeft = root.getBoundingClientRect().left
+  let lastTarget: { columnId: ColumnId; right: number } | null = null
+
+  for (const column of layoutColumns) {
+    if (
+      column.columnId === sourceColumnId ||
+      column.pinned !== sourcePinned ||
+      !columns.some((entry) => entry.columnId === column.columnId)
+    ) {
+      continue
+    }
+
+    const left =
+      column.pinned === "left"
+        ? column.left
+        : column.pinned === "right"
+          ? column.left + viewportWidth - totalWidth
+          : column.left - scrollLeft
+    const right = left + column.width
+    lastTarget = { columnId: column.columnId, right }
+    const midpoint = viewportLeft + left + column.width / 2
+    if (clientX < midpoint) {
+      return {
+        sourceColumnId,
+        targetColumnId: column.columnId,
+        placement: "before",
+        indicatorLeft: clamp(left, 0, viewportWidth),
+      }
+    }
+  }
+
+  if (!lastTarget) return null
+  return {
+    sourceColumnId,
+    targetColumnId: lastTarget.columnId,
+    placement: "after",
+    indicatorLeft: clamp(lastTarget.right, 0, viewportWidth),
+  }
+}
+
+interface ReorderColumnStateParams<TRow> {
+  columns: readonly ResolvedColumn<TRow>[]
+  columnState: readonly BcColumnStateEntry[]
+  sourceColumnId: ColumnId
+  targetColumnId: ColumnId
+  placement: "before" | "after"
+}
+
+function reorderColumnState<TRow>({
+  columns,
+  columnState,
+  sourceColumnId,
+  targetColumnId,
+  placement,
+}: ReorderColumnStateParams<TRow>): readonly BcColumnStateEntry[] {
+  if (sourceColumnId === targetColumnId) return columnState
+  const source = columns.find((column) => column.columnId === sourceColumnId)
+  const target = columns.find((column) => column.columnId === targetColumnId)
+  if (!source || !target || source.pinned !== target.pinned) return columnState
+
+  const samePinnedIds = columns
+    .filter((column) => column.pinned === source.pinned)
+    .map((column) => column.columnId)
+  const currentSourceIndex = samePinnedIds.indexOf(sourceColumnId)
+  const currentTargetIndex = samePinnedIds.indexOf(targetColumnId)
+  if (currentSourceIndex < 0 || currentTargetIndex < 0) return columnState
+
+  const nextGroup = samePinnedIds.filter((columnId) => columnId !== sourceColumnId)
+  const targetIndexAfterRemoval = nextGroup.indexOf(targetColumnId)
+  const insertIndex = placement === "before" ? targetIndexAfterRemoval : targetIndexAfterRemoval + 1
+  nextGroup.splice(insertIndex, 0, sourceColumnId)
+
+  let groupCursor = 0
+  let changed = false
+  const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
+  for (let position = 0; position < columns.length; position++) {
+    const column = columns[position]
+    if (!column) return columnState
+    const columnId = column.pinned === source.pinned ? nextGroup[groupCursor++] : column.columnId
+    if (!columnId) return columnState
+    if (columnId !== column.columnId) changed = true
+    const existing = stateById.get(columnId)
+    stateById.set(columnId, { ...existing, columnId, position })
+  }
+  return changed ? Array.from(stateById.values()) : columnState
+}
+
+// ---------------------------------------------------------------------------
 // FLIP animation on sort.
 // ---------------------------------------------------------------------------
 

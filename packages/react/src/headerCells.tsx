@@ -1,4 +1,4 @@
-import type { BcGridSort } from "@bc-grid/core"
+import type { BcGridSort, ColumnId } from "@bc-grid/core"
 import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react"
 import {
   type DateFilterOperator,
@@ -38,11 +38,16 @@ interface RenderHeaderCellParams<TRow> {
   headerHeight: number
   index: number
   onColumnMenu: (column: ResolvedColumn<TRow>, anchor: ColumnMenuAnchor) => void
+  onConsumeReorderClickSuppression: () => boolean
+  onReorderEnd: (event: PointerEvent<HTMLDivElement>) => void
+  onReorderMove: (event: PointerEvent<HTMLDivElement>) => void
+  onReorderStart: (column: ResolvedColumn<TRow>, event: PointerEvent<HTMLDivElement>) => void
   onResizeEnd: (event: PointerEvent<HTMLDivElement>) => void
   onResizeMove: (event: PointerEvent<HTMLDivElement>) => void
   onResizeStart: (column: ResolvedColumn<TRow>, event: PointerEvent<HTMLDivElement>) => void
   onSort: (column: ResolvedColumn<TRow>, modifiers: SortModifiers) => void
   pinnedEdge: "left" | "right" | null
+  reorderingColumnId: ColumnId | undefined
   scrollLeft: number
   sortState: readonly BcGridSort[]
   totalWidth: number
@@ -55,11 +60,16 @@ export function renderHeaderCell<TRow>({
   headerHeight,
   index,
   onColumnMenu,
+  onConsumeReorderClickSuppression,
+  onReorderEnd,
+  onReorderMove,
+  onReorderStart,
   onResizeEnd,
   onResizeMove,
   onResizeStart,
   onSort,
   pinnedEdge,
+  reorderingColumnId,
   scrollLeft,
   sortState,
   totalWidth,
@@ -83,6 +93,11 @@ export function renderHeaderCell<TRow>({
 
   const handleClick = sortable
     ? (event: MouseEvent<HTMLDivElement>) => {
+        if (onConsumeReorderClickSuppression()) {
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
         event.stopPropagation()
         onSort(column, {
           shiftKey: event.shiftKey,
@@ -111,6 +126,7 @@ export function renderHeaderCell<TRow>({
         "bc-grid-cell",
         "bc-grid-header-cell",
         sortable ? "bc-grid-header-cell-sortable" : undefined,
+        reorderingColumnId === column.columnId ? "bc-grid-header-cell-reordering" : undefined,
         sort ? `bc-grid-header-cell-sorted-${sort.direction}` : undefined,
         pinnedClassName(column.pinned),
         pinnedEdgeClassName(pinnedEdge),
@@ -127,6 +143,10 @@ export function renderHeaderCell<TRow>({
         onColumnMenu(column, { x: event.clientX, y: event.clientY })
       }}
       onKeyDown={handleKeyDown}
+      onPointerDown={(event) => onReorderStart(column, event)}
+      onPointerMove={onReorderMove}
+      onPointerUp={onReorderEnd}
+      onPointerCancel={onReorderEnd}
       style={cellStyle({
         align: column.align,
         height: headerHeight,
@@ -166,6 +186,7 @@ export function renderHeaderCell<TRow>({
           onColumnMenu(column, { x: rect.left, y: rect.bottom + 4 })
         }}
         onKeyDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
         type="button"
       >
         ...
@@ -177,8 +198,10 @@ export function renderHeaderCell<TRow>({
         <div
           aria-hidden="true"
           className="bc-grid-header-resize-handle"
-          data-bc-grid-resize-handle="true"
-          onPointerDown={(event) => onResizeStart(column, event)}
+          onPointerDown={(event) => {
+            event.stopPropagation()
+            onResizeStart(column, event)
+          }}
           onPointerMove={onResizeMove}
           onPointerUp={onResizeEnd}
           onPointerCancel={onResizeEnd}

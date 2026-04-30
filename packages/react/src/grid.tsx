@@ -66,6 +66,7 @@ import {
   rootStyle,
   rowStyle,
   scrollerStyle,
+  useColumnReorder,
   useColumnResize,
   useControlledState,
   useFlipOnSort,
@@ -947,6 +948,22 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     columnState,
     setColumnState,
   })
+  const {
+    columnReorderPreview,
+    consumeColumnReorderClickSuppression,
+    handleReorderPointerDown,
+    handleReorderPointerMove,
+    endReorder,
+  } = useColumnReorder<TRow>({
+    rootRef,
+    columns: consumerResolvedColumns,
+    layoutColumns: resolvedColumns,
+    columnState,
+    scrollLeft: scrollOffset.left,
+    totalWidth: virtualWindow.totalWidth,
+    viewportWidth: viewport.width,
+    setColumnState,
+  })
   const openColumnMenu = useCallback(
     (_column: (typeof resolvedColumns)[number], anchor: ColumnMenuAnchor) => {
       const margin = 8
@@ -1048,11 +1065,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               headerHeight,
               index,
               onColumnMenu: openColumnMenu,
+              onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
+              onReorderEnd: endReorder,
+              onReorderMove: handleReorderPointerMove,
+              onReorderStart: handleReorderPointerDown,
               onResizeEnd: endResize,
               onResizeMove: handleResizePointerMove,
               onResizeStart: handleResizePointerDown,
               onSort: handleHeaderSort,
               pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
+              reorderingColumnId: columnReorderPreview?.sourceColumnId,
               scrollLeft: scrollOffset.left,
               sortState,
               totalWidth: virtualWindow.totalWidth,
@@ -1060,6 +1082,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             }),
           )}
         </div>
+        {columnReorderPreview ? (
+          <div
+            aria-hidden="true"
+            className="bc-grid-column-drop-indicator"
+            style={{
+              height: headerHeight * 2,
+              left: columnReorderPreview.indicatorLeft,
+            }}
+          />
+        ) : null}
         <div
           className="bc-grid-filter-row"
           role="row"
