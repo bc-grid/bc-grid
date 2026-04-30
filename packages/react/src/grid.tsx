@@ -54,6 +54,7 @@ import {
   DEFAULT_COL_WIDTH,
   type DataRowEntry,
   type GroupRowEntry,
+  type RowEntry,
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
