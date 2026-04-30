@@ -584,6 +584,70 @@ describe("createServerRowModel", () => {
     ])
   })
 
+  test("uses row identity to upsert streaming additions without duplicating rows", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:0:size:3",
+      rows: [
+        { id: "a", name: "alpha" },
+        { id: "b", name: "old" },
+      ],
+      size: 3,
+      start: 0,
+      viewKey: "v1",
+    })
+
+    const result = model.applyRowUpdate({
+      rowId: (row) => row.id,
+      update: { indexHint: 0, row: { id: "b", name: "new" }, type: "rowAdded", viewKey: "v1" },
+      viewKey: "v1",
+    })
+
+    expect(result.insertedRowIds).toEqual([])
+    expect(result.updatedRowIds).toEqual(["b"])
+    expect(model.cache.get("infinite:v1:start:0:size:3")?.rows).toEqual([
+      { id: "a", name: "alpha" },
+      { id: "b", name: "new" },
+    ])
+  })
+
+  test("applies streaming updates and removals to stale invalidated row blocks", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:0:size:2",
+      rows: [
+        { id: "a", name: "old" },
+        { id: "b", name: "removed" },
+      ],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+
+    const invalidated = model.invalidate(
+      { scope: "rows", rowIds: ["a"] },
+      { rowId: (row) => row.id },
+    )
+    expect(invalidated.affectedBlockKeys).toEqual(["infinite:v1:start:0:size:2"])
+    expect(model.cache.get("infinite:v1:start:0:size:2")?.state).toBe("stale")
+
+    const updated = model.applyRowUpdate({
+      rowId: (row) => row.id,
+      update: { row: { id: "a", name: "new" }, rowId: "a", type: "rowUpdated" },
+      viewKey: "v1",
+    })
+    const removed = model.applyRowUpdate({
+      rowId: (row) => row.id,
+      update: { rowId: "b", type: "rowRemoved" },
+      viewKey: "v1",
+    })
+
+    expect(updated.updatedRowIds).toEqual(["a"])
+    expect(removed.removedRowIds).toEqual(["b"])
+    expect(model.cache.get("infinite:v1:start:0:size:2")?.state).toBe("stale")
+    expect(model.cache.get("infinite:v1:start:0:size:2")?.rows).toEqual([{ id: "a", name: "new" }])
+  })
+
   test("applies streaming view invalidation to matching cached blocks", () => {
     const model = createServerRowModel<Row>()
     model.cache.markLoaded({

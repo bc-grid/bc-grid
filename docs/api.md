@@ -1055,8 +1055,9 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
 Consumers with a websocket/SSE source can bridge push events into the grid with
 `useServerRowUpdates(apiRef, subscribe)`. The hook subscribes to
 `ServerRowUpdate<TRow>` events and forwards them to `applyServerRowUpdate`.
-`rowAdded` updates currently loaded server rows and triggers existing row
-insertion FLIP wiring for visible rows.
+`rowAdded`, `rowUpdated`, and `rowRemoved` apply to loaded or stale cached
+server rows by row identity. Visible insertions reuse the existing row-insertion
+FLIP wiring; removal animation remains part of `animation-polish`.
 
 ---
 
