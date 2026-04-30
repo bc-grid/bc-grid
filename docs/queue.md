@@ -85,14 +85,14 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 Spec: `docs/design/publish-rfc.md`. Distribution channel pinned: GitHub Packages, private repo, Classic PAT for consumer reads. 8 tasks; can run in parallel except where ordering is noted.
 
-- `[ready]` **publish-config-pass-1** — drop `private: true`, set version `0.1.0-alpha.1`, add `publishConfig`/`repository`/`homepage`/`bugs`/`license`/`author` fields across all 11 `packages/*/package.json`. Also drop the unused `@tanstack/react-table` peerDependency from `@bc-grid/react` (no source imports). **Effort**: S.
-- `[ready]` **license-file** — root `LICENSE` file with `UNLICENSED` proprietary text. **Effort**: XS.
-- `[ready]` **package-readmes** — per-package `README.md` files (full README for `@bc-grid/react` + `@bc-grid/theming`; one-paragraph stub for each of the other 9). **Effort**: S.
-- `[ready]` **changesets-setup** — install `@changesets/cli`, run `bun run changeset init`, configure for GitHub Packages restricted access. **Effort**: S.
-- `[blocked: depends on publish-config-pass-1 + license-file + changesets-setup]` **release-workflow** — `.github/workflows/release.yml` per `publish-rfc.md §Release workflow shape`. Runs full quality gate then `bun publish` per package. Triggered by `v*` tag push. **Effort**: S.
-- `[ready]` **consumer-install-doc** — README section in root + `.npmrc.example` template + step-by-step PAT creation guide. **Effort**: S.
-- `[blocked: depends on publish-config-pass-1]` **tarball-smoke-test** — pre-publish script: `bun pack` each package, install into a clean tmp project, verify `import { BcGrid }` resolves and CSS import works. Catches missing `exports`/`workspace:*` leaks. **Effort**: M.
-- `[blocked: depends on release-workflow + tarball-smoke-test]` **first-release** — cut tag `v0.1.0-alpha.1`, verify the workflow publishes successfully, install from bc-next as a smoke test. **Effort**: S.
+- `[done: c2 #100]` **publish-config-pass-1** — dropped `private: true`, set version `0.1.0-alpha.1`, added `publishConfig`/`repository`/`homepage`/`bugs`/`license`/`author` across all 11 `packages/*/package.json`. Dropped unused `@tanstack/react-table` peerDep from `@bc-grid/react`. **Effort**: S.
+- `[done: c2 #100]` **license-file** — root `LICENSE` file with `UNLICENSED` proprietary text. (Bundled into publish-config-pass-1.) **Effort**: XS.
+- `[done: c2 #103]` **package-readmes** — 11 per-package `README.md` files. Full READMEs for `@bc-grid/react` / `theming` / `export`; concise stubs for engine packages; placeholder stubs for the 4 empty namespace-locked packages. **Effort**: S.
+- `[done: c2 #102]` **changesets-setup** — installed `@changesets/cli` (^2.31.0), `bun run changeset init`, configured fixed-version mode (all 11 packages bump together), `access: "restricted"`. Added root scripts: `changeset`, `changeset:version`, `publish:packages`. **Effort**: S.
+- `[done: c2 #104]` **release-workflow** — `.github/workflows/release.yml` triggered by `v*` tag push; runs full quality gate (type-check + lint + test + build + bundle-size + api-surface + tarball-smoke) then `bun publish` per package. Uses GitHub Actions' built-in `GITHUB_TOKEN` (write:packages). **Effort**: S.
+- `[done: c2 #104]` **consumer-install-doc** — README "Install (from private GitHub Packages)" section + `.npmrc.example` template + step-by-step Classic PAT creation guide. **Effort**: S.
+- `[done: c2 #106]` **tarball-smoke-test** — `tools/tarball-smoke` package + `bun run tarball-smoke` script. Packs each package, installs into a clean tmp consumer with `overrides` forcing transitive `@bc-grid/*` references to the tarballs, runs `tsc --noEmit` against a strict bundler-resolution tsconfig. Catches missing exports / workspace:* leaks / broken type declarations. Wired into `release.yml` as a pre-publish gate. **Effort**: M.
+- `[blocked: needs maintainer to create Classic PAT + push v0.1.0-alpha.1 tag]` **first-release** — cut tag `v0.1.0-alpha.1`, verify the workflow publishes successfully, install from a fresh consumer to smoke-test the auth path. Manual one-time bootstrap. **Effort**: S.
 
 ### Phase 6 — v1.0 Parity Sprint (Phase B feature tracks)
 
