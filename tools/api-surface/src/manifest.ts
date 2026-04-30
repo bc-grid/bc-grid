@@ -346,6 +346,7 @@ export const apiSurfaceManifest = [
     runtimePath: "packages/editors/dist/index.js",
     mode: "enforced",
     runtimeExports: [
+      "autocompleteEditor",
       "dateEditor",
       "datetimeEditor",
       "multiSelectEditor",
@@ -355,6 +356,7 @@ export const apiSurfaceManifest = [
       "timeEditor",
     ],
     declarationExports: [
+      "autocompleteEditor",
       "dateEditor",
       "datetimeEditor",
       "multiSelectEditor",
@@ -363,7 +365,7 @@ export const apiSurfaceManifest = [
       "textEditor",
       "timeEditor",
     ],
-    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select + editor-multi-select. Other Track 1 editors land alongside their respective PRs.",
+    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select + editor-multi-select + editor-autocomplete.",
   },
   {
     packageName: "@bc-grid/enterprise",

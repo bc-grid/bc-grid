@@ -144,10 +144,10 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 - `[done: c1 #120]` **editor-time** — `<input type="time" />` styled with shadcn `Input`; 24h commit. **Effort**: S.
 - `[done: c1 #127 (salvaged via #135)]` **editor-select** — native `<select>` (not shadcn); reads `column.options` (additive prop). Type-to-narrow via `seedKey`. **Effort**: M.
 - `[done: c1 #138]` **editor-multi-select** — native `<select multiple>` (not shadcn); reuses `column.options`. Returns `readonly TValue[]`. **Effort**: M.
-- `[ready]` **editor-autocomplete** — native `<input list>` + `<datalist>` (not shadcn); async via `column.fetchOptions(query, signal)`. Debounced 200ms. **Effort**: M. **Unblocked: editor-framework done.**
+- `[review: c1 #143]` **editor-autocomplete** — native `<input list>` + `<datalist>` (not shadcn); async via `column.fetchOptions(query, signal)`. Debounced 200ms. AbortSignal races superseded fetches. **Effort**: M.
 - `[done: c1 #88 (folded into editor-framework)]` **validation-framework** — sync + async validators with `AbortSignal` race semantics; `useEditingController` already exposes the full pipeline. **Effort**: S.
 - `[done: c1 #128 (salvaged via #135)]` **dirty-tracking** — `BcEditState` map + visual states (`data-bc-grid-cell-state`); cell renderer params extension (`pending`, `editError`, `isDirty`). **Effort**: S.
-- `[blocked: depends on editor-multi-select + editor-autocomplete]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. **Effort**: M.
+- `[blocked: depends on editor-autocomplete merging]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. **Effort**: M.
 - `[blocked: depends on bc-edit-grid-complete]` **editor-custom-recipe** — docs page in `apps/docs` with a worked custom-editor example (e.g., colour picker). **Effort**: S.
 
 #### Track 2 — Range + master-detail (Q3 surface)
