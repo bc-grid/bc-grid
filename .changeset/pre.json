@@ -1,0 +1,25 @@
+{
+  "mode": "pre",
+  "tag": "alpha",
+  "initialVersions": {
+    "@bc-grid/app-animation-benchmarks": "0.0.0",
+    "@bc-grid/app-benchmarks": "0.0.0",
+    "@bc-grid/app-docs": "0.0.0",
+    "@bc-grid/app-examples": "0.0.0",
+    "@bc-grid/aggregations": "0.1.0-alpha.1",
+    "@bc-grid/animations": "0.1.0-alpha.1",
+    "@bc-grid/core": "0.1.0-alpha.1",
+    "@bc-grid/editors": "0.1.0-alpha.1",
+    "@bc-grid/enterprise": "0.1.0-alpha.1",
+    "@bc-grid/export": "0.1.0-alpha.1",
+    "@bc-grid/filters": "0.1.0-alpha.1",
+    "@bc-grid/react": "0.1.0-alpha.1",
+    "@bc-grid/server-row-model": "0.1.0-alpha.1",
+    "@bc-grid/theming": "0.1.0-alpha.1",
+    "@bc-grid/virtualizer": "0.1.0-alpha.1",
+    "@bc-grid/api-surface": "0.0.0",
+    "@bc-grid/bundle-size": "0.0.0",
+    "@bc-grid/tarball-smoke": "0.0.0"
+  },
+  "changesets": ["alpha2-release"]
+}

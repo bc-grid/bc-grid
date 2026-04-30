@@ -522,18 +522,35 @@ export function useLiveRegionAnnouncements<TRow>({
 } {
   const [politeMessage, setPoliteMessage] = useState("")
   const [assertiveMessage, setAssertiveMessage] = useState("")
+  const selectionAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Selection changes are low-priority; a click that selects a row and
+  // immediately starts/commits edit mode should not overwrite the edit
+  // commit announcement that follows.
+  const suppressSelectionAnnouncementsUntilRef = useRef(0)
   // Polite-region debounce per `editing-rfc §Live Region announcements`:
   // Tab-through-10-cells emits 10 commits in rapid succession; without a
   // tail debounce the AT queue would announce all of them and lag behind
   // the user. 250ms tail; the latest message wins. Assertive announcements
   // are deliberately not debounced — errors are individually important.
   const politeAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const announcePolite = useCallback((message: string) => {
+  const schedulePolite = useCallback((message: string) => {
     if (politeAnnounceTimerRef.current) clearTimeout(politeAnnounceTimerRef.current)
     politeAnnounceTimerRef.current = setTimeout(() => {
       setPoliteMessage(message)
+      politeAnnounceTimerRef.current = null
     }, 250)
   }, [])
+  const announcePolite = useCallback(
+    (message: string) => {
+      suppressSelectionAnnouncementsUntilRef.current = performance.now() + 500
+      if (selectionAnnounceTimerRef.current) {
+        clearTimeout(selectionAnnounceTimerRef.current)
+        selectionAnnounceTimerRef.current = null
+      }
+      schedulePolite(message)
+    },
+    [schedulePolite],
+  )
   const announceAssertive = useCallback((message: string) => {
     setAssertiveMessage(message)
   }, [])
@@ -586,7 +603,6 @@ export function useLiveRegionAnnouncements<TRow>({
   // Debounced selection announcement so rapid Shift-click range selection
   // doesn't queue a message per row.
   const prevSelectionSizeRef = useRef<number>(0)
-  const selectionAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     const size = selectionState.mode === "explicit" ? selectionState.rowIds.size : -1
     const prev = prevSelectionSizeRef.current
@@ -594,15 +610,17 @@ export function useLiveRegionAnnouncements<TRow>({
     if (size === prev) return
     if (selectionAnnounceTimerRef.current) clearTimeout(selectionAnnounceTimerRef.current)
     selectionAnnounceTimerRef.current = setTimeout(() => {
-      if (size === 0) announcePolite(messages.selectionClearedAnnounce())
-      else if (size > 0) announcePolite(messages.selectionAnnounce({ count: size }))
+      selectionAnnounceTimerRef.current = null
+      if (performance.now() < suppressSelectionAnnouncementsUntilRef.current) return
+      if (size === 0) schedulePolite(messages.selectionClearedAnnounce())
+      else if (size > 0) schedulePolite(messages.selectionAnnounce({ count: size }))
       // size < 0 means "all" / "filtered" mode — count is consumer-specific;
       // skip the announce until the consumer wires their own.
     }, 200)
     return () => {
       if (selectionAnnounceTimerRef.current) clearTimeout(selectionAnnounceTimerRef.current)
     }
-  }, [selectionState, messages, announcePolite])
+  }, [selectionState, messages, schedulePolite])
 
   return { politeMessage, assertiveMessage, announcePolite, announceAssertive }
 }
