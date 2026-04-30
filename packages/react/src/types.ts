@@ -50,6 +50,20 @@ export interface BcGridMessages {
   filterClearedAnnounce: (params: { totalRows: number }) => string
   selectionAnnounce: (params: { count: number }) => string
   selectionClearedAnnounce: () => string
+
+  /**
+   * Cell-edit live-region templates per `editing-rfc §Live Regions`.
+   * Polite announcement on commit; assertive on validation rejection
+   * (so AT interrupts speech). Cancel + edit-mode-entered are silent
+   * per the RFC — focus on the editor input announces itself.
+   */
+  editCommittedAnnounce: (params: {
+    columnLabel: string
+    rowLabel: string
+    formattedValue: string
+  }) => string
+  editValidationErrorAnnounce: (params: { columnLabel: string; error: string }) => string
+  editServerErrorAnnounce: (params: { columnLabel: string; error: string }) => string
 }
 
 export interface BcGridUrlStatePersistence {

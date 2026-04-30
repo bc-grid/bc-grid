@@ -128,7 +128,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     onVisibleRowRangeChange,
   } = props
 
-  const messages = useMemo(() => ({ ...defaultMessages, ...props.messages }), [props.messages])
+  // The spread preserves all defaultMessages required fields; cast back
+  // to the full BcGridMessages shape since `Partial<>` overrides widen
+  // each function to `string | undefined` in the inferred result.
+  const messages = useMemo(
+    () => ({ ...defaultMessages, ...props.messages }) as typeof defaultMessages,
+    [props.messages],
+  )
   const persistedGridState = useMemo(() => readPersistedGridState(props.gridId), [props.gridId])
   const urlPersistedGridState = useMemo(
     () => readUrlPersistedGridState(props.urlStatePersistence),
@@ -438,15 +444,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilter])
 
-  const { politeMessage } = useLiveRegionAnnouncements({
-    sortState,
-    resolvedColumns,
-    activeFilter,
-    rowEntries,
-    data,
-    selectionState,
-    messages,
-  })
+  const { politeMessage, assertiveMessage, announcePolite, announceAssertive } =
+    useLiveRegionAnnouncements({
+      sortState,
+      resolvedColumns,
+      activeFilter,
+      rowEntries,
+      data,
+      selectionState,
+      messages,
+    })
 
   const rowsById = useMemo(() => {
     const map = new Map<RowId, RowEntry<TRow>>()
@@ -546,6 +553,27 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const column = consumerResolvedColumns.find((c) => c.columnId === columnId)
       if (!column?.source.validate) return { valid: true }
       return column.source.validate(value as never, row)
+    },
+    // Live-region announce per `editing-rfc §Live Regions`. The
+    // controller fires committed / validationError / serverError; the
+    // grid renders polite for committed and assertive for the two
+    // error variants so AT interrupts speech on rejection.
+    announce: (event) => {
+      const columnLabel =
+        typeof event.column.header === "string"
+          ? event.column.header
+          : (event.column.columnId ?? "this cell")
+      if (event.kind === "committed") {
+        const formattedValue = formatCellValue(event.nextValue, event.row, event.column, locale)
+        const rowLabel = String(event.rowId)
+        announcePolite(messages.editCommittedAnnounce({ columnLabel, rowLabel, formattedValue }))
+        return
+      }
+      if (event.kind === "validationError") {
+        announceAssertive(messages.editValidationErrorAnnounce({ columnLabel, error: event.error }))
+        return
+      }
+      announceAssertive(messages.editServerErrorAnnounce({ columnLabel, error: event.error }))
     },
   })
 
@@ -1206,7 +1234,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         aria-live="assertive"
         aria-atomic="true"
         style={visuallyHiddenStyle}
-      />
+      >
+        {assertiveMessage}
+      </div>
     </div>
   )
 }
