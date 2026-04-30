@@ -1,0 +1,295 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const factorySnippet = `import type { BcCellEditor } from "@bc-grid/react"
+
+export const colourEditor: BcCellEditor<unknown, string> = {
+  Component: ColourEditor,
+  // Discriminator surfaced as data-bc-grid-editor-kind on the input
+  // wrapper so e2e selectors can target this editor specifically.
+  kind: "colour",
+  // Optional. Runs once before the component mounts; the resolved
+  // value lands on \`props.prepareResult\`. Reject to abort activation
+  // (the framework re-enters Navigation and announces the error).
+  prepare: async ({ row, column }) => {
+    return loadPaletteFor(row, column.columnId)
+  },
+}`
+
+const componentSnippet = `import type { BcCellEditorProps } from "@bc-grid/react"
+import { useId, useLayoutEffect, useRef, useState } from "react"
+
+interface PaletteResult {
+  swatches: readonly { hex: string; label: string }[]
+}
+
+function ColourEditor(props: BcCellEditorProps<unknown, string>) {
+  const { initialValue, error, focusRef, seedKey, prepareResult, pending, column, commit, cancel } = props
+  const palette = prepareResult as PaletteResult | undefined
+
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const [open, setOpen] = useState(true)
+  const [draft, setDraft] = useState<string>(seedKey ?? initialValue ?? "")
+  const errorId = useId()
+
+  // Hand focusRef back in useLayoutEffect so the framework's
+  // mount-focus call sees the assigned ref. useEffect is too late —
+  // child layout effects fire before parent layout effects, so the
+  // assignment lands before the framework reads focusRef.current.
+  useLayoutEffect(() => {
+    if (focusRef && triggerRef.current) {
+      ;(focusRef as { current: HTMLElement | null }).current = triggerRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
+    }
+  }, [focusRef])
+
+  const accessibleName =
+    typeof column.header === "string"
+      ? column.header
+      : (column.field ?? column.columnId ?? "")
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={pending}
+        aria-label={accessibleName}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="colour"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span aria-hidden style={{ background: draft, width: 14, height: 14 }} />
+        {draft || "Pick…"}
+      </button>
+
+      {open ? (
+        // The popover lives inside the same DOM subtree as the trigger,
+        // but if you portal to document.body apply
+        // data-bc-grid-editor-portal so the framework's click-outside
+        // path treats clicks inside the popover as part of the editor.
+        <div
+          role="dialog"
+          aria-label={\`\${accessibleName} colour picker\`}
+          data-bc-grid-editor-portal="true"
+          className="colour-popover"
+        >
+          {(palette?.swatches ?? defaultPalette).map((s) => (
+            <button
+              key={s.hex}
+              type="button"
+              aria-label={s.label}
+              onClick={() => {
+                setDraft(s.hex)
+                commit(s.hex)
+              }}
+              style={{ background: s.hex }}
+            />
+          ))}
+          <button type="button" onClick={cancel}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
+
+      {error ? (
+        <span id={errorId} className="visually-hidden">
+          {error}
+        </span>
+      ) : null}
+    </>
+  )
+}`
+
+const wireSnippet = `import { BcEditGrid, type BcGridColumn } from "@bc-grid/react"
+import { colourEditor } from "./colour-editor"
+
+const columns: BcGridColumn<Item>[] = [
+  { field: "name", header: "Name", flex: 1 },
+  {
+    field: "accent",
+    header: "Accent",
+    width: 160,
+    editable: true,
+    cellEditor: colourEditor,
+    // Optional: validate before the overlay updates. Returning
+    // { valid: false, error } keeps the editor open with the error
+    // surfaced via aria-invalid + the assertive live region.
+    validate: (value) =>
+      /^#[0-9a-f]{6}$/i.test(value)
+        ? { valid: true }
+        : { valid: false, error: "Pick a hex colour." },
+  },
+]`
+
+const commitSnippet = `<BcEditGrid<Item>
+  data={items}
+  columns={columns}
+  rowId={(row) => row.id}
+  onCellEditCommit={async (event) => {
+    // event.previousValue / nextValue are the typed colour strings.
+    // Returning a Promise marks the cell pending: true until it settles;
+    // throwing rolls back the overlay and surfaces an assertive error.
+    await api.updateAccent(event.rowId, event.nextValue as string)
+  }}
+/>`
+
+const checklist = [
+  "Factory exports a BcCellEditor with Component + optional prepare + optional kind discriminator.",
+  "Component attaches focusRef in useLayoutEffect (not useEffect) so the framework's mount-focus call lands.",
+  "Component sets aria-label from column.header so AT announces the column context.",
+  "Component sets aria-describedby pointing at a hidden span when error is present.",
+  "Component calls commit(value) exactly once on user confirmation, or cancel() to abort.",
+  "Component uses prepareResult when the editor needs async setup (palettes, options, etc.).",
+  "Popovered editors mark portaled content with data-bc-grid-editor-portal so click-outside doesn't fire inside the popover.",
+  "Column wires the editor via column.cellEditor; validate runs at commit before the overlay updates.",
+]
+---
+
+<DocsLayout
+  title="Custom editor recipe"
+  description="A worked colour-picker example walking the BcCellEditor factory contract end-to-end. Use this when you're shipping an editor not covered by the @bc-grid/editors built-ins."
+  active="editor-custom-recipe"
+>
+  <section class="section">
+    <h2>What you're building</h2>
+    <p>
+      A colour-picker cell editor that opens a popover, lets the user pick a swatch, and
+      commits the hex string. The recipe covers everything the framework cares about:
+      the factory shape, focus handoff, seed and prepare semantics, accessibility
+      contract, the portal-aware click-outside marker, and the consumer-side wiring with
+      <code>onCellEditCommit</code>.
+    </p>
+    <p>
+      Most consumers do not need this — the
+      <code>@bc-grid/editors</code> package ships built-ins for text, number, date,
+      datetime, time, select, multi-select, and autocomplete. Reach for a custom editor
+      when none of those fit (colour, file picker, mention chip, etc.).
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>1. The factory</h2>
+    <p>
+      A custom editor is a <code>BcCellEditor</code> object: a React component, an
+      optional <code>kind</code> discriminator, and an optional <code>prepare</code> hook.
+      The framework runs <code>prepare</code> once between activation and mount; whatever
+      it resolves to lands on the component as <code>props.prepareResult</code>.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>colour-editor.tsx</span>
+        <span>factory</span>
+      </div>
+      <Code code={factorySnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>2. The component</h2>
+    <p>
+      The framework gives the component an immutable snapshot of the cell
+      (<code>initialValue</code>, <code>row</code>, <code>column</code>) plus four
+      activation-aware props (<code>seedKey</code>, <code>pointerHint</code>,
+      <code>prepareResult</code>, <code>pending</code>) and two callbacks
+      (<code>commit</code>, <code>cancel</code>). Three details are easy to miss:
+    </p>
+    <ul>
+      <li>
+        <strong>focusRef in <code>useLayoutEffect</code></strong>. React commits child
+        layout effects before parent layout effects. The framework reads
+        <code>focusRef.current</code> in <em>its</em> useLayoutEffect to call
+        <code>focus()</code>; if you assign in <code>useEffect</code> the ref is still
+        <code>null</code> at that point and the input never receives DOM focus.
+      </li>
+      <li>
+        <strong>aria-label from <code>column.header</code></strong>. The editor input owns
+        DOM focus while editing, so AT announces it directly. Without an explicit name AT
+        falls back to "edit text" with no column context.
+      </li>
+      <li>
+        <strong>aria-describedby for errors</strong>. Pair with a visually-hidden span
+        keyed by <code>useId()</code> so the validator's error message reaches AT
+        regardless of whether focus is on the cell or the input.
+      </li>
+    </ul>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>colour-editor.tsx</span>
+        <span>component</span>
+      </div>
+      <Code code={componentSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>3. Portal-aware click-outside</h2>
+    <p>
+      The framework commits the current value on any document-level
+      <code>pointerdown</code> outside the editor. If your editor renders a popover into a
+      React portal — typical for date pickers, select menus, autocomplete dropdowns,
+      anything that escapes the cell's overflow box — clicks inside that popover would
+      otherwise look like "outside the editor" and trigger a premature commit.
+    </p>
+    <p>
+      Mark the portaled content with <code>data-bc-grid-editor-portal</code>. The
+      framework's click-outside handler walks <code>closest('[data-bc-grid-editor-root],
+      [data-bc-grid-editor-portal]')</code> on the click target and ignores any match.
+      The wrapper that hosts the editor's primary input already carries
+      <code>data-bc-grid-editor-root</code>; you only need the portal marker on
+      content rendered outside that wrapper.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>4. Wiring into a column</h2>
+    <p>
+      Attach the factory via <code>column.cellEditor</code>. <code>validate</code> runs
+      after <code>valueParser</code> (string editors only) and before the overlay
+      updates. Sync returns <code>BcValidationResult</code>; async returns
+      <code>Promise&lt;BcValidationResult&gt;</code> with an optional
+      <code>AbortSignal</code> 3rd arg for cancellation.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>columns.ts</span>
+        <span>wire-up</span>
+      </div>
+      <Code code={wireSnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>5. Consumer-side commit</h2>
+    <p>
+      <code>onCellEditCommit</code> fires after the optimistic overlay update lands.
+      Returning a Promise marks the cell <code>pending: true</code> until it settles; on
+      rejection the framework rolls back the overlay and surfaces an assertive
+      announcement. Multiple cells can have <code>pending: true</code> concurrently — the
+      framework does not serialise.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>commit</span>
+      </div>
+      <Code code={commitSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Checklist</h2>
+    <ul>
+      {checklist.map((item) => <li>{item}</li>)}
+    </ul>
+  </section>
+</DocsLayout>
