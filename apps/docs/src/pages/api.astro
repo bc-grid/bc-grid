@@ -49,7 +49,7 @@ const components = [
   [
     "BcGrid",
     "implemented",
-    "Read-only React grid: virtual rows and columns, pinned columns, keyboard focus, basic sort, column resize, inline text filters, slots, loading/no-rows overlays, and imperative API wiring.",
+    "Read-only React grid: virtual rows and columns, pinned columns, keyboard focus, basic sort, column resize, built-in filters, slots, loading/no-rows overlays, and imperative API wiring.",
   ],
   [
     "BcEditGrid",
@@ -161,7 +161,7 @@ const events = [
     "onFilterChange",
     "(next, prev) => void",
     "partial",
-    "Inline text filters emit BcGridFilter. Fully controlled external filter application is still being tightened.",
+    "Built-in text/number/date/set/boolean filters emit BcGridFilter. Fully controlled external filter application is still being tightened.",
   ],
   [
     "onSelectionChange",
@@ -207,7 +207,7 @@ const statePairs = [
     "filter/defaultFilter",
     "BcGridFilter",
     "partial",
-    "Used by inline text filters; full filter UI and custom filter registry are Q2.",
+    "Used by built-in text/number/date/set/boolean filters; custom filter registry is Q2.",
   ],
   [
     "selection/defaultSelection",
@@ -269,7 +269,7 @@ const columnProps = [
     "filter",
     "BcColumnFilter | false",
     "partial",
-    "Text inline filters are implemented; number/date/set/boolean/custom UIs are reserved.",
+    "Text, number, date, set, and boolean inline/popup filters are implemented; custom UIs are reserved.",
   ],
   ["groupable", "boolean", "reserved", "Reserved Q2 group-by UI."],
   ["comparator", "(a, b, rowA, rowB) => number", "implemented", "Custom sort comparator."],
