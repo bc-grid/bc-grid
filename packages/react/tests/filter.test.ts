@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test"
 import type { ColumnId } from "@bc-grid/core"
 import {
   buildGridFilter,
+  decodeNumberRangeFilterInput,
   encodeDateFilterInput,
   encodeNumberFilterInput,
+  encodeNumberRangeFilterInput,
   matchesGridFilter,
 } from "../src/filter"
 
@@ -97,6 +99,57 @@ describe("buildGridFilter", () => {
     ).toBeNull()
   })
 
+  test("number-range inputs produce a between ServerColumnFilter with normalized min/max", () => {
+    expect(
+      buildGridFilter(
+        { balance: encodeNumberRangeFilterInput({ value: "2500", valueTo: "1000" }) },
+        { balance: "number-range" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "balance",
+      type: "number-range",
+      op: "between",
+      values: [1000, 2500],
+    })
+  })
+
+  test("number-range with both bounds equal narrows to a single value", () => {
+    expect(
+      buildGridFilter(
+        { balance: encodeNumberRangeFilterInput({ value: "1500", valueTo: "1500" }) },
+        { balance: "number-range" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "balance",
+      type: "number-range",
+      op: "between",
+      values: [1500, 1500],
+    })
+  })
+
+  test("incomplete number-range inputs do not activate a filter", () => {
+    expect(
+      buildGridFilter(
+        { balance: encodeNumberRangeFilterInput({ value: "1000", valueTo: "" }) },
+        { balance: "number-range" },
+      ),
+    ).toBeNull()
+    expect(
+      buildGridFilter(
+        { balance: encodeNumberRangeFilterInput({ value: "", valueTo: "1000" }) },
+        { balance: "number-range" },
+      ),
+    ).toBeNull()
+    expect(
+      buildGridFilter(
+        { balance: encodeNumberRangeFilterInput({ value: "abc", valueTo: "1000" }) },
+        { balance: "number-range" },
+      ),
+    ).toBeNull()
+  })
+
   test("date inputs produce date ServerColumnFilter objects", () => {
     expect(
       buildGridFilter(
@@ -155,6 +208,30 @@ describe("buildGridFilter", () => {
     } else {
       throw new Error("expected column filter")
     }
+  })
+})
+
+describe("encodeNumberRangeFilterInput / decodeNumberRangeFilterInput", () => {
+  test("round-trips empty input", () => {
+    expect(
+      decodeNumberRangeFilterInput(encodeNumberRangeFilterInput({ value: "", valueTo: "" })),
+    ).toEqual({ value: "", valueTo: "" })
+  })
+
+  test("round-trips populated input", () => {
+    const input = { value: "100", valueTo: "200" }
+    expect(decodeNumberRangeFilterInput(encodeNumberRangeFilterInput(input))).toEqual(input)
+  })
+
+  test("falls back to empty input on malformed JSON", () => {
+    expect(decodeNumberRangeFilterInput("not json")).toEqual({ value: "", valueTo: "" })
+  })
+
+  test("normalises non-string fields to empty strings", () => {
+    expect(decodeNumberRangeFilterInput(JSON.stringify({ value: 123, valueTo: null }))).toEqual({
+      value: "",
+      valueTo: "",
+    })
   })
 })
 
@@ -226,6 +303,20 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(gtFilter, lookup({ balance: "$950" }))).toBe(false)
     expect(matchesGridFilter(betweenFilter, lookup({ balance: "$2,500" }))).toBe(true)
     expect(matchesGridFilter(betweenFilter, lookup({ balance: "$2,501" }))).toBe(false)
+  })
+
+  test("number-range filters apply inclusive between semantics", () => {
+    const filter = buildGridFilter(
+      { balance: encodeNumberRangeFilterInput({ value: "1000", valueTo: "2500" }) },
+      { balance: "number-range" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(matchesGridFilter(filter, lookup({ balance: "$1,000" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ balance: "$1,750" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ balance: "$2,500" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ balance: "$999" }))).toBe(false)
+    expect(matchesGridFilter(filter, lookup({ balance: "$2,501" }))).toBe(false)
   })
 
   test("date filters compare formatted date values", () => {

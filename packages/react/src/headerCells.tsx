@@ -14,8 +14,10 @@ import {
   type NumberFilterOperator,
   decodeDateFilterInput,
   decodeNumberFilterInput,
+  decodeNumberRangeFilterInput,
   encodeDateFilterInput,
   encodeNumberFilterInput,
+  encodeNumberRangeFilterInput,
 } from "./filter"
 import {
   type ResolvedColumn,
@@ -506,6 +508,17 @@ export function FilterEditorBody({
       />
     )
   }
+  if (filterType === "number-range") {
+    return (
+      <NumberRangeFilterControl
+        filterId={filterId}
+        filterLabel={filterLabel}
+        filterText={filterText}
+        onFilterChange={onFilterChange}
+        primaryRef={focusRef}
+      />
+    )
+  }
   if (filterType === "date") {
     return (
       <DateFilterControl
@@ -716,6 +729,64 @@ function NumberFilterControl({
           placeholder="Max"
         />
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * Two-input min/max filter for `BcColumnFilter.type === "number-range"`.
+ * Convenience over the `number` filter's `between` operator: no operator
+ * dropdown, two `inputMode="decimal"` fields separated by an em-dash.
+ * Per `filter-registry-rfc §number-range`.
+ */
+function NumberRangeFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+  primaryRef,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+  primaryRef?: { current: HTMLInputElement | HTMLSelectElement | null }
+}): ReactNode {
+  const input = decodeNumberRangeFilterInput(filterText)
+  const update = (next: Partial<typeof input>) => {
+    const merged = { ...input, ...next }
+    onFilterChange(encodeNumberRangeFilterInput(merged))
+  }
+
+  return (
+    <div className="bc-grid-filter-number-range">
+      <input
+        ref={(el) => {
+          if (primaryRef) primaryRef.current = el
+        }}
+        aria-label={`${filterLabel} minimum`}
+        className="bc-grid-filter-input"
+        id={filterId}
+        type="number"
+        inputMode="decimal"
+        value={input.value}
+        onChange={(event) => update({ value: event.currentTarget.value })}
+        onKeyDown={(event) => event.stopPropagation()}
+        placeholder="Min"
+      />
+      <span aria-hidden="true" className="bc-grid-filter-number-range-separator">
+        —
+      </span>
+      <input
+        aria-label={`${filterLabel} maximum`}
+        className="bc-grid-filter-input"
+        type="number"
+        inputMode="decimal"
+        value={input.valueTo}
+        onChange={(event) => update({ valueTo: event.currentTarget.value })}
+        onKeyDown={(event) => event.stopPropagation()}
+        placeholder="Max"
+      />
     </div>
   )
 }
