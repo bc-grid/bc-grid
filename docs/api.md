@@ -669,7 +669,7 @@ export interface BcFilterEditorProps<TValue = unknown> {
 
   // Layout
   density="normal"   // "compact" | "normal" | "comfortable"
-  height="auto"      // "auto" | number (px) — default fills available
+  height="auto"      // "auto" → page-flow; number → fixed scroller; undefined → fills parent flex
 
   // State (controlled)
   sort={sort} onSortChange={setSort}
@@ -767,6 +767,25 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   // Layout
   density?: "compact" | "normal" | "comfortable"
+  /**
+   * `number` — the grid root takes that pixel height; the body scroller
+   *   owns its own scrollbar and rows virtualize against it. The right
+   *   default for in-page lookup tables, modal pickers, and any grid
+   *   that should never push surrounding chrome off-screen.
+   * `"auto"` — page-flow mode. The grid grows to its rendered canvas
+   *   height and gives the scrollbar back to the document; the page
+   *   scrolls naturally through the rows. The header sticks to the top
+   *   of the viewport via `position: sticky`, while the body scroller
+   *   still owns horizontal overflow so wide tables keep a standard
+   *   horizontal scrollbar. This is the right default when the grid is
+   *   the primary surface on a long-form page.
+   *   Trade-off: virtualization no longer windows on row scroll — the
+   *   ResizeObserver expands the virtualizer's viewport to the full
+   *   canvas height, so every row is in the DOM. Use a numeric height
+   *   for datasets where row-level virtualization matters.
+   * `undefined` (default) — the scroller fills whatever flex space its
+   *   parent gives it, with internal vertical scroll.
+   */
   height?: "auto" | number
   rowHeight?: number   // override the density default
 
