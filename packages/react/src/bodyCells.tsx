@@ -129,7 +129,9 @@ export function renderBodyCell<TRow>({
       >
         {column.source.cellRenderer
           ? column.source.cellRenderer(params)
-          : highlightSearchText(formattedValue, searchText)}
+          : searchText
+            ? highlightSearchText(formattedValue, searchText)
+            : formattedValue}
       </div>
     </BcGridTooltip>
   )

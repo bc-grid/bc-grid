@@ -281,7 +281,7 @@ export const apiSurfaceManifest = [
     mode: "enforced",
     runtimeExports: ["toCsv", "toExcel", "toPdf"],
     declarationExports: ["ExportOptions", "ExportResult", "toCsv", "toExcel", "toPdf"],
-    note: "CSV is implemented for Q1; XLSX and PDF exports are reserved stubs until their follow-up tasks.",
+    note: "All three serializers implemented as of #75/#77. XLSX uses ExcelJS peer-dep, PDF uses jsPDF peer-dep.",
   },
   {
     packageName: "@bc-grid/server-row-model",
