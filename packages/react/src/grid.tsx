@@ -1130,15 +1130,46 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       />
     ) : null)
 
-  // While editing, the editor input owns DOM focus; aria-activedescendant
-  // is suspended (set to "") so AT doesn't try to point at a cell that's
-  // now hosting an `<input>`. Per `editing-rfc §a11y for edit mode`.
+  // While the editor input owns DOM focus, aria-activedescendant is
+  // suspended (set to "") so AT doesn't try to point at a cell that's now
+  // hosting an `<input>`. Once committing/cancelling starts, the editor DOM
+  // is gone and the grid root should expose the active cell again.
   const editingCell =
-    editController.editState.mode === "navigation" ? null : editController.editState.cell
-  const activeCellId = editingCell
+    editController.editState.mode === "mounting" ||
+    editController.editState.mode === "editing" ||
+    editController.editState.mode === "validating"
+      ? editController.editState.cell
+      : null
+  const editorOwnsFocus = editingCell !== null
+  const pendingEditNavigationCell = useMemo<BcCellPosition | null>(() => {
+    const editState = editController.editState
+    if (editState.mode !== "committing" && editState.mode !== "unmounting") return null
+    const cell = editState.cell
+    const rowIndex = rowIndexById.get(cell.rowId)
+    const colIndex = columnIndexById.get(cell.columnId)
+    if (rowIndex == null || colIndex == null) return null
+
+    const move = editState.mode === "committing" ? editState.moveOnSettle : editState.next.move
+    const lastRow = rowEntries.length - 1
+    const lastCol = resolvedColumns.length - 1
+    const { row: nextRow, col: nextCol } = nextActiveCellAfterEdit(
+      rowIndex,
+      colIndex,
+      lastRow,
+      lastCol,
+      move,
+    )
+    const targetRow = rowEntries[nextRow]
+    const targetCol =
+      targetRow && isDataRowEntry(targetRow) ? resolvedColumns[nextCol] : resolvedColumns[0]
+    if (!targetRow || !targetCol) return null
+    return { rowId: targetRow.rowId, columnId: targetCol.columnId }
+  }, [columnIndexById, editController.editState, resolvedColumns, rowEntries, rowIndexById])
+  const activeDescendantCell = pendingEditNavigationCell ?? activeCell
+  const activeCellId = editorOwnsFocus
     ? ""
-    : activeCell
-      ? cellDomId(domBaseId, activeCell.rowId, activeCell.columnId)
+    : activeDescendantCell
+      ? cellDomId(domBaseId, activeDescendantCell.rowId, activeDescendantCell.columnId)
       : undefined
 
   const rootHeight = typeof height === "number" ? height : undefined

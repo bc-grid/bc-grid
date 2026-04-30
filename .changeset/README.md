@@ -19,6 +19,13 @@ The result is a markdown file in `.changeset/` like `pretty-words-quack.md`. **C
 
 ### When you cut a release
 
+For alpha prereleases, enter Changesets prerelease mode before versioning
+(skip this if `.changeset/pre.json` already exists):
+
+```bash
+bunx changeset pre enter alpha
+```
+
 ```bash
 bun run changeset:version
 ```
@@ -31,6 +38,8 @@ git push --tags
 ```
 
 The tag push triggers `.github/workflows/release.yml`, which runs the full quality gate then `bun publish` for each package against GitHub Packages.
+
+When leaving alpha prerelease mode for a stable release, run `bunx changeset pre exit` before the final `bun run changeset:version`.
 
 ## Why fixed-version mode
 
