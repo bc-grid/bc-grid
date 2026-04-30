@@ -358,6 +358,20 @@ function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {
   if (focusRefCurrent instanceof HTMLTextAreaElement) return focusRefCurrent.value
   if (focusRefCurrent instanceof HTMLSelectElement) {
     const typedValues = (focusRefCurrent as BcGridSelectElement)[bcGridSelectOptionValuesKey]
+    if (focusRefCurrent.multiple) {
+      // Per `editing-rfc §editor-multi-select`: iterate every selected
+      // option and map each to the typed value via the option-keyed
+      // lookup that the editor populated. Returning a typed array bypasses
+      // `column.valueParser` (typed editor) — same contract as `select`.
+      const selectedOptions = Array.from(focusRefCurrent.selectedOptions)
+      if (typedValues) {
+        return selectedOptions.map((option) => {
+          const idx = option.index
+          return idx >= 0 && idx < typedValues.length ? typedValues[idx] : option.value
+        })
+      }
+      return selectedOptions.map((option) => option.value)
+    }
     const selectedIndex = focusRefCurrent.selectedIndex
     if (typedValues && selectedIndex >= 0 && selectedIndex < typedValues.length) {
       return typedValues[selectedIndex]

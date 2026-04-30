@@ -1,5 +1,7 @@
 export type CustomerStatus = "Open" | "Credit Hold" | "Past Due" | "Disputed"
 
+export type CustomerFlag = "high-volume" | "international" | "tax-exempt" | "manual-review" | "vip"
+
 export interface CustomerRow {
   id: string
   account: string
@@ -31,6 +33,12 @@ export interface CustomerRow {
    * Used by the editor-datetime demo + e2e.
    */
   nextScheduledCall: string
+  /**
+   * Customer flags — many-of-many tags an AR clerk would attach to a
+   * customer record (high-volume, tax-exempt, vip, etc.). Realistic
+   * multi-select field. Used by the editor-multi-select demo + e2e.
+   */
+  flags: readonly CustomerFlag[]
 }
 
 const customerNames = [
@@ -66,6 +74,28 @@ const owners = [
 const statuses: CustomerStatus[] = ["Open", "Credit Hold", "Past Due", "Disputed"]
 const regions: CustomerRow["region"][] = ["Northeast", "Midwest", "South", "West", "International"]
 const terms: CustomerRow["terms"][] = ["Net 15", "Net 30", "Net 45", "Net 60"]
+
+const ALL_CUSTOMER_FLAGS: readonly CustomerFlag[] = [
+  "high-volume",
+  "international",
+  "tax-exempt",
+  "manual-review",
+  "vip",
+]
+
+function customerFlagsForIndex(index: number): readonly CustomerFlag[] {
+  const mod = index % 6
+  if (mod === 0) return []
+  if (mod === 1) return [ALL_CUSTOMER_FLAGS[0] as CustomerFlag]
+  if (mod === 2) return [ALL_CUSTOMER_FLAGS[1] as CustomerFlag]
+  if (mod === 3) {
+    return [ALL_CUSTOMER_FLAGS[0] as CustomerFlag, ALL_CUSTOMER_FLAGS[2] as CustomerFlag]
+  }
+  if (mod === 4) {
+    return [ALL_CUSTOMER_FLAGS[3] as CustomerFlag, ALL_CUSTOMER_FLAGS[4] as CustomerFlag]
+  }
+  return [ALL_CUSTOMER_FLAGS[1] as CustomerFlag, ALL_CUSTOMER_FLAGS[4] as CustomerFlag]
+}
 
 export const customerRows = createCustomerRows(5000)
 
@@ -146,6 +176,10 @@ function createCustomerRows(count: number): CustomerRow[] {
           "0",
         )}:${String(minute).padStart(2, "0")}`
       })(),
+      // Flags derived from `index` (NOT the seeded RNG) so this column
+      // doesn't shift seeded values used by other columns. Mix of empty,
+      // 1-flag, and 2-flag rows for the editor-multi-select demo + e2e.
+      flags: customerFlagsForIndex(index),
     }
   })
 }
