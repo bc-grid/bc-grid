@@ -9,6 +9,11 @@
   --bc-grid-row-selected-fg: var(--bc-grid-fg);
   --bc-grid-header-bg: hsl(var(--muted, 210 40% 96%));
   --bc-grid-header-fg: hsl(var(--muted-foreground, 215 16% 47%));
+  --bc-grid-column-separator: color-mix(
+    in srgb,
+    var(--bc-grid-border) 72%,
+    var(--bc-grid-header-fg) 28%
+  );
   --bc-grid-focus-ring: hsl(var(--ring, 221 83% 53%));
   --bc-grid-invalid: hsl(var(--destructive, 0 84% 60%));
   --bc-grid-dirty: hsl(37 92% 50%);
@@ -162,6 +167,25 @@
 
 .bc-grid-header .bc-grid-cell {
   background: var(--bc-grid-header-bg);
+}
+
+.bc-grid-header-cell::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 0;
+  width: 1px;
+  height: calc(100% - 16px);
+  background: var(--bc-grid-column-separator);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.bc-grid-header-cell:hover::after,
+.bc-grid-header-cell:focus-within::after {
+  width: 2px;
+  background: var(--bc-grid-focus-ring);
+  opacity: 1;
 }
 
 .bc-grid-header-menu-button {
@@ -1117,6 +1141,7 @@
     --bc-grid-row-selected-fg: HighlightText;
     --bc-grid-header-bg: Canvas;
     --bc-grid-header-fg: CanvasText;
+    --bc-grid-column-separator: CanvasText;
     --bc-grid-focus-ring: Highlight;
     --bc-grid-invalid: ButtonText;
     --bc-grid-dirty: ButtonText;
