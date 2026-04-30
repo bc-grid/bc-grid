@@ -542,6 +542,115 @@
   padding-inline: 0.0625rem;
 }
 
+.bc-grid-main {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.bc-grid-table {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.bc-grid-sidebar {
+  --bc-grid-sidebar-width: 280px;
+  --bc-grid-sidebar-rail-width: 40px;
+  --bc-grid-sidebar-bg: var(--bc-grid-bg);
+  --bc-grid-sidebar-border: var(--bc-grid-border);
+
+  display: flex;
+  width: var(--bc-grid-sidebar-rail-width);
+  flex: 0 0 auto;
+  border-left: 1px solid var(--bc-grid-sidebar-border);
+  background: var(--bc-grid-sidebar-bg);
+  color: var(--bc-grid-fg);
+  overflow: hidden;
+  transition: width 140ms ease-out;
+}
+
+.bc-grid-sidebar[data-state="open"] {
+  width: calc(var(--bc-grid-sidebar-width) + var(--bc-grid-sidebar-rail-width));
+}
+
+.bc-grid-sidebar-rail {
+  display: flex;
+  width: var(--bc-grid-sidebar-rail-width);
+  flex: 0 0 var(--bc-grid-sidebar-rail-width);
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  border-left: 1px solid transparent;
+  background: var(--bc-grid-muted);
+  padding: 0.375rem 0.25rem;
+}
+
+.bc-grid-sidebar-tab {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: var(--bc-grid-muted-fg);
+  cursor: pointer;
+  padding: 0;
+}
+
+.bc-grid-sidebar-tab:hover,
+.bc-grid-sidebar-tab:focus-visible {
+  border-color: var(--bc-grid-border);
+  background: var(--bc-grid-row-hover);
+  color: var(--bc-grid-fg);
+  outline: none;
+}
+
+.bc-grid-sidebar-tab[data-state="open"] {
+  border-color: var(--bc-grid-focus-ring);
+  background: var(--bc-grid-bg);
+  color: var(--bc-grid-fg);
+}
+
+.bc-grid-sidebar-tab-icon,
+.bc-grid-sidebar-icon {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+}
+
+.bc-grid-sidebar-panel {
+  width: var(--bc-grid-sidebar-width);
+  min-width: 0;
+  flex: 0 0 var(--bc-grid-sidebar-width);
+  border-left: 1px solid var(--bc-grid-sidebar-border);
+  background: var(--bc-grid-sidebar-bg);
+  color: var(--bc-grid-fg);
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+.bc-grid-sidebar-panel:focus-visible {
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: -2px;
+}
+
+.bc-grid-sidebar-panel-slot {
+  min-width: 0;
+}
+
+.bc-grid-sidebar-panel-title {
+  margin: 0;
+  color: var(--bc-grid-fg);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
 .bc-grid-tree-cell {
   display: inline-flex;
   align-items: center;
@@ -802,7 +911,8 @@
 
   .bc-grid-cell [role="button"],
   .bc-grid-cell button,
-  .bc-grid-cell a {
+  .bc-grid-cell a,
+  .bc-grid-sidebar-tab {
     min-width: var(--bc-grid-hit-target-min);
     min-height: var(--bc-grid-hit-target-min);
   }
@@ -831,6 +941,8 @@
     --bc-grid-status-posted-fg: CanvasText;
     --bc-grid-status-held-bg: Canvas;
     --bc-grid-status-held-fg: CanvasText;
+    --bc-grid-sidebar-bg: Canvas;
+    --bc-grid-sidebar-border: CanvasText;
     --bc-grid-statusbar-bg: Canvas;
     --bc-grid-statusbar-fg: CanvasText;
     --bc-grid-statusbar-border-top: CanvasText;
@@ -839,7 +951,9 @@
   .bc-grid,
   .bc-grid-header,
   .bc-grid-row,
-  .bc-grid-cell {
+  .bc-grid-cell,
+  .bc-grid-sidebar,
+  .bc-grid-sidebar-panel {
     border-color: CanvasText;
   }
 

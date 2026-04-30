@@ -460,6 +460,7 @@ export function assertNoMixedControlledProps<TRow>(props: BcGridProps<TRow>): vo
     ["activeCell", "defaultActiveCell"],
     ["page", "defaultPage"],
     ["pageSize", "defaultPageSize"],
+    ["sidebarPanel", "defaultSidebarPanel"],
   ]
 
   for (const [controlled, uncontrolled] of pairs) {
