@@ -1,4 +1,10 @@
-import type { BcGridFilter, ColumnId, ServerColumnFilter, ServerFilter } from "@bc-grid/core"
+import type {
+  BcColumnFilter,
+  BcGridFilter,
+  ColumnId,
+  ServerColumnFilter,
+  ServerFilter,
+} from "@bc-grid/core"
 
 /**
  * Internal column-filter state held by `<BcGrid>`. One entry per column
@@ -9,6 +15,7 @@ import type { BcGridFilter, ColumnId, ServerColumnFilter, ServerFilter } from "@
  * testable without a DOM.
  */
 export type ColumnFilterText = Readonly<Record<ColumnId, string>>
+export type ColumnFilterTypeByColumnId = Readonly<Record<ColumnId, BcColumnFilter["type"]>>
 
 /**
  * Convert per-column text inputs into the canonical `BcGridFilter`
@@ -21,11 +28,20 @@ export type ColumnFilterText = Readonly<Record<ColumnId, string>>
  * label is informative; the runtime matcher (`matchesColumnFilter`)
  * owns the actual semantics.
  */
-export function buildGridFilter(text: ColumnFilterText): BcGridFilter | null {
+export function buildGridFilter(
+  text: ColumnFilterText,
+  filterTypes: ColumnFilterTypeByColumnId = {},
+): BcGridFilter | null {
   const filters: ServerColumnFilter[] = []
   for (const [columnId, raw] of Object.entries(text)) {
     const value = raw.trim()
     if (value.length === 0) continue
+    const filterType = filterTypes[columnId] ?? "text"
+    if (filterType === "boolean") {
+      if (value !== "true" && value !== "false") continue
+      filters.push({ kind: "column", columnId, type: "boolean", op: "is", value: value === "true" })
+      continue
+    }
     filters.push({ kind: "column", columnId, type: "text", op: "contains", value })
   }
   if (filters.length === 0) return null
@@ -39,6 +55,11 @@ export function buildGridFilter(text: ColumnFilterText): BcGridFilter | null {
  * through to "no match" (Q2 will fill them in).
  */
 function matchesColumnFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
+  if (filter.type === "boolean") {
+    if (filter.op !== "is") return false
+    const actual = parseFormattedBoolean(formattedValue)
+    return actual != null && actual === Boolean(filter.value)
+  }
   if (filter.type !== "text") return false
   if (filter.op !== "contains") return false
   const needle = String(filter.value ?? "").toLowerCase()
@@ -67,4 +88,11 @@ export function matchesGridFilter(
   return filter.filters.some((child: ServerFilter) =>
     matchesGridFilter(child, formattedValueByColumnId),
   )
+}
+
+function parseFormattedBoolean(value: string): boolean | null {
+  const normalised = value.trim().toLowerCase()
+  if (normalised === "yes" || normalised === "true" || normalised === "1") return true
+  if (normalised === "no" || normalised === "false" || normalised === "0") return false
+  return null
 }

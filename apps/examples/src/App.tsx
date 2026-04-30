@@ -179,6 +179,17 @@ function CustomerGridDemo({
         filter: { type: "text" },
       },
       {
+        columnId: "creditHold",
+        header: "Credit Hold?",
+        align: "center",
+        width: 128,
+        format: "boolean",
+        filter: { type: "boolean" },
+        valueGetter(row) {
+          return row.status === "Credit Hold"
+        },
+      },
+      {
         columnId: "creditLimit",
         field: "creditLimit",
         header: "Credit Limit",
