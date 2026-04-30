@@ -71,6 +71,7 @@ export interface BcRowState {
   rowId: RowId
   index: number
   selected: boolean
+  disabled?: boolean
   expanded?: boolean
   level?: number
   pending?: boolean

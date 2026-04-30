@@ -51,6 +51,10 @@ export interface BcGridMessages {
   selectionClearedAnnounce: () => string
 }
 
+export interface BcGridUrlStatePersistence {
+  searchParam: string
+}
+
 export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
   BcCoreGridColumn<TRow, TValue>,
   "header"
@@ -95,6 +99,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   showInactive?: boolean
   onShowInactiveChange?: (next: boolean) => void
   rowIsInactive?: (row: TRow) => boolean
+  rowIsDisabled?: (row: TRow) => boolean
 
   toolbar?: ReactNode
   footer?: ReactNode
@@ -108,6 +113,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   locale?: string
   messages?: Partial<BcGridMessages>
+  urlStatePersistence?: BcGridUrlStatePersistence
 
   loading?: boolean
   loadingOverlay?: ReactNode

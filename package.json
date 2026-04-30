@@ -17,10 +17,14 @@
     "type-check:watch": "tsc -b --watch",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "bench": "bun run --filter './apps/benchmarks' bench"
+    "bench": "bun run --filter './apps/benchmarks' bench",
+    "changeset": "changeset",
+    "changeset:version": "changeset version && bun install --lockfile-only",
+    "publish:packages": "for pkg in packages/*/; do (cd \"$pkg\" && bun publish); done"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@changesets/cli": "^2.31.0",
     "@playwright/test": "^1.59.1",
     "@types/node": "^22.0.0",
     "tsup": "^8.3.5",

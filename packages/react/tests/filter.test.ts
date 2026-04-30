@@ -32,6 +32,27 @@ describe("buildGridFilter", () => {
     }
   })
 
+  test("boolean inputs produce boolean ServerColumnFilter objects", () => {
+    expect(buildGridFilter({ creditHold: "true" }, { creditHold: "boolean" })).toEqual({
+      kind: "column",
+      columnId: "creditHold",
+      type: "boolean",
+      op: "is",
+      value: true,
+    })
+    expect(buildGridFilter({ creditHold: "false" }, { creditHold: "boolean" })).toEqual({
+      kind: "column",
+      columnId: "creditHold",
+      type: "boolean",
+      op: "is",
+      value: false,
+    })
+  })
+
+  test("empty boolean input means any value", () => {
+    expect(buildGridFilter({ creditHold: "" }, { creditHold: "boolean" })).toBeNull()
+  })
+
   test("trims trailing/leading whitespace on values", () => {
     const result = buildGridFilter({ name: "  John  " })
     if (result?.kind === "column") {
@@ -82,6 +103,17 @@ describe("matchesGridFilter — column", () => {
       value: 1000,
     }
     expect(matchesGridFilter(filter, lookup({ balance: "$5,000" }))).toBe(false)
+  })
+
+  test("boolean filters match formatted yes/no values", () => {
+    const yesFilter = buildGridFilter({ creditHold: "true" }, { creditHold: "boolean" })
+    const noFilter = buildGridFilter({ creditHold: "false" }, { creditHold: "boolean" })
+    if (!yesFilter || !noFilter) throw new Error("expected filters")
+
+    expect(matchesGridFilter(yesFilter, lookup({ creditHold: "Yes" }))).toBe(true)
+    expect(matchesGridFilter(yesFilter, lookup({ creditHold: "No" }))).toBe(false)
+    expect(matchesGridFilter(noFilter, lookup({ creditHold: "No" }))).toBe(true)
+    expect(matchesGridFilter(noFilter, lookup({ creditHold: "Yes" }))).toBe(false)
   })
 
   test("unknown op is rejected (Q2 follow-up)", () => {

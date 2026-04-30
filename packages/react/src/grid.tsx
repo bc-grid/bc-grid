@@ -1,5 +1,6 @@
 import type {
   BcCellPosition,
+  BcColumnFilter,
   BcColumnStateEntry,
   BcGridApi,
   BcGridFilter,
@@ -24,7 +25,12 @@ import {
 } from "react"
 import { renderBodyCell } from "./bodyCells"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
-import { type ColumnFilterText, buildGridFilter, matchesGridFilter } from "./filter"
+import {
+  type ColumnFilterText,
+  type ColumnFilterTypeByColumnId,
+  buildGridFilter,
+  matchesGridFilter,
+} from "./filter"
 import {
   DEFAULT_BODY_HEIGHT,
   DEFAULT_COL_WIDTH,
@@ -59,7 +65,12 @@ import {
 } from "./gridInternals"
 import { type SortModifiers, renderFilterCell, renderHeaderCell } from "./headerCells"
 import { nextKeyboardNav } from "./keyboard"
-import { readPersistedGridState, usePersistedGridStateWriter } from "./persistence"
+import {
+  readPersistedGridState,
+  readUrlPersistedGridState,
+  usePersistedGridStateWriter,
+  useUrlPersistedGridStateWriter,
+} from "./persistence"
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
@@ -83,6 +94,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     height,
     rowHeight,
     rowIsInactive,
+    rowIsDisabled,
     locale,
     toolbar,
     footer,
@@ -98,6 +110,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   const messages = useMemo(() => ({ ...defaultMessages, ...props.messages }), [props.messages])
   const persistedGridState = useMemo(() => readPersistedGridState(props.gridId), [props.gridId])
+  const urlPersistedGridState = useMemo(
+    () => readUrlPersistedGridState(props.urlStatePersistence),
+    [props.urlStatePersistence],
+  )
   const density = props.density ?? persistedGridState.density ?? "normal"
   const instanceId = useId()
   const domBaseId = useMemo(
@@ -122,11 +138,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     scrollOffsetRef.current = next
     setScrollOffset(next)
   }, [])
+  const isRowDisabled = useCallback((row: TRow) => rowIsDisabled?.(row) ?? false, [rowIsDisabled])
 
   const [sortState, setSortState] = useControlledState<readonly BcGridSort[]>(
     hasProp(props, "sort"),
     props.sort ?? [],
-    props.defaultSort ?? [],
+    props.defaultSort ?? urlPersistedGridState.sort ?? [],
     props.onSortChange,
   )
   const [, setFilterState] = useControlledState<BcGridFilter | null>(
@@ -159,7 +176,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
     props.columnState ?? [],
-    props.defaultColumnState ?? persistedGridState.columnState ?? [],
+    props.defaultColumnState ??
+      urlPersistedGridState.columnState ??
+      persistedGridState.columnState ??
+      [],
     props.onColumnStateChange,
   )
   const [groupByState] = useControlledState<readonly ColumnId[]>(
@@ -207,8 +227,28 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [density, groupByState, pageSizeState, persistedColumnState],
   )
   usePersistedGridStateWriter(props.gridId, persistenceState)
+  const urlPersistenceState = useMemo(
+    () => ({
+      columnState: persistedColumnState,
+      sort: sortState,
+    }),
+    [persistedColumnState, sortState],
+  )
+  useUrlPersistedGridStateWriter(props.urlStatePersistence, urlPersistenceState)
 
-  const activeFilter = useMemo(() => buildGridFilter(columnFilterText), [columnFilterText])
+  const columnFilterTypes = useMemo<ColumnFilterTypeByColumnId>(() => {
+    const next: Record<ColumnId, BcColumnFilter["type"]> = {}
+    for (const column of consumerResolvedColumns) {
+      const filter = column.source.filter
+      if (filter) next[column.columnId] = filter.type
+    }
+    return next
+  }, [consumerResolvedColumns])
+
+  const activeFilter = useMemo(
+    () => buildGridFilter(columnFilterText, columnFilterTypes),
+    [columnFilterText, columnFilterTypes],
+  )
   const searchText = props.searchText ?? props.defaultSearchText ?? ""
 
   const rowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
@@ -285,10 +325,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     sortState,
   ])
 
-  // Visible row IDs in display order (post-filter, post-sort). Used by the
-  // synthetic selection-checkbox column's header to compute the tri-state
-  // "all / some / none" master toggle.
-  const visibleRowIds = useMemo(() => rowEntries.map((entry) => entry.rowId), [rowEntries])
+  // Visible, selectable row IDs in display order (post-filter, post-sort).
+  // Used by the synthetic selection-checkbox column's header to compute the
+  // tri-state "all / some / none" master toggle while skipping disabled rows.
+  const visibleSelectableRowIds = useMemo(
+    () => rowEntries.filter((entry) => !isRowDisabled(entry.row)).map((entry) => entry.rowId),
+    [isRowDisabled, rowEntries],
+  )
 
   // Layout-resolved columns including the synthetic pinned-left checkbox
   // column when `checkboxSelection` is on. The synthetic column is rebuilt
@@ -299,7 +342,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     const synthetic = createSelectionCheckboxColumn<TRow>({
       selectionState,
       setSelectionState,
-      visibleRowIds,
+      visibleRowIds: visibleSelectableRowIds,
     })
     return resolveColumns([synthetic, ...columns], columnState)
   }, [
@@ -309,7 +352,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.checkboxSelection,
     selectionState,
     setSelectionState,
-    visibleRowIds,
+    visibleSelectableRowIds,
   ])
 
   const columnIndexById = useMemo(() => {
@@ -652,7 +695,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const cellTarget = activeCell ?? null
       const cellRow = cellTarget ? rowEntries[currentRow] : null
       const cellColumn = cellTarget ? resolvedColumns[currentCol] : null
-      if (cellTarget && cellRow && cellColumn && isCellEditable(cellColumn, cellRow.row)) {
+      if (
+        cellTarget &&
+        cellRow &&
+        cellColumn &&
+        !isRowDisabled(cellRow.row) &&
+        isCellEditable(cellColumn, cellRow.row)
+      ) {
         if (event.key === "F2" || event.key === "Enter") {
           event.preventDefault()
           editController.start(cellTarget, event.key === "F2" ? "f2" : "enter")
@@ -682,6 +731,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (outcome.type === "toggleSelection") {
         const targetRow = rowEntries[currentRow]
         if (!targetRow) return
+        if (isRowDisabled(targetRow.row)) return
         setSelectionState(toggleRow(selectionState, targetRow.rowId))
         selectionAnchorRef.current = targetRow.rowId
         return
@@ -697,6 +747,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       columnIndexById,
       editController,
       focusCell,
+      isRowDisabled,
       pageRowCount,
       resolvedColumns,
       rowEntries,
@@ -828,14 +879,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           {virtualWindow.rows.map((virtualRow) => {
             const entry = rowEntries[virtualRow.index]
             if (!entry) return null
-            const selected = isRowSelected(selectionState, entry.rowId)
+            const disabled = isRowDisabled(entry.row)
+            const selected = !disabled && isRowSelected(selectionState, entry.rowId)
             return (
               <div
                 key={entry.rowId}
-                className={classNames("bc-grid-row", selected ? "bc-grid-row-selected" : undefined)}
+                className={classNames(
+                  "bc-grid-row",
+                  selected ? "bc-grid-row-selected" : undefined,
+                  disabled ? "bc-grid-row-disabled" : undefined,
+                )}
                 role="row"
                 aria-rowindex={virtualRow.index + 3}
                 aria-selected={selected || undefined}
+                aria-disabled={disabled || undefined}
                 data-row-id={entry.rowId}
                 data-row-index={virtualRow.index}
                 style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
@@ -843,20 +900,22 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   // Selection logic. Shift+click → range from anchor; ctrl/
                   // cmd+click → toggle this row in current selection;
                   // plain click → select only this row.
-                  if (event.shiftKey && selectionAnchorRef.current) {
-                    setSelectionState(
-                      selectRange(
-                        rowEntries.map((e) => e.rowId),
-                        selectionAnchorRef.current,
-                        entry.rowId,
-                      ),
-                    )
-                  } else if (event.ctrlKey || event.metaKey) {
-                    setSelectionState(toggleRow(selectionState, entry.rowId))
-                    selectionAnchorRef.current = entry.rowId
-                  } else {
-                    setSelectionState(selectOnly(entry.rowId))
-                    selectionAnchorRef.current = entry.rowId
+                  if (!disabled) {
+                    if (event.shiftKey && selectionAnchorRef.current) {
+                      setSelectionState(
+                        selectRange(
+                          visibleSelectableRowIds,
+                          selectionAnchorRef.current,
+                          entry.rowId,
+                        ),
+                      )
+                    } else if (event.ctrlKey || event.metaKey) {
+                      setSelectionState(toggleRow(selectionState, entry.rowId))
+                      selectionAnchorRef.current = entry.rowId
+                    } else {
+                      setSelectionState(selectOnly(entry.rowId))
+                      selectionAnchorRef.current = entry.rowId
+                    }
                   }
                   onRowClick?.(entry.row, event)
                 }}
@@ -868,7 +927,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     "[data-column-id]",
                   )
                   const columnId = target?.dataset.columnId
-                  if (columnId) {
+                  if (!disabled && columnId) {
                     const column = resolvedColumns.find((c) => c.columnId === columnId)
                     if (column && isCellEditable(column, entry.row)) {
                       editController.start(
@@ -897,6 +956,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     virtualCol,
                     virtualRow,
                     selected,
+                    disabled,
                     hasOverlayValue: editController.hasOverlayValue,
                     getOverlayValue: editController.getOverlayValue,
                   }),
