@@ -765,6 +765,38 @@ export interface BcSidebarContext<TRow = unknown> {
   pivot?: unknown
 }
 
+export type BcContextMenuBuiltinItem =
+  | "copy"
+  | "copy-with-headers"
+  | "clear-selection"
+  | "clear-range"
+  | "separator"
+
+export interface BcContextMenuCustomItem<TRow = unknown> {
+  id: string
+  label: string
+  onSelect: (ctx: BcContextMenuContext<TRow>) => void
+  disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+}
+
+export type BcContextMenuItem<TRow = unknown> =
+  | BcContextMenuBuiltinItem
+  | BcContextMenuCustomItem<TRow>
+
+export interface BcContextMenuContext<TRow = unknown> {
+  cell: BcCellPosition | null
+  row: TRow | null
+  column: BcReactGridColumn<TRow> | null
+  selection: BcSelection
+  api: BcGridApi<TRow>
+}
+
+export type BcContextMenuItems<TRow = unknown> =
+  | readonly (BcContextMenuItem<TRow> | false | null | undefined)[]
+  | ((
+      ctx: BcContextMenuContext<TRow>,
+    ) => readonly (BcContextMenuItem<TRow> | false | null | undefined)[])
+
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   /** Row data (client-side). For server-side, use BcServerGrid. */
   data: readonly TRow[]
@@ -835,6 +867,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   sidebarPanel?: string | null
   onSidebarPanelChange?: (next: string | null, prev: string | null) => void
   sidebarWidth?: number
+  contextMenuItems?: BcContextMenuItems<TRow>
 
   // Master-detail
   renderDetailPanel?: (params: BcDetailPanelParams<TRow>) => React.ReactNode
@@ -1264,6 +1297,8 @@ export type {
   BcEditGridAction,
   BcRangeBeforeCopyEvent, BcRangeBeforeCopyHook, BcRangeCopyEvent, BcRangeCopyHook,
   BcServerRowUpdateHandler, BcServerRowUpdateSubscribe, BcServerRowUpdateUnsubscribe,
+  BcContextMenuBuiltinItem, BcContextMenuContext, BcContextMenuCustomItem,
+  BcContextMenuItem, BcContextMenuItems,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
   BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarCustomPanel, BcSidebarPanel,
 
