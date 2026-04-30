@@ -6,7 +6,8 @@ Consumers usually pull this in transitively via `@bc-grid/react`. Direct install
 
 ## What's inside
 
-- Public types: `BcGridColumn`, `BcGridProps`, `BcGridApi`, `BcSelection`, `BcGridSort`, `BcGridFilter`, `BcRowState`, `BcCellPosition`, etc.
+- Public types: `BcGridColumn`, `BcGridProps`, `BcGridApi`, `BcSelection`, `BcRangeSelection`, `BcGridSort`, `BcGridFilter`, `BcRowState`, `BcCellPosition`, etc.
+- Range helpers: pure state-machine functions for anchor, extend, multi-range, containment, and stable serialization.
 - Server contracts: `ServerPagedQuery`, `ServerPagedResult`, `ServerBlockQuery`, `LoadServerPage`, `LoadServerBlock`, `ServerRowModelState`, `ServerInvalidation`.
 - Pivot DTOs: `BcPivotedDataDTO`, `BcPivotState`, `BcPivotValue` (engine-internal types live in `@bc-grid/aggregations`).
 
