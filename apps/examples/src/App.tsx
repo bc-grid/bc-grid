@@ -216,6 +216,11 @@ function paginationEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("pagination") === "1"
 }
 
+function autoHeightEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("autoHeight") === "1"
+}
+
 function aggregationsEnabled(): boolean {
   if (typeof window === "undefined") return false
   return new URLSearchParams(window.location.search).get("aggregations") === "1"
@@ -269,6 +274,7 @@ function CustomerGridDemo({
   const paginationDemo = paginationEnabled()
   const aggregationDemo = aggregationsEnabled()
   const masterDetailDemo = masterDetailEnabled()
+  const gridHeight = autoHeightEnabled() ? "auto" : 560
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
   const urlStatePersistence = useMemo(
@@ -702,7 +708,7 @@ function CustomerGridDemo({
           { label: "Statement", onSelect: () => handleStatement(row) },
         ]}
         gridId="accounts-receivable.customers"
-        height={560}
+        height={gridHeight}
         linkField="legalName"
         locale="en-US"
         {...(masterDetailDemo

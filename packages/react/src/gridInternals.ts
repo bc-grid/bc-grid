@@ -237,7 +237,19 @@ export function cellStyle({
   }
 }
 
-export function rootStyle(height: number | undefined): CSSProperties {
+export function rootStyle(height: number | "auto" | undefined): CSSProperties {
+  if (height === "auto") {
+    // Page-flow mode: the grid grows to fit its rendered content and
+    // the page scrolls naturally. No fixed root height; min-height: 0
+    // keeps it shrinkable inside flex parents.
+    return {
+      display: "flex",
+      flexDirection: "column",
+      minHeight: 0,
+      outline: "none",
+      position: "relative",
+    }
+  }
   return {
     display: "flex",
     flexDirection: "column",
@@ -255,6 +267,13 @@ export const headerViewportStyle: CSSProperties = {
   zIndex: 3,
 }
 
+export const autoHeightHeaderViewportStyle: CSSProperties = {
+  ...headerViewportStyle,
+  position: "sticky",
+  top: 0,
+  zIndex: 4,
+}
+
 export function headerRowStyle(width: number, height: number, scrollLeft: number): CSSProperties {
   return {
     height,
@@ -265,11 +284,23 @@ export function headerRowStyle(width: number, height: number, scrollLeft: number
   }
 }
 
-export function scrollerStyle(height: number | undefined): CSSProperties {
+export function scrollerStyle(bodyHeight: number | undefined, pageFlow = false): CSSProperties {
+  if (pageFlow) {
+    // Auto-height mode: the scroller does not own vertical scrolling —
+    // it grows to match its canvas content height and the page scrolls
+    // through it. It still owns horizontal scrolling so header/body
+    // scrollLeft synchronization continues to use the same element.
+    return {
+      flex: "0 0 auto",
+      overflowX: "auto",
+      overflowY: "hidden",
+      position: "relative",
+    }
+  }
   return {
-    flex: height == null ? "1 1 auto" : "0 0 auto",
-    height,
-    minHeight: height == null ? 0 : undefined,
+    flex: bodyHeight == null ? "1 1 auto" : "0 0 auto",
+    height: bodyHeight,
+    minHeight: bodyHeight == null ? 0 : undefined,
     overflow: "auto",
     position: "relative",
   }
@@ -1253,6 +1284,12 @@ export function resolveFallbackBodyHeight(
   rowHeight: number,
   headerHeight: number,
 ): number {
+  // Pre-mount fallback used only by the virtualizer's first render, before
+  // the ResizeObserver in `useViewportSync` reports the real `clientHeight`.
+  // Numeric height: the body fills `height - headerHeight`. Auto / undefined:
+  // the default 360px is enough to compute a reasonable initial window;
+  // page-flow auto mode then re-syncs to the rendered canvas height on the
+  // next ResizeObserver tick.
   return typeof height === "number"
     ? Math.max(rowHeight, height - headerHeight)
     : DEFAULT_BODY_HEIGHT

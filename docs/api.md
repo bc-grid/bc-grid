@@ -413,6 +413,7 @@ This is exposed to `cellRenderer` via `params.rowState` (Q2 — when editing lan
 ## 3. Controlled / uncontrolled state pairs
 
 For each piece of grid state, there is a controlled (`<state>` + `on<State>Change`) form and an uncontrolled (`default<State>`) form. Mixing the two for the same state on the same grid is a runtime error.
+Filter state uses `null` for "no active filter"; clearing the inline, popup, or sidebar filter controls emits `onFilterChange(null, prevFilter)`.
 
 ### 3.1 The pairs (frozen at v0.1)
 
@@ -420,7 +421,7 @@ For each piece of grid state, there is a controlled (`<state>` + `on<State>Chang
 |---|---|---|---|
 | Sort | `sort: BcGridSort[]` | `onSortChange(next, prev)` | `defaultSort` |
 | Search text | `searchText: string` | `onSearchTextChange(next)` | `defaultSearchText` |
-| Filter | `filter: BcGridFilter` | `onFilterChange(next, prev)` | `defaultFilter` |
+| Filter | `filter: BcGridFilter \| null` | `onFilterChange(next, prev)` | `defaultFilter` |
 | Selection | `selection: BcSelection` | `onSelectionChange(next, prev)` | `defaultSelection` |
 | Range selection | `rangeSelection: BcRangeSelection` | `onRangeSelectionChange(next, prev)` | `defaultRangeSelection` |
 | Expansion | `expansion: ReadonlySet<RowId>` | `onExpansionChange(next, prev)` | `defaultExpansion` |
@@ -516,9 +517,9 @@ export interface BcGridStateProps {
   defaultSearchText?: string
   onSearchTextChange?: (next: string, prev: string) => void
 
-  filter?: BcGridFilter
-  defaultFilter?: BcGridFilter
-  onFilterChange?: (next: BcGridFilter, prev: BcGridFilter) => void
+  filter?: BcGridFilter | null
+  defaultFilter?: BcGridFilter | null
+  onFilterChange?: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
 
   selection?: BcSelection
   defaultSelection?: BcSelection
@@ -669,7 +670,7 @@ export interface BcFilterEditorProps<TValue = unknown> {
 
   // Layout
   density="normal"   // "compact" | "normal" | "comfortable"
-  height="auto"      // "auto" | number (px) — default fills available
+  height="auto"      // "auto" → page-flow; number → fixed scroller; undefined → fills parent flex
 
   // State (controlled)
   sort={sort} onSortChange={setSort}
@@ -772,6 +773,25 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   // Layout
   density?: "compact" | "normal" | "comfortable"
+  /**
+   * `number` — the grid root takes that pixel height; the body scroller
+   *   owns its own scrollbar and rows virtualize against it. The right
+   *   default for in-page lookup tables, modal pickers, and any grid
+   *   that should never push surrounding chrome off-screen.
+   * `"auto"` — page-flow mode. The grid grows to its rendered canvas
+   *   height and gives the scrollbar back to the document; the page
+   *   scrolls naturally through the rows. The header sticks to the top
+   *   of the viewport via `position: sticky`, while the body scroller
+   *   still owns horizontal overflow so wide tables keep a standard
+   *   horizontal scrollbar. This is the right default when the grid is
+   *   the primary surface on a long-form page.
+   *   Trade-off: virtualization no longer windows on row scroll — the
+   *   ResizeObserver expands the virtualizer's viewport to the full
+   *   canvas height, so every row is in the DOM. Use a numeric height
+   *   for datasets where row-level virtualization matters.
+   * `undefined` (default) — the scroller fills whatever flex space its
+   *   parent gives it, with internal vertical scroll.
+   */
   height?: "auto" | number
   rowHeight?: number   // override the density default
 
@@ -1038,7 +1058,7 @@ export interface BcGridApi<TRow = unknown> {
   // Mutations (controlled-state shortcuts; only effective in uncontrolled mode)
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
-  setFilter(filter: BcGridFilter): void
+  setFilter(filter: BcGridFilter | null): void
   setRangeSelection(selection: BcRangeSelection): void
   copyRange(range?: BcRange): Promise<void>
   clearRangeSelection(): void
