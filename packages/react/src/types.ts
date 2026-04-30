@@ -50,6 +50,20 @@ export interface BcGridMessages {
   filterClearedAnnounce: (params: { totalRows: number }) => string
   selectionAnnounce: (params: { count: number }) => string
   selectionClearedAnnounce: () => string
+
+  /**
+   * Cell-edit live-region templates per `editing-rfc §Live Regions`.
+   * Polite announcement on commit; assertive on validation rejection
+   * (so AT interrupts speech). Cancel + edit-mode-entered are silent
+   * per the RFC — focus on the editor input announces itself.
+   */
+  editCommittedAnnounce: (params: {
+    columnLabel: string
+    rowLabel: string
+    formattedValue: string
+  }) => string
+  editValidationErrorAnnounce: (params: { columnLabel: string; error: string }) => string
+  editServerErrorAnnounce: (params: { columnLabel: string; error: string }) => string
 }
 
 export interface BcGridUrlStatePersistence {
@@ -78,6 +92,15 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
     | ((params: BcCellRendererParams<TRow, TValue>) => CSSProperties | undefined)
   cellEditor?: BcCellEditor<TRow, TValue>
   aggregationFormatter?: (params: BcAggregationFormatterParams<TRow, TValue>) => ReactNode
+  /**
+   * Static or per-row option list for `editor-select` / `editor-multi-select`
+   * / `editor-autocomplete` per `editing-rfc §editor-select`. Either a flat
+   * array (same options on every row) or a row-fn (per-row options driven
+   * by the row's other fields).
+   */
+  options?:
+    | readonly { value: TValue; label: string }[]
+    | ((row: TRow) => readonly { value: TValue; label: string }[])
 }
 
 export type BcGridColumn<TRow, TValue = unknown> = BcReactGridColumn<TRow, TValue>
@@ -91,6 +114,24 @@ export interface BcCellRendererParams<TRow, TValue = unknown> {
   searchText: string
   rowState: BcRowState
   editing: boolean
+  /**
+   * True between `commit` and `onCellEditCommit` Promise resolution —
+   * the cell has been edited locally and the consumer hook is in
+   * flight. Per `editing-rfc §Dirty Tracking`.
+   */
+  pending: boolean
+  /**
+   * Async commit / server-commit error. Validation rejection stays on
+   * the mounted editor because the commit never lands. Cleared on
+   * successful retry or on cancel. Per `editing-rfc §Dirty Tracking`.
+   */
+  editError?: string
+  /**
+   * True when the cell has been edited (committed locally) this
+   * session, regardless of whether the consumer's commit hook has
+   * settled. Per `editing-rfc §Dirty Tracking`.
+   */
+  isDirty: boolean
 }
 
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
@@ -149,7 +190,7 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
 
   onEdit?: (row: TRow) => void
   onDelete?: (row: TRow) => void
-  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void
+  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
   canEdit?: (row: TRow) => boolean
   canDelete?: (row: TRow) => boolean
 

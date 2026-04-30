@@ -63,6 +63,12 @@ export const defaultMessages: BcGridMessages = {
   filterClearedAnnounce: ({ totalRows }) => `Filter cleared. ${totalRows} rows shown.`,
   selectionAnnounce: ({ count }) => (count === 1 ? "1 row selected." : `${count} rows selected.`),
   selectionClearedAnnounce: () => "Selection cleared.",
+  editCommittedAnnounce: ({ columnLabel, rowLabel, formattedValue }) =>
+    `Updated ${columnLabel} for ${rowLabel} to ${formattedValue}.`,
+  editValidationErrorAnnounce: ({ columnLabel, error }) =>
+    `${columnLabel} was not updated. ${error}`,
+  editServerErrorAnnounce: ({ columnLabel, error }) =>
+    `${columnLabel} update failed. ${error} Reverted.`,
 }
 
 // ---------------------------------------------------------------------------
@@ -488,11 +494,17 @@ export function useLiveRegionAnnouncements<TRow>({
   messages,
 }: UseLiveRegionAnnouncementsParams<TRow>): {
   politeMessage: string
+  assertiveMessage: string
   announcePolite: (message: string) => void
+  announceAssertive: (message: string) => void
 } {
   const [politeMessage, setPoliteMessage] = useState("")
+  const [assertiveMessage, setAssertiveMessage] = useState("")
   const announcePolite = useCallback((message: string) => {
     setPoliteMessage(message)
+  }, [])
+  const announceAssertive = useCallback((message: string) => {
+    setAssertiveMessage(message)
   }, [])
 
   // Announce sort changes. Compares to a ref of the previous sort state so
@@ -556,7 +568,7 @@ export function useLiveRegionAnnouncements<TRow>({
     }
   }, [selectionState, messages, announcePolite])
 
-  return { politeMessage, announcePolite }
+  return { politeMessage, assertiveMessage, announcePolite, announceAssertive }
 }
 
 // ---------------------------------------------------------------------------
