@@ -314,6 +314,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onRowDoubleClick?: (row: TRow, event: MouseEvent) => void
   onCellFocus?: (position: BcCellPosition) => void
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
 
@@ -352,7 +353,6 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
 
   onEdit?: (row: TRow) => void
   onDelete?: (row: TRow) => void
-  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
   canEdit?: (row: TRow) => boolean
   canDelete?: (row: TRow) => boolean
 

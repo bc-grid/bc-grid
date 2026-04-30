@@ -48,6 +48,9 @@ Consumers import from `@bc-grid/react` and types from `@bc-grid/core`. Engine pa
 
 See `docs/design.md` for the architecture in depth.
 
+For business entity pages backed by server sort/filter/edit APIs, see
+[`docs/guides/server-backed-editable-grid.md`](./docs/guides/server-backed-editable-grid.md).
+
 ## Install (from private GitHub Packages)
 
 bc-grid is published privately to GitHub Packages. The repo and packages are private — only accounts with explicit access can install.

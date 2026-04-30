@@ -13,6 +13,7 @@ import {
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
   matchesGridFilter,
+  notifyGridFilterChange,
   setFilterValueKeys,
 } from "../src/filter"
 
@@ -339,6 +340,23 @@ describe("buildGridFilter", () => {
     } else {
       throw new Error("expected column filter")
     }
+  })
+})
+
+describe("notifyGridFilterChange", () => {
+  test("forwards null when a controlled filter is cleared", () => {
+    const previous = {
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "contains",
+      value: "Acme",
+    } as const
+    const calls: Array<[unknown, unknown]> = []
+
+    notifyGridFilterChange((next, prev) => calls.push([next, prev]), null, previous)
+
+    expect(calls).toEqual([[null, previous]])
   })
 })
 

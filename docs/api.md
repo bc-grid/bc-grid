@@ -420,7 +420,7 @@ For each piece of grid state, there is a controlled (`<state>` + `on<State>Chang
 |---|---|---|---|
 | Sort | `sort: BcGridSort[]` | `onSortChange(next, prev)` | `defaultSort` |
 | Search text | `searchText: string` | `onSearchTextChange(next)` | `defaultSearchText` |
-| Filter | `filter: BcGridFilter` | `onFilterChange(next, prev)` | `defaultFilter` |
+| Filter | `filter: BcGridFilter \| null` | `onFilterChange(next, prev)` | `defaultFilter` |
 | Selection | `selection: BcSelection` | `onSelectionChange(next, prev)` | `defaultSelection` |
 | Range selection | `rangeSelection: BcRangeSelection` | `onRangeSelectionChange(next, prev)` | `defaultRangeSelection` |
 | Expansion | `expansion: ReadonlySet<RowId>` | `onExpansionChange(next, prev)` | `defaultExpansion` |
@@ -442,6 +442,9 @@ export interface BcGridSort {
  * grids and server grids share one filter shape. AND/OR groupable.
  */
 export type BcGridFilter = ServerFilter   // re-exported from @bc-grid/core
+
+// Controlled filter state uses `null` to mean "no active filter".
+// Clearing an inline or popup filter calls `onFilterChange(null, prev)`.
 
 export type BcSelection =
   | { mode: "explicit"; rowIds: ReadonlySet<RowId> }
@@ -516,9 +519,9 @@ export interface BcGridStateProps {
   defaultSearchText?: string
   onSearchTextChange?: (next: string, prev: string) => void
 
-  filter?: BcGridFilter
-  defaultFilter?: BcGridFilter
-  onFilterChange?: (next: BcGridFilter, prev: BcGridFilter) => void
+  filter?: BcGridFilter | null
+  defaultFilter?: BcGridFilter | null
+  onFilterChange?: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
 
   selection?: BcSelection
   defaultSelection?: BcSelection
@@ -834,11 +837,12 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   renderDetailPanel?: (params: BcDetailPanelParams<TRow>) => React.ReactNode
   detailPanelHeight?: number | ((params: BcDetailPanelParams<TRow>) => number)
 
-  // Read-only events
+  // Events
   onRowClick?: (row: TRow, event: React.MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: React.MouseEvent) => void
   onCellFocus?: (position: BcCellPosition) => void
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
 
@@ -929,8 +933,6 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
 
   onEdit?: (row: TRow) => void
   onDelete?: (row: TRow) => void
-  /** Post-commit edit event. Reserved Q2. */
-  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void
   canEdit?: (row: TRow) => boolean
   canDelete?: (row: TRow) => boolean
 
@@ -1026,6 +1028,10 @@ The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are 
 
 `ServerPagedQuery.pivotState?: BcPivotState` and `ServerPagedResult.pivotedRows?: BcPivotedDataDTO` are reserved for server-side pivot pushdown. Client-side pivot uses the pure `@bc-grid/aggregations` engine; server-side pivot consumers can return the same JSON-safe DTO shape without exposing the engine's internal lookup maps.
 
+For a worked business-app pattern using `BcServerGrid rowModel="paged"` with
+server filters, stable row identity, and edit commit reconciliation, see
+[`docs/guides/server-backed-editable-grid.md`](./guides/server-backed-editable-grid.md).
+
 ---
 
 ## 6. Imperative API
@@ -1052,7 +1058,7 @@ export interface BcGridApi<TRow = unknown> {
   // Mutations (controlled-state shortcuts; only effective in uncontrolled mode)
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
-  setFilter(filter: BcGridFilter): void
+  setFilter(filter: BcGridFilter | null): void
   setRangeSelection(selection: BcRangeSelection): void
   copyRange(range?: BcRange): Promise<void>
   clearRangeSelection(): void
@@ -1141,7 +1147,9 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
 }
 ```
 
-The `<BcEditGrid>` and (Q2) editing variant of `<BcGrid>` consume this protocol; consumers can pass column.cellEditor as either a built-in (`textEditor()`, `numberEditor()`) or a custom implementation.
+`<BcGrid>`, `<BcEditGrid>`, and `<BcServerGrid>` consume this protocol when
+columns are editable. Consumers can pass `column.cellEditor` as either a
+built-in (`textEditor()`, `numberEditor()`) or a custom implementation.
 
 ---
 

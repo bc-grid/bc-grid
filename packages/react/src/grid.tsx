@@ -46,6 +46,7 @@ import {
   buildGridFilter,
   columnFilterTextFromGridFilter,
   matchesGridFilter,
+  notifyGridFilterChange,
   setFilterValueKeys,
 } from "./filter"
 import {
@@ -119,12 +120,7 @@ import { createSelectionCheckboxColumn } from "./selectionColumn"
 import { BcGridSidebar, normalizeSidebarPanelId, resolveSidebarPanels } from "./sidebar"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
 import { BcStatusBar } from "./statusBar"
-import type {
-  BcCellEditCommitEvent,
-  BcGridProps,
-  BcReactGridColumn,
-  BcSidebarContext,
-} from "./types"
+import type { BcGridProps, BcReactGridColumn, BcSidebarContext } from "./types"
 import { useEditingController } from "./useEditingController"
 import { formatCellValue, getCellValue } from "./value"
 
@@ -220,9 +216,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.filter ?? null,
     defaultFilterState,
     props.onFilterChange
-      ? (next, prev) => {
-          if (next) props.onFilterChange?.(next, prev ?? next)
-        }
+      ? (next, prev) => notifyGridFilterChange(props.onFilterChange, next, prev)
       : undefined,
   )
 
@@ -817,15 +811,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   }, [firstVirtualRow, lastVirtualRow, onVisibleRowRangeChange])
 
   // Editing controller. The framework owns the lifecycle / state machine /
-  // overlay; consumers wire commit semantics via `onCellEditCommit` (read
-  // off props since it's declared on `BcEditGridProps` and reaches us via
-  // spread). Sync + async per-column `validate` runs through the
-  // controller before the overlay updates.
-  const onCellEditCommitProp = (
-    props as {
-      onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
-    }
-  ).onCellEditCommit
+  // overlay; consumers wire commit semantics via `onCellEditCommit`.
+  // Sync + async per-column `validate` runs through the controller before
+  // the overlay updates.
+  const onCellEditCommitProp = props.onCellEditCommit
   const editController = useEditingController<TRow>({
     ...(onCellEditCommitProp ? { onCellEditCommit: onCellEditCommitProp } : {}),
     validate: (value, row, columnId, signal) => {

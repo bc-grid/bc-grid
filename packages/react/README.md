@@ -70,6 +70,7 @@ Current main baseline for `core+virtualizer+animations+react`: 64.05 KiB gzipped
 ## Documentation
 
 - API reference: `docs/api.md` in the bc-grid repo.
+- Server-backed editable grid pattern: `docs/guides/server-backed-editable-grid.md`.
 - Design RFCs: `docs/design/*.md`.
 - Examples: `apps/examples/` (a 5,000-row AR Customers ledger demonstrating every shipped feature).
 

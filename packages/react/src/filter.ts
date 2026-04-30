@@ -72,6 +72,11 @@ export type FilterCellValue =
       rawValue?: unknown
     }
 
+export type GridFilterChangeCallback = (
+  next: BcGridFilter | null,
+  prev: BcGridFilter | null,
+) => void
+
 type DateColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "date" }
 type DateRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
   type: "date-range"
@@ -138,6 +143,14 @@ export function buildGridFilter(
   if (filters.length === 0) return null
   if (filters.length === 1 && filters[0]) return filters[0]
   return { kind: "group", op: "and", filters }
+}
+
+export function notifyGridFilterChange(
+  onFilterChange: GridFilterChangeCallback | undefined,
+  next: BcGridFilter | null,
+  prev: BcGridFilter | null,
+): void {
+  onFilterChange?.(next, prev)
 }
 
 export function columnFilterTextFromGridFilter(
