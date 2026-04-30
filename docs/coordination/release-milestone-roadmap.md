@@ -29,14 +29,42 @@ Every milestone release candidate must satisfy these gates before the coordinato
 
 Goal: make the published package line boring to consume in `bsncraft`.
 
-> **Source-version skew alert (2026-05-01):** `packages/*/package.json` currently declares `0.1.0-alpha.2` while the latest tag is `v0.1.0-alpha.5`. Tagging `v0.2.0` in this state would publish artifacts with `version: "0.1.0-alpha.2"` because nothing in the release flow synchronises source `version` to the tag. Coordinator action item before publishing v0.2.0: bump `packages/*/package.json` to `0.2.0` (via `bun run changeset:version` after writing a fresh changeset, or by hand) and confirm `bun run release-preflight` reports `shared source version: 0.2.0` before pushing the tag. The new release-preflight tool fails fast on this exact mismatch so it does not regress.
+### Status snapshot — 2026-05-01
+
+> **Source-version skew (still open).** `packages/*/package.json` declares `0.1.0-alpha.2`; the latest tag is `v0.1.0-alpha.5`. Tagging `v0.2.0` in this state would publish artifacts with `version: "0.1.0-alpha.2"` because nothing in the release flow synchronises source `version` to the tag. The coherence guard is now automated (#199, merged): `bun run release-preflight` fails fast on source / tag / packed-metadata mismatch and runs in `.github/workflows/release.yml` before `bun publish`. The version bump itself is still the coordinator's call — see the "Release checklist" below for the ordered steps.
+
+**Open v0.2.0 blockers (in review, awaiting coordinator CI / merge):**
+
+- **#198** `agent/worker2/auto-height-page-flow` — `fix: true auto-height / page-flow for <BcGrid height="auto">`. Closes the "host apps need hidden CSS knowledge for core layout" milestone gate. Status: green CI / mergeable, awaiting coordinator review.
+- **#200** `agent/worker5/filter-clear-state` — `fix: emit filter clear state`. Filter UX regression touching the v0.2 "basic filters are stable in fit-to-screen mode" gate. Status: green CI / mergeable, awaiting coordinator review.
+
+**Recently landed (already on `main`):**
+
+- **#199** `release preflight: package coherence guard for v0.2.0` — adds the automated coherence gate referenced above; merged 2026-05-01.
+
+### Milestone gates
 
 - [ ] Published package metadata is coherent: all internal `@bc-grid/*` dependencies resolve to the same release line. Enforced by `bun run release-preflight` (source-version coherence + workspace:* policy in source + no workspace: leak in packed tarballs + tag/source match when running under a release tag).
-- [ ] Host apps do not need hidden CSS knowledge for core layout: fixed-height grids scroll vertically, header/body widths stay aligned, and resize affordances are visible.
-- [ ] Sorting, column resize, pinned columns, vertical scrolling, and basic filters are stable in fit-to-screen mode.
+- [ ] Host apps do not need hidden CSS knowledge for core layout: fixed-height grids scroll vertically, header/body widths stay aligned, and resize affordances are visible. **Currently blocked on #198.**
+- [ ] Sorting, column resize, pinned columns, vertical scrolling, and basic filters are stable in fit-to-screen mode. **Filter clear state currently blocked on #200.**
 - [ ] `bsncraft` installs the candidate, passes `bun run check-types`, and can load representative grid pages without import/export errors.
 - [ ] Bundle budget remains under the current `100 KiB` gzip hard cap with the per-PR drift guard intact.
 - [ ] README install guidance and package docs match the actual release process.
+
+### Release checklist
+
+Ordered steps the coordinator runs once the open blockers are merged. Each step has a binary pass/fail; do not skip ahead on a yellow.
+
+1. **Confirm `main` carries every blocker.** #198 + #200 merged, CI green, no new P0 surfacing.
+2. **Decide pre-mode.** The repo is currently in changesets `pre` mode (`tag: "alpha"`, see `.changeset/pre.json`). Either `bunx changeset pre exit` to leave pre-mode for the `0.2.0` cut, or stay in pre and tag a final alpha — pick one and document in the changeset.
+3. **Bump source versions to `0.2.0`.** Either:
+   - **Via changesets** (preferred): write a changeset describing the v0.2.0 scope → `bun run changeset:version` → confirm every `packages/*/package.json` reads `"version": "0.2.0"` → commit. Regenerate `bun.lock` if the tooling demands it.
+   - **By hand** (fallback): edit all 11 `packages/*/package.json` to `"version": "0.2.0"` and commit.
+4. **Run `bun run release-preflight` locally.** Must report `shared source version: 0.2.0` and pass all four checks. If checks 1–3 fail there is a metadata bug to fix before tagging.
+5. **Run `bun run tarball-smoke` locally.** Verifies the tarballs install + type-check from a clean throwaway consumer; catches missing exports / broken types that would break a host install.
+6. **Run `bsncraft` install + check-types.** In `~/work/bsncraft`: install the candidate version (file: tarball or pre-publish from the workspace), run `bun run check-types` against the grid surfaces it actually uses. Confirms the v0.2 "boring to consume" goal end-to-end.
+7. **Push the `v0.2.0` tag.** `release.yml` re-runs preflight under `GITHUB_REF_NAME=v0.2.0` so check 4 (tag-vs-source match) fires; tarball-smoke runs again; then `bun publish` per package. If any step fails, abort the tag and fix at source rather than retrying with a `.1`.
+8. **Post-publish smoke.** Install `@bc-grid/react@0.2.0` from a fresh consumer (in a tmp dir) to confirm the registry actually has the artifacts and the install path matches the README guidance.
 
 ## v0.3.0 - Filtering, Search, and Persistence
 
