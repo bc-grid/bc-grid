@@ -187,8 +187,13 @@ export interface BcSidebarContext<TRow = unknown> {
   columns: readonly BcReactGridColumn<TRow>[]
   columnState: readonly BcColumnStateEntry[]
   setColumnState: (state: readonly BcColumnStateEntry[]) => void
-  filterState: BcGridFilter
-  setFilterState: (state: BcGridFilter) => void
+  filterState: BcGridFilter | null
+  setFilterState: (state: BcGridFilter | null) => void
+  columnFilterText: Readonly<Record<ColumnId, string>>
+  setColumnFilterText: (columnId: ColumnId, value: string) => void
+  clearColumnFilterText: (columnId?: ColumnId) => void
+  getSetFilterOptions?: (columnId: ColumnId) => readonly { value: string; label: string }[]
+  messages: BcGridMessages
   /** Pivot props when Track 4 lands; null otherwise. */
   pivot?: unknown  // Track 4 fills in the type
 }
