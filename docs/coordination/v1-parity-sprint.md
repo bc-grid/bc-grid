@@ -212,7 +212,7 @@ Each track has one suggested owner; agents are free to swap based on availabilit
 - **Coordinator / worker split** — Codex in `~/work/bc-grid` coordinates the sprint, reviews PRs, fixes merge-train issues, merges PRs, cuts releases, and runs Playwright / smoke-perf / benchmarks. Worker agents should spend their cycles coding, unit tests, type-checks, builds, and concise PR handoffs. Workers must not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs.
 - **Reviews** — every PR gets a non-author review. The Codex coordinator is default reviewer; agents rotate as backup when explicitly assigned. Self-merge prohibited for worker PRs per `AGENTS.md §3.7`.
 - **Smoke perf on every PR** — once `smoke-perf-ci` lands in Phase A, every PR runs cold-mount/sort-10k/scroll-10k locally + in CI.
-- **Bundle size budget** — `core+virtualizer+animations+react` < 60KB gzipped per `design.md §3.2`. Once `bundle-size-ci-gate` lands, drift fails the build.
+- **Bundle size budget** — `core+virtualizer+animations+react` < 100KB gzipped per `design.md §3.2`, with a 10% per-PR drift guard from the latest release baseline. Drift fails the build.
 - **API surface manifest** — every public-export change bumps `tools/api-surface/src/manifest.ts` in the same PR. Already enforced.
 - **Decision log discipline** — every cross-cutting decision gets a `design.md §13` entry in the PR that introduces it, not after the fact.
 - **`docs/queue.md` hygiene** — claim transitions: `[ready]` → `[in-flight: <agent>]` (when branch created) → `[review: <agent> #N]` (when PR opened) → `[done: <agent> #N]` (when merged). Each transition lands in a commit on the branch making the change. The Codex coordinator audits drift in periodic queue-sync PRs.
@@ -259,7 +259,7 @@ Same as `docs/roadmap.md §Definition of Done` plus:
 - All Phase A items merged
 - All seven Phase B tracks have their critical-path RFC + framework + at least one consumer task merged
 - Smoke perf bars met on every per-PR run for 5+ consecutive merges
-- Bundle size budget < 60KB gzipped on every per-PR run
+- Bundle size budget < 100KB gzipped and within the 10% drift guard on every per-PR run
 - `q1-vertical-slice-demo` cleared via the AR Customers ledger demo in `apps/examples` (PR #42); a `bc-next-cutover` follow-up replaces this gate post-1.0
 - `audit-c2-NNN.md` clean of severity-H findings; severity-M findings have follow-up PRs filed
 

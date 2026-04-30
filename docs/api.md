@@ -178,7 +178,15 @@ export type ColumnId = string
 export type RowId = string
 
 export interface BcColumnFilter {
-  type: "text" | "number" | "number-range" | "date" | "set" | "boolean" | "custom"
+  type:
+    | "text"
+    | "number"
+    | "number-range"
+    | "date"
+    | "date-range"
+    | "set"
+    | "boolean"
+    | "custom"
   /** Optional starting value. */
   defaultValue?: unknown
   /** Optional UI variant. */
@@ -467,6 +475,33 @@ export interface BcRangeSelection {
   anchor: BcCellPosition | null
 }
 
+export interface BcClipboardPayload {
+  /** text/plain payload, usually TSV. */
+  tsv: string
+  /** text/html payload, usually a table. Generated from `tsv` when omitted. */
+  html?: string
+  /** Additional MIME payloads to write alongside text/plain and text/html. */
+  custom?: Record<string, string>
+}
+
+export interface BcRangeBeforeCopyEvent<TRow> {
+  range: BcRange
+  rows: readonly TRow[]
+  api: BcGridApi<TRow>
+}
+
+export type BcRangeBeforeCopyHook<TRow> = (
+  event: BcRangeBeforeCopyEvent<TRow>
+) => BcClipboardPayload | false | undefined
+
+export interface BcRangeCopyEvent {
+  range: BcRange
+  payload: BcClipboardPayload
+  suppressed: boolean
+}
+
+export type BcRangeCopyHook = (event: BcRangeCopyEvent) => void
+
 export interface BcPaginationState {
   page: number
   pageSize: number
@@ -519,7 +554,7 @@ export interface BcGridStateProps {
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
 
-Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers; React overlay rendering, clipboard copy/paste, and fill handle behavior are Track 2 implementation tasks.
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); visual overlay, paste, and fill handle behavior remain separate Track 2 implementation tasks.
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
@@ -592,7 +627,7 @@ The matched substring is exposed to `cellRenderer` via `params.searchText` so th
 
 Per-column `filter` declares **what kind of filter UI to show** and what parser to use; the actual filter state is in `BcGridFilter` (which mirrors `ServerFilter` from `server-query-rfc` for parity with server grids).
 
-Built-in filter types: `text`, `number`, `number-range`, `date`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. The `number-range` type is a convenience over `number` `between` that renders two `inputMode="decimal"` fields and always emits `op: "between"`; partial input (only one bound filled, or non-numeric content) is treated as inactive so typing doesn't narrow the row set mid-keystroke. Set filters are multi-select editors over distinct scalar column values, loaded on first open, and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
+Built-in filter types: `text`, `number`, `number-range`, `date`, `date-range`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. The `number-range` type is a convenience over `number` `between` that renders two `inputMode="decimal"` fields and always emits `op: "between"`; partial input (only one bound filled, or non-numeric content) is treated as inactive so typing doesn't narrow the row set mid-keystroke. The `date-range` type mirrors `number-range` for ISO 8601 dates: two `<input type="date">` fields separated by an em-dash, no operator dropdown, and `op: "between"` with the bounds normalised so consumers can type either edge first. Set filters are multi-select editors over distinct column values, loaded on first open, and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). For array-valued cells, each array item is indexed and matched independently. Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
 
 ```ts
 // from @bc-grid/filters (engine)
@@ -778,6 +813,8 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onRowDoubleClick?: (row: TRow, event: React.MouseEvent) => void
   onCellFocus?: (position: BcCellPosition) => void
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+  onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
+  onCopy?: BcRangeCopyHook
 
   // Imperative
   apiRef?: React.RefObject<BcGridApi<TRow> | null>
@@ -983,12 +1020,16 @@ export interface BcGridApi<TRow = unknown> {
   getRowById(rowId: RowId): TRow | undefined
   getActiveCell(): BcCellPosition | null
   getSelection(): BcSelection
+  getRangeSelection(): BcRangeSelection
   getColumnState(): BcColumnStateEntry[]
 
   // Mutations (controlled-state shortcuts; only effective in uncontrolled mode)
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter): void
+  setRangeSelection(selection: BcRangeSelection): void
+  copyRange(range?: BcRange): Promise<void>
+  clearRangeSelection(): void
   expandAll(): void
   collapseAll(): void
 
@@ -1006,9 +1047,16 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   refreshServerRows(opts?: { purge?: boolean }): void
   invalidateServerRows(invalidation: ServerInvalidation): void
   retryServerBlock(blockKey: ServerBlockKey): void
+  applyServerRowUpdate(update: ServerRowUpdate<TRow>): void
   getServerRowModelState(): ServerRowModelState<TRow>
 }
 ```
+
+Consumers with a websocket/SSE source can bridge push events into the grid with
+`useServerRowUpdates(apiRef, subscribe)`. The hook subscribes to
+`ServerRowUpdate<TRow>` events and forwards them to `applyServerRowUpdate`.
+`rowAdded` updates currently loaded server rows and triggers existing row
+insertion FLIP wiring for visible rows.
 
 ---
 
@@ -1058,7 +1106,7 @@ The `<BcEditGrid>` and (Q2) editing variant of `<BcGrid>` consume this protocol;
 
 Per `server-query-rfc §Public Types`, the server-row-model types are:
 
-`RowId`, `ColumnId`, `ServerRowModelMode`, `ServerSort`, `ServerFilter`, `ServerFilterGroup`, `ServerColumnFilter`, `ServerGroup`, `ServerViewState`, `ServerQueryBase`, `ServerLoadContext`, `ServerPagedQuery/Result`, `ServerBlockQuery/Result`, `ServerTreeQuery/Result`, `ServerTreeRow`, `ServerGroupKey`, `ServerRowIdentity`, `ServerSelection`, `ServerSelectionSnapshot`, `ServerRowPatch`, `ServerMutationResult`, `ServerInvalidation`, `ServerCacheBlock`, `ServerBlockKey`, `ServerBlockCacheOptions`, `ServerExportQuery`, `ServerExportResult`, `ServerRowUpdate` (reserved), `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowModelState`, `ServerRowModelEvent`, `BcPivotState`, `BcPivotedDataDTO`.
+`RowId`, `ColumnId`, `ServerRowModelMode`, `ServerSort`, `ServerFilter`, `ServerFilterGroup`, `ServerColumnFilter`, `ServerGroup`, `ServerViewState`, `ServerQueryBase`, `ServerLoadContext`, `ServerPagedQuery/Result`, `ServerBlockQuery/Result`, `ServerTreeQuery/Result`, `ServerTreeRow`, `ServerGroupKey`, `ServerRowIdentity`, `ServerSelection`, `ServerSelectionSnapshot`, `ServerRowPatch`, `ServerMutationResult`, `ServerInvalidation`, `ServerCacheBlock`, `ServerBlockKey`, `ServerBlockCacheOptions`, `ServerExportQuery`, `ServerExportResult`, `ServerRowUpdate`, `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowModelState`, `ServerRowModelEvent`, `BcPivotState`, `BcPivotedDataDTO`.
 
 `ServerQueryBase` is the shared shape every `ServerPagedQuery` / `ServerBlockQuery` / `ServerTreeQuery` extends (carries `view`, `requestId`, optional `viewKey`). `ServerRowIdentity` is the row-id contract (`rowId(row)` + optional `groupRowId`) the server-row-model passes to the React layer.
 
@@ -1074,7 +1122,7 @@ So:
 
 - **`@bc-grid/core` exports**: every type listed in `server-query-rfc §Public Types`.
 - **`@bc-grid/server-row-model` exports**: the state machine factory, the cache, helper utilities. No types — types come from `core`.
-- **`@bc-grid/react` re-exports**: `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `BcServerGridProps`, `BcServerGridApi` for consumer convenience.
+- **`@bc-grid/react` re-exports**: `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowUpdate`, `BcServerGridProps`, `BcServerGridApi`, and `useServerRowUpdates` for consumer convenience.
 
 ### 8.2 Resolved review-comments from server-query-rfc
 
@@ -1084,7 +1132,7 @@ These came up in the review of `server-query-rfc`; this RFC pins them:
 - **`ServerExportQuery.maxRows` default**: 50,000 stays for fallback `loadAllRows`. ERP grids exceeding 50k rows must provide a server-side `exportRows` handler. Documented in component prop docs at impl time.
 - **Group rowId default**: `viewKey` is always present (server-issued OR client-derived from `ServerViewState`); the `?? "view"` fallback is removed. `server-query-rfc` is updated as part of the merge.
 - **`ServerTreeRow.rowId?` semantics**: leaf rows always derive `rowId` from the consumer's `rowId(row)` callback; the optional field on `ServerTreeRow` is for server-overridden group IDs only.
-- **Streaming**: `ServerRowUpdate` types are exported; no built-in subscription API in v1.0. Consumers handle invalidation manually.
+- **Streaming**: `ServerRowUpdate` types are exported; `BcServerGridApi.applyServerRowUpdate` applies them to loaded server-row-model state. `useServerRowUpdates` provides the consumer subscription bridge.
 
 ---
 
@@ -1131,7 +1179,7 @@ The machine-checkable manifest for this package lives in `tools/api-surface/src/
 export { BcGrid, BcEditGrid, BcServerGrid, BcStatusBar }
 
 // Hooks
-export { useBcGridApi, useAggregations }
+export { useBcGridApi, useAggregations, useServerRowUpdates }
 
 // Helpers
 export { resolveVisibleSegments }
@@ -1144,15 +1192,18 @@ export type {
   BcGridProps, BcEditGridProps, BcServerGridProps,
   BcGridStateProps, BcPaginationState,
   BcGridApi, BcServerGridApi,
-  BcCellRendererParams, BcGridMessages,
+  BcCellRendererParams, BcGridMessages, BcClipboardPayload,
   BcAggregationFormatterParams, BcAggregationScope, UseAggregationsOptions,
   BcCellEditor, BcCellEditorProps, BcCellEditorPrepareParams, BcCellEditCommitEvent,
   BcEditGridAction,
+  BcRangeBeforeCopyEvent, BcRangeBeforeCopyHook, BcRangeCopyEvent, BcRangeCopyHook,
+  BcServerRowUpdateHandler, BcServerRowUpdateSubscribe, BcServerRowUpdateUnsubscribe,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
   BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarCustomPanel, BcSidebarPanel,
 
   // Re-exports from @bc-grid/core
-  BcCellPosition, BcSelection, BcGridSort, BcGridFilter,
+  BcCellPosition, BcSelection, BcRange, BcRangeSelection, BcRangeKeyAction,
+  BcGridSort, BcGridFilter,
   BcColumnFilter, BcColumnFormat, BcColumnStateEntry,
   BcValidationResult, ColumnId, RowId,
 
@@ -1165,6 +1216,7 @@ export type {
   ServerPagedQuery, ServerPagedResult,
   ServerBlockQuery, ServerBlockResult,
   ServerTreeQuery, ServerTreeResult,
+  ServerRowUpdate,
 }
 
 // Reserved Q2 runtime exports, not shipped at v0.1:

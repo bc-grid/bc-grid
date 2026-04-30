@@ -1,4 +1,5 @@
 import { flash } from "@bc-grid/animations"
+import { emptyBcRangeSelection, rangeClear } from "@bc-grid/core"
 import type {
   BcCellPosition,
   BcColumnFilter,
@@ -7,6 +8,8 @@ import type {
   BcGridFilter,
   BcGridSort,
   BcPaginationState,
+  BcRange,
+  BcRangeSelection,
   BcSelection,
   ColumnId,
   RowId,
@@ -41,9 +44,8 @@ import {
   type ColumnFilterTypeByColumnId,
   type SetFilterOption,
   buildGridFilter,
-  isBlankSetFilterValue,
   matchesGridFilter,
-  setFilterValueKey,
+  setFilterValueKeys,
 } from "./filter"
 import {
   DEFAULT_BODY_HEIGHT,
@@ -77,6 +79,7 @@ import {
   useColumnReorder,
   useColumnResize,
   useControlledState,
+  useFlipOnRowInsertion,
   useFlipOnSort,
   useLiveRegionAnnouncements,
   useViewportSync,
@@ -103,6 +106,11 @@ import {
   usePersistedGridStateWriter,
   useUrlPersistedGridStateWriter,
 } from "./persistence"
+import {
+  buildRangeClipboard,
+  normaliseClipboardPayload,
+  writeClipboardPayload,
+} from "./rangeClipboard"
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
@@ -123,6 +131,7 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
 }
 
 const DEFAULT_DETAIL_HEIGHT = 144
+const editableKeyTargetTags = new Set(["INPUT", "TEXTAREA", "SELECT"])
 
 export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   assertNoMixedControlledProps(props)
@@ -148,6 +157,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     onRowClick,
     onRowDoubleClick,
     onCellFocus,
+    onBeforeCopy,
+    onCopy,
     onVisibleRowRangeChange,
   } = props
 
@@ -225,6 +236,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.selection ?? createEmptySelection(),
     props.defaultSelection ?? createEmptySelection(),
     props.onSelectionChange,
+  )
+  const [rangeSelectionState, setRangeSelectionState] = useControlledState<BcRangeSelection>(
+    hasProp(props, "rangeSelection"),
+    props.rangeSelection ?? emptyBcRangeSelection,
+    props.defaultRangeSelection ?? emptyBcRangeSelection,
+    props.onRangeSelectionChange,
   )
   const emptyExpansion = useMemo(() => new Set<RowId>(), [])
   const expansionControlled = hasProp(props, "expansion")
@@ -462,6 +479,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const rowEntries = groupedRowModel.rows
   const groupingActive = groupedRowModel.active
   const visibleDataRowEntries = useMemo(() => rowEntries.filter(isDataRowEntry), [rowEntries])
+  const rangeRowIds = useMemo(() => rowEntries.map((entry) => entry.rowId), [rowEntries])
   const autoExpandedGroupIdsRef = useRef(new Set<RowId>())
   useEffect(() => {
     if (
@@ -622,14 +640,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         }
 
         const rawValue = getCellValue(row, column.source)
-        if (isBlankSetFilterValue(rawValue)) continue
-
-        const value = setFilterValueKey(rawValue)
-        if (value.length === 0 || optionsByValue.has(value)) continue
-
+        const values = setFilterValueKeys(rawValue)
+        if (values.length === 0) continue
         const formattedValue = formatCellValue(rawValue, row, column.source, locale)
-        const label = formattedValue.trim().length > 0 ? formattedValue : value
-        optionsByValue.set(value, { value, label })
+
+        for (const value of values) {
+          if (optionsByValue.has(value)) continue
+          const label =
+            Array.isArray(rawValue) || formattedValue.trim().length === 0 ? value : formattedValue
+          optionsByValue.set(value, { value, label })
+        }
       }
 
       return Array.from(optionsByValue.values()).sort((a, b) =>
@@ -808,6 +828,24 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     },
   })
 
+  // Overlay cleanup per `editing-rfc §Row-model ownership`: when the
+  // consumer's `data` prop catches up to a patched value, drop the
+  // overlay entry — the canonical state now reflects it. Pending /
+  // error entries are preserved (the overlay is still load-bearing).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pruneOverlay is stable from the controller; the canonical resolver reads from data + columns at fire time
+  useEffect(() => {
+    editController.pruneOverlay((rowId, columnId) => {
+      const entry = rowEntries.find((e) => e.rowId === rowId)
+      // Group rows have no `row`; only DataRowEntry carries the
+      // canonical TRow we read fields from.
+      if (!entry || entry.kind !== "data") return undefined
+      const column = consumerResolvedColumns.find((c) => c.columnId === columnId)
+      const field = column?.source.field
+      if (!field) return undefined
+      return (entry.row as Record<string, unknown>)[field]
+    })
+  }, [data, rowEntries, consumerResolvedColumns])
+
   // Apply the moveOnSettle directive after the editor unmounts. The state
   // machine reaches Unmounting once the editor's useLayoutEffect cleanup
   // dispatches; we read `next.move`, advance the active cell, and dispatch
@@ -930,8 +968,46 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     return expandable
   }, [groupedRowModel.allGroupRowIds, hasDetail, visibleDataRowEntries])
 
-  const api = useMemo<BcGridApi<TRow>>(
-    () => ({
+  const copyRangeToClipboard = useCallback(
+    async (
+      requestedRange: BcRange | undefined,
+      gridApi: BcGridApi<TRow>,
+      options: { includeHeaders?: boolean } = {},
+    ) => {
+      const range =
+        requestedRange ?? rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]
+      if (!range) return
+
+      const built = buildRangeClipboard({
+        range,
+        columns: resolvedColumns,
+        rowEntries,
+        rowIds: rangeRowIds,
+        locale,
+        includeHeaders: options.includeHeaders === true,
+      })
+      if (!built) return
+
+      const beforeResult = onBeforeCopy?.({
+        api: gridApi,
+        range,
+        rows: built.rows,
+      })
+      const defaultPayload = built.payload
+      if (beforeResult === false) {
+        onCopy?.({ range, payload: defaultPayload, suppressed: true })
+        return
+      }
+
+      const payload = normaliseClipboardPayload(beforeResult ?? defaultPayload)
+      await writeClipboardPayload(payload)
+      onCopy?.({ range, payload, suppressed: false })
+    },
+    [locale, onBeforeCopy, onCopy, rangeRowIds, rangeSelectionState, resolvedColumns, rowEntries],
+  )
+
+  const api = useMemo<BcGridApi<TRow>>(() => {
+    const nextApi: BcGridApi<TRow> = {
       scrollToRow(targetRowId, opts) {
         scrollToRow(targetRowId, opts?.align)
       },
@@ -954,6 +1030,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       getSelection() {
         return selectionState
       },
+      getRangeSelection() {
+        return rangeSelectionState
+      },
       getColumnState() {
         return deriveColumnState(resolvedColumns, columnState)
       },
@@ -966,6 +1045,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       setFilter(next) {
         setFilterState(next)
       },
+      setRangeSelection(next) {
+        setRangeSelectionState(next)
+      },
+      copyRange(range) {
+        return copyRangeToClipboard(range, nextApi)
+      },
+      clearRangeSelection() {
+        setRangeSelectionState(rangeClear(rangeSelectionState))
+      },
       expandAll() {
         if (allExpandableRowIds.length === 0) return
         setExpansionState(new Set(allExpandableRowIds))
@@ -977,27 +1065,30 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       refresh() {
         requestRender()
       },
-    }),
-    [
-      activeCell,
-      allExpandableRowIds,
-      columnIndexById,
-      columnState,
-      focusCell,
-      requestRender,
-      resolvedColumns,
-      rowIndexById,
-      rowsById,
-      scrollToCell,
-      scrollToRow,
-      selectionState,
-      setColumnState,
-      setExpansionState,
-      setFilterState,
-      setSortState,
-      virtualizer,
-    ],
-  )
+    }
+    return nextApi
+  }, [
+    activeCell,
+    allExpandableRowIds,
+    columnIndexById,
+    columnState,
+    copyRangeToClipboard,
+    focusCell,
+    rangeSelectionState,
+    requestRender,
+    resolvedColumns,
+    rowIndexById,
+    rowsById,
+    scrollToCell,
+    scrollToRow,
+    selectionState,
+    setColumnState,
+    setExpansionState,
+    setFilterState,
+    setRangeSelectionState,
+    setSortState,
+    virtualizer,
+  ])
 
   useEffect(() => assignRef(apiRef, api), [apiRef, api])
 
@@ -1059,15 +1150,46 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       />
     ) : null)
 
-  // While editing, the editor input owns DOM focus; aria-activedescendant
-  // is suspended (set to "") so AT doesn't try to point at a cell that's
-  // now hosting an `<input>`. Per `editing-rfc §a11y for edit mode`.
+  // While the editor input owns DOM focus, aria-activedescendant is
+  // suspended (set to "") so AT doesn't try to point at a cell that's now
+  // hosting an `<input>`. Once committing/cancelling starts, the editor DOM
+  // is gone and the grid root should expose the active cell again.
   const editingCell =
-    editController.editState.mode === "navigation" ? null : editController.editState.cell
-  const activeCellId = editingCell
+    editController.editState.mode === "mounting" ||
+    editController.editState.mode === "editing" ||
+    editController.editState.mode === "validating"
+      ? editController.editState.cell
+      : null
+  const editorOwnsFocus = editingCell !== null
+  const pendingEditNavigationCell = useMemo<BcCellPosition | null>(() => {
+    const editState = editController.editState
+    if (editState.mode !== "committing" && editState.mode !== "unmounting") return null
+    const cell = editState.cell
+    const rowIndex = rowIndexById.get(cell.rowId)
+    const colIndex = columnIndexById.get(cell.columnId)
+    if (rowIndex == null || colIndex == null) return null
+
+    const move = editState.mode === "committing" ? editState.moveOnSettle : editState.next.move
+    const lastRow = rowEntries.length - 1
+    const lastCol = resolvedColumns.length - 1
+    const { row: nextRow, col: nextCol } = nextActiveCellAfterEdit(
+      rowIndex,
+      colIndex,
+      lastRow,
+      lastCol,
+      move,
+    )
+    const targetRow = rowEntries[nextRow]
+    const targetCol =
+      targetRow && isDataRowEntry(targetRow) ? resolvedColumns[nextCol] : resolvedColumns[0]
+    if (!targetRow || !targetCol) return null
+    return { rowId: targetRow.rowId, columnId: targetCol.columnId }
+  }, [columnIndexById, editController.editState, resolvedColumns, rowEntries, rowIndexById])
+  const activeDescendantCell = pendingEditNavigationCell ?? activeCell
+  const activeCellId = editorOwnsFocus
     ? ""
-    : activeCell
-      ? cellDomId(domBaseId, activeCell.rowId, activeCell.columnId)
+    : activeDescendantCell
+      ? cellDomId(domBaseId, activeDescendantCell.rowId, activeDescendantCell.columnId)
       : undefined
 
   const rootHeight = typeof height === "number" ? height : undefined
@@ -1141,6 +1263,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       // Edit mode: the editor's own onKeyDown owns Tab / Enter / Esc /
       // Shift+Enter / Shift+Tab. The grid stays out of the way.
       if (editController.editState.mode !== "navigation") return
+      if (isEditableKeyTarget(event.target)) return
 
       const currentRow = activeCell ? (rowIndexById.get(activeCell.rowId) ?? 0) : 0
       const currentCol = activeCell ? (columnIndexById.get(activeCell.columnId) ?? 0) : 0
@@ -1196,6 +1319,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         }
       }
 
+      if ((event.ctrlKey || event.metaKey) && (event.key === "c" || event.key === "C")) {
+        const activeRange = rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]
+        if (!activeRange) return
+        event.preventDefault()
+        void copyRangeToClipboard(activeRange, api, { includeHeaders: event.shiftKey }).catch(
+          () => undefined,
+        )
+        return
+      }
+
       const outcome = nextKeyboardNav({
         key: event.key,
         ctrlOrMeta: event.ctrlKey || event.metaKey,
@@ -1228,12 +1361,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     },
     [
       activeCell,
+      api,
       columnIndexById,
+      copyRangeToClipboard,
       editController,
       focusGroupRow,
       focusCell,
       isRowDisabled,
       pageRowCount,
+      rangeSelectionState,
       resolvedColumns,
       rowEntries,
       rowIndexById,
@@ -1244,6 +1380,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
 
   const { prepareSortAnimation } = useFlipOnSort({ sortState, scrollerRef, virtualizer })
+  useFlipOnRowInsertion({ rowEntries, scrollerRef, virtualizer })
 
   const handleHeaderSort = useCallback(
     (
@@ -1627,6 +1764,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         hasOverlayValue: editController.hasOverlayValue,
                         getOverlayValue: editController.getOverlayValue,
                         getCellEditEntry: editController.getCellEditEntry,
+                        getRowEditState: editController.getRowEditState,
                       }),
                     )}
                     {expanded && renderDetailPanel ? (
@@ -1783,6 +1921,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         : null}
     </div>
   )
+}
+
+function isEditableKeyTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return target.isContentEditable || editableKeyTargetTags.has(target.tagName)
 }
 
 /**

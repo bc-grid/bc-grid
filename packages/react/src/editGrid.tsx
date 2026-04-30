@@ -104,6 +104,12 @@ function createActionsColumn<TRow>(options: {
           ? options.extraActions(params.row)
           : (options.extraActions ?? [])
 
+      // Disable destructive actions while the row has any in-flight
+      // commit. Per `editing-rfc §Server commit + optimistic UI`:
+      // letting the user delete a row mid-commit risks dropping a
+      // pending edit silently. Non-destructive actions (Edit, custom
+      // extras) stay enabled — re-edit is always allowed.
+      const rowPending = params.rowState.pending === true
       return (
         <div className="bc-grid-actions" style={actionsStyle}>
           {[...actions, ...extra].map((action) => (
@@ -114,7 +120,11 @@ function createActionsColumn<TRow>(options: {
                 "bc-grid-action",
                 action.destructive ? "bc-grid-action-destructive" : undefined,
               )}
-              disabled={params.rowState.disabled || isActionDisabled(action, params.row)}
+              disabled={
+                params.rowState.disabled ||
+                (rowPending && action.destructive === true) ||
+                isActionDisabled(action, params.row)
+              }
               onClick={(event) => {
                 event.stopPropagation()
                 action.onSelect(params.row)

@@ -184,7 +184,11 @@ function EditorMount<TRow>({
     }
   }, [dispatchMounted, dispatchUnmounted, virtualizer, rowIndex, colIndex])
 
-  const handleCommit = (newValue: unknown, moveOnSettle: MoveOnSettle = "down") => {
+  const handleCommit = (
+    newValue: unknown,
+    moveOnSettle: MoveOnSettle = "down",
+    source: "keyboard" | "pointer" | "api" = "keyboard",
+  ) => {
     void commit(
       {
         rowId: cell.rowId,
@@ -193,6 +197,7 @@ function EditorMount<TRow>({
         column: column.source,
         value: newValue,
         previousValue: initialValue,
+        source,
       },
       moveOnSettle,
     )
@@ -201,7 +206,10 @@ function EditorMount<TRow>({
   // listener can invoke the latest closure without re-binding the
   // handler on every render (re-binding would race with mid-edit
   // state churn).
-  const handleCommitRef = useRef<(value: unknown, move: MoveOnSettle) => void>(handleCommit)
+  const handleCommitRef =
+    useRef<(value: unknown, move: MoveOnSettle, source: "keyboard" | "pointer" | "api") => void>(
+      handleCommit,
+    )
   handleCommitRef.current = handleCommit
 
   // Portal-aware click-outside per `editing-rfc §Portal click-outside rules`.
@@ -217,7 +225,7 @@ function EditorMount<TRow>({
       if (!(target instanceof Element)) return
       if (target.closest("[data-bc-grid-editor-root], [data-bc-grid-editor-portal]")) return
       const value = readEditorInputValue(focusRef.current)
-      handleCommitRef.current?.(value, "stay")
+      handleCommitRef.current?.(value, "stay", "pointer")
     }
     document.addEventListener("pointerdown", handlePointerDown, true)
     return () => {
@@ -233,25 +241,25 @@ function EditorMount<TRow>({
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault()
       const value = readEditorInputValue(focusRef.current)
-      handleCommit(value, "down")
+      handleCommit(value, "down", "keyboard")
       return
     }
     if (event.key === "Enter" && event.shiftKey) {
       event.preventDefault()
       const value = readEditorInputValue(focusRef.current)
-      handleCommit(value, "up")
+      handleCommit(value, "up", "keyboard")
       return
     }
     if (event.key === "Tab" && !event.shiftKey) {
       event.preventDefault()
       const value = readEditorInputValue(focusRef.current)
-      handleCommit(value, "right")
+      handleCommit(value, "right", "keyboard")
       return
     }
     if (event.key === "Tab" && event.shiftKey) {
       event.preventDefault()
       const value = readEditorInputValue(focusRef.current)
-      handleCommit(value, "left")
+      handleCommit(value, "left", "keyboard")
       return
     }
     if (event.key === "Escape") {

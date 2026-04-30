@@ -43,7 +43,7 @@ export interface BcGridColumn<TRow, TValue = unknown> {
 }
 
 export interface BcColumnFilter {
-  type: "text" | "number" | "number-range" | "date" | "set" | "boolean" | "custom"
+  type: "text" | "number" | "number-range" | "date" | "date-range" | "set" | "boolean" | "custom"
   defaultValue?: unknown
   variant?: "popup" | "inline"
 }
@@ -268,11 +268,15 @@ export interface BcGridApi<TRow = unknown> {
   getRowById(rowId: RowId): TRow | undefined
   getActiveCell(): BcCellPosition | null
   getSelection(): BcSelection
+  getRangeSelection(): BcRangeSelection
   getColumnState(): BcColumnStateEntry[]
 
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter): void
+  setRangeSelection(selection: BcRangeSelection): void
+  copyRange(range?: BcRange): Promise<void>
+  clearRangeSelection(): void
   expandAll(): void
   collapseAll(): void
 
@@ -283,6 +287,7 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   refreshServerRows(opts?: { purge?: boolean }): void
   invalidateServerRows(invalidation: ServerInvalidation): void
   retryServerBlock(blockKey: ServerBlockKey): void
+  applyServerRowUpdate(update: ServerRowUpdate<TRow>): void
   getServerRowModelState(): ServerRowModelState<TRow>
 }
 
@@ -305,7 +310,7 @@ export interface ServerFilterGroup {
 export interface ServerColumnFilter {
   kind: "column"
   columnId: ColumnId
-  type: "text" | "number" | "number-range" | "date" | "set" | "boolean" | "custom"
+  type: "text" | "number" | "number-range" | "date" | "date-range" | "set" | "boolean" | "custom"
   op: string
   value?: unknown
   values?: unknown[]
@@ -539,3 +544,12 @@ export type ServerRowModelEvent<TRow> =
   | { type: "rowsInvalidated"; rowIds: RowId[] }
   | { type: "mutationQueued"; mutationId: string; rowId: RowId }
   | { type: "mutationSettled"; result: ServerMutationResult<TRow> }
+  | {
+      type: "rowUpdateApplied"
+      update: ServerRowUpdate<TRow>
+      affectedBlockKeys: ServerBlockKey[]
+      insertedRowIds: RowId[]
+      updatedRowIds: RowId[]
+      removedRowIds: RowId[]
+      invalidated: boolean
+    }

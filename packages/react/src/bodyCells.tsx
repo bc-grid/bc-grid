@@ -65,6 +65,14 @@ interface RenderBodyCellParams<TRow> {
     rowId: RowId,
     columnId: ColumnId,
   ) => { pending: boolean; error?: string } | undefined
+  /**
+   * Aggregated edit state for the row (any cell pending / error). Used
+   * by the renderer to populate `BcCellRendererParams.rowState.pending`
+   * and `.error`, which the `<BcEditGrid>` action column reads to
+   * disable destructive actions while a row has an in-flight commit.
+   * Per `editing-rfc §Server commit + optimistic UI` (concurrency).
+   */
+  getRowEditState?: (rowId: RowId) => { pending: boolean; error?: string } | null
 }
 
 interface RenderGroupRowCellParams<TRow> {
@@ -100,6 +108,7 @@ export function renderBodyCell<TRow>({
   hasOverlayValue,
   getOverlayValue,
   getCellEditEntry,
+  getRowEditState,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
 
@@ -108,6 +117,10 @@ export function renderBodyCell<TRow>({
     ? getOverlayValue?.(entry.rowId, column.columnId)
     : getCellValue(entry.row, column.source)
   const formattedValue = formatCellValue(value, entry.row, column.source, locale)
+  // Aggregate row edit state for `rowState.pending` / `.error` so the
+  // BcEditGrid action column can disable destructive actions while a
+  // row has an in-flight commit. `null` when the row has no edits.
+  const rowEditState = getRowEditState?.(entry.rowId) ?? null
   const rowState = {
     rowId: entry.rowId,
     index: entry.index,
@@ -115,6 +128,8 @@ export function renderBodyCell<TRow>({
     disabled,
     expanded,
     ...(entry.level != null ? { level: entry.level } : {}),
+    ...(rowEditState?.pending ? { pending: true } : {}),
+    ...(rowEditState?.error != null ? { error: rowEditState.error } : {}),
   }
 
   // Editing state per `editing-rfc §Dirty Tracking`. Order of precedence:

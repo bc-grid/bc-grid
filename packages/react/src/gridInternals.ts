@@ -453,6 +453,7 @@ export function assertNoMixedControlledProps<TRow>(props: BcGridProps<TRow>): vo
     ["searchText", "defaultSearchText"],
     ["filter", "defaultFilter"],
     ["selection", "defaultSelection"],
+    ["rangeSelection", "defaultRangeSelection"],
     ["expansion", "defaultExpansion"],
     ["groupBy", "defaultGroupBy"],
     ["columnState", "defaultColumnState"],
@@ -521,18 +522,35 @@ export function useLiveRegionAnnouncements<TRow>({
 } {
   const [politeMessage, setPoliteMessage] = useState("")
   const [assertiveMessage, setAssertiveMessage] = useState("")
+  const selectionAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Selection changes are low-priority; a click that selects a row and
+  // immediately starts/commits edit mode should not overwrite the edit
+  // commit announcement that follows.
+  const suppressSelectionAnnouncementsUntilRef = useRef(0)
   // Polite-region debounce per `editing-rfc §Live Region announcements`:
   // Tab-through-10-cells emits 10 commits in rapid succession; without a
   // tail debounce the AT queue would announce all of them and lag behind
   // the user. 250ms tail; the latest message wins. Assertive announcements
   // are deliberately not debounced — errors are individually important.
   const politeAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const announcePolite = useCallback((message: string) => {
+  const schedulePolite = useCallback((message: string) => {
     if (politeAnnounceTimerRef.current) clearTimeout(politeAnnounceTimerRef.current)
     politeAnnounceTimerRef.current = setTimeout(() => {
       setPoliteMessage(message)
+      politeAnnounceTimerRef.current = null
     }, 250)
   }, [])
+  const announcePolite = useCallback(
+    (message: string) => {
+      suppressSelectionAnnouncementsUntilRef.current = performance.now() + 500
+      if (selectionAnnounceTimerRef.current) {
+        clearTimeout(selectionAnnounceTimerRef.current)
+        selectionAnnounceTimerRef.current = null
+      }
+      schedulePolite(message)
+    },
+    [schedulePolite],
+  )
   const announceAssertive = useCallback((message: string) => {
     setAssertiveMessage(message)
   }, [])
@@ -585,7 +603,6 @@ export function useLiveRegionAnnouncements<TRow>({
   // Debounced selection announcement so rapid Shift-click range selection
   // doesn't queue a message per row.
   const prevSelectionSizeRef = useRef<number>(0)
-  const selectionAnnounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     const size = selectionState.mode === "explicit" ? selectionState.rowIds.size : -1
     const prev = prevSelectionSizeRef.current
@@ -593,15 +610,17 @@ export function useLiveRegionAnnouncements<TRow>({
     if (size === prev) return
     if (selectionAnnounceTimerRef.current) clearTimeout(selectionAnnounceTimerRef.current)
     selectionAnnounceTimerRef.current = setTimeout(() => {
-      if (size === 0) announcePolite(messages.selectionClearedAnnounce())
-      else if (size > 0) announcePolite(messages.selectionAnnounce({ count: size }))
+      selectionAnnounceTimerRef.current = null
+      if (performance.now() < suppressSelectionAnnouncementsUntilRef.current) return
+      if (size === 0) schedulePolite(messages.selectionClearedAnnounce())
+      else if (size > 0) schedulePolite(messages.selectionAnnounce({ count: size }))
       // size < 0 means "all" / "filtered" mode — count is consumer-specific;
       // skip the announce until the consumer wires their own.
     }, 200)
     return () => {
       if (selectionAnnounceTimerRef.current) clearTimeout(selectionAnnounceTimerRef.current)
     }
-  }, [selectionState, messages, announcePolite])
+  }, [selectionState, messages, schedulePolite])
 
   return { politeMessage, assertiveMessage, announcePolite, announceAssertive }
 }
@@ -1089,6 +1108,88 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
   }, [flipBudget, sortState, virtualizer, scrollerRef])
 
   return { prepareSortAnimation }
+}
+
+// ---------------------------------------------------------------------------
+// FLIP animation when visible row IDs are inserted.
+// ---------------------------------------------------------------------------
+
+export interface UseFlipOnRowInsertionParams<TRow> {
+  rowEntries: readonly RowEntry<TRow>[]
+  scrollerRef: RefObject<HTMLDivElement | null>
+  virtualizer: Virtualizer
+}
+
+export function useFlipOnRowInsertion<TRow>({
+  rowEntries,
+  scrollerRef,
+  virtualizer,
+}: UseFlipOnRowInsertionParams<TRow>): void {
+  const flipBudget = useMemo(() => new AnimationBudget(), [])
+  const previousRowRectsRef = useRef<Map<RowId, FlipRect>>(new Map())
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rowEntries is the render-change trigger.
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) {
+      previousRowRectsRef.current = new Map()
+      return
+    }
+
+    const rows = visibleBodyRows(scroller)
+    const currentRects = new Map<RowId, FlipRect>()
+    for (const row of rows) {
+      const rowId = row.dataset.rowId as RowId | undefined
+      if (!rowId) continue
+      currentRects.set(rowId, readFlipRect(row))
+    }
+
+    const previousRects = previousRowRectsRef.current
+    previousRowRectsRef.current = currentRects
+    if (previousRects.size === 0 || currentRects.size === 0) return
+
+    let hasVisibleInsertion = false
+    for (const rowId of currentRects.keys()) {
+      if (!previousRects.has(rowId)) {
+        hasVisibleInsertion = true
+        break
+      }
+    }
+    if (!hasVisibleInsertion) return
+
+    const targets: FlipTarget[] = []
+    const handles: { release(): void }[] = []
+    for (const rowEl of rows) {
+      const rowId = rowEl.dataset.rowId as RowId | undefined
+      if (!rowId) continue
+      const first = previousRects.get(rowId)
+      if (!first) continue
+      const last = currentRects.get(rowId)
+      if (!last) continue
+      targets.push({ element: rowEl, first, last })
+      const rowIndexAttr = rowEl.dataset.rowIndex
+      if (rowIndexAttr) {
+        const rowIndex = Number(rowIndexAttr)
+        if (Number.isFinite(rowIndex)) handles.push(virtualizer.beginInFlightRow(rowIndex))
+      }
+    }
+
+    if (targets.length === 0) {
+      for (const handle of handles) handle.release()
+      return
+    }
+
+    const animations = flip(targets, { budget: flipBudget })
+    if (animations.length === 0) {
+      for (const handle of handles) handle.release()
+      return
+    }
+    for (const [index, animation] of animations.entries()) {
+      const handle = handles[index]
+      if (!handle) continue
+      animation.finished.finally(() => handle.release())
+    }
+  }, [flipBudget, rowEntries, scrollerRef, virtualizer])
 }
 
 // ---------------------------------------------------------------------------

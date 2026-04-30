@@ -149,7 +149,7 @@ Spec: `docs/design/editing-rfc.md` (PR #45).
 - `[done: c1 #143]` **editor-autocomplete** — native `<input list>` + `<datalist>` (not shadcn); async via `column.fetchOptions(query, signal)`. Debounced 200ms. AbortSignal races superseded fetches. **Effort**: M.
 - `[done: c1 #88 (folded into editor-framework)]` **validation-framework** — sync + async validators with `AbortSignal` race semantics; `useEditingController` already exposes the full pipeline. **Effort**: S.
 - `[done: c1 #128 (salvaged via #135)]` **dirty-tracking** — `BcEditState` map + visual states (`data-bc-grid-cell-state`); cell renderer params extension (`pending`, `editError`, `isDirty`). **Effort**: S.
-- `[blocked: depends on editor-autocomplete merging]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. **Effort**: M.
+- `[review: worker4 #166]` **bc-edit-grid-complete** — `<BcEditGrid>` Q2 fold-in: `onCellEditCommit` post-commit event with optimistic + rollback; integration with the action column from Q1. The optimistic-commit / rollback skeleton landed in #148; this PR closes the remaining RFC-level gaps audited against `editing-rfc` §Server commit + §Concurrency: per-commit `mutationId` stamping, stale-mutation guard so a re-edit during a pending Promise can't be rolled back by the older settle, overlay cleanup when consumer's `data` prop catches up to the patch, real commit-source attribution, and Delete-action disabling while a row has pending edits. **Effort**: M.
 - `[blocked: depends on bc-edit-grid-complete]` **editor-custom-recipe** — docs page in `apps/docs` with a worked custom-editor example (e.g., colour picker). **Effort**: S.
 
 #### Track 2 — Range + master-detail (Q3 surface)
@@ -159,7 +159,7 @@ Spec pending: `docs/design/range-rfc.md` (c2 to author).
 - `[done: c2 #49]` **range-rfc** — design doc covering range model, anchor/extend semantics, multi-range, clipboard contract, fill handle. **Effort**: 1 day.
 - `[review: worker1 #146]` **range-state-machine** — `BcRange` (already declared `api.md §reserved Q3`) state in `core/range.ts`; anchor + extend + multi-range. **Effort**: M.
 - `[blocked: depends on range-state-machine]` **visual-selection-layer** — absolute-positioned overlay rendering range rectangles; works through virtualization. **Effort**: M.
-- `[blocked: depends on range-state-machine]` **clipboard-copy-tsv-html** — Ctrl/Cmd+C serializes range to TSV (text/plain) + HTML (text/html) on the clipboard. **Effort**: S.
+- `[review: worker1 #162]` **clipboard-copy-tsv-html** — Ctrl/Cmd+C serializes range to TSV (text/plain) + HTML (text/html) on the clipboard. **Effort**: S.
 - `[blocked: depends on clipboard-copy-tsv-html]` **clipboard-paste-from-excel** — Ctrl/Cmd+V parses clipboard TSV; applies cell-by-cell with per-column `valueParser` + `validate`; atomic apply (all-or-rollback). **Effort**: M.
 - `[blocked: depends on clipboard-paste-from-excel]` **fill-handle** — drag-square at bottom-right of active range; drag to extend; release to fill (linear / copy / smart-fill). **Effort**: M.
 - `[done: c1 #140]` **master-detail** — expandable row that mounts a consumer-supplied detail component below the row. State via `expansion: ReadonlySet<RowId>` (already declared). `aria-level` + `role="treegrid"` when active. Independent of range work; can run in parallel. **Effort**: M.
@@ -208,8 +208,8 @@ Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 - `[done: c2 #48]` **filter-registry-rfc** — extension protocol; `BcFilterDefinition` / `BcReactFilterDefinition`; persistence shape; 7 built-in filter specs. **Effort**: 1 day.
 - `[done: c1 #145]` **filter-popup-variant** ⭐ — When `column.filter.variant === "popup"`, render a header-icon (funnel) that opens a shadcn `Popover` with the existing text/number/date/boolean filter editor inside, instead of the inline-row input. Active state: solid/blue funnel + underline on the header, cleared by an `×` in the popover footer. The inline row collapses for that column when popup is active; if every column is popup-variant the row disappears entirely. AG-Grid-feel. Reuses existing filter editors — no logic duplication. **Demo-critical** (week 2). **Effort**: M.
 - `[review: worker1 #156]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
-- `[ready]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
-- `[ready]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
+- `[review: worker1 #175]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.
+- `[review: worker2 #164]` **filter-date-range-impl** — between two dates; uses shadcn date-picker. **Effort**: M.
 - `[review: worker2 #159]` **filter-number-range-impl** — between two numbers. **Effort**: S.
 - `[ready]` **filter-text-impl-extend** — extend the existing inline text filter with operators (contains / starts-with / ends-with / equals / regex toggle / case-sensitivity toggle). **Effort**: S.
 - `[ready]` **filter-custom-extension-example** — recipe in `apps/docs` showing how to register a custom filter type. **Effort**: S.
@@ -225,7 +225,7 @@ Spec pending: `docs/design/charts-rfc.md` (c2 to author; user confirmed peer-dep
 
 - `[done: c2 #53]` **charts-rfc** — **NEW track**; peer-dep architecture (consumer brings library); recharts as the documented default; adapter shape; 3 worked examples in apps/docs. **Effort**: 1 day.
 - `[blocked: depends on charts-rfc]` **charts-peer-dep-integration** — adapter package (`@bc-grid/charts` or in-react module — RFC decides); `<BcGridChart>` slot or hook; consumer-supplied chart component. **Effort**: M.
-- `[ready]` **streaming-row-updates** — server pushes new rows mid-session via `ServerRowUpdate` types (already in core); animated insertion via FLIP. Consumer subscribes via a hook. **Effort**: M.
+- `[review: worker3 #169]` **streaming-row-updates** — server pushes new rows mid-session via `ServerRowUpdate` types (already in core); animated insertion via FLIP. Consumer subscribes via a hook. **Effort**: M.
 - `[ready]` **mobile-touch-fallback** — `accessibility-rfc §Pointer and Touch Fallback`: 44px hit targets in coarse-pointer mode; double-tap to edit; long-press 500ms for context menu; pointer selection handles 44px. **Effort**: M.
 - `[ready]` **wcag-deep-pass** — full axe-core audit on every demo + manual NVDA / JAWS / VoiceOver runs; fix any findings. Generates a `docs/design/a11y-impl-report.md`. **Effort**: M.
 - `[ready]` **animation-polish** — review every transition (sort / filter / expand / collapse / insert / remove / cell-flash); tune to 60fps; document the motion system. **Effort**: M.

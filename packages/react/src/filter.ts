@@ -43,6 +43,18 @@ export interface NumberRangeFilterInput {
   valueTo: string
 }
 
+/**
+ * Two-input from/to filter for `BcColumnFilter.type === "date-range"`.
+ * Convenience over `date` `between` per `filter-registry-rfc §date-range`:
+ * always emits `op: "between"` so the predicate path collapses into the
+ * existing `matchesDateFilter` between branch. ISO 8601 (yyyy-mm-dd)
+ * day-precision strings, sourced directly from `<input type="date">`.
+ */
+export interface DateRangeFilterInput {
+  value: string
+  valueTo: string
+}
+
 export interface SetFilterInput {
   op: SetFilterOperator
   values: readonly string[]
@@ -61,6 +73,9 @@ export type FilterCellValue =
     }
 
 type DateColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "date" }
+type DateRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
+  type: "date-range"
+}
 type NumberColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "number" }
 type NumberRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
   type: "number-range"
@@ -106,6 +121,12 @@ export function buildGridFilter(
       filters.push({ ...parsed, columnId })
       continue
     }
+    if (filterType === "date-range") {
+      const parsed = parseDateRangeFilterInput(value)
+      if (!parsed) continue
+      filters.push({ ...parsed, columnId })
+      continue
+    }
     if (filterType === "set") {
       const parsed = parseSetFilterInput(value)
       if (!parsed) continue
@@ -140,6 +161,11 @@ function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFil
     return matchesNumberFilter(value.formattedValue, filter)
   }
   if (filter.type === "date") {
+    return matchesDateFilter(value, filter)
+  }
+  if (filter.type === "date-range") {
+    // The date-range filter always emits op="between"; the predicate
+    // path is identical to `date`'s between branch.
     return matchesDateFilter(value, filter)
   }
   if (filter.type === "set") {
@@ -198,6 +224,22 @@ export function encodeNumberRangeFilterInput(input: NumberRangeFilterInput): str
 export function decodeNumberRangeFilterInput(raw: string): NumberRangeFilterInput {
   try {
     const parsed = JSON.parse(raw) as Partial<NumberRangeFilterInput>
+    return {
+      value: typeof parsed.value === "string" ? parsed.value : "",
+      valueTo: typeof parsed.valueTo === "string" ? parsed.valueTo : "",
+    }
+  } catch {
+    return { value: "", valueTo: "" }
+  }
+}
+
+export function encodeDateRangeFilterInput(input: DateRangeFilterInput): string {
+  return JSON.stringify(input)
+}
+
+export function decodeDateRangeFilterInput(raw: string): DateRangeFilterInput {
+  try {
+    const parsed = JSON.parse(raw) as Partial<DateRangeFilterInput>
     return {
       value: typeof parsed.value === "string" ? parsed.value : "",
       valueTo: typeof parsed.valueTo === "string" ? parsed.valueTo : "",
@@ -313,6 +355,30 @@ function parseNumberRangeFilterInput(raw: string): NumberRangeColumnFilterDraft 
   }
 }
 
+/**
+ * Parse a `date-range` filter draft into the canonical `between`
+ * `ServerColumnFilter` shape. Both inputs must parse to ISO 8601 dates;
+ * if either is missing or unparseable, the filter is dropped (treated as
+ * "not yet active") so partial typing doesn't narrow the row set.
+ * Swapped from/to are normalised so consumers can type either edge
+ * first. Lexical ISO comparison is sufficient because dates are
+ * `YYYY-MM-DD`.
+ */
+function parseDateRangeFilterInput(raw: string): DateRangeColumnFilterDraft | null {
+  const input = decodeDateRangeFilterInput(raw)
+  const lo = parseFilterDate(input.value)
+  const hi = parseFilterDate(input.valueTo)
+  if (!lo || !hi) return null
+  const min = lo <= hi ? lo : hi
+  const max = lo <= hi ? hi : lo
+  return {
+    kind: "column",
+    type: "date-range",
+    op: "between",
+    values: [min, max],
+  }
+}
+
 function parseSetFilterInput(raw: string): SetColumnFilterDraft | null {
   const input = decodeSetFilterInput(raw)
 
@@ -358,7 +424,7 @@ function normaliseNumberFilterInput(input: Partial<NumberFilterInput>): NumberFi
 function normaliseSetFilterInput(input: Partial<SetFilterInput>): SetFilterInput {
   const op = isSetFilterOperator(input.op) ? input.op : "in"
   const values = Array.isArray(input.values)
-    ? Array.from(new Set(input.values.map(setFilterValueKey).filter((value) => value.length > 0)))
+    ? Array.from(new Set(input.values.flatMap(setFilterValueKeys)))
     : []
   return { op, values }
 }
@@ -394,9 +460,7 @@ function matchesSetFilter(
 ): boolean {
   if (filter.op === "blank") return isBlankSetFilterCellValue(cellValue)
 
-  const selected = new Set(
-    (filter.values ?? []).map(setFilterValueKey).filter((value) => value.length > 0),
-  )
+  const selected = new Set((filter.values ?? []).flatMap(setFilterValueKeys))
   if (selected.size === 0) return true
 
   const candidates = setFilterCandidateValues(cellValue)
@@ -442,7 +506,18 @@ export function setFilterValueKey(value: unknown): string {
   return String(value ?? "")
 }
 
+export function setFilterValueKeys(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.flatMap(setFilterValueKeys)))
+  }
+  if (typeof value === "string" && value.trim().length === 0) return []
+
+  const key = setFilterValueKey(value)
+  return key.length > 0 ? [key] : []
+}
+
 export function isBlankSetFilterValue(value: unknown): boolean {
+  if (Array.isArray(value)) return setFilterValueKeys(value).length === 0
   if (value == null) return true
   if (typeof value === "string") return value.trim().length === 0
   return false
@@ -456,8 +531,10 @@ function isBlankSetFilterCellValue(value: { formattedValue: string; rawValue?: u
 function setFilterCandidateValues(value: { formattedValue: string; rawValue?: unknown }): string[] {
   const candidates: string[] = []
   if ("rawValue" in value) {
-    const rawKey = setFilterValueKey(value.rawValue)
-    if (rawKey.length > 0) candidates.push(rawKey)
+    for (const rawKey of setFilterValueKeys(value.rawValue)) {
+      if (!candidates.includes(rawKey)) candidates.push(rawKey)
+    }
+    if (Array.isArray(value.rawValue)) return candidates
   }
 
   const formattedKey = setFilterValueKey(value.formattedValue)
