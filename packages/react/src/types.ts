@@ -230,6 +230,38 @@ export interface BcCellRendererParams<TRow, TValue = unknown> {
   isDirty: boolean
 }
 
+export type BcContextMenuBuiltinItem =
+  | "copy"
+  | "copy-with-headers"
+  | "clear-selection"
+  | "clear-range"
+  | "separator"
+
+export interface BcContextMenuCustomItem<TRow = unknown> {
+  id: string
+  label: string
+  onSelect: (ctx: BcContextMenuContext<TRow>) => void
+  disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+}
+
+export type BcContextMenuItem<TRow = unknown> =
+  | BcContextMenuBuiltinItem
+  | BcContextMenuCustomItem<TRow>
+
+export interface BcContextMenuContext<TRow = unknown> {
+  cell: BcCellPosition | null
+  row: TRow | null
+  column: BcReactGridColumn<TRow> | null
+  selection: BcSelection
+  api: BcGridApi<TRow>
+}
+
+export type BcContextMenuItems<TRow = unknown> =
+  | readonly (BcContextMenuItem<TRow> | false | null | undefined)[]
+  | ((
+      ctx: BcContextMenuContext<TRow>,
+    ) => readonly (BcContextMenuItem<TRow> | false | null | undefined)[])
+
 export interface BcDetailPanelParams<TRow> {
   row: TRow
   rowId: RowId
@@ -296,6 +328,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   sidebarPanel?: string | null
   onSidebarPanelChange?: (next: string | null, prev: string | null) => void
   sidebarWidth?: number
+  contextMenuItems?: BcContextMenuItems<TRow>
 
   /**
    * Master-detail render hook. When supplied, the grid renders a pinned-left

@@ -35,6 +35,8 @@
   --bc-grid-status-posted-fg: hsl(221 65% 36%);
   --bc-grid-status-held-bg: hsl(37 92% 91%);
   --bc-grid-status-held-fg: hsl(32 80% 32%);
+  --bc-grid-context-menu-bg: hsl(var(--popover, var(--background, 0 0% 100%)));
+  --bc-grid-context-menu-border: hsl(var(--border, 214 32% 91%));
   --bc-grid-row-height: 36px;
   --bc-grid-header-height: 40px;
   --bc-grid-cell-padding-x: 12px;
@@ -564,6 +566,61 @@
   margin-top: 0.25rem;
   justify-content: center;
   color: var(--bc-grid-muted-fg);
+}
+
+.bc-grid-context-menu {
+  position: fixed;
+  z-index: 70;
+  width: min(16rem, calc(100vw - 16px));
+  border: 1px solid var(--bc-grid-context-menu-border);
+  border-radius: var(--bc-grid-radius);
+  background: var(--bc-grid-context-menu-bg);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+  color: var(--bc-grid-fg);
+  padding: 0.25rem;
+}
+
+.bc-grid-context-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 2rem;
+  align-items: center;
+  border: 0;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  gap: 0.5rem;
+  outline: none;
+  padding: 0 0.5rem;
+  text-align: left;
+  user-select: none;
+}
+
+.bc-grid-context-menu-item:hover,
+.bc-grid-context-menu-item[data-active="true"],
+.bc-grid-context-menu-item:focus-visible {
+  background: var(--bc-grid-row-hover);
+}
+
+.bc-grid-context-menu-item[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.bc-grid-context-menu-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bc-grid-context-menu-separator {
+  height: 1px;
+  margin: 0.25rem 0.375rem;
+  background: var(--bc-grid-context-menu-border);
 }
 
 .bc-grid-tooltip-content {
@@ -1220,6 +1277,8 @@
     --bc-grid-statusbar-bg: Canvas;
     --bc-grid-statusbar-fg: CanvasText;
     --bc-grid-statusbar-border-top: CanvasText;
+    --bc-grid-context-menu-bg: Canvas;
+    --bc-grid-context-menu-border: CanvasText;
   }
 
   .bc-grid,

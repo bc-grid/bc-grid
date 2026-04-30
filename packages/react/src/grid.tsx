@@ -17,11 +17,14 @@ import type {
 import { Virtualizer } from "@bc-grid/virtualizer"
 import {
   type CSSProperties,
+  type ComponentType,
   type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
+  Suspense,
   type UIEvent,
+  lazy,
   useCallback,
   useEffect,
   useId,
@@ -96,6 +99,7 @@ import {
   renderFilterCell,
   renderHeaderCell,
 } from "./headerCells"
+import type { BcGridContextMenuLayerProps } from "./internal/context-menu-layer"
 import { nextKeyboardNav } from "./keyboard"
 import {
   BcGridPagination,
@@ -136,6 +140,7 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
 
 const DEFAULT_DETAIL_HEIGHT = 144
 const editableKeyTargetTags = new Set(["INPUT", "TEXTAREA", "SELECT"])
+const BcGridContextMenuLayer = lazy(() => import("./internal/context-menu-layer"))
 
 export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   assertNoMixedControlledProps(props)
@@ -1200,6 +1205,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       />
     ) : null)
 
+  const clearContextSelection = useCallback(
+    () => setSelectionState(createEmptySelection()),
+    [setSelectionState],
+  )
+
   // While the editor input owns DOM focus, aria-activedescendant is
   // suspended (set to "") so AT doesn't try to point at a cell that's now
   // hosting an `<input>`. Once committing/cancelling starts, the editor DOM
@@ -1574,6 +1584,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ],
   )
   const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
+  const ContextMenuLayer = BcGridContextMenuLayer as ComponentType<
+    BcGridContextMenuLayerProps<TRow>
+  >
 
   return (
     <div
@@ -1921,6 +1934,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           onToggle={toggleColumnHidden}
         />
       ) : null}
+
+      <Suspense fallback={null}>
+        <ContextMenuLayer
+          args={[
+            activeCell,
+            api,
+            props.contextMenuItems,
+            clearContextSelection,
+            copyRangeToClipboard,
+            editController.editState.mode === "navigation",
+            onCellFocus,
+            resolvedColumns,
+            rowEntries,
+            rowsById,
+            rootRef,
+            selectionState,
+            setActiveCell,
+          ]}
+        />
+      </Suspense>
 
       {renderedFooter ? <div className="bc-grid-footer">{renderedFooter}</div> : null}
 
