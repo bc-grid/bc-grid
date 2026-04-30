@@ -1,4 +1,5 @@
 import type { BcCellPosition } from "@bc-grid/core"
+import type { InFlightHandle, Virtualizer } from "@bc-grid/virtualizer"
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -24,6 +25,17 @@ interface EditorPortalProps<TRow> {
   /** Pixel position of the cell being edited. */
   cellRect: { top: number; left: number; width: number; height: number } | null
   /**
+   * Virtualizer + index lookup for in-flight retention while editing.
+   * The editor portal acquires `beginInFlightRow(rowIndex) +
+   * beginInFlightCol(colIndex)` on mount so scroll / sort / filter
+   * during edit doesn't unmount the editor element. Released on
+   * unmount via the InFlightHandle pair. Per
+   * `editing-rfc §Virtualizer retention contract`.
+   */
+  virtualizer?: Virtualizer
+  rowIndexById?: Map<BcCellPosition["rowId"], number>
+  columnIndexById?: Map<BcCellPosition["columnId"], number>
+  /**
    * Default editor used when a column doesn't supply its own
    * `cellEditor`. v0.1 default is a text input.
    */
@@ -46,6 +58,9 @@ export function EditorPortal<TRow>({
   rowEntries,
   resolvedColumns,
   cellRect,
+  virtualizer,
+  rowIndexById,
+  columnIndexById,
   defaultEditor,
 }: EditorPortalProps<TRow>): ReactNode {
   const { editState } = controller
@@ -70,6 +85,13 @@ export function EditorPortal<TRow>({
   const editorSpec: BcCellEditor<TRow> | undefined = column.source.cellEditor ?? defaultEditor
   if (!editorSpec) return null
 
+  // Resolve indices for in-flight retention. If the lookup maps weren't
+  // supplied, retention is a no-op — the editor still works for the
+  // common case where the row + column are inside the viewport, but
+  // scrolling them out mid-edit will unmount the editor.
+  const rowIndex = rowIndexById?.get(activeCell.rowId)
+  const colIndex = columnIndexById?.get(activeCell.columnId)
+
   return (
     <EditorMount
       controller={controller}
@@ -78,6 +100,9 @@ export function EditorPortal<TRow>({
       column={column}
       rowEntry={rowEntry}
       editor={editorSpec}
+      {...(virtualizer ? { virtualizer } : {})}
+      {...(typeof rowIndex === "number" ? { rowIndex } : {})}
+      {...(typeof colIndex === "number" ? { colIndex } : {})}
     />
   )
 }
@@ -89,6 +114,9 @@ interface EditorMountProps<TRow> {
   column: ResolvedColumn<TRow>
   rowEntry: RowEntry<TRow>
   editor: BcCellEditor<TRow>
+  virtualizer?: Virtualizer
+  rowIndex?: number
+  colIndex?: number
 }
 
 function EditorMount<TRow>({
@@ -98,6 +126,9 @@ function EditorMount<TRow>({
   column,
   rowEntry,
   editor,
+  virtualizer,
+  rowIndex,
+  colIndex,
 }: EditorMountProps<TRow>) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const focusRef = useRef<HTMLElement | null>(null)
@@ -128,13 +159,26 @@ function EditorMount<TRow>({
   // Move DOM focus to the editor's `focusRef` after mount, then dispatch
   // `mounted` to advance the state machine to Editing. Cleanup releases
   // the focus back to the grid root via `unmounted`.
+  //
+  // Per `editing-rfc §Virtualizer retention contract`, also acquire
+  // row + column retention so scroll / sort / filter during edit doesn't
+  // unmount the editor's DOM. The retained row + col are held until
+  // either handle is released.
   useLayoutEffect(() => {
     focusRef.current?.focus({ preventScroll: true })
     dispatchMounted()
+    const handles: InFlightHandle[] = []
+    if (virtualizer && typeof rowIndex === "number" && rowIndex >= 0) {
+      handles.push(virtualizer.beginInFlightRow(rowIndex))
+    }
+    if (virtualizer && typeof colIndex === "number" && colIndex >= 0) {
+      handles.push(virtualizer.beginInFlightCol(colIndex))
+    }
     return () => {
+      for (const handle of handles) handle.release()
       dispatchUnmounted()
     }
-  }, [dispatchMounted, dispatchUnmounted])
+  }, [dispatchMounted, dispatchUnmounted, virtualizer, rowIndex, colIndex])
 
   const handleCommit = (newValue: unknown, moveOnSettle: MoveOnSettle = "down") => {
     void commit(

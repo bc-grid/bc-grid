@@ -1142,6 +1142,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           rowEntries={rowEntries}
           resolvedColumns={resolvedColumns}
           cellRect={editorCellRect}
+          virtualizer={virtualizer}
+          rowIndexById={rowIndexById}
+          columnIndexById={columnIndexById}
           defaultEditor={defaultTextEditor as never}
         />
 
