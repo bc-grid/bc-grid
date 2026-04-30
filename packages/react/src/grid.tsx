@@ -1635,6 +1635,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     scrollLeft: scrollOffset.left,
                     totalWidth: virtualWindow.totalWidth,
                     viewportWidth: viewport.width,
+                    messages,
                   }),
                 )}
               </div>
@@ -1917,7 +1918,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             const popupFilter = popupColumn.source.filter
             if (!popupFilter) return null
             const popupColumnId = filterPopupState.columnId
-            const popupLabel = `Filter ${typeof popupColumn.source.header === "string" ? popupColumn.source.header : popupColumnId}`
+            const popupColumnLabel =
+              typeof popupColumn.source.header === "string"
+                ? popupColumn.source.header
+                : popupColumnId
+            const popupLabel = messages.filterAriaLabel({ columnLabel: popupColumnLabel })
             return (
               <FilterPopup
                 anchor={filterPopupState.anchor}
@@ -1937,6 +1942,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   setFilterPopupState(null)
                 }}
                 onClose={() => setFilterPopupState(null)}
+                messages={messages}
               />
             )
           })()

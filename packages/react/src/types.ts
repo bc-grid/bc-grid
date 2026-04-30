@@ -44,6 +44,21 @@ export interface BcGridMessages {
   statusBarLabel: string
 
   /**
+   * Filter cell text. `filterAriaLabel` produces the accessible name
+   * for filter inputs from the column header so AT announces the
+   * column context; `filterPlaceholder` is the visible placeholder
+   * for the inline single-input filters; `filterMinPlaceholder` /
+   * `filterMaxPlaceholder` are the per-bound placeholders for
+   * range-style filters (number-range / date-range). Per
+   * `accessibility-rfc §Semantic DOM Model` (no hard-coded English
+   * inside engine packages).
+   */
+  filterPlaceholder: string
+  filterAriaLabel: (params: { columnLabel: string }) => string
+  filterMinPlaceholder: string
+  filterMaxPlaceholder: string
+
+  /**
    * Live-region announcement templates. Functions return the localised
    * string for the given event. Per `accessibility-rfc §Live Regions`.
    */

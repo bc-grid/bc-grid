@@ -36,6 +36,7 @@ import {
   pinnedClassName,
   pinnedEdgeClassName,
 } from "./gridInternals"
+import type { BcGridMessages } from "./types"
 
 /**
  * Modifier flags forwarded from the header click / keyboard handler so the
@@ -44,6 +45,32 @@ import {
 export interface SortModifiers {
   shiftKey: boolean
   ctrlOrMeta: boolean
+}
+
+/**
+ * Pure helper that resolves the column header's `aria-sort` attribute
+ * value from the current sort direction and whether the column is
+ * sortable at all. Per `accessibility-rfc §Semantic DOM Model`:
+ * "Sortable headers set `aria-sort='ascending' | 'descending' | 'none'
+ * | 'other'` only on the active sorted header where applicable."
+ *
+ *   - When the column is currently sorted, return the matching
+ *     "ascending" / "descending" string.
+ *   - When the column is sortable but not currently sorted, return
+ *     `"none"` so AT users know the column is sortable.
+ *   - When the column is not sortable at all, return `undefined` so
+ *     no `aria-sort` attribute is emitted (cleaner DOM than emitting
+ *     `aria-sort="none"` on non-sortable columns).
+ *
+ * Exported for unit testing; `renderHeaderCell` uses it inline.
+ */
+export function ariaSortFor(
+  direction: "asc" | "desc" | undefined,
+  sortable: boolean,
+): "ascending" | "descending" | "none" | undefined {
+  if (direction === "asc") return "ascending"
+  if (direction === "desc") return "descending"
+  return sortable ? "none" : undefined
 }
 
 export interface ColumnMenuAnchor {
@@ -110,13 +137,7 @@ export function renderHeaderCell<TRow>({
   const sortIndex = sortState.findIndex((entry) => entry.columnId === column.columnId)
   const sort = sortIndex >= 0 ? sortState[sortIndex] : undefined
   const sortable = column.source.sortable !== false
-  const ariaSort = sort
-    ? sort.direction === "asc"
-      ? "ascending"
-      : "descending"
-    : sortable
-      ? "none"
-      : undefined
+  const ariaSort = ariaSortFor(sort?.direction, sortable)
   // Show the 1-based sort-order index when more than one column is sorted,
   // so users can see the priority order they composed via Shift+click.
   const showSortOrder = sort != null && sortState.length > 1
@@ -299,6 +320,14 @@ interface RenderFilterCellParams<TRow> {
   scrollLeft: number
   totalWidth: number
   viewportWidth: number
+  /**
+   * Localised filter strings. Threaded from the grid's resolved
+   * messages so AT announcements / placeholders aren't hardcoded
+   * English. Per `accessibility-rfc §Live Regions` ("Live text is
+   * localized through the React layer; no hard-coded English inside
+   * engine packages").
+   */
+  messages: BcGridMessages
 }
 
 export function renderFilterCell<TRow>({
@@ -313,6 +342,7 @@ export function renderFilterCell<TRow>({
   scrollLeft,
   totalWidth,
   viewportWidth,
+  messages,
 }: RenderFilterCellParams<TRow>): ReactNode {
   const filterDisabled = column.source.filter === false
   const filterType = column.source.filter ? column.source.filter.type : "text"
@@ -320,7 +350,9 @@ export function renderFilterCell<TRow>({
     Boolean(column.source.filter) &&
     column.source.filter !== false &&
     (column.source.filter as BcColumnFilter).variant === "popup"
-  const filterLabel = `Filter ${typeof column.source.header === "string" ? column.source.header : column.columnId}`
+  const columnLabel =
+    typeof column.source.header === "string" ? column.source.header : column.columnId
+  const filterLabel = messages.filterAriaLabel({ columnLabel })
   const filterId = `${domBaseId}-filter-${domToken(column.columnId)}`
   return (
     <div
@@ -362,6 +394,7 @@ export function renderFilterCell<TRow>({
             loadSetFilterOptions ? () => loadSetFilterOptions(column.columnId) : undefined
           }
           onFilterChange={onFilterChange}
+          messages={messages}
         />
       )}
     </div>
@@ -673,6 +706,7 @@ export function FilterEditorBody({
   getSetFilterOptions,
   onFilterChange,
   autoFocus,
+  messages,
 }: {
   filterType: BcColumnFilter["type"]
   filterText: string
@@ -681,6 +715,7 @@ export function FilterEditorBody({
   getSetFilterOptions?: (() => readonly SetFilterOption[]) | undefined
   onFilterChange: (next: string) => void
   autoFocus?: boolean
+  messages: BcGridMessages
 }): ReactNode {
   const focusRef = useRef<FilterFocusElement | null>(null)
   useLayoutEffect(() => {
@@ -714,6 +749,8 @@ export function FilterEditorBody({
         filterText={filterText}
         onFilterChange={onFilterChange}
         primaryRef={focusRef}
+        minPlaceholder={messages.filterMinPlaceholder}
+        maxPlaceholder={messages.filterMaxPlaceholder}
       />
     )
   }
@@ -725,6 +762,8 @@ export function FilterEditorBody({
         filterText={filterText}
         onFilterChange={onFilterChange}
         primaryRef={focusRef}
+        minPlaceholder={messages.filterMinPlaceholder}
+        maxPlaceholder={messages.filterMaxPlaceholder}
       />
     )
   }
@@ -774,7 +813,7 @@ export function FilterEditorBody({
       onChange={(event) => onFilterChange(event.currentTarget.value)}
       onKeyDown={(event) => event.stopPropagation()}
       id={filterId}
-      placeholder="Filter"
+      placeholder={messages.filterPlaceholder}
     />
   )
 }
@@ -789,6 +828,7 @@ interface FilterPopupProps {
   onFilterChange: (next: string) => void
   onClear: () => void
   onClose: () => void
+  messages: BcGridMessages
 }
 
 /**
@@ -810,6 +850,7 @@ export function FilterPopup({
   onFilterChange,
   onClear,
   onClose,
+  messages,
 }: FilterPopupProps): ReactNode {
   // Close on Escape or pointer-down outside.
   useEffect(() => {
@@ -869,6 +910,7 @@ export function FilterPopup({
         getSetFilterOptions={getSetFilterOptions}
         onFilterChange={onFilterChange}
         autoFocus
+        messages={messages}
       />
       <div
         className="bc-grid-filter-popup-footer"
@@ -908,12 +950,16 @@ function NumberFilterControl({
   filterText,
   onFilterChange,
   primaryRef,
+  minPlaceholder,
+  maxPlaceholder,
 }: {
   filterId: string
   filterLabel: string
   filterText: string
   onFilterChange: (next: string) => void
   primaryRef?: { current: FilterFocusElement | null }
+  minPlaceholder: string
+  maxPlaceholder: string
 }): ReactNode {
   const input = decodeNumberFilterInput(filterText)
   const update = (next: Partial<typeof input>) => {
@@ -950,7 +996,7 @@ function NumberFilterControl({
         value={input.value}
         onChange={(event) => update({ value: event.currentTarget.value })}
         onKeyDown={(event) => event.stopPropagation()}
-        placeholder={input.op === "between" ? "Min" : "Value"}
+        placeholder={input.op === "between" ? minPlaceholder : ""}
       />
       {input.op === "between" ? (
         <input
@@ -961,7 +1007,7 @@ function NumberFilterControl({
           value={input.valueTo ?? ""}
           onChange={(event) => update({ valueTo: event.currentTarget.value })}
           onKeyDown={(event) => event.stopPropagation()}
-          placeholder="Max"
+          placeholder={maxPlaceholder}
         />
       ) : null}
     </div>
@@ -980,12 +1026,16 @@ function NumberRangeFilterControl({
   filterText,
   onFilterChange,
   primaryRef,
+  minPlaceholder,
+  maxPlaceholder,
 }: {
   filterId: string
   filterLabel: string
   filterText: string
   onFilterChange: (next: string) => void
   primaryRef?: { current: FilterFocusElement | null }
+  minPlaceholder: string
+  maxPlaceholder: string
 }): ReactNode {
   const input = decodeNumberRangeFilterInput(filterText)
   const update = (next: Partial<typeof input>) => {
@@ -1007,7 +1057,7 @@ function NumberRangeFilterControl({
         value={input.value}
         onChange={(event) => update({ value: event.currentTarget.value })}
         onKeyDown={(event) => event.stopPropagation()}
-        placeholder="Min"
+        placeholder={minPlaceholder}
       />
       <span aria-hidden="true" className="bc-grid-filter-number-range-separator">
         —
@@ -1020,7 +1070,7 @@ function NumberRangeFilterControl({
         value={input.valueTo}
         onChange={(event) => update({ valueTo: event.currentTarget.value })}
         onKeyDown={(event) => event.stopPropagation()}
-        placeholder="Max"
+        placeholder={maxPlaceholder}
       />
     </div>
   )
