@@ -177,6 +177,31 @@ export function columnIdFor<TRow>(
   return column.columnId ?? column.field ?? `column-${originalIndex}`
 }
 
+/**
+ * Decide whether the inline filter row should render. The
+ * `showFilterRow` prop on `BcGridProps` overrides the column-driven
+ * default so host apps can wire a filter-toggle button without
+ * touching column definitions.
+ *
+ * - `undefined` (default) — row renders iff at least one column has
+ *   an inline-variant filter configured.
+ * - `true` — force visible.
+ * - `false` — force hidden. Active filter state (`columnFilterText` /
+ *   `BcGridFilter`) is independent of this flag and is preserved.
+ */
+export function resolveFilterRowVisibility<TRow>(
+  showFilterRow: boolean | undefined,
+  resolvedColumns: readonly ResolvedColumn<TRow>[],
+): boolean {
+  if (showFilterRow === false) return false
+  if (showFilterRow === true) return true
+  return resolvedColumns.some((column) => {
+    const filter = column.source.filter
+    if (filter === false || filter == null) return false
+    return filter.variant !== "popup"
+  })
+}
+
 export function deriveColumnState<TRow>(
   resolvedColumns: readonly ResolvedColumn<TRow>[],
   columnState: readonly BcColumnStateEntry[],

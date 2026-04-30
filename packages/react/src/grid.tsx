@@ -76,6 +76,7 @@ import {
   pinnedEdgeFor,
   resolveColumns,
   resolveFallbackBodyHeight,
+  resolveFilterRowVisibility,
   resolveHeaderHeight,
   resolveRowHeight,
   rootStyle,
@@ -627,19 +628,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   })
   const hasAggregationFooter = aggregationResults.length > 0
 
-  // Whether the inline filter row should render at all. Per
-  // `filter-popup-variant`: when every filterable column is variant="popup"
-  // (or filter:false), the inline row collapses entirely. Any other case —
-  // mixed inline/popup or all inline — keeps the row.
+  // Whether the inline filter row should render. Default is column-driven
+  // (`filter-popup-variant`: row hidden when every filterable column is
+  // variant="popup" or filter:false); `showFilterRow` overrides the
+  // default so host apps can wire a filter-toggle button without touching
+  // column defs. Active filter state (`columnFilterText`) is independent
+  // and preserved across toggle — hiding the row never clears anything.
   const hasInlineFilters = useMemo(
-    () =>
-      resolvedColumns.some(
-        (column) =>
-          column.source.filter !== false &&
-          column.source.filter != null &&
-          (column.source.filter as BcColumnFilter).variant !== "popup",
-      ),
-    [resolvedColumns],
+    () => resolveFilterRowVisibility(props.showFilterRow, resolvedColumns),
+    [props.showFilterRow, resolvedColumns],
   )
 
   const loadSetFilterOptions = useCallback(
