@@ -2,12 +2,13 @@
 
 Coordinator-owned plan for side-by-side AG Grid vs bc-grid audits.
 
-Do not clone, download, open, or inspect the AG Grid source repository for this project. Do not copy or translate AG Grid source logic. The value of this audit is behavioral parity and product judgment, not source-derived implementation.
+Do not clone, download, open, or inspect the AG Grid source repository for this project. Do not copy or translate AG Grid source logic. The value of this audit is behavioral parity, product judgment, and pattern validation from public surfaces, not source-derived implementation.
 
 ## Allowed Inputs
 
 - AG Grid public documentation and public API reference.
 - Public examples and screenshots.
+- Publicly documented interaction patterns, configuration shapes, and UX conventions.
 - Black-box behavior observed by running a consumer app or minimal demo that uses a public AG Grid package, if the maintainer approves the dependency/license for that local audit.
 - bc-grid source, tests, docs, examples, and package behavior.
 - User reports from `bsncraft` or other consuming apps.
@@ -18,6 +19,10 @@ Do not clone, download, open, or inspect the AG Grid source repository for this 
 - Reading AG Grid implementation files, patches, internals, or minified/decompiled bundles to infer logic.
 - Copying algorithm structure, internal names, private state machines, or implementation details.
 - Treating AG Grid bugs as compatibility requirements unless the maintainer explicitly chooses bug-for-bug behavior for a consumer-critical case.
+
+## Pattern Validation Rule
+
+AG Grid can be used as a product reference for what serious grid users expect, especially around Enterprise-style workflows. It is acceptable to validate UX, API, and behavior patterns from public documentation, examples, screenshots, and approved black-box demos. It is not acceptable to derive bc-grid implementation details from AG Grid source or internals.
 
 ## Audit Output
 

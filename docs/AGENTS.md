@@ -8,7 +8,7 @@ This is the binding process for all agents (Claude Max, Codex Max, or any other)
 
 Build a high-performance shadcn-native data grid that competes with AG Grid Enterprise. See `design.md` for the architecture, `roadmap.md` for the **2-week parallel sprint to v1.0** (compressed from the original 2-year plan; see `design.md §13` for the 2026-04-29 scope+timeline pivot), `queue.md` for the current task list, and `coordination/v1-parity-sprint.md` for the active orchestration.
 
-**Coordinator release memory:** the Codex coordinator must keep `docs/coordination/release-milestone-roadmap.md` current. When a milestone's checklist and release gates are complete, the coordinator should recommend bumping the package version and publishing the next release. AG Grid comparisons must follow `docs/coordination/ag-grid-clean-room-audit-plan.md`; do not inspect or clone AG Grid source.
+**Coordinator release memory:** the Codex coordinator must keep `docs/coordination/release-milestone-roadmap.md` current. When a milestone's checklist and release gates are complete, the coordinator should recommend bumping the package version and publishing the next release. AG Grid comparisons must follow `docs/coordination/ag-grid-clean-room-audit-plan.md`; use public docs, APIs, examples, and black-box behavior for pattern validation, but do not inspect or clone AG Grid source.
 
 ## 2. Reading order on first session
 
@@ -27,7 +27,7 @@ After Q1, every session: re-read `queue.md` + the design doc for the package you
 ## 3. The golden rules
 
 1. **Audit before code.** Every non-trivial task has a design entry under `docs/design/<feature>.md` reviewed before code is written. New features without a design doc are rejected at PR review.
-2. **No AG Grid source code.** Read public docs only; never the AG Grid source. If you've ever worked on AG Grid in another project, flag it; for code you write, the architect may ask you to step back from a particular package.
+2. **No AG Grid source code.** Use public docs, APIs, examples, screenshots, and approved black-box behavior to validate product patterns; never inspect or clone AG Grid source or internals. If you've ever worked on AG Grid in another project, flag it; for code you write, the architect may ask you to step back from a particular package.
 3. **Public API is sacred.** After Q1 freeze, public API changes go through the architect. Every PR runs an API-surface diff in CI; non-empty diff requires architect sign-off.
 4. **Performance is non-negotiable.** Every PR runs the perf benchmark suite. Regressions fail the build. No "we'll fix it later" — perf debt compounds.
 5. **TypeScript strict, no `any`.** The TanStack adapter is the only place `any` is permitted. Outside that, fully typed.
