@@ -1,4 +1,11 @@
-import { dateEditor, datetimeEditor, numberEditor, textEditor, timeEditor } from "@bc-grid/editors"
+import {
+  dateEditor,
+  datetimeEditor,
+  numberEditor,
+  selectEditor,
+  textEditor,
+  timeEditor,
+} from "@bc-grid/editors"
 import {
   type BcCellEditor,
   BcEditGrid,
@@ -29,6 +36,13 @@ const statusLabels: Record<CustomerStatus, string> = {
   "Past Due": "past-due",
   Disputed: "disputed",
 }
+
+const STATUS_OPTIONS: readonly { value: CustomerStatus; label: string }[] = [
+  { value: "Open", label: "Open" },
+  { value: "Credit Hold", label: "Credit Hold" },
+  { value: "Past Due", label: "Past Due" },
+  { value: "Disputed", label: "Disputed" },
+]
 
 export function App() {
   const [theme, setTheme] = useState<ThemeMode>("light")
@@ -335,6 +349,13 @@ function CustomerGridDemo({
         cellRenderer(params) {
           return <StatusBadge status={params.row.status} />
         },
+        // ?edit=1: editable enum field. Native <select> dropdown via
+        // editor-select; options enumerate every CustomerStatus value.
+        editable: editorFrameworkEnabled(),
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: selectEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        options: STATUS_OPTIONS,
       },
       {
         columnId: "lastInvoice",
