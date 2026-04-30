@@ -123,59 +123,18 @@ export interface ViewportSize {
   width: number
 }
 
-export type HeaderCellLayout<TRow> =
-  | {
-      kind: "group"
-      id: string
-      source: BcReactGridColumn<TRow>
-      depth: number
-      colStart: number
-      colSpan: number
-      rowSpan: 1
-      left: number
-      width: number
-      pinned: "left" | "right" | null
-      pinnedEdge: "left" | "right" | null
-    }
-  | {
-      kind: "leaf"
-      id: ColumnId
-      column: ResolvedColumn<TRow>
-      depth: number
-      colStart: number
-      colSpan: 1
-      rowSpan: number
-      left: number
-      width: number
-      pinned: "left" | "right" | null
-      pinnedEdge: "left" | "right" | null
-    }
-
-export interface ColumnHeaderLayout<TRow> {
-  rows: readonly (readonly HeaderCellLayout<TRow>[])[]
-  rowCount: number
-}
+export type HeaderGroupLayout<TRow> = [
+  source: BcReactGridColumn<TRow>,
+  colStart: number,
+  colSpan: number,
+  left: number,
+  width: number,
+  pinned: "left" | "right" | null,
+]
 
 // ---------------------------------------------------------------------------
 // Column resolution.
 // ---------------------------------------------------------------------------
-
-interface ColumnTreeNode<TRow> {
-  source: BcReactGridColumn<TRow>
-  id: string
-  depth: number
-  children: ColumnTreeNode<TRow>[]
-  leafColumnIds: ColumnId[]
-}
-
-interface ColumnTreeBuildContext {
-  leafIndex: number
-}
-
-interface ColumnTreeInheritance {
-  hidden: boolean
-  pinned: "left" | "right" | undefined
-}
 
 export function resolveColumns<TRow>(
   columns: readonly BcReactGridColumn<TRow>[],
@@ -230,28 +189,22 @@ export function columnIdFor<TRow>(
 export function flattenLeafColumns<TRow>(
   columns: readonly BcReactGridColumn<TRow>[],
 ): BcReactGridColumn<TRow>[] {
-  const leaves: BcReactGridColumn<TRow>[] = []
-  collectLeafColumns(columns, leaves, { hidden: false, pinned: undefined })
-  return leaves
+  return columns.flatMap((column) =>
+    column.children?.length ? flattenLeafColumns(column.children) : [column],
+  )
 }
 
-export function buildColumnHeaderLayout<TRow>(
+export function buildColumnHeaderGroups<TRow>(
   columns: readonly BcReactGridColumn<TRow>[],
   resolvedColumns: readonly ResolvedColumn<TRow>[],
-): ColumnHeaderLayout<TRow> {
-  const nodes = buildColumnTree(columns, 0, { leafIndex: 0 }, { hidden: false, pinned: undefined })
+): HeaderGroupLayout<TRow>[][] {
   const indexById = new Map(resolvedColumns.map((column, index) => [column.columnId, index]))
-  const maxDepth = maxVisibleLeafDepth(nodes, indexById)
-  if (maxDepth < 0) return { rows: [[]], rowCount: 1 }
-
-  const rows: HeaderCellLayout<TRow>[][] = Array.from({ length: maxDepth + 1 }, () => [])
-  for (const node of nodes) {
-    appendHeaderCells(node, rows, maxDepth, resolvedColumns, indexById)
-  }
+  const rows: HeaderGroupLayout<TRow>[][] = []
+  appendHeaderGroups(columns, rows, resolvedColumns, indexById, 0, { leafIndex: 0 })
   for (const row of rows) {
-    row.sort((a, b) => a.colStart - b.colStart || a.depth - b.depth)
+    row.sort((a, b) => a[1] - b[1])
   }
-  return { rows, rowCount: rows.length }
+  return rows
 }
 
 export function deriveColumnState<TRow>(
@@ -267,190 +220,74 @@ export function deriveColumnState<TRow>(
   }))
 }
 
-function collectLeafColumns<TRow>(
+function appendHeaderGroups<TRow>(
   columns: readonly BcReactGridColumn<TRow>[],
-  leaves: BcReactGridColumn<TRow>[],
-  inherited: ColumnTreeInheritance,
-): void {
-  for (const column of columns) {
-    const normalized = normalizeColumnInheritance(column, inherited)
-    if (normalized.children && normalized.children.length > 0) {
-      collectLeafColumns(normalized.children, leaves, {
-        hidden: normalized.hidden === true,
-        pinned: normalized.pinned,
-      })
-      continue
-    }
-    leaves.push(normalized)
-  }
-}
-
-function buildColumnTree<TRow>(
-  columns: readonly BcReactGridColumn<TRow>[],
-  depth: number,
-  context: ColumnTreeBuildContext,
-  inherited: ColumnTreeInheritance,
-): ColumnTreeNode<TRow>[] {
-  return columns.map((column, index) => {
-    const normalized = normalizeColumnInheritance(column, inherited)
-    const pathId = `${depth}-${index}-${context.leafIndex}`
-    if (normalized.children && normalized.children.length > 0) {
-      const children = buildColumnTree(normalized.children, depth + 1, context, {
-        hidden: normalized.hidden === true,
-        pinned: normalized.pinned,
-      })
-      return {
-        source: normalized,
-        id: groupIdFor(normalized, pathId),
-        depth,
-        children,
-        leafColumnIds: children.flatMap((child) => child.leafColumnIds),
-      }
-    }
-
-    const columnId = columnIdFor(normalized, context.leafIndex)
-    context.leafIndex += 1
-    return {
-      source: normalized,
-      id: columnId,
-      depth,
-      children: [],
-      leafColumnIds: [columnId],
-    }
-  })
-}
-
-function normalizeColumnInheritance<TRow>(
-  column: BcReactGridColumn<TRow>,
-  inherited: ColumnTreeInheritance,
-): BcReactGridColumn<TRow> {
-  const hidden = inherited.hidden || column.hidden === true
-  const pinned = column.pinned ?? inherited.pinned
-  const shouldCopy =
-    (hidden && column.hidden !== true) || (pinned !== undefined && column.pinned == null)
-  if (!shouldCopy) return column
-  return {
-    ...column,
-    ...(hidden ? { hidden: true } : {}),
-    ...(pinned ? { pinned } : {}),
-  }
-}
-
-function groupIdFor<TRow>(column: BcReactGridColumn<TRow>, fallback: string): string {
-  return `group-${column.columnId ?? column.field ?? fallback}`
-}
-
-function maxVisibleLeafDepth<TRow>(
-  nodes: readonly ColumnTreeNode<TRow>[],
-  indexById: ReadonlyMap<ColumnId, number>,
-): number {
-  let maxDepth = -1
-  for (const node of nodes) {
-    if (node.children.length === 0) {
-      if (indexById.has(node.leafColumnIds[0] as ColumnId))
-        maxDepth = Math.max(maxDepth, node.depth)
-      continue
-    }
-    maxDepth = Math.max(maxDepth, maxVisibleLeafDepth(node.children, indexById))
-  }
-  return maxDepth
-}
-
-function appendHeaderCells<TRow>(
-  node: ColumnTreeNode<TRow>,
-  rows: HeaderCellLayout<TRow>[][],
-  maxDepth: number,
+  rows: HeaderGroupLayout<TRow>[][],
   resolvedColumns: readonly ResolvedColumn<TRow>[],
   indexById: ReadonlyMap<ColumnId, number>,
-): void {
-  const visibleLeafIndexes = sortedVisibleLeafIndexes(node.leafColumnIds, indexById)
-  if (visibleLeafIndexes.length === 0) return
-
-  if (node.children.length === 0) {
-    const columnIndex = visibleLeafIndexes[0]
-    if (columnIndex == null) return
-    const column = resolvedColumns[columnIndex]
-    if (!column) return
-    rows[node.depth]?.push({
-      kind: "leaf",
-      id: column.columnId,
-      column,
-      depth: node.depth,
-      colStart: columnIndex,
-      colSpan: 1,
-      rowSpan: maxDepth - node.depth + 1,
-      left: column.left,
-      width: column.width,
-      pinned: column.pinned,
-      pinnedEdge: pinnedEdgeForHeaderSpan(resolvedColumns, columnIndex, columnIndex),
-    })
-    return
-  }
-
-  for (const segment of contiguousHeaderSegments(visibleLeafIndexes, resolvedColumns)) {
-    const first = resolvedColumns[segment.start]
-    const last = resolvedColumns[segment.end]
-    if (!first || !last) continue
-    rows[node.depth]?.push({
-      kind: "group",
-      id: `${node.id}-${segment.start}-${segment.end}`,
-      source: node.source,
-      depth: node.depth,
-      colStart: segment.start,
-      colSpan: segment.end - segment.start + 1,
-      rowSpan: 1,
-      left: first.left,
-      width: last.left + last.width - first.left,
-      pinned: first.pinned,
-      pinnedEdge: pinnedEdgeForHeaderSpan(resolvedColumns, segment.start, segment.end),
-    })
-  }
-
-  for (const child of node.children) {
-    appendHeaderCells(child, rows, maxDepth, resolvedColumns, indexById)
-  }
-}
-
-function sortedVisibleLeafIndexes(
-  leafColumnIds: readonly ColumnId[],
-  indexById: ReadonlyMap<ColumnId, number>,
+  depth: number,
+  context: { leafIndex: number },
 ): number[] {
-  const indexes = leafColumnIds.flatMap((columnId) => {
-    const index = indexById.get(columnId)
-    return index == null ? [] : [index]
-  })
-  indexes.sort((a, b) => a - b)
+  const indexes: number[] = []
+  for (const column of columns) {
+    if (column.children?.length) {
+      const childIndexes = appendHeaderGroups(
+        column.children,
+        rows,
+        resolvedColumns,
+        indexById,
+        depth + 1,
+        context,
+      )
+      childIndexes.sort((a, b) => a - b)
+      let start = -1
+      let end = -1
+      for (const index of childIndexes) {
+        const current = resolvedColumns[index]
+        const previous = resolvedColumns[end]
+        if (start < 0 || index !== end + 1 || previous?.pinned !== current?.pinned) {
+          if (start >= 0) {
+            appendHeaderGroup(rows, depth, column, start, end, resolvedColumns)
+          }
+          start = index
+        }
+        end = index
+      }
+      if (start >= 0) {
+        appendHeaderGroup(rows, depth, column, start, end, resolvedColumns)
+      }
+      indexes.push(...childIndexes)
+      continue
+    }
+
+    const columnId = columnIdFor(column, context.leafIndex)
+    context.leafIndex += 1
+    const columnIndex = indexById.get(columnId)
+    if (columnIndex != null) indexes.push(columnIndex)
+  }
   return indexes
 }
 
-function contiguousHeaderSegments<TRow>(
-  indexes: readonly number[],
-  resolvedColumns: readonly ResolvedColumn<TRow>[],
-): Array<{ start: number; end: number }> {
-  const segments: Array<{ start: number; end: number }> = []
-  for (const index of indexes) {
-    const current = resolvedColumns[index]
-    const last = segments[segments.length - 1]
-    const previous = last ? resolvedColumns[last.end] : undefined
-    if (!last || index !== last.end + 1 || previous?.pinned !== current?.pinned) {
-      segments.push({ start: index, end: index })
-      continue
-    }
-    last.end = index
-  }
-  return segments
-}
-
-function pinnedEdgeForHeaderSpan(
-  columns: readonly { pinned: "left" | "right" | null }[],
+function appendHeaderGroup<TRow>(
+  rows: HeaderGroupLayout<TRow>[][],
+  depth: number,
+  column: BcReactGridColumn<TRow>,
   start: number,
   end: number,
-): "left" | "right" | null {
-  const first = columns[start]
-  if (!first?.pinned) return null
-  if (first.pinned === "left" && columns[end + 1]?.pinned !== "left") return "left"
-  if (first.pinned === "right" && columns[start - 1]?.pinned !== "right") return "right"
-  return null
+  resolvedColumns: readonly ResolvedColumn<TRow>[],
+): void {
+  const first = resolvedColumns[start]
+  const last = resolvedColumns[end]
+  if (!first || !last) return
+  rows[depth] ??= []
+  rows[depth]?.push([
+    column,
+    start,
+    end - start + 1,
+    first.left,
+    last.left + last.width - first.left,
+    first.pinned,
+  ])
 }
 
 // ---------------------------------------------------------------------------

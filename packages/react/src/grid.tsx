@@ -56,7 +56,7 @@ import {
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
-  buildColumnHeaderLayout,
+  buildColumnHeaderGroups,
   canvasStyle,
   cellDomId,
   classNames,
@@ -564,7 +564,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // column when `checkboxSelection` is on. The synthetic column is rebuilt
   // on every render so its closure captures the live selectionState +
   // setter; resolveColumns is cheap so the cache miss here is acceptable.
-  const syntheticColumns = useMemo(() => {
+  const layoutColumns = useMemo(() => {
+    if (!props.checkboxSelection && !hasDetail) return columns
     const syntheticColumns: BcReactGridColumn<TRow>[] = []
     if (hasDetail) {
       syntheticColumns.push(
@@ -583,8 +584,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         }),
       )
     }
-    return syntheticColumns
+    return [...syntheticColumns, ...columns]
   }, [
+    columns,
     hasDetail,
     expansionState,
     props.checkboxSelection,
@@ -593,20 +595,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setSelectionState,
     visibleSelectableRowIds,
   ])
-  const layoutColumns = useMemo(
-    () => (syntheticColumns.length > 0 ? [...syntheticColumns, ...columns] : columns),
-    [columns, syntheticColumns],
-  )
-  const layoutLeafColumns = useMemo(() => flattenLeafColumns(layoutColumns), [layoutColumns])
   const resolvedColumns = useMemo(
     () =>
-      syntheticColumns.length > 0
-        ? resolveColumns(layoutLeafColumns, columnState)
-        : consumerResolvedColumns,
-    [columnState, consumerResolvedColumns, layoutLeafColumns, syntheticColumns.length],
+      layoutColumns === columns
+        ? consumerResolvedColumns
+        : resolveColumns(flattenLeafColumns(layoutColumns), columnState),
+    [columnState, columns, consumerResolvedColumns, layoutColumns],
   )
-  const headerLayout = useMemo(
-    () => buildColumnHeaderLayout(layoutColumns, resolvedColumns),
+  const headerGroupRows = useMemo(
+    () => buildColumnHeaderGroups(layoutColumns, resolvedColumns),
     [layoutColumns, resolvedColumns],
   )
   const aggregationResults = useAggregations(aggregationRows, consumerLeafColumns, {
@@ -1562,7 +1559,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       setGroupByState,
     ],
   )
-  const headerRowCount = headerLayout.rowCount
+  const headerRowCount = headerGroupRows.length + 1
   const filterRowIndex = headerRowCount + 1
   const bodyAriaRowOffset = headerRowCount + (hasInlineFilters ? 2 : 1)
 
@@ -1596,57 +1593,61 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       <div className="bc-grid-main">
         <div className="bc-grid-table">
           <div className="bc-grid-header-viewport" role="rowgroup" style={headerViewportStyle}>
-            {headerLayout.rows.map((row, rowIndex) => (
+            {headerGroupRows.map((row, rowIndex) => (
               <div
-                key={row.map((cell) => cell.id).join("|") || "empty-header-row"}
+                key={`${row[0]?.[1] ?? 0}-${row.length}`}
                 className="bc-grid-header"
                 role="row"
                 aria-rowindex={rowIndex + 1}
                 style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
               >
                 {row.map((cell) =>
-                  cell.kind === "group"
-                    ? renderHeaderGroupCell({
-                        cell,
-                        domBaseId,
-                        headerHeight,
-                        scrollLeft: scrollOffset.left,
-                        totalWidth: virtualWindow.totalWidth,
-                        viewportWidth: viewport.width,
-                      })
-                    : renderHeaderCell({
-                        column: cell.column,
-                        domBaseId,
-                        filterPopupOpen: filterPopupState?.columnId === cell.column.columnId,
-                        filterText: columnFilterText[cell.column.columnId] ?? "",
-                        headerHeight,
-                        index: cell.colStart,
-                        onColumnMenu: openColumnMenu,
-                        onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
-                        onOpenFilterPopup: (col, anchor) =>
-                          setFilterPopupState((prev) =>
-                            prev?.columnId === col.columnId
-                              ? null
-                              : { columnId: col.columnId, anchor },
-                          ),
-                        onReorderEnd: endReorder,
-                        onReorderMove: handleReorderPointerMove,
-                        onReorderStart: handleReorderPointerDown,
-                        onResizeEnd: endResize,
-                        onResizeMove: handleResizePointerMove,
-                        onResizeStart: handleResizePointerDown,
-                        onSort: handleHeaderSort,
-                        pinnedEdge: cell.pinnedEdge,
-                        reorderingColumnId: columnReorderPreview?.sourceColumnId,
-                        rowSpan: cell.rowSpan,
-                        scrollLeft: scrollOffset.left,
-                        sortState,
-                        totalWidth: virtualWindow.totalWidth,
-                        viewportWidth: viewport.width,
-                      }),
+                  renderHeaderGroupCell({
+                    cell,
+                    headerHeight,
+                    scrollLeft: scrollOffset.left,
+                    totalWidth: virtualWindow.totalWidth,
+                    viewportWidth: viewport.width,
+                  }),
                 )}
               </div>
             ))}
+            <div
+              className="bc-grid-header"
+              role="row"
+              aria-rowindex={headerGroupRows.length + 1}
+              style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
+            >
+              {resolvedColumns.map((column, index) =>
+                renderHeaderCell({
+                  column,
+                  domBaseId,
+                  headerHeight,
+                  index,
+                  onColumnMenu: openColumnMenu,
+                  onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
+                  onReorderEnd: endReorder,
+                  onReorderMove: handleReorderPointerMove,
+                  onReorderStart: handleReorderPointerDown,
+                  onResizeEnd: endResize,
+                  onResizeMove: handleResizePointerMove,
+                  onResizeStart: handleResizePointerDown,
+                  onSort: handleHeaderSort,
+                  pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
+                  reorderingColumnId: columnReorderPreview?.sourceColumnId,
+                  scrollLeft: scrollOffset.left,
+                  sortState,
+                  totalWidth: virtualWindow.totalWidth,
+                  viewportWidth: viewport.width,
+                  filterText: columnFilterText[column.columnId] ?? "",
+                  filterPopupOpen: filterPopupState?.columnId === column.columnId,
+                  onOpenFilterPopup: (col, anchor) =>
+                    setFilterPopupState((prev) =>
+                      prev?.columnId === col.columnId ? null : { columnId: col.columnId, anchor },
+                    ),
+                }),
+              )}
+            </div>
             {columnReorderPreview ? (
               <div
                 aria-hidden="true"
