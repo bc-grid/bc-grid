@@ -112,6 +112,7 @@ function CustomerGridDemo({
 }) {
   const apiRef = useBcGridApi<CustomerRow>()
   const [lastAction, setLastAction] = useState("Ready")
+  const [searchText, setSearchText] = useState("")
   const [selectedCount, setSelectedCount] = useState(0)
   const [activeCustomer, setActiveCustomer] = useState<CustomerRow | null>(customerRows[0] ?? null)
   const rows = customerRows
@@ -313,6 +314,15 @@ function CustomerGridDemo({
         </div>
 
         <div className="demo-controls">
+          <label className="search-control">
+            <span>Search</span>
+            <input
+              type="search"
+              value={searchText}
+              onChange={(event) => setSearchText(event.currentTarget.value)}
+              placeholder="Customer, account, collector"
+            />
+          </label>
           <SegmentedControl
             label="Mode"
             options={themeModes}
@@ -339,7 +349,9 @@ function CustomerGridDemo({
         data={rows}
         density={density}
         detailPath="/accounts-receivable/customers"
-        extraActions={(row) => [{ label: "Statement", onSelect: () => handleStatement(row) }]}
+        extraActions={(row: CustomerRow) => [
+          { label: "Statement", onSelect: () => handleStatement(row) },
+        ]}
         gridId="accounts-receivable.customers"
         height={560}
         linkField="legalName"
@@ -347,7 +359,8 @@ function CustomerGridDemo({
         onEdit={handleEdit}
         onRowClick={setActiveCustomer}
         onSelectionChange={handleSelectionChange}
-        rowId={(row) => row.id}
+        rowId={(row: CustomerRow) => row.id}
+        searchText={searchText}
       />
 
       {activeCustomer ? <CustomerDetail row={activeCustomer} /> : null}
