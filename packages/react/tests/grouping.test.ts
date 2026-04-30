@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { ColumnId } from "@bc-grid/core"
 import { type DataRowEntry, type GroupRowEntry, resolveColumns } from "../src/gridInternals"
-import { buildGroupedRowModel, formatGroupRowLabel } from "../src/grouping"
+import { buildGroupedRowModel } from "../src/grouping"
 import type { BcReactGridColumn } from "../src/types"
 
 interface Row {
@@ -46,13 +46,12 @@ describe("buildGroupedRowModel", () => {
 
     expect(model.active).toBe(true)
     expect(model.rows.every((entry) => entry.kind === "group")).toBe(true)
-    expect(model.rows.map((entry) => (entry as GroupRowEntry).formattedValue)).toEqual([
-      "Open",
-      "Closed",
-      "(Blank)",
+    expect(model.rows.map((entry) => (entry as GroupRowEntry).label)).toEqual([
+      "Status: Open",
+      "Status: Closed",
+      "Status: (Blank)",
     ])
     expect(model.rows.map((entry) => (entry as GroupRowEntry).childCount)).toEqual([2, 1, 1])
-    expect(formatGroupRowLabel(model.rows[0] as GroupRowEntry)).toBe("Status: Open")
   })
 
   test("expands a group row and stamps tree levels on leaves", () => {
@@ -82,10 +81,7 @@ describe("buildGroupedRowModel", () => {
 
     const byStatusExpanded = buildModel(["status", "region"], new Set([openGroupId]))
     const northGroup = byStatusExpanded.rows.find(
-      (entry): entry is GroupRowEntry =>
-        entry.kind === "group" &&
-        entry.groupColumnId === "region" &&
-        entry.formattedValue === "North",
+      (entry): entry is GroupRowEntry => entry.kind === "group" && entry.label === "Region: North",
     )
     if (!northGroup) throw new Error("expected nested North group")
 

@@ -11,7 +11,6 @@ import {
   pinnedClassName,
   pinnedEdgeClassName,
 } from "./gridInternals"
-import { formatGroupRowLabel } from "./grouping"
 import { BcGridTooltip } from "./tooltip"
 import type { BcCellRendererParams } from "./types"
 import { formatCellValue, getCellValue } from "./value"
@@ -225,7 +224,7 @@ export function renderGroupRowCell<TRow>({
 }: RenderGroupRowCellParams<TRow>): ReactNode {
   if (!column) return null
 
-  const label = formatGroupRowLabel(entry)
+  const label = entry.label
   const cellId = cellDomId(domBaseId, entry.rowId, column.columnId)
   const active = activeCell?.rowId === entry.rowId
 

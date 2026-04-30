@@ -88,9 +88,7 @@ export interface GroupRowEntry {
   rowId: RowId
   index: number
   level: number
-  groupColumnId: ColumnId
-  groupColumnHeader: string
-  formattedValue: string
+  label: string
   childCount: number
   childRowIds: readonly RowId[]
   expanded: boolean

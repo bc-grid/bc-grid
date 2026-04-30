@@ -78,7 +78,7 @@ import {
   useViewportSync,
   visuallyHiddenStyle,
 } from "./gridInternals"
-import { buildGroupedRowModel, formatGroupRowLabel } from "./grouping"
+import { buildGroupedRowModel } from "./grouping"
 import {
   type ColumnMenuAnchor,
   FilterPopup,
@@ -977,9 +977,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       else next.add(entry.rowId)
       setExpansionState(next)
 
-      const label = formatGroupRowLabel(entry)
       announcePolite(
-        entry.expanded ? `Collapsed ${label}.` : `Expanded ${label}. ${entry.childCount} rows.`,
+        entry.expanded
+          ? `Collapsed ${entry.label}.`
+          : `Expanded ${entry.label}. ${entry.childCount} rows.`,
       )
 
       if (entry.expanded && activeCell && entry.childRowIds.includes(activeCell.rowId)) {

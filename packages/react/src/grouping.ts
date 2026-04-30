@@ -25,7 +25,6 @@ interface InternalGroupPathEntry {
   columnId: ColumnId
   formattedValue: string
   key: string
-  value: unknown
 }
 
 export function buildGroupedRowModel<TRow>({
@@ -79,9 +78,7 @@ export function buildGroupedRowModel<TRow>({
           rowId: groupRowId,
           index: -1,
           level: depth + 1,
-          groupColumnId: column.columnId,
-          groupColumnHeader: columnHeaderText(column),
-          formattedValue: bucket.pathEntry.formattedValue,
+          label: `${columnHeaderText(column)}: ${bucket.pathEntry.formattedValue}`,
           childCount: bucket.rows.length,
           childRowIds: bucket.rows.map((entry) => entry.rowId),
           expanded,
@@ -122,7 +119,6 @@ function groupRowsByColumn<TRow>(
           columnId: column.columnId,
           formattedValue,
           key,
-          value,
         },
         rows: [entry],
       })
@@ -136,10 +132,6 @@ function groupRowIdForPath(path: readonly InternalGroupPathEntry[]): RowId {
     .map((entry) => `${encodeURIComponent(entry.columnId)}=${encodeURIComponent(entry.key)}`)
     .join("|")
   return `__bc_group:${encodedPath}`
-}
-
-export function formatGroupRowLabel(entry: GroupRowEntry): string {
-  return `${entry.groupColumnHeader}: ${entry.formattedValue}`
 }
 
 function columnHeaderText<TRow>(column: ResolvedColumn<TRow>): string {
