@@ -2,11 +2,9 @@ import type { BcGridApi, BcRange, BcSelection, ColumnId, RowId } from "@bc-grid/
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react"
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
-  contextMenuItemDestructive,
   contextMenuItemDisabled,
   contextMenuItemKey,
   contextMenuItemLabel,
-  contextMenuItemShortcut,
   isContextMenuSeparator,
   isCustomContextMenuItem,
   resolveContextMenuItems,
@@ -29,6 +27,7 @@ export interface BcGridContextMenuProps<TRow> {
     gridApi: BcGridApi<TRow>,
     options?: { includeHeaders?: boolean },
   ) => Promise<void>
+  clearSelection: () => void
   onClose: () => void
   resolvedColumns: readonly ResolvedColumn<TRow>[]
   rowId: RowId
@@ -42,6 +41,7 @@ export function BcGridContextMenu<TRow>({
   columnId,
   contextMenuItems,
   copyRangeToClipboard,
+  clearSelection,
   onClose,
   resolvedColumns,
   rowId,
@@ -117,10 +117,16 @@ export function BcGridContextMenu<TRow>({
     if (isCustomContextMenuItem(item)) {
       item.onSelect(context)
     } else if (item === "copy" || item === "copy-with-headers") {
-      if (!context.cell) return
-      void copyRangeToClipboard({ start: context.cell, end: context.cell }, api, {
+      const activeRange = api.getRangeSelection().ranges.at(-1)
+      const range =
+        activeRange ?? (context.cell ? { start: context.cell, end: context.cell } : undefined)
+      void copyRangeToClipboard(range, api, {
         includeHeaders: item === "copy-with-headers",
       }).catch(() => undefined)
+    } else if (item === "clear-selection") {
+      clearSelection()
+    } else if (item === "clear-range") {
+      api.clearRangeSelection()
     }
     onClose()
   }
@@ -161,18 +167,13 @@ export function BcGridContextMenu<TRow>({
         }
 
         const label = contextMenuItemLabel(item)
-        const shortcut = contextMenuItemShortcut(item)
         const disabled = contextMenuItemDisabled(item, context)
         const active = activeIndex === index
-        const Icon = isCustomContextMenuItem(item) ? item.icon : undefined
-        const title =
-          disabled && (item === "export-csv" || item === "export-xlsx") ? "Coming soon" : undefined
         return (
           <div
             aria-disabled={disabled || undefined}
             className="bc-grid-context-menu-item"
             data-active={active || undefined}
-            data-destructive={contextMenuItemDestructive(item) || undefined}
             id={`${menuId}-item-${index}`}
             key={contextMenuItemKey(item, index)}
             onClick={(event) => {
@@ -188,15 +189,8 @@ export function BcGridContextMenu<TRow>({
             onMouseEnter={() => setActiveIndex(index)}
             role="menuitem"
             tabIndex={-1}
-            title={title}
           >
-            {Icon ? (
-              <span aria-hidden="true" className="bc-grid-context-menu-icon">
-                <Icon className="bc-grid-context-menu-icon-svg" />
-              </span>
-            ) : null}
             <span className="bc-grid-context-menu-label">{label}</span>
-            {shortcut ? <span className="bc-grid-context-menu-shortcut">{shortcut}</span> : null}
           </div>
         )
       })}

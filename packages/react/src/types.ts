@@ -233,18 +233,15 @@ export interface BcCellRendererParams<TRow, TValue = unknown> {
 export type BcContextMenuBuiltinItem =
   | "copy"
   | "copy-with-headers"
-  | "export-csv"
-  | "export-xlsx"
+  | "clear-selection"
+  | "clear-range"
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {
   id: string
   label: string
-  icon?: ComponentType<{ className?: string }>
   onSelect: (ctx: BcContextMenuContext<TRow>) => void
   disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
-  destructive?: boolean
-  shortcut?: string
 }
 
 export type BcContextMenuItem<TRow = unknown> =

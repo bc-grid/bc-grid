@@ -4,7 +4,6 @@ import {
   DEFAULT_CONTEXT_MENU_ITEMS,
   contextMenuItemDisabled,
   contextMenuItemLabel,
-  contextMenuItemShortcut,
   resolveContextMenuItems,
 } from "../src/contextMenu"
 import type { BcContextMenuContext, BcContextMenuItem, BcReactGridColumn } from "../src/types"
@@ -20,7 +19,9 @@ function makeContext(
   overrides: Partial<BcContextMenuContext<Row>> = {},
 ): BcContextMenuContext<Row> {
   return {
-    api: {} as BcContextMenuContext<Row>["api"],
+    api: {
+      getRangeSelection: () => ({ ranges: [], anchor: null }),
+    } as BcContextMenuContext<Row>["api"],
     cell: null,
     column: null,
     row: null,
@@ -30,13 +31,13 @@ function makeContext(
 }
 
 describe("context menu items", () => {
-  test("uses the four built-in actions by default", () => {
+  test("uses the minimal built-in actions by default", () => {
     expect(resolveContextMenuItems(undefined, makeContext())).toEqual(DEFAULT_CONTEXT_MENU_ITEMS)
     expect(DEFAULT_CONTEXT_MENU_ITEMS.filter((item) => item !== "separator")).toEqual([
       "copy",
       "copy-with-headers",
-      "export-csv",
-      "export-xlsx",
+      "clear-selection",
+      "clear-range",
     ])
   })
 
@@ -62,7 +63,7 @@ describe("context menu items", () => {
     ])
   })
 
-  test("reports built-in labels, shortcuts, and disabled state", () => {
+  test("reports built-in labels and disabled state", () => {
     const context = makeContext({
       cell: { rowId: "r1", columnId: "name" },
       column: { field: "name", header: "Name" } as BcReactGridColumn<Row>,
@@ -70,11 +71,36 @@ describe("context menu items", () => {
     })
 
     expect(contextMenuItemLabel("copy-with-headers")).toBe("Copy with Headers")
-    expect(contextMenuItemShortcut("copy")).toBe("Ctrl+C")
+    expect(contextMenuItemLabel("clear-selection")).toBe("Clear Selection")
+    expect(contextMenuItemLabel("clear-range")).toBe("Clear Range")
     expect(contextMenuItemDisabled("copy", context)).toBe(false)
     expect(contextMenuItemDisabled("copy", makeContext())).toBe(true)
-    expect(contextMenuItemDisabled("export-csv", context)).toBe(true)
-    expect(contextMenuItemDisabled("export-xlsx", context)).toBe(true)
+    expect(contextMenuItemDisabled("clear-selection", context)).toBe(true)
+    expect(contextMenuItemDisabled("clear-range", context)).toBe(true)
+    expect(
+      contextMenuItemDisabled(
+        "clear-selection",
+        makeContext({ selection: { mode: "explicit", rowIds: new Set(["r1"]) } }),
+      ),
+    ).toBe(false)
+    expect(
+      contextMenuItemDisabled(
+        "clear-range",
+        makeContext({
+          api: {
+            getRangeSelection: () => ({
+              ranges: [
+                {
+                  start: { rowId: "r1", columnId: "name" },
+                  end: { rowId: "r2", columnId: "name" },
+                },
+              ],
+              anchor: { rowId: "r1", columnId: "name" },
+            }),
+          } as BcContextMenuContext<Row>["api"],
+        }),
+      ),
+    ).toBe(false)
   })
 
   test("supports custom disabled predicates", () => {

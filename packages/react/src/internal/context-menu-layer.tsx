@@ -13,6 +13,7 @@ export type BcGridContextMenuLayerArgs<TRow> = readonly [
   activeCell: BcCellPosition | null,
   api: BcGridApi<TRow>,
   contextMenuItems: BcContextMenuItems<TRow> | undefined,
+  clearSelection: () => void,
   copyRangeToClipboard: (
     requestedRange: BcRange | undefined,
     gridApi: BcGridApi<TRow>,
@@ -39,6 +40,7 @@ export function BcGridContextMenuLayer<TRow>({
     activeCell,
     api,
     contextMenuItems,
+    clearSelection,
     copyRangeToClipboard,
     keyboardEnabled,
     onCellFocus,
@@ -106,6 +108,7 @@ export function BcGridContextMenuLayer<TRow>({
       anchor={contextMenu.anchor}
       columnId={contextMenu.columnId}
       contextMenuItems={contextMenuItems}
+      clearSelection={clearSelection}
       copyRangeToClipboard={copyRangeToClipboard}
       onClose={closeContextMenu}
       resolvedColumns={resolvedColumns}

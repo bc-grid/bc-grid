@@ -1184,6 +1184,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       />
     ) : null)
 
+  const clearContextSelection = useCallback(
+    () => setSelectionState(createEmptySelection()),
+    [setSelectionState],
+  )
+
   // While the editor input owns DOM focus, aria-activedescendant is
   // suspended (set to "") so AT doesn't try to point at a cell that's now
   // hosting an `<input>`. Once committing/cancelling starts, the editor DOM
@@ -1904,6 +1909,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             activeCell,
             api,
             props.contextMenuItems,
+            clearContextSelection,
             copyRangeToClipboard,
             editController.editState.mode === "navigation",
             onCellFocus,

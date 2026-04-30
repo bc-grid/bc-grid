@@ -27,7 +27,6 @@
   --bc-grid-status-held-fg: hsl(32 80% 32%);
   --bc-grid-context-menu-bg: hsl(var(--popover, var(--background, 0 0% 100%)));
   --bc-grid-context-menu-border: hsl(var(--border, 214 32% 91%));
-  --bc-grid-context-menu-destructive-fg: hsl(var(--destructive, 0 84% 60%));
   --bc-grid-row-height: 36px;
   --bc-grid-header-height: 40px;
   --bc-grid-cell-padding-x: 12px;
@@ -569,36 +568,11 @@
   opacity: 0.52;
 }
 
-.bc-grid-context-menu-item[data-destructive="true"] {
-  color: var(--bc-grid-context-menu-destructive-fg);
-}
-
-.bc-grid-context-menu-icon {
-  display: inline-flex;
-  width: 1rem;
-  flex: 0 0 1rem;
-  align-items: center;
-  justify-content: center;
-}
-
-.bc-grid-context-menu-icon-svg {
-  width: 1rem;
-  height: 1rem;
-}
-
 .bc-grid-context-menu-label {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bc-grid-context-menu-shortcut {
-  flex: 0 0 auto;
-  color: var(--bc-grid-muted-fg);
-  font-size: 0.75rem;
-  margin-left: 0.75rem;
   white-space: nowrap;
 }
 
@@ -1247,7 +1221,6 @@
     --bc-grid-statusbar-border-top: CanvasText;
     --bc-grid-context-menu-bg: Canvas;
     --bc-grid-context-menu-border: CanvasText;
-    --bc-grid-context-menu-destructive-fg: CanvasText;
   }
 
   .bc-grid,
