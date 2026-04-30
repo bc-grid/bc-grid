@@ -74,9 +74,7 @@ test("editor stays mounted when scrolling horizontally far away from the active 
   await expect(editor).toBeAttached()
 })
 
-test("editor unmounts on commit; retention handles release (no leaked rows)", async ({
-  page,
-}) => {
+test("editor unmounts on commit; retention handles release (no leaked rows)", async ({ page }) => {
   await page.goto(URL)
   await focusBodyCell(page, 0, EDITABLE_COLUMN)
   await page.keyboard.press("F2")
