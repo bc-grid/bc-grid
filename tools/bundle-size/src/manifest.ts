@@ -13,11 +13,11 @@ export interface BundleSizeManifest {
 
 export const bundleSizeManifest: BundleSizeManifest = {
   name: "core+virtualizer+animations+react",
-  budgetGzipBytes: 60 * 1024,
-  // 10% during the v1 parity sprint (per `design.md §13` 2026-04-30 entry):
-  // the API surface is intentionally growing; +5% per PR was blocking
-  // legitimate feature work. Tightens back to 5% once we're at 80% of
-  // the 60 KB total budget OR the sprint ends, whichever comes first.
+  budgetGzipBytes: 100 * 1024,
+  // 10% during the v1 parity sprint (per `design.md §13` 2026-04-30 entries):
+  // the API surface is intentionally growing. The hard cap moved to 100 KiB
+  // after alpha.2, while this per-PR drift guard stays anchored to the latest
+  // release baseline.
   maxRegressionPercent: 10,
   entries: [
     {
@@ -28,7 +28,7 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/virtualizer",
       bundlePath: "packages/virtualizer/dist/index.js",
-      baselineGzipBytes: 7061,
+      baselineGzipBytes: 7045,
     },
     {
       packageName: "@bc-grid/animations",
@@ -38,7 +38,7 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
-      baselineGzipBytes: 45646,
+      baselineGzipBytes: 48406,
     },
   ],
 }
