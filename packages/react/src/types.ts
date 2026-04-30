@@ -265,6 +265,17 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   toolbar?: ReactNode
   footer?: ReactNode
   /**
+   * Render column filter controls. Inline filter rows and popup-filter
+   * buttons are hidden when false; any existing filter state remains applied.
+   */
+  showFilters?: boolean
+  /**
+   * Render the per-column options trigger in header cells. Right-click column
+   * menus are disabled when this is false so consumers can fully suppress the
+   * column-menu affordance.
+   */
+  showColumnMenu?: boolean
+  /**
    * Footer status bar segments rendered below the body, above any
    * `footer` slot. Built-in segment IDs (`total`, `filtered`,
    * `selected`, `aggregations`) opt in to the standard renderers;

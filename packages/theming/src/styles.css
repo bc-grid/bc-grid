@@ -555,6 +555,7 @@
 
 .bc-grid-table {
   display: flex;
+  min-height: 0;
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;

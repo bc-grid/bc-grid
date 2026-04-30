@@ -1,5 +1,11 @@
 # @bc-grid/theming
 
+## 0.1.0-alpha.4
+
+### Patch Changes
+
+- Fix fixed-height grid body scrolling by allowing the table flex item to shrink inside the grid root.
+
 ## 0.1.0-alpha.3
 
 ### Patch Changes

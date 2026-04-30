@@ -68,6 +68,8 @@ interface RenderHeaderCellParams<TRow> {
   pinnedEdge: "left" | "right" | null
   reorderingColumnId: ColumnId | undefined
   scrollLeft: number
+  showColumnMenu: boolean
+  showFilters: boolean
   sortState: readonly BcGridSort[]
   totalWidth: number
   viewportWidth: number
@@ -100,6 +102,8 @@ export function renderHeaderCell<TRow>({
   pinnedEdge,
   reorderingColumnId,
   scrollLeft,
+  showColumnMenu,
+  showFilters,
   sortState,
   totalWidth,
   viewportWidth,
@@ -169,11 +173,15 @@ export function renderHeaderCell<TRow>({
       aria-sort={ariaSort}
       tabIndex={sortable ? 0 : undefined}
       onClick={handleClick}
-      onContextMenu={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        onColumnMenu(column, { x: event.clientX, y: event.clientY })
-      }}
+      onContextMenu={
+        showColumnMenu
+          ? (event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onColumnMenu(column, { x: event.clientX, y: event.clientY })
+            }
+          : undefined
+      }
       onKeyDown={handleKeyDown}
       onPointerDown={(event) => onReorderStart(column, event)}
       onPointerMove={onReorderMove}
@@ -206,7 +214,10 @@ export function renderHeaderCell<TRow>({
           ) : null}
         </span>
       ) : null}
-      {column.source.filter && column.source.filter.variant === "popup" && onOpenFilterPopup ? (
+      {showFilters &&
+      column.source.filter &&
+      column.source.filter.variant === "popup" &&
+      onOpenFilterPopup ? (
         <button
           aria-haspopup="dialog"
           aria-expanded={filterPopupOpen ? true : undefined}
@@ -229,23 +240,25 @@ export function renderHeaderCell<TRow>({
           <FunnelIcon active={Boolean(filterText)} />
         </button>
       ) : null}
-      <button
-        aria-haspopup="menu"
-        aria-label={`Column options for ${headerLabel}`}
-        className="bc-grid-header-menu-button"
-        data-bc-grid-column-menu-button="true"
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          const rect = event.currentTarget.getBoundingClientRect()
-          onColumnMenu(column, { x: rect.left, y: rect.bottom + 4 })
-        }}
-        onKeyDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        type="button"
-      >
-        ...
-      </button>
+      {showColumnMenu ? (
+        <button
+          aria-haspopup="menu"
+          aria-label={`Column options for ${headerLabel}`}
+          className="bc-grid-header-menu-button"
+          data-bc-grid-column-menu-button="true"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            const rect = event.currentTarget.getBoundingClientRect()
+            onColumnMenu(column, { x: rect.left, y: rect.bottom + 4 })
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          type="button"
+        >
+          ...
+        </button>
+      ) : null}
       {column.source.resizable === false ? null : (
         // Drag handle pinned to the right edge of the header cell. Pointer
         // events with setPointerCapture so the drag survives the cursor

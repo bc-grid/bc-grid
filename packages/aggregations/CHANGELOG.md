@@ -1,5 +1,11 @@
 # @bc-grid/aggregations
 
+## 0.1.0-alpha.4
+
+### Patch Changes
+
+- Fix alpha.3 grid runtime regressions and keep internal @bc-grid package versions aligned for alpha.4.
+
 ## 0.1.0-alpha.3
 
 ### Patch Changes

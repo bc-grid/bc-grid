@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { type Locator, expect, test } from "@playwright/test"
 
 test("AR customer vertical slice exposes the Q1 grid contract", async ({ page }) => {
   await page.goto("/")
@@ -15,6 +15,41 @@ test("AR customer vertical slice exposes the Q1 grid contract", async ({ page })
   const renderedRows = await grid.locator(".bc-grid-row").count()
   expect(renderedRows).toBeGreaterThan(0)
   expect(renderedRows).toBeLessThan(80)
+})
+
+test("fixed-height grid owns vertical scrolling and can reveal the final record", async ({
+  page,
+}) => {
+  await page.goto("/")
+
+  const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
+  const scroller = grid.locator(".bc-grid-scroller")
+  await expect(scroller).toBeVisible()
+
+  const metrics = await scroller.evaluate((node) => {
+    const table = node.closest(".bc-grid-table")
+    const root = node.closest(".bc-grid")
+    return {
+      clientHeight: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+      rootHeight: root?.getBoundingClientRect().height ?? 0,
+      tableMinHeight: table ? getComputedStyle(table).minHeight : "",
+    }
+  })
+
+  expect(metrics.rootHeight).toBeGreaterThan(500)
+  expect(metrics.clientHeight).toBeLessThan(metrics.rootHeight)
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight + 1_000)
+  expect(metrics.tableMinHeight).toBe("0px")
+
+  await scroller.evaluate((node) => {
+    node.scrollTop = node.scrollHeight
+    node.dispatchEvent(new Event("scroll", { bubbles: true }))
+  })
+
+  const finalRow = grid.locator('.bc-grid-row[data-row-id="AR-05000"]')
+  await expect(finalRow).toBeVisible()
+  await expect(finalRow.locator('[data-column-id="account"]')).toHaveText("CUST-05000")
 })
 
 test("AR customer filters narrow the ledger to a single account", async ({ page }) => {
@@ -75,4 +110,72 @@ test("AR customer sort affordance works on outstanding balance", async ({ page }
 
   await outstanding.click()
   await expect(outstanding).toHaveAttribute("aria-sort", "descending")
+  await scrollHorizontallyTo(grid, 900)
+
+  await expect
+    .poll(async () => isNonIncreasing(await visibleColumnNumbers(grid, "balance")))
+    .toBe(true)
 })
+
+test("AR customer sort changes rendered data order, not just header state", async ({ page }) => {
+  await page.goto("/")
+
+  const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
+  const outstanding = grid.getByRole("columnheader", { name: /Outstanding/ })
+  const firstAccountBefore = await grid
+    .locator(".bc-grid-row[data-row-id]")
+    .first()
+    .locator('[data-column-id="account"]')
+    .innerText()
+
+  await outstanding.click()
+  await expect(outstanding).toHaveAttribute("aria-sort", "ascending")
+  await scrollHorizontallyTo(grid, 900)
+
+  await expect
+    .poll(async () => {
+      const firstAccountAfter = await grid
+        .locator(".bc-grid-row[data-row-id]")
+        .first()
+        .locator('[data-column-id="account"]')
+        .innerText()
+      return firstAccountAfter !== firstAccountBefore
+    })
+    .toBe(true)
+
+  await expect
+    .poll(async () => isNonDecreasing(await visibleColumnNumbers(grid, "balance")))
+    .toBe(true)
+})
+
+async function scrollHorizontallyTo(grid: Locator, left: number): Promise<void> {
+  await grid.locator(".bc-grid-scroller").evaluate((node, scrollLeft) => {
+    node.scrollLeft = scrollLeft
+    node.dispatchEvent(new Event("scroll", { bubbles: true }))
+  }, left)
+}
+
+async function visibleColumnNumbers(grid: Locator, columnId: string): Promise<number[]> {
+  const values = await grid
+    .locator(`.bc-grid-row[data-row-id] [data-column-id="${columnId}"]`)
+    .evaluateAll((cells) =>
+      cells.map((cell) => Number(cell.textContent?.replace(/[^0-9.-]/g, "") ?? Number.NaN)),
+    )
+  return values.filter((value) => Number.isFinite(value))
+}
+
+function isNonDecreasing(values: readonly number[]): boolean {
+  if (values.length < 2) return false
+  for (let index = 1; index < values.length; index += 1) {
+    if (values[index] < values[index - 1]) return false
+  }
+  return true
+}
+
+function isNonIncreasing(values: readonly number[]): boolean {
+  if (values.length < 2) return false
+  for (let index = 1; index < values.length; index += 1) {
+    if (values[index] > values[index - 1]) return false
+  }
+  return true
+}

@@ -1,5 +1,11 @@
 # @bc-grid/react
 
+## 0.1.0-alpha.4
+
+### Patch Changes
+
+- Fix fixed-height body scrolling, add `showFilters` / `showColumnMenu` props for host app chrome control, and cover rendered sort order in browser tests.
+
 ## 0.1.0-alpha.3
 
 ### Patch Changes

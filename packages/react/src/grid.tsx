@@ -148,6 +148,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     locale,
     toolbar,
     footer,
+    showFilters = true,
+    showColumnMenu = true,
     loading,
     loadingOverlay,
     renderDetailPanel,
@@ -586,13 +588,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // mixed inline/popup or all inline — keeps the row.
   const hasInlineFilters = useMemo(
     () =>
+      showFilters &&
       resolvedColumns.some(
         (column) =>
           column.source.filter !== false &&
           column.source.filter != null &&
           (column.source.filter as BcColumnFilter).variant !== "popup",
       ),
-    [resolvedColumns],
+    [resolvedColumns, showFilters],
   )
 
   const loadSetFilterOptions = useCallback(
@@ -1536,6 +1539,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
                   reorderingColumnId: columnReorderPreview?.sourceColumnId,
                   scrollLeft: scrollOffset.left,
+                  showColumnMenu,
+                  showFilters,
                   sortState,
                   totalWidth: virtualWindow.totalWidth,
                   viewportWidth: viewport.width,
@@ -1851,7 +1856,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       >
         {assertiveMessage}
       </div>
-      {filterPopupState
+      {showFilters && filterPopupState
         ? (() => {
             const popupColumn = resolvedColumns.find(
               (column) => column.columnId === filterPopupState.columnId,
