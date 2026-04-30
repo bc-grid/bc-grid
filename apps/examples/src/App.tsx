@@ -226,6 +226,27 @@ function masterDetailEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("masterDetail") === "1"
 }
 
+/**
+ * `?filterPopup=1` URL flag opts every filterable column into the
+ * `filter-popup-variant` demo: the inline filter row collapses entirely
+ * and each column header gains a funnel icon → floating filter popover.
+ * Demo-critical for the bsncraft funding demo (week 2 sprint).
+ */
+function filterPopupEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("filterPopup") === "1"
+}
+
+function applyPopupFilterVariant<TRow>(
+  columns: readonly BcGridColumn<TRow>[],
+): readonly BcGridColumn<TRow>[] {
+  if (!filterPopupEnabled()) return columns
+  return columns.map((column) => {
+    if (!column.filter) return column
+    return { ...column, filter: { ...column.filter, variant: "popup" as const } }
+  })
+}
+
 function CustomerGridDemo({
   density,
   onDensityChange,
@@ -259,7 +280,7 @@ function CustomerGridDemo({
     [disabledRows],
   )
 
-  const columns = useMemo<readonly BcGridColumn<CustomerRow>[]>(
+  const baseColumns = useMemo<readonly BcGridColumn<CustomerRow>[]>(
     () => [
       {
         columnId: "account",
@@ -596,6 +617,11 @@ function CustomerGridDemo({
     ],
     [aggregationDemo],
   )
+
+  // `?filterPopup=1` flips every filterable column into popup-variant per
+  // `filter-popup-variant`. The inline filter row collapses entirely when
+  // every filter is popup-mode, surfacing the AG-Grid-style funnel UX.
+  const columns = useMemo(() => applyPopupFilterVariant(baseColumns), [baseColumns])
 
   const handleEdit = useCallback((row: CustomerRow) => {
     setActiveCustomer(row)
