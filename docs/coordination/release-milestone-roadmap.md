@@ -21,7 +21,7 @@ Every milestone release candidate must satisfy these gates before the coordinato
 - [ ] Type-check, lint, unit tests, package builds, API-surface, bundle-size, and tarball-smoke pass.
 - [ ] Coordinator-owned Playwright and smoke-perf checks pass, or failures are explicitly documented as non-blocking.
 - [ ] `~/work/bsncraft` can install the candidate version and pass its type-check/build smoke for the grid surfaces it uses.
-- [ ] Package metadata has no internal `@bc-grid/*` version skew or workspace leakage in published artifacts.
+- [ ] Package metadata has no internal `@bc-grid/*` version skew or workspace leakage in published artifacts. Automated by `bun run release-preflight` (`tools/release-preflight`); the same script runs in `release.yml` before `bun publish` and fails when source / packed-tarball / release-tag are out of step.
 - [ ] `docs/queue.md` reflects merged, deferred, or blocked work accurately.
 - [ ] Known issues are documented with a severity call; no P0/P1 issue is open.
 
@@ -29,7 +29,9 @@ Every milestone release candidate must satisfy these gates before the coordinato
 
 Goal: make the published package line boring to consume in `bsncraft`.
 
-- [ ] Published package metadata is coherent: all internal `@bc-grid/*` dependencies resolve to the same release line.
+> **Source-version skew alert (2026-05-01):** `packages/*/package.json` currently declares `0.1.0-alpha.2` while the latest tag is `v0.1.0-alpha.5`. Tagging `v0.2.0` in this state would publish artifacts with `version: "0.1.0-alpha.2"` because nothing in the release flow synchronises source `version` to the tag. Coordinator action item before publishing v0.2.0: bump `packages/*/package.json` to `0.2.0` (via `bun run changeset:version` after writing a fresh changeset, or by hand) and confirm `bun run release-preflight` reports `shared source version: 0.2.0` before pushing the tag. The new release-preflight tool fails fast on this exact mismatch so it does not regress.
+
+- [ ] Published package metadata is coherent: all internal `@bc-grid/*` dependencies resolve to the same release line. Enforced by `bun run release-preflight` (source-version coherence + workspace:* policy in source + no workspace: leak in packed tarballs + tag/source match when running under a release tag).
 - [ ] Host apps do not need hidden CSS knowledge for core layout: fixed-height grids scroll vertically, header/body widths stay aligned, and resize affordances are visible.
 - [ ] Sorting, column resize, pinned columns, vertical scrolling, and basic filters are stable in fit-to-screen mode.
 - [ ] `bsncraft` installs the candidate, passes `bun run check-types`, and can load representative grid pages without import/export errors.

@@ -42,6 +42,15 @@ jobs:
       - name: API surface check
         run: bun run api-surface
 
+      - name: Release preflight (package coherence + tag match)
+        env:
+          # bun pm pack rewrites workspace:* at pack time; the preflight
+          # tool verifies the rewritten manifests align with the source
+          # version line and the release tag (the v* trigger above sets
+          # github.ref_name).
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: bun run release-preflight
+
       - name: Tarball smoke test (pre-publish)
         run: bun run tarball-smoke
 
