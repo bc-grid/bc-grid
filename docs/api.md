@@ -467,6 +467,33 @@ export interface BcRangeSelection {
   anchor: BcCellPosition | null
 }
 
+export interface BcClipboardPayload {
+  /** text/plain payload, usually TSV. */
+  tsv: string
+  /** text/html payload, usually a table. Generated from `tsv` when omitted. */
+  html?: string
+  /** Additional MIME payloads to write alongside text/plain and text/html. */
+  custom?: Record<string, string>
+}
+
+export interface BcRangeBeforeCopyEvent<TRow> {
+  range: BcRange
+  rows: readonly TRow[]
+  api: BcGridApi<TRow>
+}
+
+export type BcRangeBeforeCopyHook<TRow> = (
+  event: BcRangeBeforeCopyEvent<TRow>
+) => BcClipboardPayload | false | undefined
+
+export interface BcRangeCopyEvent {
+  range: BcRange
+  payload: BcClipboardPayload
+  suppressed: boolean
+}
+
+export type BcRangeCopyHook = (event: BcRangeCopyEvent) => void
+
 export interface BcPaginationState {
   page: number
   pageSize: number
@@ -519,7 +546,7 @@ export interface BcGridStateProps {
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
 
-Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers; React overlay rendering, clipboard copy/paste, and fill handle behavior are Track 2 implementation tasks.
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); visual overlay, paste, and fill handle behavior remain separate Track 2 implementation tasks.
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
@@ -747,6 +774,8 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onRowDoubleClick?: (row: TRow, event: React.MouseEvent) => void
   onCellFocus?: (position: BcCellPosition) => void
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+  onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
+  onCopy?: BcRangeCopyHook
 
   // Imperative
   apiRef?: React.RefObject<BcGridApi<TRow> | null>
@@ -952,12 +981,16 @@ export interface BcGridApi<TRow = unknown> {
   getRowById(rowId: RowId): TRow | undefined
   getActiveCell(): BcCellPosition | null
   getSelection(): BcSelection
+  getRangeSelection(): BcRangeSelection
   getColumnState(): BcColumnStateEntry[]
 
   // Mutations (controlled-state shortcuts; only effective in uncontrolled mode)
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter): void
+  setRangeSelection(selection: BcRangeSelection): void
+  copyRange(range?: BcRange): Promise<void>
+  clearRangeSelection(): void
   expandAll(): void
   collapseAll(): void
 
@@ -1113,14 +1146,16 @@ export type {
   BcGridProps, BcEditGridProps, BcServerGridProps,
   BcGridStateProps, BcPaginationState,
   BcGridApi, BcServerGridApi,
-  BcCellRendererParams, BcGridMessages,
+  BcCellRendererParams, BcGridMessages, BcClipboardPayload,
   BcAggregationFormatterParams, BcAggregationScope, UseAggregationsOptions,
   BcCellEditor, BcCellEditorProps, BcCellEditorPrepareParams, BcCellEditCommitEvent,
   BcEditGridAction,
+  BcRangeBeforeCopyEvent, BcRangeBeforeCopyHook, BcRangeCopyEvent, BcRangeCopyHook,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
 
   // Re-exports from @bc-grid/core
-  BcCellPosition, BcSelection, BcGridSort, BcGridFilter,
+  BcCellPosition, BcSelection, BcRange, BcRangeSelection, BcRangeKeyAction,
+  BcGridSort, BcGridFilter,
   BcColumnFilter, BcColumnFormat, BcColumnStateEntry,
   BcValidationResult, ColumnId, RowId,
 

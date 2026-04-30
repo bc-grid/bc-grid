@@ -16,6 +16,7 @@ import type {
   ServerSelection,
   ServerViewState,
 } from "@bc-grid/core"
+import { emptyBcRangeSelection } from "@bc-grid/core"
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { BcGrid, useBcGridApi } from "./grid"
@@ -136,6 +137,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       getSelection() {
         return gridApiRef.current?.getSelection() ?? createEmptySelection()
       },
+      getRangeSelection() {
+        return gridApiRef.current?.getRangeSelection() ?? emptyBcRangeSelection
+      },
       getColumnState() {
         return gridApiRef.current?.getColumnState() ?? []
       },
@@ -147,6 +151,15 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       },
       setFilter(filter) {
         gridApiRef.current?.setFilter(filter)
+      },
+      setRangeSelection(selection) {
+        gridApiRef.current?.setRangeSelection(selection)
+      },
+      copyRange(range) {
+        return gridApiRef.current?.copyRange(range) ?? Promise.resolve()
+      },
+      clearRangeSelection() {
+        gridApiRef.current?.clearRangeSelection()
       },
       expandAll() {
         gridApiRef.current?.expandAll()

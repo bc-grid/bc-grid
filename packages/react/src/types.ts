@@ -17,6 +17,7 @@ import type {
   BcServerGridApi,
   BcValidationResult,
   ColumnId,
+  BcRange as CoreBcRange,
   LoadServerBlock,
   LoadServerPage,
   LoadServerTreeChildren,
@@ -72,6 +73,30 @@ export interface BcGridUrlStatePersistence {
 }
 
 export type BcAggregationScope = "filtered" | "all" | "selected"
+
+export interface BcClipboardPayload {
+  tsv: string
+  html?: string
+  custom?: Record<string, string>
+}
+
+export interface BcRangeBeforeCopyEvent<TRow> {
+  range: CoreBcRange
+  rows: readonly TRow[]
+  api: BcGridApi<TRow>
+}
+
+export type BcRangeBeforeCopyHook<TRow> = (
+  event: BcRangeBeforeCopyEvent<TRow>,
+) => BcClipboardPayload | false | undefined
+
+export interface BcRangeCopyEvent {
+  range: CoreBcRange
+  payload: BcClipboardPayload
+  suppressed: boolean
+}
+
+export type BcRangeCopyHook = (event: BcRangeCopyEvent) => void
 
 /**
  * Render context handed to status-bar segment renderers. Rebuilt per
@@ -244,6 +269,8 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onRowDoubleClick?: (row: TRow, event: MouseEvent) => void
   onCellFocus?: (position: BcCellPosition) => void
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+  onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
+  onCopy?: BcRangeCopyHook
 
   apiRef?: RefObject<BcGridApi<TRow> | null>
 
@@ -435,3 +462,5 @@ export type {
   ServerTreeQuery,
   ServerTreeResult,
 }
+
+export type { BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
