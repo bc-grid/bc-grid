@@ -1467,7 +1467,7 @@ class ServerRowModelController<TRow> {
 
   private findCachedRow(rowId: RowId, rowIdGetter: RowIdGetter<TRow>): TRow | null {
     for (const block of this.cache.toMap().values()) {
-      if (block.state !== "loaded") continue
+      if (block.state !== "loaded" && block.state !== "stale") continue
       for (const row of block.rows) {
         if (rowIdGetter(row) === rowId) return row
       }
@@ -1651,7 +1651,7 @@ class ServerRowModelController<TRow> {
   ): number {
     let updatedRows = 0
     for (const block of this.cache.toMap().values()) {
-      if (block.state !== "loaded") continue
+      if (block.state !== "loaded" && block.state !== "stale") continue
       let changed = false
       const rows = block.rows.map((row) => {
         if (rowIdGetter(row) !== rowId) return row
