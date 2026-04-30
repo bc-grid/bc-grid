@@ -71,6 +71,60 @@ export interface BcAggregation {
       }
 }
 
+export interface BcAggregationResultDTO<TResult = unknown> {
+  columnId: ColumnId
+  rowCount: number
+  value: TResult
+}
+
+export interface BcPivotValue {
+  columnId: ColumnId
+  aggregation?: BcAggregation
+  label?: string
+}
+
+export interface BcPivotState {
+  rowGroups: readonly ColumnId[]
+  colGroups: readonly ColumnId[]
+  values: readonly BcPivotValue[]
+  subtotals?: { rows?: boolean; cols?: boolean }
+}
+
+export const emptyBcPivotState: BcPivotState = {
+  rowGroups: [],
+  colGroups: [],
+  values: [],
+  subtotals: { rows: true, cols: true },
+}
+
+export interface BcPivotedDataDTO {
+  rowRoot: BcPivotRowNodeDTO
+  colRoot: BcPivotColNodeDTO
+  cells: readonly BcPivotCellDTO[]
+}
+
+export interface BcPivotRowNodeDTO {
+  keyPath: readonly unknown[]
+  value: unknown
+  children: readonly BcPivotRowNodeDTO[]
+  isTotal: boolean
+  level: number
+}
+
+export interface BcPivotColNodeDTO {
+  keyPath: readonly unknown[]
+  value: unknown
+  children: readonly BcPivotColNodeDTO[]
+  isTotal: boolean
+  level: number
+}
+
+export interface BcPivotCellDTO {
+  rowKeyPath: readonly unknown[]
+  colKeyPath: readonly unknown[]
+  results: readonly BcAggregationResultDTO[]
+}
+
 export type BcValidationResult = { valid: true } | { valid: false; error: string }
 
 export type BcRowId<TRow> = (row: TRow, index: number) => RowId
@@ -258,6 +312,7 @@ export interface ServerPagedQuery extends ServerQueryBase {
   mode: "paged"
   pageIndex: number
   pageSize: number
+  pivotState?: BcPivotState
 }
 
 export interface ServerPagedResult<TRow> {
@@ -265,6 +320,7 @@ export interface ServerPagedResult<TRow> {
   totalRows: number
   pageIndex: number
   pageSize: number
+  pivotedRows?: BcPivotedDataDTO
   viewKey?: string
   revision?: string
 }
