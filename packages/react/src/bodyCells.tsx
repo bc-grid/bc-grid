@@ -45,6 +45,17 @@ interface RenderBodyCellParams<TRow> {
    */
   hasOverlayValue?: (rowId: RowId, columnId: ColumnId) => boolean
   getOverlayValue?: (rowId: RowId, columnId: ColumnId) => unknown
+  /**
+   * Per-cell editing entry from the controller's `getCellEditEntry`.
+   * When defined, the cell has been edited (or is in flight) — the
+   * renderer reflects pending / error / dirty state via
+   * `data-bc-grid-cell-state` and the matching `BcCellRendererParams`
+   * fields per `editing-rfc §Dirty Tracking`.
+   */
+  getCellEditEntry?: (
+    rowId: RowId,
+    columnId: ColumnId,
+  ) => { pending: boolean; error?: string } | undefined
 }
 
 export function renderBodyCell<TRow>({
@@ -66,6 +77,7 @@ export function renderBodyCell<TRow>({
   virtualRow,
   hasOverlayValue,
   getOverlayValue,
+  getCellEditEntry,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
 
@@ -80,6 +92,27 @@ export function renderBodyCell<TRow>({
     selected,
     disabled,
   }
+
+  // Editing state per `editing-rfc §Dirty Tracking`. Order of precedence:
+  //   - error: validation rejected or server reject (highest priority)
+  //   - pending: async commit in flight
+  //   - dirty: locally edited, no error / pending in flight
+  //   - undefined (default): clean cell
+  // The overlay-applies check serves as the "isDirty" signal — a cell
+  // that has any patch in the overlay is dirty. The cell-edit entry
+  // adds the pending / error nuance on top.
+  const editEntry = getCellEditEntry?.(entry.rowId, column.columnId)
+  const isDirty = overlayApplies
+  const editPending = editEntry?.pending ?? false
+  const editError = editEntry?.error
+  const cellEditState: "error" | "pending" | "dirty" | undefined = editError
+    ? "error"
+    : editPending
+      ? "pending"
+      : isDirty
+        ? "dirty"
+        : undefined
+
   const params = {
     value,
     formattedValue,
@@ -89,6 +122,9 @@ export function renderBodyCell<TRow>({
     searchText,
     rowState,
     editing: false,
+    pending: editPending,
+    ...(editError != null ? { editError } : {}),
+    isDirty,
   } satisfies BcCellRendererParams<TRow, unknown>
   const position = { rowId: entry.rowId, columnId: column.columnId }
   const active = activeCell?.rowId === position.rowId && activeCell.columnId === position.columnId
@@ -128,7 +164,9 @@ export function renderBodyCell<TRow>({
         aria-colindex={virtualCol.index + 1}
         aria-labelledby={`${headerDomId(domBaseId, column.columnId)} ${cellId}`}
         aria-selected={selected || undefined}
+        aria-invalid={editError ? true : undefined}
         data-bc-grid-active-cell={active || undefined}
+        data-bc-grid-cell-state={cellEditState}
         data-column-id={column.columnId}
         style={{
           ...cellStyle({
