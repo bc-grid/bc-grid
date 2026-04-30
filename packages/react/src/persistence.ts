@@ -15,6 +15,7 @@ export interface PersistedGridState {
   pageSize?: number | undefined
   density?: BcGridDensity | undefined
   groupBy?: readonly ColumnId[] | undefined
+  sidebarPanel?: string | null | undefined
 }
 
 export interface UrlStatePersistenceOptions {
@@ -52,6 +53,7 @@ export function readPersistedGridState(
     pageSize: readJson(storage, gridStorageKey(gridId, "pageSize"), parsePageSize),
     density: readJson(storage, gridStorageKey(gridId, "density"), parseDensity),
     groupBy: readJson(storage, gridStorageKey(gridId, "groupBy"), parseGroupBy),
+    sidebarPanel: readJson(storage, gridStorageKey(gridId, "sidebarPanel"), parseSidebarPanel),
   }
 }
 
@@ -66,6 +68,7 @@ export function writePersistedGridState(
   writeJson(storage, gridStorageKey(gridId, "pageSize"), state.pageSize)
   writeJson(storage, gridStorageKey(gridId, "density"), state.density)
   writeJson(storage, gridStorageKey(gridId, "groupBy"), state.groupBy)
+  writeJson(storage, gridStorageKey(gridId, "sidebarPanel"), state.sidebarPanel)
 }
 
 export function readUrlPersistedGridState(
@@ -270,6 +273,13 @@ function parseDensity(value: unknown): BcGridDensity | undefined {
 function parseGroupBy(value: unknown): ColumnId[] | undefined {
   if (!Array.isArray(value)) return undefined
   return value.every((columnId) => typeof columnId === "string") ? value : undefined
+}
+
+function parseSidebarPanel(value: unknown): string | null | undefined {
+  if (value === null) return null
+  if (typeof value !== "string") return undefined
+  const trimmed = value.trim()
+  return trimmed ? trimmed : undefined
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

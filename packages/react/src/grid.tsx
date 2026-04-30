@@ -106,9 +106,15 @@ import {
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
+import { BcGridSidebar, normalizeSidebarPanelId, resolveSidebarPanels } from "./sidebar"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
 import { BcStatusBar } from "./statusBar"
-import type { BcCellEditCommitEvent, BcGridProps, BcReactGridColumn } from "./types"
+import type {
+  BcCellEditCommitEvent,
+  BcGridProps,
+  BcReactGridColumn,
+  BcSidebarContext,
+} from "./types"
 import { useEditingController } from "./useEditingController"
 import { formatCellValue, getCellValue } from "./value"
 
@@ -236,6 +242,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // re-render the grid just to update the anchor.
   const selectionAnchorRef = useRef<RowId | null>(null)
   const [columnMenu, setColumnMenu] = useState<ColumnVisibilityMenuAnchor | null>(null)
+  const sidebarPanels = useMemo(() => resolveSidebarPanels(props.sidebar), [props.sidebar])
+  const hasSidebar = sidebarPanels.length > 0
 
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
@@ -270,6 +278,22 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultActiveCell ?? null,
     props.onActiveCellChange,
   )
+  const [sidebarPanelState, setSidebarPanelState] = useControlledState<string | null>(
+    hasProp(props, "sidebarPanel"),
+    props.sidebarPanel ?? null,
+    props.defaultSidebarPanel ?? persistedGridState.sidebarPanel ?? null,
+    props.onSidebarPanelChange,
+  )
+  const activeSidebarPanel = useMemo(
+    () => normalizeSidebarPanelId(sidebarPanelState, sidebarPanels),
+    [sidebarPanelState, sidebarPanels],
+  )
+  const setActiveSidebarPanel = useCallback(
+    (next: string | null) => {
+      setSidebarPanelState(normalizeSidebarPanelId(next, sidebarPanels))
+    },
+    [setSidebarPanelState, sidebarPanels],
+  )
 
   // Consumer columns resolved for filter / sort lookups. The synthetic
   // selection-checkbox column (when `checkboxSelection` is on) is added
@@ -297,8 +321,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       density,
       groupBy: groupByState,
       pageSize: pageSizeState,
+      sidebarPanel: hasSidebar ? activeSidebarPanel : undefined,
     }),
-    [density, groupByState, pageSizeState, persistedColumnState],
+    [activeSidebarPanel, density, groupByState, hasSidebar, pageSizeState, persistedColumnState],
   )
   usePersistedGridStateWriter(props.gridId, persistenceState)
   const urlPersistenceState = useMemo(
@@ -1331,6 +1356,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const maxScrollLeft = Math.max(0, virtualWindow.totalWidth - viewport.width)
   const isScrolledLeft = scrollOffset.left > 1 && pinnedLeftCols > 0
   const isScrolledRight = scrollOffset.left < maxScrollLeft - 1 && pinnedRightCols > 0
+  const sidebarContext = useMemo<BcSidebarContext<TRow>>(
+    () => ({
+      api,
+      columns,
+      columnState,
+      filterState: activeFilter,
+      setColumnState,
+      setFilterState,
+    }),
+    [activeFilter, api, columnState, columns, setColumnState, setFilterState],
+  )
   const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
 
   return (
@@ -1357,297 +1393,312 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     >
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
 
-      <div className="bc-grid-header-viewport" role="rowgroup" style={headerViewportStyle}>
-        <div
-          className="bc-grid-header"
-          role="row"
-          aria-rowindex={1}
-          style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
-        >
-          {resolvedColumns.map((column, index) =>
-            renderHeaderCell({
-              column,
-              domBaseId,
-              headerHeight,
-              index,
-              onColumnMenu: openColumnMenu,
-              onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
-              onReorderEnd: endReorder,
-              onReorderMove: handleReorderPointerMove,
-              onReorderStart: handleReorderPointerDown,
-              onResizeEnd: endResize,
-              onResizeMove: handleResizePointerMove,
-              onResizeStart: handleResizePointerDown,
-              onSort: handleHeaderSort,
-              pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
-              reorderingColumnId: columnReorderPreview?.sourceColumnId,
-              scrollLeft: scrollOffset.left,
-              sortState,
-              totalWidth: virtualWindow.totalWidth,
-              viewportWidth: viewport.width,
-              filterText: columnFilterText[column.columnId] ?? "",
-              filterPopupOpen: filterPopupState?.columnId === column.columnId,
-              onOpenFilterPopup: (col, anchor) =>
-                setFilterPopupState((prev) =>
-                  prev?.columnId === col.columnId ? null : { columnId: col.columnId, anchor },
-                ),
-            }),
-          )}
-        </div>
-        {columnReorderPreview ? (
-          <div
-            aria-hidden="true"
-            className="bc-grid-column-drop-indicator"
-            style={{
-              height: headerHeight * 2,
-              left: columnReorderPreview.indicatorLeft,
-            }}
-          />
-        ) : null}
-        {hasInlineFilters ? (
-          <div
-            className="bc-grid-filter-row"
-            role="row"
-            aria-rowindex={2}
-            style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
-          >
-            {resolvedColumns.map((column, index) =>
-              renderFilterCell({
-                column,
-                domBaseId,
-                filterText: columnFilterText[column.columnId] ?? "",
-                headerHeight,
-                index,
-                loadSetFilterOptions,
-                onFilterChange: (next) =>
-                  setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
-                pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
-                scrollLeft: scrollOffset.left,
-                totalWidth: virtualWindow.totalWidth,
-                viewportWidth: viewport.width,
-              }),
-            )}
-          </div>
-        ) : null}
-      </div>
-
-      <div
-        ref={scrollerRef}
-        className="bc-grid-scroller"
-        role="rowgroup"
-        onScroll={handleScroll}
-        style={scrollerStyle(bodyHeight)}
-      >
-        <div
-          className="bc-grid-canvas"
-          style={canvasStyle(virtualWindow.totalHeight, virtualWindow.totalWidth)}
-        >
-          {virtualWindow.rows.map((virtualRow) => {
-            const entry = rowEntries[virtualRow.index]
-            if (!entry) return null
-            if (!isDataRowEntry(entry)) {
-              return (
-                <div
-                  key={entry.rowId}
-                  className={classNames("bc-grid-row", "bc-grid-row-group")}
-                  role="row"
-                  aria-rowindex={virtualRow.index + bodyAriaRowOffset}
-                  aria-level={entry.level}
-                  aria-expanded={entry.expanded}
-                  data-row-id={entry.rowId}
-                  data-row-index={virtualRow.index}
-                  data-bc-grid-row-kind="group"
-                  style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
-                  onClick={() => {
-                    focusGroupRow(entry)
-                    toggleGroupRow(entry)
-                  }}
-                >
-                  {renderGroupRowCell({
-                    activeCell,
-                    colCount: resolvedColumns.length,
-                    column: resolvedColumns[0],
-                    domBaseId,
-                    entry,
-                    onToggle: (groupEntry) => {
-                      focusGroupRow(groupEntry)
-                      toggleGroupRow(groupEntry)
-                    },
-                    totalWidth: virtualWindow.totalWidth,
-                    virtualRow,
-                  })}
-                </div>
-              )
-            }
-            const disabled = isRowDisabled(entry.row)
-            const selected = !disabled && isRowSelected(selectionState, entry.rowId)
-            const expanded = hasDetail && expansionState.has(entry.rowId)
-            const detailHeight = expanded ? getDetailHeight(entry) : 0
-            const cellVirtualRow = expanded
-              ? { ...virtualRow, height: defaultRowHeight }
-              : virtualRow
-            return (
+      <div className="bc-grid-main">
+        <div className="bc-grid-table">
+          <div className="bc-grid-header-viewport" role="rowgroup" style={headerViewportStyle}>
+            <div
+              className="bc-grid-header"
+              role="row"
+              aria-rowindex={1}
+              style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
+            >
+              {resolvedColumns.map((column, index) =>
+                renderHeaderCell({
+                  column,
+                  domBaseId,
+                  headerHeight,
+                  index,
+                  onColumnMenu: openColumnMenu,
+                  onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
+                  onReorderEnd: endReorder,
+                  onReorderMove: handleReorderPointerMove,
+                  onReorderStart: handleReorderPointerDown,
+                  onResizeEnd: endResize,
+                  onResizeMove: handleResizePointerMove,
+                  onResizeStart: handleResizePointerDown,
+                  onSort: handleHeaderSort,
+                  pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
+                  reorderingColumnId: columnReorderPreview?.sourceColumnId,
+                  scrollLeft: scrollOffset.left,
+                  sortState,
+                  totalWidth: virtualWindow.totalWidth,
+                  viewportWidth: viewport.width,
+                  filterText: columnFilterText[column.columnId] ?? "",
+                  filterPopupOpen: filterPopupState?.columnId === column.columnId,
+                  onOpenFilterPopup: (col, anchor) =>
+                    setFilterPopupState((prev) =>
+                      prev?.columnId === col.columnId ? null : { columnId: col.columnId, anchor },
+                    ),
+                }),
+              )}
+            </div>
+            {columnReorderPreview ? (
               <div
-                key={entry.rowId}
-                className={classNames(
-                  "bc-grid-row",
-                  selected ? "bc-grid-row-selected" : undefined,
-                  disabled ? "bc-grid-row-disabled" : undefined,
-                )}
+                aria-hidden="true"
+                className="bc-grid-column-drop-indicator"
+                style={{
+                  height: headerHeight * 2,
+                  left: columnReorderPreview.indicatorLeft,
+                }}
+              />
+            ) : null}
+            {hasInlineFilters ? (
+              <div
+                className="bc-grid-filter-row"
                 role="row"
-                aria-rowindex={virtualRow.index + bodyAriaRowOffset}
-                aria-level={groupingActive ? entry.level : undefined}
-                aria-selected={selected || undefined}
-                aria-disabled={disabled || undefined}
-                data-row-id={entry.rowId}
-                data-row-index={virtualRow.index}
-                data-bc-grid-row-kind="data"
-                style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
-                onClick={(event) => {
-                  // Selection logic. Shift+click → range from anchor; ctrl/
-                  // cmd+click → toggle this row in current selection;
-                  // plain click → select only this row.
-                  if (!disabled) {
-                    if (event.shiftKey && selectionAnchorRef.current) {
-                      setSelectionState(
-                        selectRange(
-                          visibleSelectableRowIds,
-                          selectionAnchorRef.current,
-                          entry.rowId,
-                        ),
-                      )
-                    } else if (event.ctrlKey || event.metaKey) {
-                      setSelectionState(toggleRow(selectionState, entry.rowId))
-                      selectionAnchorRef.current = entry.rowId
-                    } else {
-                      setSelectionState(selectOnly(entry.rowId))
-                      selectionAnchorRef.current = entry.rowId
-                    }
-                  }
-                  onRowClick?.(entry.row, event)
-                }}
-                onDoubleClick={(event) => {
-                  // Activate edit on the cell at the click point if the
-                  // column is editable. Falls through to onRowDoubleClick
-                  // either way.
-                  const target = (event.target as HTMLElement).closest<HTMLElement>(
-                    "[data-column-id]",
-                  )
-                  const columnId = target?.dataset.columnId
-                  if (!disabled && columnId) {
-                    const column = resolvedColumns.find((c) => c.columnId === columnId)
-                    if (column && isCellEditable(column, entry.row)) {
-                      const editor = (column.source.cellEditor ?? defaultTextEditor) as never
-                      editController.start(
-                        { rowId: entry.rowId, columnId: column.columnId },
-                        "doubleclick",
-                        {
-                          pointerHint: { x: event.clientX, y: event.clientY },
-                          editor,
-                          row: entry.row,
-                          rowId: entry.rowId,
-                        },
-                      )
-                    }
-                  }
-                  onRowDoubleClick?.(entry.row, event)
-                }}
+                aria-rowindex={2}
+                style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
               >
-                {virtualWindow.cols.map((virtualCol) =>
-                  renderBodyCell({
-                    activeCell,
-                    column: resolvedColumns[virtualCol.index],
+                {resolvedColumns.map((column, index) =>
+                  renderFilterCell({
+                    column,
                     domBaseId,
-                    entry,
-                    locale,
-                    onCellFocus,
-                    pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
-                    searchText,
+                    filterText: columnFilterText[column.columnId] ?? "",
+                    headerHeight,
+                    index,
+                    loadSetFilterOptions,
+                    onFilterChange: (next) =>
+                      setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
+                    pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
                     scrollLeft: scrollOffset.left,
-                    setActiveCell,
                     totalWidth: virtualWindow.totalWidth,
                     viewportWidth: viewport.width,
-                    virtualCol,
-                    virtualRow: cellVirtualRow,
-                    selected,
-                    disabled,
-                    expanded,
-                    editingCell,
-                    hasOverlayValue: editController.hasOverlayValue,
-                    getOverlayValue: editController.getOverlayValue,
-                    getCellEditEntry: editController.getCellEditEntry,
                   }),
                 )}
-                {expanded && renderDetailPanel ? (
-                  <div
-                    className="bc-grid-detail-panel"
-                    role="region"
-                    aria-label="Detail"
-                    style={detailPanelStyle(
-                      defaultRowHeight,
-                      detailHeight,
-                      virtualWindow.totalWidth,
-                    )}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  >
-                    {renderDetailPanel({
-                      row: entry.row,
-                      rowId: entry.rowId,
-                      rowIndex: entry.index,
-                    })}
-                  </div>
-                ) : null}
               </div>
-            )
-          })}
+            ) : null}
+          </div>
+
+          <div
+            ref={scrollerRef}
+            className="bc-grid-scroller"
+            role="rowgroup"
+            onScroll={handleScroll}
+            style={scrollerStyle(bodyHeight)}
+          >
+            <div
+              className="bc-grid-canvas"
+              style={canvasStyle(virtualWindow.totalHeight, virtualWindow.totalWidth)}
+            >
+              {virtualWindow.rows.map((virtualRow) => {
+                const entry = rowEntries[virtualRow.index]
+                if (!entry) return null
+                if (!isDataRowEntry(entry)) {
+                  return (
+                    <div
+                      key={entry.rowId}
+                      className={classNames("bc-grid-row", "bc-grid-row-group")}
+                      role="row"
+                      aria-rowindex={virtualRow.index + bodyAriaRowOffset}
+                      aria-level={entry.level}
+                      aria-expanded={entry.expanded}
+                      data-row-id={entry.rowId}
+                      data-row-index={virtualRow.index}
+                      data-bc-grid-row-kind="group"
+                      style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
+                      onClick={() => {
+                        focusGroupRow(entry)
+                        toggleGroupRow(entry)
+                      }}
+                    >
+                      {renderGroupRowCell({
+                        activeCell,
+                        colCount: resolvedColumns.length,
+                        column: resolvedColumns[0],
+                        domBaseId,
+                        entry,
+                        onToggle: (groupEntry) => {
+                          focusGroupRow(groupEntry)
+                          toggleGroupRow(groupEntry)
+                        },
+                        totalWidth: virtualWindow.totalWidth,
+                        virtualRow,
+                      })}
+                    </div>
+                  )
+                }
+                const disabled = isRowDisabled(entry.row)
+                const selected = !disabled && isRowSelected(selectionState, entry.rowId)
+                const expanded = hasDetail && expansionState.has(entry.rowId)
+                const detailHeight = expanded ? getDetailHeight(entry) : 0
+                const cellVirtualRow = expanded
+                  ? { ...virtualRow, height: defaultRowHeight }
+                  : virtualRow
+                return (
+                  <div
+                    key={entry.rowId}
+                    className={classNames(
+                      "bc-grid-row",
+                      selected ? "bc-grid-row-selected" : undefined,
+                      disabled ? "bc-grid-row-disabled" : undefined,
+                    )}
+                    role="row"
+                    aria-rowindex={virtualRow.index + bodyAriaRowOffset}
+                    aria-level={groupingActive ? entry.level : undefined}
+                    aria-selected={selected || undefined}
+                    aria-disabled={disabled || undefined}
+                    data-row-id={entry.rowId}
+                    data-row-index={virtualRow.index}
+                    data-bc-grid-row-kind="data"
+                    style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
+                    onClick={(event) => {
+                      // Selection logic. Shift+click → range from anchor; ctrl/
+                      // cmd+click → toggle this row in current selection;
+                      // plain click → select only this row.
+                      if (!disabled) {
+                        if (event.shiftKey && selectionAnchorRef.current) {
+                          setSelectionState(
+                            selectRange(
+                              visibleSelectableRowIds,
+                              selectionAnchorRef.current,
+                              entry.rowId,
+                            ),
+                          )
+                        } else if (event.ctrlKey || event.metaKey) {
+                          setSelectionState(toggleRow(selectionState, entry.rowId))
+                          selectionAnchorRef.current = entry.rowId
+                        } else {
+                          setSelectionState(selectOnly(entry.rowId))
+                          selectionAnchorRef.current = entry.rowId
+                        }
+                      }
+                      onRowClick?.(entry.row, event)
+                    }}
+                    onDoubleClick={(event) => {
+                      // Activate edit on the cell at the click point if the
+                      // column is editable. Falls through to onRowDoubleClick
+                      // either way.
+                      const target = (event.target as HTMLElement).closest<HTMLElement>(
+                        "[data-column-id]",
+                      )
+                      const columnId = target?.dataset.columnId
+                      if (!disabled && columnId) {
+                        const column = resolvedColumns.find((c) => c.columnId === columnId)
+                        if (column && isCellEditable(column, entry.row)) {
+                          const editor = (column.source.cellEditor ?? defaultTextEditor) as never
+                          editController.start(
+                            { rowId: entry.rowId, columnId: column.columnId },
+                            "doubleclick",
+                            {
+                              pointerHint: { x: event.clientX, y: event.clientY },
+                              editor,
+                              row: entry.row,
+                              rowId: entry.rowId,
+                            },
+                          )
+                        }
+                      }
+                      onRowDoubleClick?.(entry.row, event)
+                    }}
+                  >
+                    {virtualWindow.cols.map((virtualCol) =>
+                      renderBodyCell({
+                        activeCell,
+                        column: resolvedColumns[virtualCol.index],
+                        domBaseId,
+                        entry,
+                        locale,
+                        onCellFocus,
+                        pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
+                        searchText,
+                        scrollLeft: scrollOffset.left,
+                        setActiveCell,
+                        totalWidth: virtualWindow.totalWidth,
+                        viewportWidth: viewport.width,
+                        virtualCol,
+                        virtualRow: cellVirtualRow,
+                        selected,
+                        disabled,
+                        expanded,
+                        editingCell,
+                        hasOverlayValue: editController.hasOverlayValue,
+                        getOverlayValue: editController.getOverlayValue,
+                        getCellEditEntry: editController.getCellEditEntry,
+                      }),
+                    )}
+                    {expanded && renderDetailPanel ? (
+                      <div
+                        className="bc-grid-detail-panel"
+                        role="region"
+                        aria-label="Detail"
+                        style={detailPanelStyle(
+                          defaultRowHeight,
+                          detailHeight,
+                          virtualWindow.totalWidth,
+                        )}
+                        onClick={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
+                        {renderDetailPanel({
+                          row: entry.row,
+                          rowId: entry.rowId,
+                          rowIndex: entry.index,
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+
+            <EditorPortal
+              controller={editController}
+              activeCell={activeCell}
+              rowEntries={visibleDataRowEntries}
+              resolvedColumns={resolvedColumns}
+              cellRect={editorCellRect}
+              virtualizer={virtualizer}
+              rowIndexById={rowIndexById}
+              columnIndexById={columnIndexById}
+              defaultEditor={defaultTextEditor as never}
+            />
+
+            {loading ? (
+              <div className="bc-grid-overlay" role="status" style={overlayStyle}>
+                {loadingOverlay ?? messages.loadingLabel}
+              </div>
+            ) : null}
+
+            {!loading && rowEntries.length === 0 ? (
+              <div className="bc-grid-overlay" role="status" style={overlayStyle}>
+                {messages.noRowsLabel}
+              </div>
+            ) : null}
+          </div>
+
+          {hasAggregationFooter ? (
+            <BcGridAggregationFooterRow
+              columns={resolvedColumns}
+              locale={locale}
+              results={aggregationResults}
+              rowHeight={defaultRowHeight}
+              rowIndex={rowEntries.length + bodyAriaRowOffset}
+              scrollLeft={scrollOffset.left}
+              totalWidth={virtualWindow.totalWidth}
+              viewportWidth={viewport.width}
+            />
+          ) : null}
+
+          {props.statusBar && props.statusBar.length > 0 ? (
+            <BcStatusBar
+              segments={props.statusBar}
+              ctx={statusBarContext}
+              ariaLabel={messages.statusBarLabel}
+            />
+          ) : null}
         </div>
 
-        <EditorPortal
-          controller={editController}
-          activeCell={activeCell}
-          rowEntries={visibleDataRowEntries}
-          resolvedColumns={resolvedColumns}
-          cellRect={editorCellRect}
-          virtualizer={virtualizer}
-          rowIndexById={rowIndexById}
-          columnIndexById={columnIndexById}
-          defaultEditor={defaultTextEditor as never}
-        />
-
-        {loading ? (
-          <div className="bc-grid-overlay" role="status" style={overlayStyle}>
-            {loadingOverlay ?? messages.loadingLabel}
-          </div>
-        ) : null}
-
-        {!loading && rowEntries.length === 0 ? (
-          <div className="bc-grid-overlay" role="status" style={overlayStyle}>
-            {messages.noRowsLabel}
-          </div>
+        {hasSidebar ? (
+          <BcGridSidebar
+            panels={sidebarPanels}
+            activePanelId={activeSidebarPanel}
+            context={sidebarContext}
+            domBaseId={domBaseId}
+            width={props.sidebarWidth}
+            onActivePanelChange={setActiveSidebarPanel}
+          />
         ) : null}
       </div>
-
-      {hasAggregationFooter ? (
-        <BcGridAggregationFooterRow
-          columns={resolvedColumns}
-          locale={locale}
-          results={aggregationResults}
-          rowHeight={defaultRowHeight}
-          rowIndex={rowEntries.length + 3}
-          scrollLeft={scrollOffset.left}
-          totalWidth={virtualWindow.totalWidth}
-          viewportWidth={viewport.width}
-        />
-      ) : null}
-
-      {props.statusBar && props.statusBar.length > 0 ? (
-        <BcStatusBar
-          segments={props.statusBar}
-          ctx={statusBarContext}
-          ariaLabel={messages.statusBarLabel}
-        />
-      ) : null}
 
       {columnMenu ? (
         <ColumnVisibilityMenu
