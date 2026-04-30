@@ -268,11 +268,15 @@ export interface BcGridApi<TRow = unknown> {
   getRowById(rowId: RowId): TRow | undefined
   getActiveCell(): BcCellPosition | null
   getSelection(): BcSelection
+  getRangeSelection(): BcRangeSelection
   getColumnState(): BcColumnStateEntry[]
 
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter): void
+  setRangeSelection(selection: BcRangeSelection): void
+  copyRange(range?: BcRange): Promise<void>
+  clearRangeSelection(): void
   expandAll(): void
   collapseAll(): void
 
