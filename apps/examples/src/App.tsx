@@ -109,6 +109,11 @@ function editorFrameworkEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("edit") === "1"
 }
 
+function paginationEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("pagination") === "1"
+}
+
 function CustomerGridDemo({
   density,
   onDensityChange,
@@ -128,6 +133,7 @@ function CustomerGridDemo({
   const rows = customerRows
   const urlStateEnabled = urlStatePersistenceEnabled()
   const disabledRows = disabledRowsEnabled()
+  const paginationDemo = paginationEnabled()
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
   const urlStatePersistence = useMemo(
@@ -390,6 +396,9 @@ function CustomerGridDemo({
         onEdit={handleEdit}
         onRowClick={setActiveCustomer}
         onSelectionChange={handleSelectionChange}
+        {...(paginationDemo
+          ? { pagination: true, defaultPageSize: 100, pageSizeOptions: [50, 100, 250] }
+          : {})}
         rowIsDisabled={rowIsDisabled}
         rowId={(row: CustomerRow) => row.id}
         searchText={searchText}

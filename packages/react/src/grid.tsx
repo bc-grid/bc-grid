@@ -5,6 +5,7 @@ import type {
   BcGridApi,
   BcGridFilter,
   BcGridSort,
+  BcPaginationState,
   BcSelection,
   ColumnId,
   RowId,
@@ -66,6 +67,12 @@ import {
 import { type SortModifiers, renderFilterCell, renderHeaderCell } from "./headerCells"
 import { nextKeyboardNav } from "./keyboard"
 import {
+  BcGridPagination,
+  DEFAULT_CLIENT_PAGE_SIZE,
+  getPaginationWindow,
+  normalisePageSizeOptions,
+} from "./pagination"
+import {
   readPersistedGridState,
   readUrlPersistedGridState,
   usePersistedGridStateWriter,
@@ -124,6 +131,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const defaultRowHeight = resolveRowHeight(density, rowHeight)
   const headerHeight = resolveHeaderHeight(density)
   const fallbackBodyHeight = resolveFallbackBodyHeight(height, defaultRowHeight, headerHeight)
+  const pageSizeOptions = useMemo(
+    () => normalisePageSizeOptions(props.pageSizeOptions),
+    [props.pageSizeOptions],
+  )
 
   const [scrollOffset, setScrollOffset] = useState({ top: 0, left: 0 })
   const scrollOffsetRef = useRef(scrollOffset)
@@ -188,7 +199,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultGroupBy ?? persistedGridState.groupBy ?? [],
     props.onGroupByChange,
   )
-  const [pageSizeState] = useControlledState<number | undefined>(
+  const [pageState, setPageState] = useControlledState<number>(
+    hasProp(props, "page"),
+    props.page ?? 0,
+    props.defaultPage ?? 0,
+    undefined,
+  )
+  const [pageSizeState, setPageSizeState] = useControlledState<number | undefined>(
     hasProp(props, "pageSize"),
     props.pageSize,
     props.defaultPageSize ?? persistedGridState.pageSize,
@@ -251,7 +268,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
   const searchText = props.searchText ?? props.defaultSearchText ?? ""
 
-  const rowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
+  const allRowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
     let visibleRows: TRow[] =
       props.showInactive === false && rowIsInactive
         ? data.filter((row) => !rowIsInactive(row))
@@ -324,6 +341,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     searchText,
     sortState,
   ])
+  const paginationEnabled = props.pagination === true
+  const effectivePageSize = pageSizeState ?? pageSizeOptions[0] ?? DEFAULT_CLIENT_PAGE_SIZE
+  const paginationWindow = useMemo(
+    () => getPaginationWindow(allRowEntries.length, pageState, effectivePageSize),
+    [allRowEntries.length, effectivePageSize, pageState],
+  )
+  const paginationPageSizeOptions = useMemo(
+    () =>
+      pageSizeOptions.includes(effectivePageSize)
+        ? pageSizeOptions
+        : normalisePageSizeOptions([...pageSizeOptions, effectivePageSize]),
+    [effectivePageSize, pageSizeOptions],
+  )
+  const rowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
+    if (!paginationEnabled) return allRowEntries
+
+    return allRowEntries
+      .slice(paginationWindow.startIndex, paginationWindow.endIndex)
+      .map((entry, index) => ({ ...entry, index }))
+  }, [allRowEntries, paginationEnabled, paginationWindow.endIndex, paginationWindow.startIndex])
 
   // Visible, selectable row IDs in display order (post-filter, post-sort).
   // Used by the synthetic selection-checkbox column's header to compute the
@@ -637,6 +674,49 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
 
   useEffect(() => assignRef(apiRef, api), [apiRef, api])
+
+  const handlePaginationChange = useCallback(
+    (next: BcPaginationState) => {
+      const normalized = getPaginationWindow(allRowEntries.length, next.page, next.pageSize)
+      const nextState = {
+        page: normalized.page,
+        pageSize: normalized.pageSize,
+      }
+      const prevState = {
+        page: paginationWindow.page,
+        pageSize: effectivePageSize,
+      }
+      if (nextState.page === prevState.page && nextState.pageSize === prevState.pageSize) return
+
+      applyScroll(scrollerRef.current, virtualizer, 0, undefined, updateScrollOffset)
+      setPageState(nextState.page)
+      setPageSizeState(nextState.pageSize)
+      props.onPaginationChange?.(nextState, prevState)
+    },
+    [
+      allRowEntries.length,
+      effectivePageSize,
+      paginationWindow.page,
+      props.onPaginationChange,
+      setPageSizeState,
+      setPageState,
+      updateScrollOffset,
+      virtualizer,
+    ],
+  )
+
+  const renderedFooter =
+    footer ??
+    (paginationEnabled ? (
+      <BcGridPagination
+        page={paginationWindow.page}
+        pageCount={paginationWindow.pageCount}
+        pageSize={effectivePageSize}
+        pageSizeOptions={paginationPageSizeOptions}
+        totalRows={paginationWindow.totalRows}
+        onChange={handlePaginationChange}
+      />
+    ) : null)
 
   const activeCellId = activeCell
     ? cellDomId(domBaseId, activeCell.rowId, activeCell.columnId)
@@ -988,7 +1068,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         ) : null}
       </div>
 
-      {footer ? <div className="bc-grid-footer">{footer}</div> : null}
+      {renderedFooter ? <div className="bc-grid-footer">{renderedFooter}</div> : null}
 
       {/*
        * Live regions per accessibility-rfc §Live Regions. Visually hidden
