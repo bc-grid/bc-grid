@@ -586,6 +586,76 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(sensitive, lookup({ name: "ACME" }))).toBe(false)
   })
 
+  test("caseSensitive applies to starts-with / ends-with / equals individually", () => {
+    const startsCs = buildGridFilter({
+      name: encodeTextFilterInput({ op: "starts-with", value: "Ac", caseSensitive: true }),
+    })
+    const endsCs = buildGridFilter({
+      name: encodeTextFilterInput({ op: "ends-with", value: "Co", caseSensitive: true }),
+    })
+    const equalsCs = buildGridFilter({
+      name: encodeTextFilterInput({ op: "equals", value: "Acme", caseSensitive: true }),
+    })
+    if (!startsCs || !endsCs || !equalsCs) throw new Error("expected filters")
+
+    // starts-with case-sensitive: "Ac" matches "Acme Inc" but not "ACME INC".
+    expect(matchesGridFilter(startsCs, lookup({ name: "Acme Inc" }))).toBe(true)
+    expect(matchesGridFilter(startsCs, lookup({ name: "ACME INC" }))).toBe(false)
+    expect(matchesGridFilter(startsCs, lookup({ name: "acme inc" }))).toBe(false)
+
+    // ends-with case-sensitive: "Co" matches "Acme & Co" but not "ACME & CO".
+    expect(matchesGridFilter(endsCs, lookup({ name: "Acme & Co" }))).toBe(true)
+    expect(matchesGridFilter(endsCs, lookup({ name: "Acme & CO" }))).toBe(false)
+
+    // equals case-sensitive: "Acme" only.
+    expect(matchesGridFilter(equalsCs, lookup({ name: "Acme" }))).toBe(true)
+    expect(matchesGridFilter(equalsCs, lookup({ name: "ACME" }))).toBe(false)
+    expect(matchesGridFilter(equalsCs, lookup({ name: "acme" }))).toBe(false)
+  })
+
+  test("matchesTextFilter swallows regex compile errors at match time (defense-in-depth)", () => {
+    // Hand-built filter that bypasses parseTextFilterInput (which would
+    // have rejected the bad pattern at build time). matchesTextFilter
+    // must not throw — the row simply doesn't match.
+    const badRegex = {
+      kind: "column" as const,
+      columnId: "name",
+      type: "text" as const,
+      op: "contains",
+      value: "(unterminated",
+      regex: true,
+    }
+    expect(matchesGridFilter(badRegex, lookup({ name: "anything" }))).toBe(false)
+    // Even an empty cell value shouldn't blow up.
+    expect(matchesGridFilter(badRegex, lookup({ name: "" }))).toBe(false)
+  })
+
+  test("empty needle matches every row regardless of operator or modifier flags", () => {
+    // Hand-built — buildGridFilter trims and drops empty values, but a
+    // server-driven filter could carry an empty string and the predicate
+    // must still short-circuit to "match-all" before consulting op /
+    // regex / caseSensitive.
+    const emptyContains = {
+      kind: "column" as const,
+      columnId: "name",
+      type: "text" as const,
+      op: "contains",
+      value: "",
+    }
+    const emptyRegex = {
+      kind: "column" as const,
+      columnId: "name",
+      type: "text" as const,
+      op: "equals",
+      value: "",
+      regex: true,
+      caseSensitive: true,
+    }
+    expect(matchesGridFilter(emptyContains, lookup({ name: "anything" }))).toBe(true)
+    expect(matchesGridFilter(emptyContains, lookup({ name: "" }))).toBe(true)
+    expect(matchesGridFilter(emptyRegex, lookup({ name: "anything" }))).toBe(true)
+  })
+
   test("unsupported non-text types are rejected (Q2 follow-up)", () => {
     const filter = {
       kind: "column" as const,
