@@ -484,6 +484,35 @@ describe("createServerRowModel", () => {
     expect(model.cache.get("infinite:v1:start:2:size:2")?.state).toBe("loaded")
   })
 
+  test("drops late block results after invalidating an in-flight request", async () => {
+    const model = createServerRowModel<Row>()
+    let resolvePage: (value: ServerPagedResult<Row>) => void = () => {}
+    const request = model.loadPagedPage({
+      loadPage: () =>
+        new Promise<ServerPagedResult<Row>>((resolve) => {
+          resolvePage = resolve
+        }),
+      pageIndex: 0,
+      pageSize: 1,
+      view,
+      viewKey: "v1",
+    })
+
+    expect(model.cache.get(request.blockKey)?.state).toBe("fetching")
+    expect(model.invalidate({ scope: "all" }).affectedBlockKeys).toEqual([request.blockKey])
+    expect(model.cache.get(request.blockKey)).toBeUndefined()
+
+    resolvePage({
+      pageIndex: 0,
+      pageSize: 1,
+      rows: [{ id: "a" }],
+      totalRows: 1,
+    })
+
+    await expect(request.promise).rejects.toThrow("Aborted")
+    expect(model.cache.get(request.blockKey)).toBeUndefined()
+  })
+
   test("applies streaming row additions to loaded view blocks", () => {
     const events: ServerRowModelEvent<Row>[] = []
     const model = createServerRowModel<Row>({ onEvent: (event) => events.push(event) })
