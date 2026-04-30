@@ -170,6 +170,9 @@ export interface BcSidebarContext<TRow = unknown> {
   setColumnState: (state: readonly BcColumnStateEntry[]) => void
   filterState: BcGridFilter | null
   setFilterState: (state: BcGridFilter | null) => void
+  groupBy: readonly ColumnId[]
+  setGroupBy: (state: readonly ColumnId[]) => void
+  groupableColumns: readonly { columnId: ColumnId; header: string }[]
   pivot?: unknown
 }
 
