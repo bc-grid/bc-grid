@@ -140,6 +140,78 @@ export function buildGridFilter(
   return { kind: "group", op: "and", filters }
 }
 
+export function columnFilterTextFromGridFilter(
+  filter: BcGridFilter | null | undefined,
+): ColumnFilterText {
+  if (!filter) return {}
+  const text: Record<ColumnId, string> = {}
+  assignColumnFilterText(filter, text)
+  return text
+}
+
+function assignColumnFilterText(filter: ServerFilter, text: Record<ColumnId, string>): void {
+  if (filter.kind === "group") {
+    if (filter.op !== "and") return
+    for (const child of filter.filters) assignColumnFilterText(child, text)
+    return
+  }
+
+  const encoded = encodeColumnFilterInput(filter)
+  if (encoded !== undefined) text[filter.columnId] = encoded
+}
+
+function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined {
+  if (filter.type === "boolean") {
+    if (filter.op !== "is" || typeof filter.value !== "boolean") return undefined
+    return String(filter.value)
+  }
+
+  if (filter.type === "number") {
+    if (!isNumberFilterOperator(filter.op)) return undefined
+    if (filter.op === "between") {
+      const values = numberFilterValuePair(filter.values)
+      return values ? encodeNumberFilterInput({ op: "between", ...values }) : undefined
+    }
+    const value = scalarFilterInputValue(filter.value)
+    return value ? encodeNumberFilterInput({ op: filter.op, value }) : undefined
+  }
+
+  if (filter.type === "number-range") {
+    if (filter.op !== "between") return undefined
+    const values = numberFilterValuePair(filter.values)
+    return values ? encodeNumberRangeFilterInput(values) : undefined
+  }
+
+  if (filter.type === "date") {
+    if (!isDateFilterOperator(filter.op)) return undefined
+    if (filter.op === "between") {
+      const values = dateFilterValuePair(filter.values)
+      return values ? encodeDateFilterInput({ op: "between", ...values }) : undefined
+    }
+    const value = dateFilterInputValue(filter.value)
+    return value ? encodeDateFilterInput({ op: filter.op, value }) : undefined
+  }
+
+  if (filter.type === "date-range") {
+    if (filter.op !== "between") return undefined
+    const values = dateFilterValuePair(filter.values)
+    return values ? encodeDateRangeFilterInput(values) : undefined
+  }
+
+  if (filter.type === "set") {
+    if (filter.op === "blank") return encodeSetFilterInput({ op: "blank", values: [] })
+    if (filter.op !== "in" && filter.op !== "not-in") return undefined
+    const values = Array.isArray(filter.values)
+      ? filter.values.filter((value): value is string => typeof value === "string")
+      : []
+    return values.length > 0 ? encodeSetFilterInput({ op: filter.op, values }) : undefined
+  }
+
+  if (filter.type !== "text" || filter.op !== "contains") return undefined
+  const value = scalarFilterInputValue(filter.value)
+  return value && value.trim().length > 0 ? value : undefined
+}
+
 /**
  * Test whether a single formatted cell value matches a column filter.
  * Unsupported types / ops fall through to "no match" so new public API
@@ -397,6 +469,34 @@ function parseSetFilterInput(raw: string): SetColumnFilterDraft | null {
     op: input.op,
     values: [...input.values],
   }
+}
+
+function scalarFilterInputValue(value: unknown): string | undefined {
+  if (typeof value === "string") return value
+  if (typeof value === "number" && Number.isFinite(value)) return String(value)
+  return undefined
+}
+
+function numberFilterValuePair(
+  values: readonly unknown[] | undefined,
+): NumberRangeFilterInput | undefined {
+  if (!Array.isArray(values) || values.length < 2) return undefined
+  const value = scalarFilterInputValue(values[0])
+  const valueTo = scalarFilterInputValue(values[1])
+  return value && valueTo ? { value, valueTo } : undefined
+}
+
+function dateFilterInputValue(value: unknown): string | undefined {
+  return parseFilterDate(value) ?? undefined
+}
+
+function dateFilterValuePair(
+  values: readonly unknown[] | undefined,
+): DateRangeFilterInput | undefined {
+  if (!Array.isArray(values) || values.length < 2) return undefined
+  const value = dateFilterInputValue(values[0])
+  const valueTo = dateFilterInputValue(values[1])
+  return value && valueTo ? { value, valueTo } : undefined
 }
 
 function normaliseDateFilterInput(input: Partial<DateFilterInput>): DateFilterInput {

@@ -2,8 +2,11 @@ import { describe, expect, test } from "bun:test"
 import type { ColumnId } from "@bc-grid/core"
 import {
   buildGridFilter,
+  columnFilterTextFromGridFilter,
   decodeDateRangeFilterInput,
+  decodeNumberFilterInput,
   decodeNumberRangeFilterInput,
+  decodeSetFilterInput,
   encodeDateFilterInput,
   encodeDateRangeFilterInput,
   encodeNumberFilterInput,
@@ -335,6 +338,74 @@ describe("buildGridFilter", () => {
     } else {
       throw new Error("expected column filter")
     }
+  })
+})
+
+describe("columnFilterTextFromGridFilter", () => {
+  test("projects supported filters into inline filter input state", () => {
+    const filter = {
+      kind: "group",
+      op: "and",
+      filters: [
+        { kind: "column", columnId: "name", type: "text", op: "contains", value: "John" },
+        { kind: "column", columnId: "creditHold", type: "boolean", op: "is", value: true },
+        { kind: "column", columnId: "balance", type: "number", op: ">=", value: 1000 },
+        {
+          kind: "column",
+          columnId: "lastInvoice",
+          type: "date-range",
+          op: "between",
+          values: ["2026-03-01", "2026-03-31"],
+        },
+        { kind: "column", columnId: "status", type: "set", op: "not-in", values: ["Closed"] },
+      ],
+    } as const
+
+    const text = columnFilterTextFromGridFilter(filter)
+
+    expect(text.name).toBe("John")
+    expect(text.creditHold).toBe("true")
+    expect(text.balance ? decodeNumberFilterInput(text.balance) : null).toEqual({
+      op: ">=",
+      value: "1000",
+    })
+    expect(text.lastInvoice ? decodeDateRangeFilterInput(text.lastInvoice) : null).toEqual({
+      value: "2026-03-01",
+      valueTo: "2026-03-31",
+    })
+    expect(text.status ? decodeSetFilterInput(text.status) : null).toEqual({
+      op: "not-in",
+      values: ["Closed"],
+    })
+    expect(
+      buildGridFilter(text, {
+        balance: "number",
+        creditHold: "boolean",
+        lastInvoice: "date-range",
+        status: "set",
+      }),
+    ).toEqual(filter)
+  })
+
+  test("does not project OR groups or unsupported custom filters into inline inputs", () => {
+    expect(
+      columnFilterTextFromGridFilter({
+        kind: "group",
+        op: "or",
+        filters: [
+          { kind: "column", columnId: "name", type: "text", op: "contains", value: "John" },
+        ],
+      }),
+    ).toEqual({})
+    expect(
+      columnFilterTextFromGridFilter({
+        kind: "column",
+        columnId: "name",
+        type: "custom",
+        op: "tags-any",
+        values: ["finance"],
+      }),
+    ).toEqual({})
   })
 })
 
