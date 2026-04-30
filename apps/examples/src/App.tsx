@@ -1,4 +1,4 @@
-import { textEditor } from "@bc-grid/editors"
+import { numberEditor, textEditor } from "@bc-grid/editors"
 import {
   type BcCellEditor,
   BcEditGrid,
@@ -198,6 +198,25 @@ function CustomerGridDemo({
         align: "right",
         width: 140,
         format: { type: "currency", currency: "USD", precision: 0 },
+        // ?edit=1: editable numeric column. valueParser strips locale
+        // thousands separators (commas, spaces) and runs parseFloat.
+        // validate enforces a non-negative bound (credit limits can't
+        // be negative — realistic ERP constraint).
+        editable: editorFrameworkEnabled(),
+        ...(editorFrameworkEnabled()
+          ? { cellEditor: numberEditor as unknown as BcCellEditor<CustomerRow, unknown> }
+          : {}),
+        valueParser: (input: string) => {
+          const cleaned = input.replace(/[\s,]/g, "")
+          const parsed = Number.parseFloat(cleaned)
+          return Number.isFinite(parsed) ? parsed : Number.NaN
+        },
+        validate: (next: unknown) => {
+          if (typeof next !== "number" || !Number.isFinite(next))
+            return { valid: false as const, error: "Credit limit must be a number." }
+          if (next < 0) return { valid: false as const, error: "Credit limit can't be negative." }
+          return { valid: true as const }
+        },
       },
       {
         columnId: "balance",
