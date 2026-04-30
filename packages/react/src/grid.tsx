@@ -117,6 +117,7 @@ import { createSelectionCheckboxColumn } from "./selectionColumn"
 import { BcGridSidebar, normalizeSidebarPanelId, resolveSidebarPanels } from "./sidebar"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
 import { BcStatusBar } from "./statusBar"
+import { type TapTarget, isDoubleTap } from "./touch"
 import type {
   BcCellEditCommitEvent,
   BcGridProps,
@@ -258,6 +259,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // click; consumed (and reset) by shift-click. Held in a ref so we don't
   // re-render the grid just to update the anchor.
   const selectionAnchorRef = useRef<RowId | null>(null)
+  // Last-tap state for the touch double-tap-to-edit fallback per
+  // `accessibility-rfc §Pointer and Touch Fallback`. Mouse users keep
+  // the native dblclick path; touch users get a synthetic detector
+  // because dblclick on touch is unreliable across iOS / Android.
+  const lastTapRef = useRef<TapTarget | null>(null)
   const [columnMenu, setColumnMenu] = useState<ColumnVisibilityMenuAnchor | null>(null)
   const sidebarPanels = useMemo(() => resolveSidebarPanels(props.sidebar), [props.sidebar])
   const hasSidebar = sidebarPanels.length > 0
@@ -1519,6 +1525,35 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
   const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
 
+  // Edit activation from a pointer event — shared between the mouse
+  // dblclick path and the touch synthetic double-tap detector. Returns
+  // true when an edit was started; the caller still fires onRowDoubleClick.
+  const tryStartEditAtPointer = (
+    eventTarget: EventTarget | null,
+    clientX: number,
+    clientY: number,
+    entry: DataRowEntry<TRow>,
+    rowDisabled: boolean,
+  ): boolean => {
+    if (rowDisabled) return false
+    const target =
+      eventTarget instanceof HTMLElement
+        ? eventTarget.closest<HTMLElement>("[data-column-id]")
+        : null
+    const columnId = target?.dataset.columnId
+    if (!columnId) return false
+    const column = resolvedColumns.find((c) => c.columnId === columnId)
+    if (!column || !isCellEditable(column, entry.row)) return false
+    const editor = (column.source.cellEditor ?? defaultTextEditor) as never
+    editController.start({ rowId: entry.rowId, columnId: column.columnId }, "doubleclick", {
+      pointerHint: { x: clientX, y: clientY },
+      editor,
+      row: entry.row,
+      rowId: entry.rowId,
+    })
+    return true
+  }
+
   return (
     <div
       ref={rootRef}
@@ -1718,27 +1753,46 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                       // Activate edit on the cell at the click point if the
                       // column is editable. Falls through to onRowDoubleClick
                       // either way.
+                      tryStartEditAtPointer(
+                        event.target,
+                        event.clientX,
+                        event.clientY,
+                        entry,
+                        disabled,
+                      )
+                      onRowDoubleClick?.(entry.row, event)
+                    }}
+                    onPointerUp={(event) => {
+                      // Synthetic double-tap detector for touch — native
+                      // dblclick is unreliable across iOS / Android even with
+                      // touch-action: manipulation, so we dedupe two
+                      // pointerup events on the same cell within the
+                      // double-tap window. Mouse / pen users keep the
+                      // native onDoubleClick path. Per
+                      // `accessibility-rfc §Pointer and Touch Fallback`.
+                      if (event.pointerType !== "touch" || disabled) return
                       const target = (event.target as HTMLElement).closest<HTMLElement>(
                         "[data-column-id]",
                       )
                       const columnId = target?.dataset.columnId
-                      if (!disabled && columnId) {
-                        const column = resolvedColumns.find((c) => c.columnId === columnId)
-                        if (column && isCellEditable(column, entry.row)) {
-                          const editor = (column.source.cellEditor ?? defaultTextEditor) as never
-                          editController.start(
-                            { rowId: entry.rowId, columnId: column.columnId },
-                            "doubleclick",
-                            {
-                              pointerHint: { x: event.clientX, y: event.clientY },
-                              editor,
-                              row: entry.row,
-                              rowId: entry.rowId,
-                            },
-                          )
-                        }
+                      if (!columnId) return
+                      const current: TapTarget = {
+                        rowId: String(entry.rowId),
+                        columnId,
+                        time: event.timeStamp,
                       }
-                      onRowDoubleClick?.(entry.row, event)
+                      if (isDoubleTap(current, lastTapRef.current)) {
+                        tryStartEditAtPointer(
+                          event.target,
+                          event.clientX,
+                          event.clientY,
+                          entry,
+                          disabled,
+                        )
+                        lastTapRef.current = null
+                      } else {
+                        lastTapRef.current = current
+                      }
                     }}
                   >
                     {virtualWindow.cols.map((virtualCol) =>

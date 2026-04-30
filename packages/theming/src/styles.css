@@ -1094,14 +1094,49 @@
     --bc-grid-hit-target-min: 44px;
   }
 
+  /*
+   * 44px hit target per `accessibility-rfc §Pointer and Touch Fallback`.
+   * Limited to coarse-pointer only so desktop density isn't bloated.
+   * Some controls visually grow on touch — accepted by the RFC: hit
+   * target wins over visual density when those conflict.
+   */
   .bc-grid-cell [role="button"],
   .bc-grid-cell button,
   .bc-grid-cell a,
+  .bc-grid-header-menu-button,
+  .bc-grid-header-filter-button,
+  .bc-grid-detail-toggle,
+  .bc-grid-group-toggle,
+  .bc-grid-tree-toggle,
+  .bc-grid-pagination-button,
+  .bc-grid-filter-text-toggle,
+  .bc-grid-filter-set-button,
+  .bc-grid-column-menu-item,
+  .bc-grid-column-menu-close,
   .bc-grid-sidebar-tab,
   .bc-grid-columns-panel-button,
   .bc-grid-columns-panel-chip-remove {
     min-width: var(--bc-grid-hit-target-min);
     min-height: var(--bc-grid-hit-target-min);
+  }
+
+  .bc-grid-pagination-size select,
+  .bc-grid-filter-input,
+  .bc-grid-filter-select {
+    min-height: var(--bc-grid-hit-target-min);
+  }
+
+  /*
+   * `touch-action: manipulation` suppresses the iOS / Android
+   * 300ms tap-to-zoom delay so native dblclick fires reliably for
+   * double-tap-to-edit. `pan-y` would also work but blocks the grid's
+   * own range-drag gestures from Q3 in the body.
+   */
+  .bc-grid-row,
+  .bc-grid-cell,
+  .bc-grid-header-cell,
+  .bc-grid-filter-cell {
+    touch-action: manipulation;
   }
 }
 
