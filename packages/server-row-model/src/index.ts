@@ -1,4 +1,5 @@
 import type {
+  RowId,
   ServerBlockCacheOptions,
   ServerBlockKey,
   ServerBlockQuery,
@@ -6,10 +7,12 @@ import type {
   ServerCacheBlock,
   ServerInvalidation,
   ServerLoadContext,
+  ServerMutationResult,
   ServerPagedQuery,
   ServerPagedResult,
   ServerRowModelMode,
   ServerRowModelState,
+  ServerRowPatch,
   ServerSelection,
   ServerViewState,
 } from "@bc-grid/core"
@@ -71,6 +74,30 @@ type LoadInfiniteBlockResult<TRow> = {
   deduped: boolean
   promise: Promise<ServerBlockResult<TRow>>
   query: ServerBlockQuery
+}
+
+type RowIdGetter<TRow> = (row: TRow) => RowId
+
+type QueueMutationInput<TRow> = {
+  patch: ServerRowPatch
+  rowId: RowIdGetter<TRow>
+}
+
+type QueueMutationResult = {
+  mutationId: string
+  rowId: RowId
+  updatedRows: number
+}
+
+type SettleMutationInput<TRow> = {
+  result: ServerMutationResult<TRow>
+  rowId: RowIdGetter<TRow>
+}
+
+type SettleMutationResult<TRow> = {
+  pending: boolean
+  result: ServerMutationResult<TRow>
+  updatedRows: number
 }
 
 type InFlightPagedRequest<TRow> = {
@@ -294,9 +321,12 @@ class ServerRowModelController<TRow> {
   readonly cache = new ServerBlockCache<TRow>()
 
   #activeInfiniteRequests = 0
+  #canonicalMutationRows = new Map<RowId, TRow>()
   #inFlightInfinite = new Map<ServerBlockKey, InFlightInfiniteRequest<TRow>>()
   #inFlightPaged = new Map<ServerBlockKey, InFlightPagedRequest<TRow>>()
+  #pendingMutations = new Map<string, ServerRowPatch>()
   #requestSequence = 0
+  #mutationRowIdGetter: RowIdGetter<TRow> | null = null
 
   createViewKey(view: ServerViewState): string {
     return `view:${stableStringify(view)}`
@@ -337,15 +367,16 @@ class ServerRowModelController<TRow> {
     const promise = input
       .loadPage(query, { signal: controller.signal })
       .then((result) => {
+        const rows = this.applyPendingMutationsToRows(result.rows)
         this.cache.markLoaded({
           blockKey,
-          rows: result.rows,
+          rows,
           size: result.pageSize,
           start: result.pageIndex * result.pageSize,
           viewKey: result.viewKey ?? viewKey,
           ...(result.revision ? { revision: result.revision } : {}),
         })
-        return result
+        return rows === result.rows ? result : { ...result, rows }
       })
       .catch((error: unknown) => {
         if (!isAbortError(error)) {
@@ -476,11 +507,88 @@ class ServerRowModelController<TRow> {
     this.cache.invalidate(invalidation)
   }
 
+  queueMutation(input: QueueMutationInput<TRow>): QueueMutationResult {
+    if (this.#pendingMutations.has(input.patch.mutationId)) {
+      throw new Error(`Mutation ${input.patch.mutationId} is already pending`)
+    }
+
+    this.#mutationRowIdGetter = input.rowId
+    this.captureCanonicalMutationRow(input.patch.rowId, input.rowId)
+    this.#pendingMutations.set(input.patch.mutationId, input.patch)
+    const updatedRows = this.reconcileMutatedRow(input.patch.rowId, input.rowId)
+
+    return {
+      mutationId: input.patch.mutationId,
+      rowId: input.patch.rowId,
+      updatedRows,
+    }
+  }
+
+  settleMutation(input: SettleMutationInput<TRow>): SettleMutationResult<TRow> {
+    this.#mutationRowIdGetter = input.rowId
+    const patch = this.#pendingMutations.get(input.result.mutationId)
+    if (!patch) {
+      return {
+        pending: false,
+        result: input.result,
+        updatedRows: 0,
+      }
+    }
+
+    const targetRowId = input.result.previousRowId ?? patch.rowId
+    this.#pendingMutations.delete(input.result.mutationId)
+
+    if (input.result.status === "accepted") {
+      const canonicalRow =
+        input.result.row ?? applyPatchChanges(this.#canonicalMutationRows.get(targetRowId), patch)
+      const nextRowId = input.result.row
+        ? (input.result.rowId ?? input.rowId(input.result.row))
+        : (input.result.rowId ?? targetRowId)
+      const updatedRows = canonicalRow
+        ? this.setCanonicalMutationRow({
+            canonicalRow,
+            rowId: input.rowId,
+            sourceRowId: targetRowId,
+            targetRowId: nextRowId,
+          })
+        : this.reconcileMutatedRow(targetRowId, input.rowId)
+
+      return {
+        pending: this.hasPendingRowMutations(nextRowId),
+        result: input.result,
+        updatedRows,
+      }
+    }
+
+    if (input.result.status === "conflict" && input.result.row) {
+      const nextRowId = input.result.rowId ?? input.rowId(input.result.row)
+      const updatedRows = this.setCanonicalMutationRow({
+        canonicalRow: input.result.row,
+        rowId: input.rowId,
+        sourceRowId: targetRowId,
+        targetRowId: nextRowId,
+      })
+
+      return {
+        pending: this.hasPendingRowMutations(nextRowId),
+        result: input.result,
+        updatedRows,
+      }
+    }
+
+    const updatedRows = this.reconcileMutatedRow(targetRowId, input.rowId)
+    return {
+      pending: this.hasPendingRowMutations(targetRowId),
+      result: input.result,
+      updatedRows,
+    }
+  }
+
   getState(input: StateSnapshotInput): ServerRowModelState<TRow> {
     return {
       blocks: this.cache.toMap(),
       mode: input.mode,
-      pendingMutations: new Map(),
+      pendingMutations: new Map(this.#pendingMutations),
       rowCount: input.rowCount,
       selection: input.selection,
       view: input.view,
@@ -547,16 +655,17 @@ class ServerRowModelController<TRow> {
       .loadBlock(input.query, { signal: input.request.controller.signal })
       .then((result) => {
         validateInfiniteResult(result, input.query)
+        const rows = this.applyPendingMutationsToRows(result.rows)
         this.cache.markLoaded({
           blockKey: input.blockKey,
-          rows: result.rows,
+          rows,
           size: input.options.blockSize,
           start: input.query.blockStart,
           viewKey: result.viewKey ?? input.viewKey,
           ...(result.revision ? { revision: result.revision } : {}),
         })
         this.cache.evictLoadedBlocks(input.options.maxBlocks)
-        input.deferred.resolve(result)
+        input.deferred.resolve(rows === result.rows ? result : { ...result, rows })
       })
       .catch((error: unknown) => {
         if (!isAbortError(error)) {
@@ -584,6 +693,119 @@ class ServerRowModelController<TRow> {
       request.start()
       if (this.#activeInfiniteRequests >= options.maxConcurrentRequests) return
     }
+  }
+
+  private captureCanonicalMutationRow(rowId: RowId, rowIdGetter: RowIdGetter<TRow>): void {
+    if (this.#canonicalMutationRows.has(rowId)) return
+    const row = this.findCachedRow(rowId, rowIdGetter)
+    if (row) this.#canonicalMutationRows.set(rowId, row)
+  }
+
+  private findCachedRow(rowId: RowId, rowIdGetter: RowIdGetter<TRow>): TRow | null {
+    for (const block of this.cache.toMap().values()) {
+      if (block.state !== "loaded") continue
+      for (const row of block.rows) {
+        if (rowIdGetter(row) === rowId) return row
+      }
+    }
+    return null
+  }
+
+  private pendingPatchesForRow(rowId: RowId): ServerRowPatch[] {
+    return [...this.#pendingMutations.values()].filter((patch) => patch.rowId === rowId)
+  }
+
+  private hasPendingRowMutations(rowId: RowId): boolean {
+    return this.pendingPatchesForRow(rowId).length > 0
+  }
+
+  private applyPendingMutationsToRows(rows: TRow[]): TRow[] {
+    if (!this.#mutationRowIdGetter || this.#pendingMutations.size === 0) return rows
+    let changed = false
+    const nextRows = rows.map((row) => {
+      const rowId = this.#mutationRowIdGetter?.(row) ?? null
+      if (rowId == null) return row
+      const pendingPatches = this.pendingPatchesForRow(rowId)
+      if (pendingPatches.length === 0) return row
+      if (!this.#canonicalMutationRows.has(rowId)) {
+        this.#canonicalMutationRows.set(rowId, row)
+      }
+      changed = true
+      return pendingPatches.reduce<TRow>(
+        (nextRow, patch) => applyPatchChanges(nextRow, patch) ?? nextRow,
+        row,
+      )
+    })
+    return changed ? nextRows : rows
+  }
+
+  private reconcileMutatedRow(rowId: RowId, rowIdGetter: RowIdGetter<TRow>): number {
+    const canonicalRow = this.#canonicalMutationRows.get(rowId)
+    if (!canonicalRow) return 0
+
+    const pendingPatches = this.pendingPatchesForRow(rowId)
+    const nextRow =
+      pendingPatches.length > 0
+        ? pendingPatches.reduce<TRow>(
+            (row, patch) => applyPatchChanges(row, patch) ?? row,
+            canonicalRow,
+          )
+        : canonicalRow
+    const updatedRows = this.replaceCachedRow(rowId, nextRow, rowIdGetter)
+
+    if (pendingPatches.length === 0) {
+      this.#canonicalMutationRows.delete(rowId)
+    }
+
+    return updatedRows
+  }
+
+  private setCanonicalMutationRow(input: {
+    canonicalRow: TRow
+    rowId: RowIdGetter<TRow>
+    sourceRowId: RowId
+    targetRowId: RowId
+  }): number {
+    if (input.sourceRowId !== input.targetRowId) {
+      this.#canonicalMutationRows.delete(input.sourceRowId)
+    }
+
+    this.#canonicalMutationRows.set(input.targetRowId, input.canonicalRow)
+    const pendingPatches = this.pendingPatchesForRow(input.targetRowId)
+    const nextRow =
+      pendingPatches.length > 0
+        ? pendingPatches.reduce<TRow>(
+            (row, patch) => applyPatchChanges(row, patch) ?? row,
+            input.canonicalRow,
+          )
+        : input.canonicalRow
+    const updatedRows = this.replaceCachedRow(input.sourceRowId, nextRow, input.rowId)
+
+    if (pendingPatches.length === 0) {
+      this.#canonicalMutationRows.delete(input.targetRowId)
+    }
+
+    return updatedRows
+  }
+
+  private replaceCachedRow(
+    rowId: RowId,
+    replacement: TRow,
+    rowIdGetter: RowIdGetter<TRow>,
+  ): number {
+    let updatedRows = 0
+    for (const block of this.cache.toMap().values()) {
+      if (block.state !== "loaded") continue
+      let changed = false
+      const rows = block.rows.map((row) => {
+        if (rowIdGetter(row) !== rowId) return row
+        changed = true
+        updatedRows += 1
+        return replacement
+      })
+      if (changed) this.cache.set({ ...block, rows })
+    }
+    return updatedRows
   }
 }
 
@@ -651,6 +873,11 @@ function validateInfiniteResult<TRow>(
   if (result.totalRows == null && result.hasMore == null) {
     throw new Error("ServerBlockResult requires totalRows or hasMore")
   }
+}
+
+function applyPatchChanges<TRow>(row: TRow | undefined, patch: ServerRowPatch): TRow | undefined {
+  if (!row) return undefined
+  return { ...(row as object), ...patch.changes } as TRow
 }
 
 function stableStringify(value: unknown): string {
