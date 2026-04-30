@@ -1,0 +1,264 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const registrySnippet = `import type { BcReactFilterDefinition } from "@bc-grid/react"
+
+const appFilterRegistry = new Map<string, BcReactFilterDefinition<unknown>>()
+
+export function registerFilter<TValue>(definition: BcReactFilterDefinition<TValue>) {
+  if (appFilterRegistry.has(definition.type)) {
+    throw new Error("Filter type " + definition.type + " is already registered")
+  }
+
+  appFilterRegistry.set(definition.type, definition as BcReactFilterDefinition<unknown>)
+}
+
+export function getFilterDefinition(type: string) {
+  return appFilterRegistry.get(type)
+}`
+
+const definitionSnippet = `import type { BcFilterEditorProps, BcReactFilterDefinition } from "@bc-grid/react"
+
+const availableTags = ["urgent", "finance", "renewal", "blocked"] as const
+
+function toTagList(input: unknown): readonly string[] {
+  return Array.isArray(input)
+    ? input.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : []
+}
+
+export function TagsAnyFilterEditor({
+  value,
+  commit,
+  clear,
+}: BcFilterEditorProps<readonly string[]>) {
+  const selected = new Set(value ?? [])
+
+  return (
+    <fieldset aria-label="Tags include any">
+      {availableTags.map((tag) => (
+        <label key={tag}>
+          <input
+            type="checkbox"
+            checked={selected.has(tag)}
+            onChange={(event) => {
+              const next = new Set(selected)
+              if (event.currentTarget.checked) next.add(tag)
+              else next.delete(tag)
+              commit([...next])
+            }}
+          />
+          {tag}
+        </label>
+      ))}
+      <button type="button" onClick={clear}>
+        Clear
+      </button>
+    </fieldset>
+  )
+}
+
+export const tagsAnyFilter: BcReactFilterDefinition<readonly string[]> = {
+  type: "tags-any",
+  predicate(value, criteria) {
+    const selectedTags = toTagList(criteria)
+    if (selectedTags.length === 0) return true
+
+    const rowTags = Array.isArray(value) ? value : []
+    return selectedTags.some((tag) => rowTags.includes(tag))
+  },
+  serialize(criteria) {
+    return JSON.stringify(toTagList(criteria))
+  },
+  parse(serialized) {
+    return toTagList(JSON.parse(serialized))
+  },
+  Editor: TagsAnyFilterEditor,
+}`
+
+const columnSnippet = `import { useMemo, useState } from "react"
+import { BcGrid, type BcGridColumn } from "@bc-grid/react"
+import { registerFilter } from "./filterRegistry"
+import { TagsAnyFilterEditor, tagsAnyFilter } from "./tagsAnyFilter"
+
+type InvoiceRow = {
+  id: string
+  customer: string
+  tags: string[]
+}
+
+registerFilter(tagsAnyFilter)
+
+const columns: BcGridColumn<InvoiceRow>[] = [
+  { field: "customer", header: "Customer", filter: { type: "text" } },
+  {
+    field: "tags",
+    header: "Tags",
+    filter: { type: "custom", defaultValue: tagsAnyFilter.type },
+    valueFormatter: (tags) => tags.join(", "),
+  },
+]
+
+export function InvoicesGrid({ rows }: { rows: InvoiceRow[] }) {
+  const [selectedTags, setSelectedTags] = useState<readonly string[]>([])
+  const visibleRows = useMemo(
+    () => rows.filter((row) => tagsAnyFilter.predicate(row.tags, selectedTags)),
+    [rows, selectedTags],
+  )
+
+  return (
+    <>
+      <TagsAnyFilterEditor
+        value={selectedTags}
+        commit={setSelectedTags}
+        clear={() => setSelectedTags([])}
+      />
+      <BcGrid data={visibleRows} columns={columns} rowId={(row) => row.id} />
+    </>
+  )
+}`
+
+const futureRuntimeSnippet = `import { registerFilter } from "@bc-grid/filters"
+import { tagsAnyFilter } from "./tagsAnyFilter"
+
+registerFilter(tagsAnyFilter)
+
+const columns: BcGridColumn<InvoiceRow>[] = [
+  {
+    field: "tags",
+    header: "Tags",
+    filter: { type: "tags-any" },
+    valueFormatter: (tags) => tags.join(", "),
+  },
+]`
+
+const serverSnippet = `import type { BcGridFilter } from "@bc-grid/react"
+
+const selectedTags = ["finance", "urgent"]
+
+const serverFilter = {
+  kind: "column",
+  columnId: "tags",
+  type: "custom",
+  op: "tags-any",
+  values: selectedTags,
+} satisfies BcGridFilter`
+---
+
+<DocsLayout
+  title="Custom Filters"
+  description="A recipe for app-owned filter types that match bc-grid's registry contract and can move to the package registry when it lands."
+  active="custom-filters"
+>
+  <section class="section">
+    <p class="lead">
+      Use a custom filter when the built-ins do not express the domain predicate, such as
+      matching any selected value inside a <code>tags: string[]</code> cell. The current alpha
+      exposes the React filter definition and editor types, while the <code>@bc-grid/filters</code>
+      runtime package is still reserved. Keep the registry in app code for now and keep the
+      definition shape identical to the package contract.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>Contract</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>Definition Rules</h3>
+        <ul>
+          <li>Use a stable <code>type</code> key. Treat it like persisted data, not display text.</li>
+          <li>Keep <code>predicate</code> pure and return <code>true</code> for empty criteria.</li>
+          <li>Serialize only the filter criteria. The framework owns column ids and filter groups.</li>
+          <li>Use JSON for <code>serialize</code> and <code>parse</code> so URL and storage state round-trip safely.</li>
+        </ul>
+      </article>
+      <article class="panel">
+        <h3>Editor Rules</h3>
+        <ul>
+          <li>Render an accessible control with a label or grouped label.</li>
+          <li>Call <code>commit(next)</code> with the next criteria value.</li>
+          <li>Call <code>clear()</code> instead of committing an app-specific empty sentinel.</li>
+          <li>Keep option loading outside the editor when the values come from a server.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Register in App Code</h2>
+    <p class="section-note">
+      This local helper mirrors the planned <code>@bc-grid/filters</code> runtime shape without
+      importing from the placeholder package.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>filterRegistry.ts</span>
+        <span>local registry</span>
+      </div>
+      <Code code={registrySnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Define a Tags Filter</h2>
+    <p class="section-note">
+      This example treats each row's <code>tags</code> array as a set and keeps rows that contain
+      any selected tag.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>tagsAnyFilter.tsx</span>
+        <span>definition + editor</span>
+      </div>
+      <Code code={definitionSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Wire the Column</h2>
+    <p class="section-note">
+      The current alpha does not dispatch custom predicates through the built-in client filter
+      evaluator. Apply the registered predicate before rows reach <code>BcGrid</code>, or map the
+      same criteria to your server query.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>InvoicesGrid.tsx</span>
+        <span>current alpha</span>
+      </div>
+      <Code code={columnSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Runtime Migration</h2>
+    <p class="section-note">
+      When <code>@bc-grid/filters</code> exports <code>registerFilter</code>, remove the local map
+      and register the same definition with the package runtime. At that point, column filter keys
+      can use the registered type directly.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>future package registry</span>
+        <span>target shape</span>
+      </div>
+      <Code code={futureRuntimeSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Server Mode</h2>
+    <p class="section-note">
+      For <code>BcServerGrid</code>, send the same custom operation to your API and run the
+      predicate on the server. The browser registry is only for client-side matching and editor UI.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>server filter payload</span>
+        <span>wire contract</span>
+      </div>
+      <Code code={serverSnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+</DocsLayout>
