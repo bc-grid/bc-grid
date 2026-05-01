@@ -364,7 +364,11 @@ export function splitSearchText(value: string, searchText: string): SearchTextPa
 export function highlightSearchText(value: string, searchText: string): ReactNode {
   return splitSearchText(value, searchText).map((part, index) =>
     part.match ? (
-      <mark data-bc-grid-search-match="true" key={`${part.text}-${index}`}>
+      <mark
+        className="bc-grid-search-match"
+        data-bc-grid-search-match="true"
+        key={`${part.text}-${index}`}
+      >
         {part.text}
       </mark>
     ) : (

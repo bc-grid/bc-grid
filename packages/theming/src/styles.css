@@ -47,8 +47,8 @@
   );
   --bc-grid-range-overlay-bg: color-mix(in srgb, var(--bc-grid-accent) 10%, transparent);
   --bc-grid-dirty: hsl(37 92% 50%);
-  --bc-grid-search-match-bg: hsl(48 96% 89%);
-  --bc-grid-search-match-fg: hsl(24 95% 24%);
+  --bc-grid-search-match-bg: color-mix(in srgb, var(--bc-grid-muted) 72%, transparent);
+  --bc-grid-search-match-fg: var(--bc-grid-fg);
   --bc-grid-status-open-bg: hsl(153 56% 92%);
   --bc-grid-status-open-fg: hsl(153 74% 28%);
   --bc-grid-status-posted-bg: hsl(221 83% 94%);
@@ -1450,10 +1450,17 @@ select.bc-grid-editor-input {
 }
 
 .bc-grid [data-bc-grid-search-match="true"] {
-  border-radius: 0.125rem;
+  display: inline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  border-radius: calc(var(--bc-grid-radius) * 0.375);
   background: var(--bc-grid-search-match-bg);
+  box-shadow: inset 0 -0.08em 0 color-mix(in srgb, var(--bc-grid-accent) 24%, transparent);
   color: var(--bc-grid-search-match-fg);
-  padding-inline: 0.0625rem;
+  font: inherit;
+  line-height: inherit;
+  padding-block: 0;
+  padding-inline: 0.0625em;
 }
 
 .bc-grid-main {
