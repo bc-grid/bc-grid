@@ -3,6 +3,7 @@ import {
   DEFAULT_SIDEBAR_WIDTH,
   nextSidebarPanelForActivation,
   normalizeSidebarPanelId,
+  resolveInitialSidebarPanelId,
   resolveSidebarPanels,
   resolveSidebarWidth,
 } from "../src/sidebar"
@@ -22,6 +23,53 @@ describe("sidebar state", () => {
     expect(normalizeSidebarPanelId("pivot", panels)).toBeNull()
     expect(normalizeSidebarPanelId(null, panels)).toBeNull()
     expect(normalizeSidebarPanelId(undefined, panels)).toBeNull()
+  })
+
+  test("normalizes default and persisted panel ids before opening", () => {
+    const panels = [{ id: "columns" }, { id: "filters" }]
+
+    expect(
+      resolveInitialSidebarPanelId({
+        defaultPanelId: undefined,
+        persistedPanelId: undefined,
+        panels,
+      }),
+    ).toBeNull()
+    expect(
+      resolveInitialSidebarPanelId({
+        defaultPanelId: null,
+        persistedPanelId: "filters",
+        panels,
+      }),
+    ).toBeNull()
+    expect(
+      resolveInitialSidebarPanelId({
+        defaultPanelId: undefined,
+        persistedPanelId: "filters",
+        panels,
+      }),
+    ).toBe("filters")
+    expect(
+      resolveInitialSidebarPanelId({
+        defaultPanelId: "columns",
+        persistedPanelId: "filters",
+        panels,
+      }),
+    ).toBe("columns")
+    expect(
+      resolveInitialSidebarPanelId({
+        defaultPanelId: "missing",
+        persistedPanelId: "filters",
+        panels,
+      }),
+    ).toBeNull()
+    expect(
+      resolveInitialSidebarPanelId({
+        defaultPanelId: "columns",
+        persistedPanelId: undefined,
+        panels: [],
+      }),
+    ).toBeNull()
   })
 })
 

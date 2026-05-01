@@ -122,7 +122,12 @@ import {
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
-import { BcGridSidebar, normalizeSidebarPanelId, resolveSidebarPanels } from "./sidebar"
+import {
+  BcGridSidebar,
+  normalizeSidebarPanelId,
+  resolveInitialSidebarPanelId,
+  resolveSidebarPanels,
+} from "./sidebar"
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
 import { BcStatusBar } from "./statusBar"
 import type {
@@ -347,7 +352,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [sidebarPanelState, setSidebarPanelState] = useControlledState<string | null>(
     hasProp(props, "sidebarPanel"),
     props.sidebarPanel ?? null,
-    props.defaultSidebarPanel ?? persistedGridState.sidebarPanel ?? null,
+    resolveInitialSidebarPanelId({
+      defaultPanelId: hasProp(props, "defaultSidebarPanel") ? props.defaultSidebarPanel : undefined,
+      persistedPanelId: persistedGridState.sidebarPanel,
+      panels: sidebarPanels,
+    }),
     props.onSidebarPanelChange,
   )
   const activeSidebarPanel = useMemo(
