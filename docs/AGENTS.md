@@ -17,10 +17,11 @@ Build a high-performance shadcn-native data grid that competes with AG Grid Ente
 3. `docs/roadmap.md` — phase plan (~5 min)
 4. `docs/coordination/release-milestone-roadmap.md` — coordinator release gates (~5 min)
 5. `docs/coordination/ag-grid-clean-room-audit-plan.md` — comparison-audit guardrails (~3 min)
-6. `docs/AGENTS.md` (this file) — process (~5 min)
-7. `docs/PARALLEL_WORK.md` — worktree scheme (~5 min)
-8. `docs/queue.md` — open tasks (~2 min)
-9. `docs/api.md` — public API spec (frozen after Q1)
+6. `docs/coordination/ui-quality-gate.md` — visual rejection criteria for UI PRs (~5 min; binding)
+7. `docs/AGENTS.md` (this file) — process (~5 min)
+8. `docs/PARALLEL_WORK.md` — worktree scheme (~5 min)
+9. `docs/queue.md` — open tasks (~2 min)
+10. `docs/api.md` — public API spec (frozen after Q1)
 
 After Q1, every session: re-read `queue.md` + the design doc for the package you're touching.
 
@@ -65,6 +66,7 @@ Before requesting review:
 - [ ] Public API diff is intentional (or empty)
 - [ ] Linked to the task in `queue.md`
 - [ ] Updated relevant design docs if the architecture shifted
+- [ ] **UI PRs only:** self-inspected against `docs/coordination/ui-quality-gate.md` §4 and every §2 hard rejection criterion ticks (or note in the PR body why an exception applies)
 
 ### Test budget per PR
 
@@ -83,6 +85,7 @@ If an RFC or design doc says a feature needs Playwright/e2e acceptance, workers 
   - Test coverage dropped below the gate
   - Architecture decision contradicts the design doc without an entry in §13
   - Code style egregiously violates project conventions
+  - **UI PR fails any hard rejection criterion in `docs/coordination/ui-quality-gate.md` §2** — reject (don't request changes), worker re-opens after fix
 - **Reviewer's job is NOT to redesign.** If you disagree with the approach, comment with the alternative; don't block on personal preference. Block only on objective violations.
 - **Two-agent review for high-risk PRs.** New public API surface, virtualizer changes, animation system changes, server-row-model changes — require two reviewers.
 
