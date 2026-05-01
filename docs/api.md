@@ -470,6 +470,17 @@ export interface BcRange {
   end: BcCellPosition
 }
 
+export interface BcNormalisedRange {
+  rowStart: number
+  rowEnd: number
+  colStart: number
+  colEnd: number
+  rowSpan: number
+  colSpan: number
+  topLeft: BcCellPosition
+  bottomRight: BcCellPosition
+}
+
 export interface BcRangeSelection {
   ranges: readonly BcRange[]
   /** The cell that anchors Shift+arrow / Shift+click extension. */
@@ -555,7 +566,7 @@ export interface BcGridStateProps {
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
 
-Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); visual overlay, paste, and fill handle behavior remain separate Track 2 implementation tasks.
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `normaliseRange`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); visual overlay, paste, and fill handle behavior remain separate Track 2 implementation tasks.
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
@@ -1271,6 +1282,7 @@ export {
   emptyBcRangeSelection,
   expandRangeTo,
   newRangeAt,
+  normaliseRange,
   parseRangeSelection,
   rangeBounds,
   rangeClear,
@@ -1286,8 +1298,8 @@ export {
 
 // Framework-agnostic column/state/API types (§1.1-1.2, §3, §4, §6).
 // All Server* types from server-query-rfc (§8).
-// Helpers: ColumnId, RowId, BcCellPosition, BcRange, BcRangeSelection,
-//   BcRangeKeyAction,
+// Helpers: ColumnId, RowId, BcCellPosition, BcRange, BcNormalisedRange,
+//   BcRangeSelection, BcRangeKeyAction,
 //   BcScrollAlign, BcScrollOptions, BcAggregation, BcGridIdentity, BcRowState,
 //   BcPivotState, BcPivotValue, BcPivotedDataDTO, BcPivot*DTO.
 // Excludes React component props, React renderers, refs, DOM events, and editor components.
@@ -1327,7 +1339,7 @@ export type {
   BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarCustomPanel, BcSidebarPanel,
 
   // Re-exports from @bc-grid/core
-  BcCellPosition, BcSelection, BcRange, BcRangeSelection, BcRangeKeyAction,
+  BcCellPosition, BcSelection, BcRange, BcNormalisedRange, BcRangeSelection, BcRangeKeyAction,
   BcGridSort, BcGridFilter,
   BcColumnFilter, BcColumnFormat, BcColumnStateEntry,
   BcValidationResult, ColumnId, RowId,

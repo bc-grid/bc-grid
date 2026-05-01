@@ -25,6 +25,17 @@ interface CellIndex {
   col: number
 }
 
+export interface BcNormalisedRange {
+  rowStart: number
+  rowEnd: number
+  colStart: number
+  colEnd: number
+  rowSpan: number
+  colSpan: number
+  topLeft: BcCellPosition
+  bottomRight: BcCellPosition
+}
+
 export function newRangeAt(position: BcCellPosition): BcRange {
   return { start: clonePosition(position), end: clonePosition(position) }
 }
@@ -63,12 +74,37 @@ export function rangeBounds(
   columns: readonly RangeColumnRef[],
   rowIds: readonly RowId[],
 ): { rowSpan: number; colSpan: number } {
+  const normalised = normaliseRange(range, columns, rowIds)
+  if (!normalised) return { rowSpan: 0, colSpan: 0 }
+
+  return { rowSpan: normalised.rowSpan, colSpan: normalised.colSpan }
+}
+
+export function normaliseRange(
+  range: BcRange,
+  columns: readonly RangeColumnRef[],
+  rowIds: readonly RowId[],
+): BcNormalisedRange | undefined {
   const bounds = resolveRangeIndexes(range, columns, rowIds)
-  if (!bounds) return { rowSpan: 0, colSpan: 0 }
+  if (!bounds) return undefined
+
+  const rowStart = Math.min(bounds.start.row, bounds.end.row)
+  const rowEnd = Math.max(bounds.start.row, bounds.end.row)
+  const colStart = Math.min(bounds.start.col, bounds.end.col)
+  const colEnd = Math.max(bounds.start.col, bounds.end.col)
+  const topLeft = positionAt(rowStart, colStart, columns, rowIds)
+  const bottomRight = positionAt(rowEnd, colEnd, columns, rowIds)
+  if (!topLeft || !bottomRight) return undefined
 
   return {
-    rowSpan: Math.abs(bounds.end.row - bounds.start.row) + 1,
-    colSpan: Math.abs(bounds.end.col - bounds.start.col) + 1,
+    rowStart,
+    rowEnd,
+    colStart,
+    colEnd,
+    rowSpan: rowEnd - rowStart + 1,
+    colSpan: colEnd - colStart + 1,
+    topLeft,
+    bottomRight,
   }
 }
 

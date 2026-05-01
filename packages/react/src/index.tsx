@@ -38,6 +38,7 @@ export type {
   BcGridSort,
   BcGridStateProps,
   BcGridUrlStatePersistence,
+  BcNormalisedRange,
   BcPaginationState,
   BcRange,
   BcRangeBeforeCopyEvent,

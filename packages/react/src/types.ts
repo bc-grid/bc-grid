@@ -616,4 +616,4 @@ export type {
   ServerTreeResult,
 }
 
-export type { BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
+export type { BcNormalisedRange, BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
