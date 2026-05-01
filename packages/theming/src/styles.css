@@ -169,9 +169,21 @@
   background: var(--bc-grid-row-hover);
 }
 
+.bc-grid-row[data-bc-grid-focused-row="true"] {
+  background: color-mix(in srgb, var(--bc-grid-focus-ring) 7%, var(--bc-grid-bg));
+}
+
 .bc-grid-row[aria-selected="true"] {
   background: var(--bc-grid-row-selected);
   color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-row[aria-selected="true"]:hover {
+  background: color-mix(in srgb, var(--bc-grid-row-selected) 88%, var(--bc-grid-row-hover));
+}
+
+.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] {
+  background: color-mix(in srgb, var(--bc-grid-row-selected) 84%, var(--bc-grid-focus-ring));
 }
 
 .bc-grid-row-group {
@@ -650,6 +662,10 @@
   background: var(--bc-grid-bg);
 }
 
+.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell {
+  background: color-mix(in srgb, var(--bc-grid-focus-ring) 7%, var(--bc-grid-bg));
+}
+
 .bc-grid-row:hover .bc-grid-cell {
   background: var(--bc-grid-row-hover);
 }
@@ -657,6 +673,15 @@
 .bc-grid-row[aria-selected="true"] .bc-grid-cell,
 .bc-grid-cell[aria-selected="true"] {
   background: var(--bc-grid-row-selected);
+  color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell {
+  background: color-mix(in srgb, var(--bc-grid-row-selected) 88%, var(--bc-grid-row-hover));
+}
+
+.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell {
+  background: color-mix(in srgb, var(--bc-grid-row-selected) 84%, var(--bc-grid-focus-ring));
   color: var(--bc-grid-row-selected-fg);
 }
 
@@ -677,8 +702,15 @@
 .bc-grid-cell:focus-visible,
 .bc-grid-cell[data-bc-grid-active-cell="true"],
 .bc-grid [data-bc-grid-active-cell="true"] {
+  background: color-mix(in srgb, var(--bc-grid-focus-ring) 8%, var(--bc-grid-bg));
   outline: 2px solid var(--bc-grid-focus-ring);
   outline-offset: -2px;
+}
+
+.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-bc-grid-active-cell="true"],
+.bc-grid-cell[aria-selected="true"][data-bc-grid-active-cell="true"] {
+  background: color-mix(in srgb, var(--bc-grid-focus-ring) 12%, var(--bc-grid-row-selected));
+  color: var(--bc-grid-row-selected-fg);
 }
 
 .bc-grid-cell[aria-invalid="true"],
@@ -2951,8 +2983,28 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-cell:focus-visible,
   .bc-grid-cell[data-bc-grid-active-cell="true"],
   .bc-grid [data-bc-grid-active-cell="true"] {
+    background: Canvas;
     outline: 2px solid Highlight;
     outline-offset: -2px;
+  }
+
+  .bc-grid-row[data-bc-grid-focused-row="true"],
+  .bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell {
+    background: Canvas;
+  }
+
+  .bc-grid-row[aria-selected="true"]:hover,
+  .bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"],
+  .bc-grid-row[aria-selected="true"]:hover .bc-grid-cell,
+  .bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .bc-grid-row[aria-selected="true"] .bc-grid-cell[data-bc-grid-active-cell="true"],
+  .bc-grid-cell[aria-selected="true"][data-bc-grid-active-cell="true"] {
+    background: Canvas;
+    color: CanvasText;
   }
 
   .bc-grid-editor-input:focus-visible {

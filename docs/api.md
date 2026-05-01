@@ -2000,6 +2000,13 @@ The shipped CSS treats host shadcn tokens as complete CSS colors, so Tailwind v4
 complete CSS colors (`oklch(...)`, `hsl(...)`, hex, or system colors) when grid
 chrome needs to differ from the host app.
 
+Row chrome precedence is intentionally layered: hover and the focused row use
+soft backgrounds, selected rows use the selection background/foreground, the
+active cell keeps its `--bc-grid-focus-ring` outline above row selection, and
+dirty/pending/error cell side markers remain visible on active or selected
+cells. Themes can target `data-bc-grid-focused-row="true"`,
+`data-bc-grid-active-cell="true"`, and `data-bc-grid-cell-state`.
+
 Column resize affordances use `--bc-grid-column-resize-affordance`,
 `--bc-grid-column-resize-affordance-hover`, and
 `--bc-grid-column-resize-affordance-active`. Resizable headers expose
