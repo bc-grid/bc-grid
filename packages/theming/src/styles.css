@@ -318,10 +318,10 @@
   font: inherit;
   line-height: 1;
   margin-left: 0.125rem;
-  opacity: 0;
+  opacity: 0.58;
   outline: none;
   padding: 0;
-  pointer-events: none;
+  pointer-events: auto;
   transition: opacity var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
 }
 
@@ -331,7 +331,6 @@
 .bc-grid-header-filter-button:focus-visible,
 .bc-grid-header-filter-button-active {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .bc-grid-header-filter-button:hover {
