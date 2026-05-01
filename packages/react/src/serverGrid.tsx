@@ -42,12 +42,15 @@ interface PagedServerState<TRow> {
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   invalidate: (invalidation: ServerInvalidation) => void
   loading: boolean
+  pageIndex: number
+  pageSize: number
   queueMutation: (patch: ServerRowPatch) => void
   refresh: (opts?: { purge?: boolean }) => void
   retryBlock: (blockKey: ServerBlockKey) => void
   rows: readonly TRow[]
   rowCount: number | "unknown"
   settleMutation: (result: ServerMutationResult<TRow>) => void
+  updatePagination: (next: BcPaginationState) => void
   view: ServerViewState
 }
 
@@ -345,6 +348,26 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
           ? "Failed to load rows"
           : undefined)
 
+  // Manual pagination: paged rowModel ships only the current page's rows
+  // to BcGrid, so the inner grid must source pageCount + total from the
+  // server's `ServerPagedResult.totalRows` rather than slicing
+  // `data.length`. We override `paginationMode` / `paginationTotalRows` /
+  // `page` / `pageSize` / `onPaginationChange` for paged mode so the
+  // built-in pager renders "Rows 1-25 of 36,302" and Next / Prev call
+  // back into `updatePagination`, which triggers `loadPage` via the
+  // pageIndex / pageSize state effect. `pagination={true}` forces the
+  // pager on even when the loaded slice is smaller than the threshold.
+  const pagedPaginationProps =
+    props.rowModel === "paged"
+      ? {
+          pagination: gridProps.pagination ?? true,
+          paginationMode: "manual" as const,
+          ...(typeof paged.rowCount === "number" ? { paginationTotalRows: paged.rowCount } : {}),
+          page: paged.pageIndex,
+          pageSize: paged.pageSize,
+          onPaginationChange: paged.updatePagination,
+        }
+      : {}
   return (
     <BcGrid
       {...gridProps}
@@ -361,6 +384,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       apiRef={gridApiRef}
       loading={loading}
       loadingOverlay={loadingOverlay}
+      {...pagedPaginationProps}
       {...(cellEditCommitHandler ? { onCellEditCommit: cellEditCommitHandler } : {})}
       onFilterChange={
         props.rowModel === "tree"
@@ -490,6 +514,21 @@ function usePagedServerState<TRow>(
     [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
   )
   const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
+  // Any change to the composite view (sort, filter, search, groupBy,
+  // locale, visible columns) invalidates the current page index — page
+  // 5 of the previous result set isn't meaningful in the new one. The
+  // sort/filter handlers above already reset to page 0 when the change
+  // originates inside the grid; this effect catches axes that flow in
+  // purely through props (search text, groupBy, locale, column
+  // visibility) so the reset behaviour is uniform.
+  const initialViewKeyRef = useRef(viewKey)
+  const shouldDeferPageLoadForViewReset = initialViewKeyRef.current !== viewKey && pageIndex !== 0
+  useEffect(() => {
+    if (initialViewKeyRef.current === viewKey) return
+    initialViewKeyRef.current = viewKey
+    if (pageIndex === 0) return
+    updatePagination({ page: 0, pageSize })
+  }, [pageIndex, pageSize, updatePagination, viewKey])
   const serverRowId = useCallback((row: TRow) => props.rowId(row, 0), [props.rowId])
 
   const refresh = useCallback((opts?: { purge?: boolean }) => {
@@ -578,6 +617,7 @@ function usePagedServerState<TRow>(
 
   useEffect(() => {
     if (!loadPage) return
+    if (shouldDeferPageLoadForViewReset) return
     void refreshVersion
 
     const request = modelRef.current.loadPagedPage({
@@ -607,7 +647,15 @@ function usePagedServerState<TRow>(
         setError(nextError)
         setLoading(false)
       })
-  }, [loadPage, pageIndex, pageSize, refreshVersion, view, viewKey])
+  }, [
+    loadPage,
+    pageIndex,
+    pageSize,
+    refreshVersion,
+    shouldDeferPageLoadForViewReset,
+    view,
+    viewKey,
+  ])
 
   useEffect(() => () => modelRef.current.abortAll(), [])
 
@@ -633,12 +681,15 @@ function usePagedServerState<TRow>(
     handleSortChange,
     invalidate,
     loading,
+    pageIndex,
+    pageSize,
     queueMutation,
     refresh,
     retryBlock,
     rowCount,
     rows,
     settleMutation,
+    updatePagination,
     view,
   }
 }

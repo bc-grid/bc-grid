@@ -43,6 +43,43 @@ export function isPaginationEnabled(
   return rowCount > pageSize
 }
 
+/**
+ * Resolve the row count the pager should reason from. Manual mode
+ * (typically `BcServerGrid` paged rowModel) feeds the grid one page
+ * of pre-sliced rows + the dataset total via `paginationTotalRows`;
+ * the pager uses that total so "Rows X-Y of Z" reflects the server,
+ * not the loaded slice. Falls back to the loaded slice length if the
+ * consumer set `paginationMode="manual"` without supplying a finite
+ * total — keeps the pager rendering rather than throwing.
+ */
+export function resolvePaginationRowCount(
+  mode: "client" | "manual",
+  paginationTotalRows: number | null | undefined,
+  loadedRowCount: number,
+): number {
+  if (mode === "manual" && paginationTotalRows != null && Number.isFinite(paginationTotalRows)) {
+    return Math.max(0, Math.floor(paginationTotalRows))
+  }
+  return loadedRowCount
+}
+
+/**
+ * Resolve whether the pager should render. Manual mode forces the
+ * pager on whenever `pagination !== false` so a server-paged source
+ * gets visible page controls even if the loaded slice is smaller than
+ * the threshold (e.g., the last page of a 36 k-row dataset has 2
+ * rows). Client mode delegates to the threshold-based default.
+ */
+export function resolvePaginationEnabled(
+  mode: "client" | "manual",
+  pagination: boolean | undefined,
+  rowCount: number,
+  pageSize: number,
+): boolean {
+  if (mode === "manual") return pagination !== false
+  return isPaginationEnabled(pagination, rowCount, pageSize)
+}
+
 export function normalisePageSizeOptions(options: readonly number[] | undefined): number[] {
   const values = options
     ?.map((value) => Math.floor(value))
@@ -112,7 +149,7 @@ export function BcGridPagination({
           Prev
         </button>
         <span className="bc-grid-pagination-page">
-          Page {page + 1} of {pageCount}
+          Page {(page + 1).toLocaleString()} of {pageCount.toLocaleString()}
         </span>
         <button
           type="button"
