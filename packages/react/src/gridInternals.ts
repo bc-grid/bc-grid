@@ -1411,9 +1411,88 @@ interface RowFlipCandidate extends FlipTarget {
   rowIndex: number
 }
 
+interface RowFlipPlayback {
+  animation: Animation
+  release: () => void
+}
+
 const ROW_FLIP_DURATION_MS = 160
 const ROW_ENTER_DURATION_MS = 120
 const ROW_ENTER_DISTANCE_PX = 4
+const ROW_FLIP_SIZE_TOLERANCE_PX = 0.5
+const ROW_FLIP_POSITION_TOLERANCE_PX = 1
+
+export interface RowFlipSnapshot {
+  rowId: RowId
+  rowIndex: number
+  rect: FlipRect
+}
+
+export interface RowFlipCandidateSpec {
+  rowId: RowId
+  rowIndex: number
+  first: FlipRect
+  last: FlipRect
+}
+
+export type RowFlipSkipReason =
+  | "empty-capture"
+  | "empty-current"
+  | "row-count-changed"
+  | "duplicate-current-row"
+  | "missing-current-row"
+  | "invalid-row-index"
+  | "row-size-changed"
+  | "row-moved-outside-visible-window"
+
+export type RowFlipCandidatePlan =
+  | { status: "animate"; candidates: readonly RowFlipCandidateSpec[] }
+  | { status: "skip"; reason: RowFlipSkipReason }
+
+export function resolveStableRowFlipCandidates(
+  captured: ReadonlyMap<RowId, FlipRect>,
+  current: readonly RowFlipSnapshot[],
+): RowFlipCandidatePlan {
+  if (captured.size === 0) return { status: "skip", reason: "empty-capture" }
+  if (current.length === 0) return { status: "skip", reason: "empty-current" }
+  if (current.length !== captured.size) return { status: "skip", reason: "row-count-changed" }
+
+  const currentIds = new Set<RowId>()
+  let visibleTop = Number.POSITIVE_INFINITY
+  let visibleBottom = Number.NEGATIVE_INFINITY
+  let maxRowHeight = 1
+  for (const snapshot of current) {
+    if (!Number.isInteger(snapshot.rowIndex) || snapshot.rowIndex < 0) {
+      return { status: "skip", reason: "invalid-row-index" }
+    }
+    if (currentIds.has(snapshot.rowId)) return { status: "skip", reason: "duplicate-current-row" }
+    currentIds.add(snapshot.rowId)
+    visibleTop = Math.min(visibleTop, snapshot.rect.top)
+    visibleBottom = Math.max(visibleBottom, snapshot.rect.top + snapshot.rect.height)
+    maxRowHeight = Math.max(maxRowHeight, snapshot.rect.height)
+  }
+
+  const maxMovement = Math.max(maxRowHeight * 2, visibleBottom - visibleTop + maxRowHeight)
+  const candidates: RowFlipCandidateSpec[] = []
+  for (const snapshot of current) {
+    const first = captured.get(snapshot.rowId)
+    if (!first) return { status: "skip", reason: "missing-current-row" }
+    const last = snapshot.rect
+    if (!sameRowFlipSize(first, last)) return { status: "skip", reason: "row-size-changed" }
+    if (Math.abs(first.left - last.left) > ROW_FLIP_POSITION_TOLERANCE_PX) {
+      return { status: "skip", reason: "row-moved-outside-visible-window" }
+    }
+    if (Math.abs(first.top - last.top) > maxMovement) {
+      return { status: "skip", reason: "row-moved-outside-visible-window" }
+    }
+    const delta = calculateFlipDelta(first, last)
+    if (delta.x !== 0 || delta.y !== 0) {
+      candidates.push({ rowId: snapshot.rowId, rowIndex: snapshot.rowIndex, first, last })
+    }
+  }
+
+  return { status: "animate", candidates }
+}
 
 export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOnSortParams): {
   /**
@@ -1427,8 +1506,16 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
   // design.md §3.2 100-row in-flight cap.
   const flipBudget = useMemo(() => new AnimationBudget(), [])
   const sortFlipRectsRef = useRef<Map<RowId, FlipRect>>(new Map())
+  const activeSortAnimationsRef = useRef<RowFlipPlayback[]>([])
+
+  const cancelActiveSortAnimations = useCallback(() => {
+    cancelRowFlipPlaybacks(activeSortAnimationsRef.current)
+    activeSortAnimationsRef.current = []
+    flipBudget.reset()
+  }, [flipBudget])
 
   const prepareSortAnimation = useCallback((): void => {
+    cancelActiveSortAnimations()
     const rects = new Map<RowId, FlipRect>()
     const scroller = scrollerRef.current
     if (!scroller) {
@@ -1437,11 +1524,13 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
     }
     const rows = visibleBodyRows(scroller)
     for (const row of rows) {
-      const id = row.dataset.rowId
-      if (id) rects.set(id as RowId, readFlipRect(row))
+      const snapshot = rowFlipSnapshot(row)
+      if (snapshot) rects.set(snapshot.rowId, snapshot.rect)
     }
     sortFlipRectsRef.current = rects
-  }, [scrollerRef])
+  }, [cancelActiveSortAnimations, scrollerRef])
+
+  useEffect(() => () => cancelActiveSortAnimations(), [cancelActiveSortAnimations])
 
   // After sortState commits and the new row positions render, run FLIP.
   // useLayoutEffect runs synchronously before paint, so we read the new
@@ -1456,25 +1545,35 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
 
     const scroller = scrollerRef.current
     if (!scroller) return
+    cancelActiveSortAnimations()
 
-    const candidates: RowFlipCandidate[] = []
     const visibleRows = visibleBodyRows(scroller)
-    if (visibleRows.length !== captured.size) return
-
+    const currentSnapshots: RowFlipSnapshot[] = []
+    const rowById = new Map<RowId, HTMLElement>()
     for (const rowEl of visibleRows) {
-      const rowId = rowEl.dataset.rowId as RowId | undefined
-      if (!rowId) return
-      const first = captured.get(rowId)
-      if (!first) return
-      const last = readFlipRect(rowEl)
-      const maxDelta = Math.max(1, last.height * 1.5)
-      if (Math.abs(first.top - last.top) > maxDelta) return
-      const candidate = rowFlipCandidate(rowEl, first, last)
-      if (candidate) candidates.push(candidate)
+      const snapshot = rowFlipSnapshot(rowEl)
+      if (!snapshot) return
+      currentSnapshots.push(snapshot)
+      rowById.set(snapshot.rowId, rowEl)
     }
 
-    playRowFlipCandidates(candidates, flipBudget, virtualizer)
-  }, [flipBudget, sortState, virtualizer, scrollerRef])
+    const plan = resolveStableRowFlipCandidates(captured, currentSnapshots)
+    if (plan.status === "skip") return
+    const candidates = plan.candidates
+      .map((candidate): RowFlipCandidate | null => {
+        const element = rowById.get(candidate.rowId)
+        if (!element) return null
+        return {
+          element,
+          first: candidate.first,
+          last: candidate.last,
+          rowIndex: candidate.rowIndex,
+        }
+      })
+      .filter((candidate): candidate is RowFlipCandidate => candidate != null)
+
+    activeSortAnimationsRef.current = playRowFlipCandidates(candidates, flipBudget, virtualizer)
+  }, [cancelActiveSortAnimations, flipBudget, sortState, virtualizer, scrollerRef])
 
   return { prepareSortAnimation }
 }
@@ -1564,12 +1663,29 @@ function rowFlipCandidate(
   return { element: rowEl, first, last, rowIndex }
 }
 
+function rowFlipSnapshot(rowEl: HTMLElement): RowFlipSnapshot | null {
+  const rowId = rowEl.dataset.rowId as RowId | undefined
+  if (!rowId) return null
+  const rowIndexAttr = rowEl.dataset.rowIndex
+  if (!rowIndexAttr) return null
+  const rowIndex = Number(rowIndexAttr)
+  if (!Number.isInteger(rowIndex) || rowIndex < 0) return null
+  return { rowId, rowIndex, rect: readFlipRect(rowEl) }
+}
+
+function sameRowFlipSize(first: FlipRect, last: FlipRect): boolean {
+  return (
+    Math.abs(first.width - last.width) <= ROW_FLIP_SIZE_TOLERANCE_PX &&
+    Math.abs(first.height - last.height) <= ROW_FLIP_SIZE_TOLERANCE_PX
+  )
+}
+
 function playRowFlipCandidates(
   candidates: readonly RowFlipCandidate[],
   budget: AnimationBudget,
   virtualizer: Virtualizer,
-): void {
-  if (candidates.length === 0) return
+): RowFlipPlayback[] {
+  if (candidates.length === 0) return []
 
   const limitedCandidates = budget.limit(candidates, candidates.length)
   const handles = limitedCandidates.map((candidate) =>
@@ -1589,10 +1705,26 @@ function playRowFlipCandidates(
   for (let index = animations.length; index < handles.length; index += 1) {
     handles[index]?.release()
   }
+  const playbacks: RowFlipPlayback[] = []
   for (const [index, animation] of animations.entries()) {
     const handle = handles[index]
     if (!handle) continue
-    void animation.finished.finally(() => handle.release())
+    let released = false
+    const release = () => {
+      if (released) return
+      released = true
+      handle.release()
+    }
+    void animation.finished.then(release, release)
+    playbacks.push({ animation, release })
+  }
+  return playbacks
+}
+
+function cancelRowFlipPlaybacks(playbacks: readonly RowFlipPlayback[]): void {
+  for (const playback of playbacks) {
+    playback.animation.cancel()
+    playback.release()
   }
 }
 
