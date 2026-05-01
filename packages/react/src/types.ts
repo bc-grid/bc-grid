@@ -269,6 +269,8 @@ export interface BcCellRendererParams<TRow, TValue = unknown> {
 
 export type BcContextMenuBuiltinItem =
   | "copy"
+  | "copy-cell"
+  | "copy-row"
   | "copy-with-headers"
   | "clear-selection"
   | "clear-range"
@@ -278,7 +280,9 @@ export type BcContextMenuBuiltinItem =
   | "pin-column-right"
   | "unpin-column"
   | "hide-column"
+  | "show-all-columns"
   | "autosize-column"
+  | "autosize-all-columns"
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {

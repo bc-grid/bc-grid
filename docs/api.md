@@ -932,6 +932,8 @@ export interface BcSidebarContext<TRow = unknown> {
 
 export type BcContextMenuBuiltinItem =
   | "copy"
+  | "copy-cell"
+  | "copy-row"
   | "copy-with-headers"
   | "clear-selection"
   | "clear-range"
@@ -941,7 +943,9 @@ export type BcContextMenuBuiltinItem =
   | "pin-column-right"
   | "unpin-column"
   | "hide-column"
+  | "show-all-columns"
   | "autosize-column"
+  | "autosize-all-columns"
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {
@@ -956,24 +960,67 @@ export type BcContextMenuItem<TRow = unknown> =
   | BcContextMenuCustomItem<TRow>
 ```
 
-The default `contextMenuItems` set is `["copy", "copy-with-headers", "separator",
-"clear-selection", "clear-range"]`. Every other built-in below is
-**consumer-opt-in** — pass it explicitly via `contextMenuItems` to surface it.
-See `docs/design/context-menu-command-map.md` for the full v0.3 command map.
+The default `contextMenuItems` set is `["copy", "copy-row", "copy-with-headers", "separator", "clear-selection", "clear-range"]`. Every other built-in below is **consumer-opt-in** — pass it explicitly via `contextMenuItems` to surface it. See `docs/design/context-menu-command-map.md` for the full v0.3 command map.
 
 | Built-in id | Action | Disabled when |
 |---|---|---|
+| `copy` | Copies the active range, falling back to the right-clicked cell when no range exists. TSV format, no headers. | No cell context AND no range selection |
+| `copy-cell` | Explicit single-cell copy — ignores any active range. | No cell context |
+| `copy-row` | Copies every visible-column cell of the right-clicked row, joined as a TSV line. | No cell or row context |
+| `copy-with-headers` | Same shape as `copy` but prepends the column-header row. | No cell context AND no range selection |
 | `clear-all-filters` | Calls `BcGridApi.clearFilter()` (clears every column filter) | No filter is active |
 | `clear-column-filter` | Calls `BcGridApi.clearFilter(columnId)` for the right-clicked cell | No cell context, or that column has no filter entry |
 | `pin-column-left` | Calls `BcGridApi.setColumnPinned(columnId, "left")` | No column context, or the column is already pinned left |
 | `pin-column-right` | Calls `BcGridApi.setColumnPinned(columnId, "right")` | No column context, or the column is already pinned right |
 | `unpin-column` | Calls `BcGridApi.setColumnPinned(columnId, null)` | No column context, or the column is not pinned |
 | `hide-column` | Calls `BcGridApi.setColumnHidden(columnId, true)` | No column context, the column is already hidden, or it's the last visible column (UX guard — the user would need the column chooser to recover) |
+| `show-all-columns` | Walks the column state and writes every entry's `hidden` flag to `false` in a single `setColumnState` write. | Every column is already visible |
 | `autosize-column` | Calls `BcGridApi.autoSizeColumn(columnId)` | No column context, or the column is hidden (no DOM to measure) |
+| `autosize-all-columns` | Loops `BcGridApi.autoSizeColumn(columnId)` over every visible column. | Every column is hidden (nothing to measure) |
 
 The icon set rendered next to these items is shipped by `@bc-grid/react` itself
 — consumers don't need to install lucide / heroicons / radix-icons to get the
 default look.
+
+To extend the default menu without rewriting it from scratch, spread the default
+list and append column / filter built-ins or a custom item factory:
+
+```ts
+import { DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
+
+const contextMenuItems: BcContextMenuItems<Customer> = [
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+  "separator",
+  "clear-column-filter",
+  "clear-all-filters",
+  "separator",
+  "pin-column-left",
+  "pin-column-right",
+  "unpin-column",
+  "hide-column",
+  "show-all-columns",
+  "autosize-column",
+  "autosize-all-columns",
+]
+```
+
+For row-action commands ("View customer", "Open invoice"), pass a factory and
+return a custom item with the active row already captured from `ctx.row`:
+
+```ts
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) => [
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+  "separator",
+  ctx.row && {
+    id: "open-customer",
+    label: `Open ${ctx.row.name}`,
+    onSelect: () => navigate(`/customers/${ctx.row?.id}`),
+  },
+]
+```
+
+`null` / `false` / `undefined` entries are filtered out, so a row-conditional
+item can be returned as `ctx.row && { ... }` without an extra check.
 
 ```ts
 export interface BcContextMenuContext<TRow = unknown> {

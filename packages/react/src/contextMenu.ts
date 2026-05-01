@@ -8,15 +8,25 @@ import type {
 } from "./types"
 
 export const DEFAULT_CONTEXT_MENU_ITEMS: readonly BcContextMenuBuiltinItem[] = [
+  // Clipboard — useful at every right-click point. `copy` adapts: it
+  // uses the active range when one exists, otherwise the right-clicked
+  // cell. `copy-row` covers the common bsncraft case ("copy this whole
+  // line as TSV"). `copy-with-headers` joins clipboard headers for
+  // paste-into-spreadsheet flows.
   "copy",
+  "copy-row",
   "copy-with-headers",
   "separator",
+  // Selection / range. Disabled-state predicates suppress the
+  // affordance when there's nothing to clear.
   "clear-selection",
   "clear-range",
 ]
 
 const builtInLabels: Partial<Record<BcContextMenuBuiltinItem, string>> = {
   copy: "Copy",
+  "copy-cell": "Copy Cell",
+  "copy-row": "Copy Row",
   "copy-with-headers": "Copy with Headers",
   "clear-selection": "Clear Selection",
   "clear-range": "Clear Range",
@@ -26,7 +36,9 @@ const builtInLabels: Partial<Record<BcContextMenuBuiltinItem, string>> = {
   "pin-column-right": "Pin Right",
   "unpin-column": "Unpin",
   "hide-column": "Hide Column",
+  "show-all-columns": "Show All Columns",
   "autosize-column": "Autosize Column",
+  "autosize-all-columns": "Autosize All Columns",
 }
 
 export function resolveContextMenuItems<TRow>(
@@ -77,6 +89,19 @@ export function contextMenuItemDisabled<TRow>(
   if (item === "copy" || item === "copy-with-headers") {
     return context.cell == null && context.api.getRangeSelection().ranges.length === 0
   }
+  if (item === "copy-cell") {
+    // `copy-cell` is the explicit single-cell variant — disabled when
+    // the trigger has no cell context (e.g., Shift+F10 with no active
+    // cell). The implicit-fallback `copy` item above accepts a range.
+    return context.cell == null
+  }
+  if (item === "copy-row") {
+    // `copy-row` needs a row, which the right-click trigger always has
+    // when the user clicks on a data row. Header / filter-row clicks
+    // surface a column without a row, so the cell context is the
+    // accurate signal.
+    return context.cell == null && context.row == null
+  }
   if (item === "clear-range") return context.api.getRangeSelection().ranges.length === 0
   if (item === "clear-selection") {
     return context.selection.mode === "explicit" && context.selection.rowIds.size === 0
@@ -101,6 +126,19 @@ export function contextMenuItemDisabled<TRow>(
     item === "autosize-column"
   ) {
     return !columnCommandEnabled(item, context)
+  }
+  if (item === "show-all-columns") {
+    // The bulk show-all command works on the grid's column state, not
+    // the right-clicked column, so it doesn't need a column context.
+    // Disabled when there's nothing to show — every column is already
+    // visible.
+    return context.api.getColumnState().every((entry) => entry.hidden !== true)
+  }
+  if (item === "autosize-all-columns") {
+    // Same shape as show-all: column-state-driven, no column context
+    // required. Disabled only when there are no visible columns to
+    // measure (an edge case — the grid always has at least one).
+    return context.api.getColumnState().every((entry) => entry.hidden === true)
   }
   return false
 }

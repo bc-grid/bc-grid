@@ -1,4 +1,5 @@
 export { useAggregations } from "./aggregations"
+export { DEFAULT_CONTEXT_MENU_ITEMS } from "./contextMenu"
 export { BcEditGrid } from "./editGrid"
 export { BcGrid, useBcGridApi } from "./grid"
 export { BcServerGrid } from "./serverGrid"
