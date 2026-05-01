@@ -162,6 +162,12 @@ describe("range clipboard", () => {
     )
   })
 
+  test("normaliseClipboardPayload preserves quoted TSV delimiters for future paste parsing", () => {
+    expect(normaliseClipboardPayload({ tsv: '"A\tB"\t"C\nD"\r\nE\tF' }).html).toBe(
+      "<table><tbody><tr><td>A\tB</td><td>C\nD</td></tr><tr><td>E</td><td>F</td></tr></tbody></table>",
+    )
+  })
+
   test("cell serializers escape delimiters and HTML", () => {
     expect(cellsToTsv([["a\tb", 'c"d']])).toBe('"a\tb"\t"c""d"')
     expect(cellsToHtmlTable([["<Ada>", "Grace & Hopper"]])).toBe(
