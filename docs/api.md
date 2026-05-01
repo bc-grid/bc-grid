@@ -40,6 +40,7 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
 | Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
+| Row grouping (client / server-page-window) | Available | Columns panel "Group by" zone, header menu, controlled `groupBy` | `groupBy`, `defaultGroupBy`, `onGroupByChange`, `groupableColumns`, `groupsExpandedByDefault` |
 | Columns panel | Available | Tool panels control or `?toolPanel=columns` | `sidebar={["columns"]}` |
 | Filters panel | Available | Tool panels control or `?toolPanel=filters` | `sidebar={["filters"]}` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
@@ -1593,14 +1594,46 @@ that distinction: `rowCount` / `lastLoad.rowCount` describe the server total,
 while `cache.loadedRowCount` describes only cached row payloads that bc-grid has
 actually loaded.
 
-Client grouping, client filtering, and client search can still run over the rows
-currently rendered by `<BcGrid>`, but with server data that is only the loaded
-page/window. They do not imply global grouping or global filtering over all
-matching rows. For bsncraft-style customer grids, the expected server-backed
-path is to treat `query.view` as the source of truth, apply search/filter/sort
-and any global grouping on the server, return the current page rows plus
-`totalRows`, and use `apiRef.current?.getServerDiagnostics()` to verify the
-active request while integrating the endpoint.
+#### Client vs server / current-page grouping
+
+The same `groupBy` shape covers three execution modes that look identical
+in the chrome but differ in **which row set the grouping engine sees**.
+Be explicit about which one your grid uses — they have very different
+correctness implications.
+
+- **`<BcGrid data={rows}>` — client full-data grouping.** Group buckets
+  cover every row in `data` after client filter / search runs. Stable
+  across pagination because the grid sees the full dataset.
+- **`<BcServerGrid>` without server-side group support — current-page
+  grouping.** bc-grid runs the same client engine over the rows
+  currently rendered, which on a server-row-model adapter is **only
+  the loaded page or block**. Group buckets reflect that slice. They
+  do not imply global grouping over rows the client hasn't loaded —
+  a "Region" bucket on page 2 of an unsorted server feed is "Region
+  within page 2", not "Region across all customers". Useful in dev
+  to confirm the wire format; misleading as a production grouping
+  surface.
+- **`<BcServerGrid>` with server-side group delegation — full-dataset
+  grouping.** bc-grid forwards `groupBy` to the consumer-supplied
+  `loadPage` / `loadBlock` callback as `query.view.groupBy:
+  ServerGroup[]`. Whether the rendered buckets span the full dataset
+  depends on whether the server applies the hint and returns rows in
+  global group order. bc-grid does not synthesise server-aggregated
+  group rows the server didn't return; the production path is to
+  return the rows in group order and let the client engine layer in
+  group-row chrome over the loaded page.
+
+For bsncraft-style customer grids, the expected server-backed path is
+to treat `query.view` as the source of truth, apply search / filter /
+sort and any global grouping on the server, return the current page
+rows plus `totalRows`, and use
+`apiRef.current?.getServerDiagnostics()` to verify the active request
+while integrating the endpoint.
+
+A grouping change on the client resets the requested server page to
+`0` (same reset rule as sort / filter / search / visible columns).
+`query.viewKey` includes the group set so a stale response that
+arrives after a user changes the grouping is dropped.
 
 When `onServerRowMutation` is used with paged mode, optimistic edit patches are
 tracked by row identity in the server-row-model mutation queue, not by the
