@@ -483,6 +483,142 @@ describe("columnFilterTextFromGridFilter", () => {
   })
 })
 
+describe("columnFilterTextFromGridFilter — per-type round-trip", () => {
+  // The multi-type AND-group test above proves the projection composes
+  // across the supported set. These tests pin each filter type's
+  // canonical-shape round-trip in isolation, so a regression in one
+  // type-branch surfaces here before a host app sees it via persistence
+  // or controlled-filter rehydration. The single-value `date` and
+  // standalone `boolean` rows fill the gaps not exercised by the
+  // existing AND-group test.
+  test("text — bare contains shape", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "name",
+      type: "text" as const,
+      op: "contains",
+      value: "Acme",
+    }
+    expect(columnFilterTextFromGridFilter(filter)).toEqual({ name: "Acme" })
+    expect(buildGridFilter({ name: "Acme" })).toEqual(filter)
+  })
+
+  test("number — single-op `>=`", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "balance",
+      type: "number" as const,
+      op: ">=",
+      value: 1000,
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.balance ? decodeNumberFilterInput(text.balance) : null).toEqual({
+      op: ">=",
+      value: "1000",
+    })
+    expect(buildGridFilter(text, { balance: "number" })).toEqual(filter)
+  })
+
+  test("date — single-op `before`", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "lastInvoice",
+      type: "date" as const,
+      op: "before",
+      value: "2026-03-01",
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.lastInvoice).toBe(encodeDateFilterInput({ op: "before", value: "2026-03-01" }))
+    expect(buildGridFilter(text, { lastInvoice: "date" })).toEqual(filter)
+  })
+
+  test("date — `between` carries both endpoints", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "lastInvoice",
+      type: "date" as const,
+      op: "between",
+      values: ["2026-03-01", "2026-03-31"],
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.lastInvoice).toBe(
+      encodeDateFilterInput({ op: "between", value: "2026-03-01", valueTo: "2026-03-31" }),
+    )
+    expect(buildGridFilter(text, { lastInvoice: "date" })).toEqual(filter)
+  })
+
+  test("set — `in` projects to encoded value", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "status",
+      type: "set" as const,
+      op: "in",
+      values: ["Open", "Past Due"],
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.status ? decodeSetFilterInput(text.status) : null).toEqual({
+      op: "in",
+      values: ["Open", "Past Due"],
+    })
+    expect(buildGridFilter(text, { status: "set" })).toEqual(filter)
+  })
+
+  test("set — `blank` projects without a values entry (canonical empty shape)", () => {
+    // The set filter's `blank` op is value-less by design — it asks
+    // "is this cell empty / null / empty array?" — so the canonical
+    // ServerColumnFilter shape produced by buildGridFilter omits the
+    // `values` key entirely. The projection still encodes `values: []`
+    // in `columnFilterText` so the editor's set-input round-trip works.
+    const filter = {
+      kind: "column" as const,
+      columnId: "status",
+      type: "set" as const,
+      op: "blank",
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.status).toBe(encodeSetFilterInput({ op: "blank", values: [] }))
+    expect(buildGridFilter(text, { status: "set" })).toEqual(filter)
+  })
+
+  test("boolean — standalone column projects to plain 'true' / 'false' text", () => {
+    const yesFilter = {
+      kind: "column" as const,
+      columnId: "creditHold",
+      type: "boolean" as const,
+      op: "is",
+      value: true,
+    }
+    const noFilter = {
+      kind: "column" as const,
+      columnId: "creditHold",
+      type: "boolean" as const,
+      op: "is",
+      value: false,
+    }
+    expect(columnFilterTextFromGridFilter(yesFilter)).toEqual({ creditHold: "true" })
+    expect(columnFilterTextFromGridFilter(noFilter)).toEqual({ creditHold: "false" })
+    expect(buildGridFilter({ creditHold: "true" }, { creditHold: "boolean" })).toEqual(yesFilter)
+    expect(buildGridFilter({ creditHold: "false" }, { creditHold: "boolean" })).toEqual(noFilter)
+  })
+
+  test("custom — drops out of the inline projection (consumer-owned shape)", () => {
+    // Custom filters carry a consumer-defined operator and value shape;
+    // the inline filter row is text-driven and cannot meaningfully edit
+    // them. The projection drops custom entries so the inline row
+    // doesn't display a stub editor for state it can't author. The
+    // canonical filter is still applied to the row set — projection
+    // affects only the editor surface, not the predicate.
+    const filter = {
+      kind: "column" as const,
+      columnId: "tags",
+      type: "custom" as const,
+      op: "tags-any",
+      values: ["finance", "audit"],
+    }
+    expect(columnFilterTextFromGridFilter(filter)).toEqual({})
+  })
+})
+
 describe("encodeNumberRangeFilterInput / decodeNumberRangeFilterInput", () => {
   test("round-trips empty input", () => {
     expect(

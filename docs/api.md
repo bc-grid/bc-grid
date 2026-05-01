@@ -614,9 +614,11 @@ export interface BcGridUrlStatePersistence {
 }
 ```
 
-When `gridId` is set, the React layer persists `columnState`, `pageSize`, `density`, `groupBy`, `filter`, and the active `sidebarPanel` to `localStorage` by default. A consumer-provided storage backend via `<BcGridProvider storage={...}>` is reserved for Q2 and is not exported at v0.1.
+When `gridId` is set, the React layer persists six state keys to `localStorage` by default — `columnState`, `pageSize`, `density`, `groupBy`, `filter`, and `sidebarPanel`. Each key is stored under `bc-grid:{gridId}:{state}` (e.g., `bc-grid:accounts-receivable.customers:filter`); they round-trip independently so consumers can clear or inspect a single key without touching the others. `sidebarPanel` distinguishes `null` ("explicitly closed", round-trips as JSON `"null"`) from `undefined` ("no preference, fall back to `defaultSidebarPanel`"); the same `null` vs `undefined` distinction applies to `filter`. Per-column sort direction is carried by `columnState[i].sortDirection` / `sortIndex`, so `sort` does not appear as a separate localStorage key. A consumer-provided storage backend via `<BcGridProvider storage={...}>` is reserved for Q2 and is not exported at v0.1.
 
-When `urlStatePersistence` is set, the React layer reads and writes `columnState`, `sort`, and `filter` to the configured URL search parameter via `history.replaceState`. This is opt-in because URL state is shareable and user-visible. URL filter state takes precedence over `localStorage` filter state on mount.
+When `urlStatePersistence` is set, the React layer reads and writes a JSON payload containing `columnState`, `sort`, and `filter` to the configured URL search parameter via `history.replaceState`. This is opt-in because URL state is shareable and user-visible. **On mount, URL state takes precedence over `localStorage`** for every key the URL carries — `columnState`, `sort`, and `filter`. The cascade per state key is `props.default<X> ?? urlPersistedGridState.<x> ?? persistedGridState.<x> ?? <empty>`. The URL writer drops the search param entirely when all three URL keys are `undefined`; an explicit empty array (`[]`) is preserved as "explicit empty" and is distinct from `undefined`.
+
+Both backends silently drop malformed or unsupported persisted entries (best-effort restore — a corrupted blob from an older bc-grid version, or hand-edited storage / URL, never breaks the grid). Both writers are debounced by 500ms (`GRID_STATE_WRITE_DEBOUNCE_MS`) so a column drag or filter typing settles into a single trailing write.
 
 ---
 
