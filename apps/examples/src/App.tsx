@@ -25,16 +25,10 @@ import {
   customerRows,
   packageRows,
 } from "./examples"
+import { customerContacts } from "./masterDetailExample"
 import { ServerEditGridExample } from "./serverEditExample"
 
 type ThemeMode = "light" | "dark"
-
-interface CustomerContact {
-  name: string
-  role: string
-  channel: string
-  note: string
-}
 
 const densityModes = [
   { id: "compact", label: "Compact" },
@@ -174,7 +168,7 @@ const featureDiscoveryRows = [
   {
     feature: "Master detail",
     status: "Available",
-    entry: "?masterDetail=1",
+    entry: "?masterDetail=1 customer contacts child grid",
     api: "renderDetailPanel",
   },
   {
@@ -1126,7 +1120,10 @@ function CustomerMasterDetail({ row }: { row: CustomerRow }) {
           <strong>{contacts.length} contacts</strong>
         </div>
         {contacts.length > 0 ? (
-          <table className="bc-grid-detail-nested-grid customer-contact-grid">
+          <table
+            aria-labelledby={contactsHeadingId}
+            className="bc-grid-detail-nested-grid customer-contact-grid"
+          >
             <thead>
               <tr>
                 <th scope="col">Name</th>
@@ -1136,7 +1133,7 @@ function CustomerMasterDetail({ row }: { row: CustomerRow }) {
             </thead>
             <tbody>
               {contacts.map((contact) => (
-                <tr key={`${contact.name}-${contact.role}`}>
+                <tr key={contact.id}>
                   <td className="customer-contact-name">
                     <strong>{contact.name}</strong>
                     <small>{contact.note}</small>
@@ -1153,24 +1150,6 @@ function CustomerMasterDetail({ row }: { row: CustomerRow }) {
       </section>
     </div>
   )
-}
-
-function customerContacts(row: CustomerRow): readonly CustomerContact[] {
-  const accountToken = row.account.toLowerCase()
-  return [
-    {
-      name: `${row.tradingName} AP`,
-      role: "Accounts payable",
-      channel: `ap+${accountToken}@example.test`,
-      note: row.terms,
-    },
-    {
-      name: row.owner,
-      role: "Collector",
-      channel: "Internal owner",
-      note: row.region,
-    },
-  ]
 }
 
 function PackageMatrix() {
