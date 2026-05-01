@@ -1,5 +1,6 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { type CSSProperties, useEffect, useLayoutEffect, useRef } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
+import { editorControlState, editorInputClassName } from "./chrome"
 
 const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
 
@@ -74,6 +75,7 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   return (
     <select
       ref={selectRef}
+      className={editorInputClassName}
       multiple
       size={visibleRows}
       defaultValue={options
@@ -83,7 +85,7 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
       aria-invalid={error ? true : undefined}
       data-bc-grid-editor-input="true"
       data-bc-grid-editor-kind="multi-select"
-      style={multiSelectStyle}
+      data-bc-grid-editor-state={editorControlState({ error, pending })}
     >
       {options.map((option) => (
         <option key={optionToString(option.value)} value={optionToString(option.value)}>
@@ -120,19 +122,4 @@ function optionToString(value: unknown): string {
   if (typeof value === "string") return value
   if (typeof value === "number" || typeof value === "boolean") return String(value)
   return JSON.stringify(value)
-}
-
-const multiSelectStyle: CSSProperties = {
-  width: "100%",
-  height: "100%",
-  border: "2px solid var(--bc-grid-focus-ring)",
-  borderRadius: "calc(var(--bc-grid-radius) - 1px)",
-  background: "var(--bc-grid-bg)",
-  color: "inherit",
-  font: "inherit",
-  paddingInline: "var(--bc-grid-cell-padding-x, 12px)",
-  outline: "none",
-  boxSizing: "border-box",
-  appearance: "auto",
-  overflowY: "auto",
 }

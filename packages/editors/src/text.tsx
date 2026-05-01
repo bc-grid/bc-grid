@@ -1,5 +1,6 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { type CSSProperties, useId, useLayoutEffect, useRef } from "react"
+import { useId, useLayoutEffect, useRef } from "react"
+import { editorControlState, editorInputClassName, visuallyHiddenStyle } from "./chrome"
 
 /**
  * Text editor — `kind: "text"`. The default for string-typed columns
@@ -100,6 +101,7 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
     <>
       <input
         ref={inputRef}
+        className={editorInputClassName}
         type="text"
         defaultValue={seeded}
         disabled={pending}
@@ -108,7 +110,7 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
         aria-describedby={error ? errorId : undefined}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="text"
-        style={inputStyle}
+        data-bc-grid-editor-state={editorControlState({ error, pending })}
       />
       {error ? (
         <span id={errorId} style={visuallyHiddenStyle}>
@@ -117,29 +119,4 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
       ) : null}
     </>
   )
-}
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  height: "100%",
-  border: "2px solid var(--bc-grid-focus-ring)",
-  borderRadius: "calc(var(--bc-grid-radius) - 1px)",
-  background: "var(--bc-grid-bg)",
-  color: "inherit",
-  font: "inherit",
-  paddingInline: "var(--bc-grid-cell-padding-x, 12px)",
-  outline: "none",
-  boxSizing: "border-box",
-}
-
-const visuallyHiddenStyle: CSSProperties = {
-  position: "absolute",
-  width: 1,
-  height: 1,
-  padding: 0,
-  margin: -1,
-  overflow: "hidden",
-  clip: "rect(0 0 0 0)",
-  whiteSpace: "nowrap",
-  border: 0,
 }
