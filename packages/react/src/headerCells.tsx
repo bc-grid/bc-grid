@@ -1017,32 +1017,30 @@ export function FilterPopup({
   }, [onClose])
 
   const filterId = `bc-grid-filter-popup-${domToken(columnId)}`
+  const titleId = `${filterId}-title`
+  const isActive = filterText.length > 0
+  // Position is the only thing that has to be inline — it's derived from
+  // the trigger's bounding rect at click time. All chrome (background,
+  // border, shadow, padding) lives in the theming CSS so dark mode and
+  // shadcn token overrides apply without re-rendering.
   const top = anchor.bottom + 4
   const left = anchor.left
   return (
     <div
       data-bc-grid-filter-popup="true"
       data-column-id={columnId}
+      data-active={isActive ? "true" : undefined}
       role="dialog"
-      aria-label={filterLabel}
+      aria-labelledby={titleId}
       className="bc-grid-filter-popup"
-      style={{
-        position: "fixed",
-        top,
-        left,
-        zIndex: 100,
-        background: "var(--bc-grid-bg)",
-        color: "inherit",
-        border: "1px solid var(--bc-grid-border)",
-        borderRadius: "var(--bc-grid-radius)",
-        boxShadow: "0 8px 24px -8px rgba(0, 0, 0, 0.2)",
-        padding: "10px",
-        minWidth: 220,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
+      style={{ top, left }}
     >
+      <div className="bc-grid-filter-popup-header">
+        <span id={titleId} className="bc-grid-filter-popup-title">
+          {filterLabel}
+        </span>
+        {isActive ? <span className="bc-grid-filter-popup-active-dot" aria-hidden="true" /> : null}
+      </div>
       <FilterEditorBody
         filterType={filterType}
         filterText={filterText}
@@ -1053,32 +1051,32 @@ export function FilterPopup({
         autoFocus
         messages={messages}
       />
-      <div
-        className="bc-grid-filter-popup-footer"
-        style={{ display: "flex", justifyContent: "flex-end" }}
-      >
+      <div className="bc-grid-filter-popup-footer">
         <button
           type="button"
           aria-label={`Clear ${filterLabel}`}
-          className="bc-grid-filter-popup-clear"
+          className="bc-grid-filter-popup-button bc-grid-filter-popup-clear"
           data-bc-grid-filter-clear="true"
           onClick={(event) => {
             event.preventDefault()
             onClear()
           }}
           onKeyDown={(event) => event.stopPropagation()}
-          disabled={filterText.length === 0}
-          style={{
-            font: "inherit",
-            background: "transparent",
-            border: "1px solid var(--bc-grid-border)",
-            borderRadius: "calc(var(--bc-grid-radius) - 2px)",
-            cursor: filterText ? "pointer" : "default",
-            opacity: filterText ? 1 : 0.4,
-            padding: "2px 8px",
-          }}
+          disabled={!isActive}
         >
-          × Clear
+          Clear
+        </button>
+        <button
+          type="button"
+          aria-label={`Apply ${filterLabel}`}
+          className="bc-grid-filter-popup-button bc-grid-filter-popup-apply"
+          onClick={(event) => {
+            event.preventDefault()
+            onClose()
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          Apply
         </button>
       </div>
     </div>
