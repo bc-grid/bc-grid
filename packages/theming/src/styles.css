@@ -995,20 +995,19 @@ select.bc-grid-editor-input {
 /*
  * Strip the native `<select>` chrome (Safari paints it pill-shaped
  * with a thick chevron well; Firefox paints rounded ends) and
- * replace with a quiet shadcn-style chevron. The SVG stroke is a
- * neutral mid-grey so it reads on light + dark backgrounds without
- * a per-mode override; the colour goes muted because the chevron is
- * decorative chrome, not primary content. `padding-right` leaves
- * room so the chevron doesn't overlap a long operator label.
+ * replace with a quiet shadcn-style chevron drawn from token-coloured
+ * CSS gradients. `padding-right` leaves room so the chevron doesn't
+ * overlap a long operator label.
  */
 .bc-grid-filter-select {
   appearance: none;
   -webkit-appearance: none;
   padding-right: 1.5rem;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1l4 4 4-4'/></svg>");
+  background-image: linear-gradient(45deg, transparent 50%, var(--bc-grid-muted-fg) 50%),
+    linear-gradient(135deg, var(--bc-grid-muted-fg) 50%, transparent 50%);
   background-repeat: no-repeat;
-  background-position: right 0.5rem center;
-  background-size: 10px 6px;
+  background-position: calc(100% - 0.8125rem) 50%, calc(100% - 0.5rem) 50%;
+  background-size: 0.3125rem 0.3125rem, 0.3125rem 0.3125rem;
 }
 
 .bc-grid-filter-input:hover:not(:disabled),

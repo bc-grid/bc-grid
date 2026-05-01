@@ -1177,8 +1177,8 @@ describe("@bc-grid/theming", () => {
   test("inline filter <select> strips the native chrome and paints a custom shadcn-style chevron", () => {
     // Safari paints native `<select>` pill-shaped; Firefox rounds
     // the ends. Both fight the rectangular shadcn aesthetic. Pin
-    // `appearance: none` + the inline SVG chevron + right-padding
-    // so the dropdown affordance reads cleanly across browsers.
+    // `appearance: none` + the token-coloured gradient chevron +
+    // right-padding so the dropdown affordance reads cleanly across browsers.
     // The shared `.bc-grid-filter-input,.bc-grid-filter-select` rule
     // sets the surface; the second standalone `.bc-grid-filter-select`
     // rule layers the appearance reset.
@@ -1196,7 +1196,8 @@ describe("@bc-grid/theming", () => {
     const rule = css.slice(idx, ruleEnd)
     expect(rule).toContain("appearance: none")
     expect(rule).toContain("-webkit-appearance: none")
-    expect(rule).toContain("background-image: url(")
+    expect(rule).toContain("background-image: linear-gradient")
+    expect(rule).toContain("var(--bc-grid-muted-fg)")
     expect(rule).toContain("padding-right: 1.5rem")
   })
 
