@@ -87,6 +87,14 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Pivot grid rendering | Planned | Not exposed in examples | Pivot row/column rendering integration |
 | Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
 
+## Server diagnostics
+
+For server-backed customer grids, keep a small support action wired to
+`apiRef.current?.getServerDiagnostics()`. Log the active `viewSummary`,
+`lastLoad.query` page/block/tree window, `rowCount`, `cache.loadedRowCount`,
+`pendingMutationCount`, and `lastLoad.error` before debugging an endpoint. The
+copy-paste recipe lives in `docs/api.md` under `BcServerGridApi`.
+
 ## Global search
 
 bc-grid leaves the global search input to the host application. Keep the input

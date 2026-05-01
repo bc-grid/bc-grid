@@ -1771,6 +1771,62 @@ server for before debugging endpoint behavior. Diagnostics intentionally avoid
 cached row payloads; call `getServerRowModelState()` only when you need the full
 state snapshot.
 
+Minimal diagnostics recipe for a server-backed customer grid:
+
+```ts
+function logServerGridDiagnostics(api: BcServerGridApi<Customer> | null) {
+  const diagnostics = api?.getServerDiagnostics()
+  if (!diagnostics) return
+
+  const lastLoad = diagnostics.lastLoad
+  const query = lastLoad.query
+  const request = (() => {
+    if (!query) return { status: lastLoad.status }
+    if (query.mode === "paged") {
+      return {
+        status: lastLoad.status,
+        requestId: query.requestId,
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+      }
+    }
+    if (query.mode === "infinite") {
+      return {
+        status: lastLoad.status,
+        requestId: query.requestId,
+        blockStart: query.blockStart,
+        blockSize: query.blockSize,
+      }
+    }
+    return {
+      status: lastLoad.status,
+      requestId: query.requestId,
+      parentRowId: query.parentRowId,
+      childStart: query.childStart,
+      childCount: query.childCount,
+    }
+  })()
+
+  console.info("bc-grid server diagnostics", {
+    mode: diagnostics.mode,
+    viewKey: diagnostics.viewKey,
+    view: {
+      sortCount: diagnostics.viewSummary.sortCount,
+      filterActive: diagnostics.viewSummary.filterActive,
+      searchActive: diagnostics.viewSummary.searchActive,
+      groupByCount: diagnostics.viewSummary.groupByCount,
+      visibleColumnCount: diagnostics.viewSummary.visibleColumnCount,
+    },
+    request,
+    rowCount: diagnostics.rowCount,
+    loadedRowCount: diagnostics.cache.loadedRowCount,
+    cacheBlockCount: diagnostics.cache.blockCount,
+    pendingMutationCount: diagnostics.pendingMutationCount,
+    lastError: lastLoad.error ?? null,
+  })
+}
+```
+
 ---
 
 ## 7. Editor protocol
