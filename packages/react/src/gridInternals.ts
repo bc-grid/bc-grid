@@ -20,6 +20,7 @@ import type {
 import type { Virtualizer } from "@bc-grid/virtualizer"
 import {
   type CSSProperties,
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   useCallback,
@@ -118,6 +119,37 @@ export interface ResolvedColumn<TRow> {
   position: number
 }
 
+export interface FlattenedColumnDefinition<TRow> {
+  column: BcReactGridColumn<TRow, unknown>
+  columnId: ColumnId
+  groupPath: readonly ColumnGroupPathEntry<TRow>[]
+  originalIndex: number
+}
+
+export interface FlattenColumnDefinitionsOptions {
+  includeHidden?: boolean
+}
+
+export interface ColumnGroupPathEntry<TRow> {
+  groupId: ColumnId
+  header: ReactNode
+  source: BcReactGridColumn<TRow, unknown>
+}
+
+export interface ColumnGroupHeaderCell<TRow> {
+  groupId: ColumnId
+  header: ReactNode
+  source: BcReactGridColumn<TRow, unknown>
+  depth: number
+  ariaColIndex: number
+  ariaColSpan: number
+  left: number
+  width: number
+  pinned: "left" | "right" | null
+  pinnedEdge: "left" | "right" | null
+  leafColumnIds: readonly ColumnId[]
+}
+
 export interface ViewportSize {
   height: number
   width: number
@@ -132,28 +164,29 @@ export function resolveColumns<TRow>(
   columnState: readonly BcColumnStateEntry[],
 ): ResolvedColumn<TRow>[] {
   const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
-  const resolved = columns.flatMap((column, originalIndex) => {
-    const columnId = columnIdFor(column, originalIndex)
-    const state = stateById.get(columnId)
-    if (state?.hidden ?? column.hidden) return []
+  const resolved = flattenColumnDefinitions(columns).flatMap(
+    ({ column, columnId, originalIndex }) => {
+      const state = stateById.get(columnId)
+      if (state?.hidden ?? column.hidden) return []
 
-    const pinned = state?.pinned === null ? null : (state?.pinned ?? column.pinned ?? null)
-    const requestedWidth = state?.width ?? column.width ?? DEFAULT_COL_WIDTH
-    const minWidth = column.minWidth ?? 48
-    const maxWidth = column.maxWidth ?? Number.POSITIVE_INFINITY
-    const width = clamp(requestedWidth, minWidth, maxWidth)
-    return [
-      {
-        align: column.align ?? "left",
-        columnId,
-        left: 0,
-        pinned,
-        position: state?.position ?? originalIndex,
-        source: column,
-        width,
-      } satisfies ResolvedColumn<TRow>,
-    ]
-  })
+      const pinned = state?.pinned === null ? null : (state?.pinned ?? column.pinned ?? null)
+      const requestedWidth = state?.width ?? column.width ?? DEFAULT_COL_WIDTH
+      const minWidth = column.minWidth ?? 48
+      const maxWidth = column.maxWidth ?? Number.POSITIVE_INFINITY
+      const width = clamp(requestedWidth, minWidth, maxWidth)
+      return [
+        {
+          align: column.align ?? "left",
+          columnId,
+          left: 0,
+          pinned,
+          position: state?.position ?? originalIndex,
+          source: column,
+          width,
+        } satisfies ResolvedColumn<TRow>,
+      ]
+    },
+  )
 
   const byPosition = (a: ResolvedColumn<TRow>, b: ResolvedColumn<TRow>) => a.position - b.position
   const ordered = [
@@ -170,11 +203,154 @@ export function resolveColumns<TRow>(
   })
 }
 
+export function flattenColumnDefinitions<TRow>(
+  columns: readonly BcReactGridColumn<TRow>[],
+  options: FlattenColumnDefinitionsOptions = {},
+): FlattenedColumnDefinition<TRow>[] {
+  const leaves: FlattenedColumnDefinition<TRow>[] = []
+  const includeHidden = options.includeHidden === true
+
+  const visit = (
+    candidates: readonly BcReactGridColumn<TRow>[],
+    groupPath: readonly ColumnGroupPathEntry<TRow>[],
+    indexPath: readonly number[],
+  ) => {
+    candidates.forEach((column, index) => {
+      if (column.hidden && !includeHidden) return
+      const children = column.children?.filter((child) => includeHidden || !child.hidden) ?? []
+      if (children.length > 0) {
+        const groupId = columnGroupIdFor(column, [...indexPath, index])
+        visit(
+          children,
+          [
+            ...groupPath,
+            {
+              groupId,
+              header: column.header,
+              source: column as BcReactGridColumn<TRow, unknown>,
+            },
+          ],
+          [...indexPath, index],
+        )
+        return
+      }
+
+      const originalIndex = leaves.length
+      leaves.push({
+        column: column as BcReactGridColumn<TRow, unknown>,
+        columnId: columnIdFor(column, originalIndex),
+        groupPath,
+        originalIndex,
+      })
+    })
+  }
+
+  visit(columns, [], [])
+  return leaves
+}
+
+export function deriveColumnGroupHeaderRows<TRow>(
+  columns: readonly BcReactGridColumn<TRow>[],
+  resolvedColumns: readonly ResolvedColumn<TRow>[],
+): ColumnGroupHeaderCell<TRow>[][] {
+  const flattened = flattenColumnDefinitions(columns)
+  const groupPathByColumnId = new Map(flattened.map((leaf) => [leaf.columnId, leaf.groupPath]))
+  const maxDepth = flattened.reduce((depth, leaf) => Math.max(depth, leaf.groupPath.length), 0)
+  if (maxDepth === 0 || resolvedColumns.length === 0) return []
+
+  const rows: ColumnGroupHeaderCell<TRow>[][] = []
+
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const row: ColumnGroupHeaderCell<TRow>[] = []
+    let active: {
+      group: ColumnGroupPathEntry<TRow>
+      startIndex: number
+      endIndex: number
+      pinned: "left" | "right" | null
+      leafColumnIds: ColumnId[]
+      width: number
+    } | null = null
+
+    const flush = () => {
+      if (!active) return
+      const firstColumn = resolvedColumns[active.startIndex]
+      if (!firstColumn) {
+        active = null
+        return
+      }
+      row.push({
+        ariaColIndex: active.startIndex + 1,
+        ariaColSpan: active.leafColumnIds.length,
+        depth,
+        groupId: active.group.groupId,
+        header: active.group.header,
+        leafColumnIds: active.leafColumnIds,
+        left: firstColumn.left,
+        pinned: active.pinned,
+        pinnedEdge: pinnedEdgeForGroupSpan(resolvedColumns, active.startIndex, active.endIndex),
+        source: active.group.source,
+        width: active.width,
+      })
+      active = null
+    }
+
+    resolvedColumns.forEach((column, index) => {
+      const group = groupPathByColumnId.get(column.columnId)?.[depth]
+      if (!group) {
+        flush()
+        return
+      }
+
+      if (active && active.group.groupId === group.groupId && active.pinned === column.pinned) {
+        active.endIndex = index
+        active.leafColumnIds.push(column.columnId)
+        active.width += column.width
+        return
+      }
+
+      flush()
+      active = {
+        endIndex: index,
+        group,
+        leafColumnIds: [column.columnId],
+        pinned: column.pinned,
+        startIndex: index,
+        width: column.width,
+      }
+    })
+
+    flush()
+    rows.push(row)
+  }
+
+  return rows.filter((row) => row.length > 0)
+}
+
 export function columnIdFor<TRow>(
   column: BcReactGridColumn<TRow>,
   originalIndex: number,
 ): ColumnId {
   return column.columnId ?? column.field ?? `column-${originalIndex}`
+}
+
+function columnGroupIdFor<TRow>(
+  column: BcReactGridColumn<TRow>,
+  indexPath: readonly number[],
+): ColumnId {
+  return column.columnId ?? column.field ?? `group-${indexPath.join("-")}`
+}
+
+function pinnedEdgeForGroupSpan<TRow>(
+  columns: readonly ResolvedColumn<TRow>[],
+  startIndex: number,
+  endIndex: number,
+): "left" | "right" | null {
+  const first = columns[startIndex]
+  const last = columns[endIndex]
+  if (!first || !last || first.pinned !== last.pinned) return null
+  if (last.pinned === "left" && columns[endIndex + 1]?.pinned !== "left") return "left"
+  if (first.pinned === "right" && columns[startIndex - 1]?.pinned !== "right") return "right"
+  return null
 }
 
 /**

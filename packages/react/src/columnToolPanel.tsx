@@ -1,6 +1,6 @@
 import type { BcColumnStateEntry, ColumnId } from "@bc-grid/core"
 import { type ChangeEvent, type DragEvent, type ReactNode, useMemo, useState } from "react"
-import { columnIdFor } from "./gridInternals"
+import { flattenColumnDefinitions } from "./gridInternals"
 import type { BcReactGridColumn, BcSidebarContext } from "./types"
 
 const COLUMN_DRAG_MIME = "application/x-bc-grid-column"
@@ -260,21 +260,22 @@ export function buildColumnToolPanelItems<TRow>(
 ): readonly ColumnToolPanelItem[] {
   const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
   const explicitGroupableIds = new Set(groupableColumns.map((entry) => entry.columnId))
-  const items = columns.map((column, originalIndex) => {
-    const columnId = columnIdFor(column, originalIndex)
-    const state = stateById.get(columnId)
-    const pinned = state?.pinned === null ? null : (state?.pinned ?? column.pinned ?? null)
-    return {
-      columnId,
-      groupable: explicitGroupableIds.has(columnId) || column.groupable === true,
-      hidden: state?.hidden ?? column.hidden ?? false,
-      hideDisabled: false,
-      label: columnToolPanelLabel(column, columnId, groupableColumns),
-      originalIndex,
-      pinned,
-      position: state?.position ?? originalIndex,
-    }
-  })
+  const items = flattenColumnDefinitions(columns, { includeHidden: true }).map(
+    ({ column, columnId, originalIndex }) => {
+      const state = stateById.get(columnId)
+      const pinned = state?.pinned === null ? null : (state?.pinned ?? column.pinned ?? null)
+      return {
+        columnId,
+        groupable: explicitGroupableIds.has(columnId) || column.groupable === true,
+        hidden: state?.hidden ?? column.hidden ?? false,
+        hideDisabled: false,
+        label: columnToolPanelLabel(column, columnId, groupableColumns),
+        originalIndex,
+        pinned,
+        position: state?.position ?? originalIndex,
+      }
+    },
+  )
   const sorted = [...items].sort(compareColumnToolPanelItems)
   const visibleCount = sorted.filter((item) => !item.hidden).length
   return sorted.map((item) => ({

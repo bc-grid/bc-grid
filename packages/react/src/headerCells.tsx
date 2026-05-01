@@ -32,6 +32,7 @@ import {
   encodeTextFilterInput,
 } from "./filter"
 import {
+  type ColumnGroupHeaderCell,
   type ResolvedColumn,
   cellStyle,
   classNames,
@@ -113,6 +114,59 @@ interface RenderHeaderCellParams<TRow> {
   filterText?: string
   filterPopupOpen?: boolean
   onOpenFilterPopup?: (column: ResolvedColumn<TRow>, anchor: DOMRect) => void
+}
+
+interface RenderColumnGroupHeaderCellParams<TRow> {
+  cell: ColumnGroupHeaderCell<TRow>
+  domBaseId: string
+  headerHeight: number
+  scrollLeft: number
+  totalWidth: number
+  viewportWidth: number
+}
+
+export function renderColumnGroupHeaderCell<TRow>({
+  cell,
+  domBaseId,
+  headerHeight,
+  scrollLeft,
+  totalWidth,
+  viewportWidth,
+}: RenderColumnGroupHeaderCellParams<TRow>): ReactNode {
+  const headerLabel = typeof cell.header === "string" ? cell.header : cell.groupId
+
+  return (
+    <div
+      key={`${cell.groupId}-${cell.depth}-${cell.ariaColIndex}`}
+      id={`${domBaseId}-header-group-${domToken(cell.groupId)}-${cell.depth}-${cell.ariaColIndex}`}
+      className={classNames(
+        "bc-grid-cell",
+        "bc-grid-header-cell",
+        "bc-grid-header-group-cell",
+        pinnedClassName(cell.pinned),
+        pinnedEdgeClassName(cell.pinnedEdge),
+      )}
+      role="columnheader"
+      aria-colindex={cell.ariaColIndex}
+      aria-colspan={cell.ariaColSpan}
+      aria-label={headerLabel}
+      data-bc-grid-column-group-id={cell.groupId}
+      data-bc-grid-column-group-depth={cell.depth}
+      style={cellStyle({
+        align: "center",
+        height: headerHeight,
+        left: cell.left,
+        pinned: cell.pinned,
+        scrollLeft,
+        totalWidth,
+        viewportWidth,
+        width: cell.width,
+        zIndex: cell.pinned ? 4 : 3,
+      })}
+    >
+      <span className="bc-grid-header-group-label">{cell.header}</span>
+    </div>
+  )
 }
 
 export function renderHeaderCell<TRow>({

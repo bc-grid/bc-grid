@@ -321,6 +321,13 @@ export type BcReactGridColumn<TRow, TValue = unknown> =
     header: string | React.ReactNode
 
     /**
+     * Optional nested child columns for multi-row grouped headers.
+     * Parent columns are header-only. Resize, reorder, pin, sort, filter,
+     * edit, and aggregation behavior remains on leaf columns.
+     */
+    children?: readonly BcReactGridColumn<TRow>[]
+
+    /**
      * Custom cell renderer. Receives the value (post-getter, pre-formatter)
      * plus row and column context. Memoised internally; identity changes
      * trigger re-render of all cells in the column.
@@ -378,6 +385,28 @@ export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
   column: BcReactGridColumn<TRow, TValue>
   locale?: string
 }
+```
+
+Grouped headers are additive and preserve flat-column behavior. Parent header
+cells render above their visible leaf columns with `aria-colspan`; leaf columns
+keep the existing `columnheader` roles, resize handles, sort/menu/filter
+controls, and column-state entries. Parent resize and parent reorder are not
+implemented; reorder/pin leaf columns instead. If a group is split by leaf
+pinning or reordering, the parent label renders once for each contiguous span.
+
+```tsx
+const columns: BcGridColumn<Customer>[] = [
+  { columnId: "account", field: "account", header: "Account", pinned: "left" },
+  {
+    columnId: "aging",
+    header: "Aging Buckets",
+    children: [
+      { columnId: "current", field: "current", header: "Current", align: "right" },
+      { columnId: "days1to30", field: "days1to30", header: "1-30", align: "right" },
+      { columnId: "daysOver60", field: "daysOver60", header: "60+", align: "right" },
+    ],
+  },
+]
 ```
 
 ### 1.4 Column-level events

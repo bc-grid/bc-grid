@@ -99,6 +99,12 @@ const featureDiscoveryRows = [
     api: "sortable, resizable, pinned",
   },
   {
+    feature: "Column groups",
+    status: "Available",
+    entry: "?columnGroups=1",
+    api: "columns[].children",
+  },
+  {
     feature: "Inline filters",
     status: "Available",
     entry: "AR Customers filter row",
@@ -374,6 +380,11 @@ function masterDetailEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("masterDetail") === "1"
 }
 
+function columnGroupsEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("columnGroups") === "1"
+}
+
 /**
  * `?filterPopup=1` URL flag opts every filterable column into the
  * `filter-popup-variant` demo: the inline filter row collapses entirely
@@ -390,8 +401,35 @@ function applyPopupFilterVariant<TRow>(
 ): readonly BcGridColumn<TRow>[] {
   if (!filterPopupEnabled()) return columns
   return columns.map((column) => {
+    if (column.children && column.children.length > 0) {
+      return { ...column, children: applyPopupFilterVariant(column.children) }
+    }
     if (!column.filter) return column
     return { ...column, filter: { ...column.filter, variant: "popup" as const } }
+  })
+}
+
+function applyGroupedHeaderDemo(
+  columns: readonly BcGridColumn<CustomerRow>[],
+): readonly BcGridColumn<CustomerRow>[] {
+  if (!columnGroupsEnabled()) return columns
+  const agingColumnIds = new Set(["current", "days1to30", "days31to60", "daysOver60"])
+  const agingChildren = columns.filter((column) => {
+    const columnId = column.columnId ?? column.field
+    return columnId ? agingColumnIds.has(columnId) : false
+  })
+  return columns.flatMap((column) => {
+    const columnId = column.columnId ?? column.field
+    if (columnId === "current") {
+      return [
+        {
+          columnId: "agingBuckets",
+          header: "Aging Buckets",
+          children: agingChildren,
+        } satisfies BcGridColumn<CustomerRow>,
+      ]
+    }
+    return columnId && agingColumnIds.has(columnId) ? [] : [column]
   })
 }
 
@@ -781,7 +819,10 @@ function CustomerGridDemo({
   // `?filterPopup=1` flips every filterable column into popup-variant per
   // `filter-popup-variant`. The inline filter row collapses entirely when
   // every filter is popup-mode, surfacing the AG-Grid-style funnel UX.
-  const columns = useMemo(() => applyPopupFilterVariant(baseColumns), [baseColumns])
+  const columns = useMemo(
+    () => applyPopupFilterVariant(applyGroupedHeaderDemo(baseColumns)),
+    [baseColumns],
+  )
 
   const handleEdit = useCallback((row: CustomerRow) => {
     setActiveCustomer(row)
