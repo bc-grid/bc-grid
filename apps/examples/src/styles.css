@@ -108,6 +108,7 @@ button {
 .brand p,
 .toolbar h2,
 .toolbar p,
+.package-panel header p,
 .package-panel h3 {
   margin: 0;
 }
@@ -119,6 +120,7 @@ button {
 
 .brand p,
 .toolbar p,
+.package-panel header p,
 .demo-toolbar span,
 .package-panel header span,
 .control-group > span {
@@ -582,6 +584,11 @@ button {
   font-size: 1rem;
 }
 
+.package-panel header > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
 .package-list {
   display: grid;
   border-top: 1px solid hsl(var(--border));
@@ -608,6 +615,99 @@ button {
 
 .package-row strong {
   justify-self: end;
+}
+
+.feature-map-panel {
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.feature-map-scroll {
+  overflow-x: auto;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.feature-map-table {
+  width: 100%;
+  min-width: 56rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.875rem;
+}
+
+.feature-map-table th,
+.feature-map-table td {
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.feature-map-table tr:last-child th,
+.feature-map-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.feature-map-table thead th {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.feature-map-table tbody th {
+  color: hsl(var(--foreground));
+  font-weight: 700;
+}
+
+.feature-map-table th:nth-child(1) {
+  width: 20%;
+}
+
+.feature-map-table th:nth-child(2) {
+  width: 9rem;
+}
+
+.feature-map-table th:nth-child(3),
+.feature-map-table th:nth-child(4) {
+  width: 30%;
+}
+
+.feature-map-table code {
+  color: hsl(var(--foreground));
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.feature-status {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 0.1875rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.feature-status-available {
+  border-color: hsl(142 70% 72%);
+  background: hsl(142 76% 94%);
+  color: hsl(142 76% 28%);
+}
+
+.feature-status-planned {
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+}
+
+.dark .feature-status-available {
+  border-color: hsl(142 52% 32%);
+  background: hsl(142 65% 18%);
+  color: hsl(142 70% 78%);
 }
 
 @media (max-width: 980px) {
@@ -697,5 +797,9 @@ button {
 
   .package-row strong {
     justify-self: start;
+  }
+
+  .feature-map-table {
+    min-width: 46rem;
   }
 }
