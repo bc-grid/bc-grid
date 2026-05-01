@@ -69,12 +69,33 @@ Internal pure helper `computePopupPosition` (`packages/react/src/internal/popup-
 | 2: popup interaction contracts | **landed (PR #252)** | `internal/popup-dismiss.ts` (new) + `FilterPopup`, `BcGridContextMenu`, `ColumnVisibilityMenu`, `grid.tsx` | Low | Shared `usePopupDismiss` hook (Escape + outside-pointer + focus-return-to-trigger). Column chooser now uses `computePopupPosition` (the third inline-clamp site is gone). Every popup root now carries `data-state="open"` + `data-side` + `data-align`. Pure decision helpers (`shouldDismissOnOutsidePointer`, `shouldDismissOnKey`) unit-tested without a live DOM. |
 | 5: keyboard-nav primitive | **landed (PR #261)** | new `internal/use-roving-focus.ts`; column chooser integration | Low | Shared roving-focus hook + pure helpers (`nextEnabledIndex` / `firstEnabledIndex` / `lastEnabledIndex` / `nextMatchingIndex` / `decideRovingKey`). Column chooser switched to roving tabindex per WAI-ARIA Authoring Practices. Escape stays out (popup-dismiss owns it); no focus trap. |
 | 8 (was 4 of slice-2 audit): filter-popup chrome polish | **landed in this update** | `headerCells.tsx` + `theming/styles.css` + tests | Low | Trigger funnel button gets `data-state="open" \| "closed"` (Radix PopoverTrigger contract). Apply button focus ring inset to be visible against the accent bg. Clear button moves to a shadcn-ghost treatment (transparent border, hover bg). Filter popup root opts into a translate-only fade-in animation (gated by `prefers-reduced-motion`). Header padding rationalised; active-dot bumped to 8px with a token-driven inner ring. SSR markup contracts pinned in tests. |
+| 9: sidebar/tool-panel chrome audit | in flight (worker5) | `theming/styles.css`, theming tests, queue/doc notes | Low | Sidebar already carries the docked-panel interaction contract (tablist, `data-state`, Escape close/focus return). First safe slice keeps panel behavior unchanged and maps columns/filters/pivot form-control borders to `--bc-grid-input-border` so shadcn hosts can distinguish input chrome from card/panel borders. |
 | 3: shared menu-item primitive | open | `internal/context-menu.tsx`, `columnVisibility.tsx` | Medium | Extract `<MenuItem>` / `<MenuCheckboxItem>` into `packages/react/src/internal/menu-item.tsx`. Standardises spacing, focus ring, disabled state across the two menus. Test impact: existing context-menu / column-chooser unit tests need to follow the new DOM. |
 | 4: Radix-Popper trial | open | `packages/react/package.json`, `FilterPopup`, possibly `BcGridContextMenu` | Medium-High | Trial `@radix-ui/react-popper`. Compare bundle size + visual parity. Decision recorded in this doc. **Coordinator approval required** before adding the dep. |
 | 6: Radix-Tooltip trial | open | `tooltip.tsx`, `package.json` | Medium | Replace the bespoke tooltip with `@radix-ui/react-tooltip` if bundle / SSR story checks out. Likely after slice 4. |
 | 7: shared overlay primitive | open | new `internal/popup-shell.tsx` | Medium | Once all popups use the helper + matching focus, lift the box-shadow / radius / border / `data-state="open"` into a shared shell. Currently each popup re-declares these classes in `styles.css`. |
 
 Slices 1–2, 5, and 8 give the visible polish + interaction contract without any dependency change; 3 is also dep-free; 4 / 6 / 7 are the Radix-conversion track and need a coordinator-level dep decision.
+
+---
+
+## Slice 9 — Sidebar/tool-panel chrome audit + input-token polish (this PR)
+
+A narrow audit pass over the docked sidebar shell and the merged columns / filters / pivot panels. This slice avoids React behavior changes and keeps the existing column, filter, and pivot panel state contracts intact.
+
+### Audit notes
+
+- **Surface / border layering:** the sidebar shell already bridges its panel background through `--bc-grid-card-bg` and separates the rail / panel with `--bc-grid-sidebar-border`. No surface restructure in this slice.
+- **Spacing / radius:** panel body spacing and item radius already follow the compact chrome scale used by the current menu/filter-popup polish. Empty states are still plain muted copy; leave richer empty-state boxes for a follow-up to avoid broad visual churn.
+- **Focus-visible:** sidebar tabs, panel container, panel buttons, and panel inputs already expose explicit focus-visible rings. No focus contract changes.
+- **Disabled states:** panel buttons use the existing disabled opacity/cursor contract. No pointer-event changes here because disabled button activation is already guarded by native button semantics.
+- **Search/input controls:** columns search / pin select, filters panel inline editors, and pivot search / select controls were still reading the generic border token. They now consume `--bc-grid-input-border`, matching shadcn's distinction between `--input` and surrounding card/panel borders.
+
+### What ships
+
+- CSS-only token alignment for sidebar tool-panel form controls.
+- A theming test that pins columns, filters, and pivot panel controls to `--bc-grid-input-border`.
+- No panel behavior changes, no new runtime dependency, no Radix migration.
 
 ---
 
