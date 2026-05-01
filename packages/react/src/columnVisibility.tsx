@@ -1,5 +1,6 @@
 import type { ColumnId } from "@bc-grid/core"
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react"
+import { BcGridMenuCheckItem } from "./internal/menu-item"
 import { usePopupDismiss } from "./internal/popup-dismiss"
 import { computePopupPosition } from "./internal/popup-position"
 
@@ -95,51 +96,22 @@ export function ColumnVisibilityMenu({
           const checked = !item.hidden
           const label = `${checked ? "Hide" : "Show"} ${item.label}`
           return (
-            <button
-              aria-checked={checked}
+            <BcGridMenuCheckItem
               aria-label={label}
-              className="bc-grid-column-menu-item"
-              data-checked={checked || undefined}
+              checked={checked}
               data-column-id={item.columnId}
               disabled={item.hideDisabled}
               key={item.columnId}
+              label={item.label}
               onClick={(event) => {
                 event.stopPropagation()
                 onToggle(item.columnId, checked)
               }}
-              role="menuitemcheckbox"
-              type="button"
-            >
-              <span aria-hidden="true" className="bc-grid-column-menu-check">
-                {checked ? <CheckmarkIcon /> : null}
-              </span>
-              <span className="bc-grid-column-menu-label">{item.label}</span>
-            </button>
+            />
           )
         })}
       </div>
     </div>
-  )
-}
-
-function CheckmarkIcon(): ReactNode {
-  // Inline 12x12 checkmark — tracks shadcn's DropdownMenuCheckboxItem
-  // visual style. currentColor + stroke so it picks up the surrounding
-  // text colour for both light + dark themes.
-  return (
-    <svg
-      aria-hidden="true"
-      fill="none"
-      height="12"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 16 16"
-      width="12"
-    >
-      <path d="M3 8.5 6.5 12 13 4.5" />
-    </svg>
   )
 }
 

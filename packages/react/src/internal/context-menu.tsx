@@ -12,6 +12,7 @@ import {
 import type { ResolvedColumn, RowEntry } from "../gridInternals"
 import type { BcContextMenuContext, BcContextMenuItem, BcContextMenuItems } from "../types"
 import { contextMenuBuiltinIcon } from "./context-menu-icons"
+import { BcGridMenuItem } from "./menu-item"
 import { usePopupDismiss } from "./popup-dismiss"
 import { computePopupPosition } from "./popup-position"
 
@@ -229,31 +230,17 @@ export function BcGridContextMenu<TRow>({
         const active = activeIndex === index
         const icon = isCustomContextMenuItem(item) ? null : contextMenuBuiltinIcon(item)
         return (
-          <div
-            aria-disabled={disabled || undefined}
-            className="bc-grid-context-menu-item"
-            data-active={active || undefined}
+          <BcGridMenuItem
+            active={active}
+            disabled={disabled}
             id={`${menuId}-item-${index}`}
             key={contextMenuItemKey(item, index)}
-            onClick={(event) => {
-              event.stopPropagation()
-              activate(item)
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter" && event.key !== " ") return
-              event.preventDefault()
-              event.stopPropagation()
-              activate(item)
-            }}
+            label={label}
+            leading={icon}
+            onClick={(event) => event.stopPropagation()}
+            onActivate={() => activate(item)}
             onMouseEnter={() => setActiveIndex(index)}
-            role="menuitem"
-            tabIndex={-1}
-          >
-            <span aria-hidden="true" className="bc-grid-context-menu-icon">
-              {icon}
-            </span>
-            <span className="bc-grid-context-menu-label">{label}</span>
-          </div>
+          />
         )
       })}
     </div>
