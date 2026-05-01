@@ -322,6 +322,15 @@ Same as copy, but prepend a header row containing each column's `header` (or `co
 
 ### Paste (Ctrl/Cmd+V)
 
+**0.4-alpha implementation status.** The React package now has internal pure
+helpers for the TSV paste groundwork: Excel/Sheets-style TSV parsing with
+diagnostics, anchor-to-visible-row/column planning, out-of-bounds metadata,
+editability checks, per-column `valueParser`, per-column `validate`, and an
+atomic commit/row-patch plan. The helpers do not yet read from
+`navigator.clipboard`, mutate grid state, fire paste commit events, render
+failure feedback, or implement fill-handle drag/copy behavior. Those remain the
+UI clipboard wiring and fill-handle slices.
+
 When the user presses Ctrl/Cmd+V with at least one cell focused:
 
 1. Read clipboard via `navigator.clipboard.read()`. Prefer `text/html` if available (richer); fall back to `text/plain` (TSV).

@@ -49,6 +49,8 @@ export type RangeTsvPasteSkipReason =
   | "anchor-column-not-found"
   | "row-out-of-bounds"
   | "column-out-of-bounds"
+  | "row-not-editable"
+  | "cell-readonly"
 
 export interface RangeTsvPasteTargetCell {
   sourceRowIndex: number
@@ -509,12 +511,14 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
       }
     }
     if (!isDataRowEntry(rowEntry)) {
+      const skippedCell = skippedCellFromTarget(target, "row-not-editable")
       return {
         ok: false,
         error: {
           code: "row-not-editable",
           message: "Paste target row is not editable.",
-          ...failureTargetFields(target),
+          skippedCell,
+          ...failureTargetFields(skippedCell),
         },
       }
     }
@@ -532,12 +536,14 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
     }
 
     if (!isRangePasteCellEditable(column, rowEntry.row)) {
+      const skippedCell = skippedCellFromTarget(target, "cell-readonly")
       return {
         ok: false,
         error: {
           code: "cell-readonly",
           message: "Paste target cell is read-only.",
-          ...failureTargetFields(target),
+          skippedCell,
+          ...failureTargetFields(skippedCell),
         },
       }
     }
@@ -712,6 +718,22 @@ function pasteDiagnosticMessage(diagnostic: RangeTsvParseDiagnostic): string {
     return "TSV paste contains characters after a closing quote."
   }
   return "TSV paste contains an unexpected quote."
+}
+
+function skippedCellFromTarget(
+  target: RangeTsvPasteTargetCell,
+  reason: Extract<RangeTsvPasteSkipReason, "row-not-editable" | "cell-readonly">,
+): RangeTsvPasteSkippedCell {
+  return {
+    sourceRowIndex: target.sourceRowIndex,
+    sourceColumnIndex: target.sourceColumnIndex,
+    targetRowIndex: target.targetRowIndex,
+    targetColumnIndex: target.targetColumnIndex,
+    rowId: target.rowId,
+    columnId: target.columnId,
+    value: target.value,
+    reasons: [reason],
+  }
 }
 
 function failureTargetFields(
