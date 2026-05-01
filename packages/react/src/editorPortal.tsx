@@ -276,6 +276,7 @@ function EditorMount<TRow>({
       ref={wrapperRef}
       className="bc-grid-editor-portal"
       data-bc-grid-editor-root="true"
+      data-bc-grid-editor-state={editorStateAttribute({ error, pending })}
       onKeyDown={handleKeyDown}
       style={editorWrapperStyle(cellRect)}
     >
@@ -358,27 +359,28 @@ function DefaultTextEditor({
   return (
     <input
       ref={inputRef}
+      className="bc-grid-editor-input"
       type="text"
       defaultValue={seeded}
       disabled={pending}
       aria-invalid={error ? true : undefined}
       data-bc-grid-editor-input="true"
-      style={defaultEditorInputStyle}
+      data-bc-grid-editor-kind="text-default"
+      data-bc-grid-editor-state={editorStateAttribute({ error, pending })}
     />
   )
 }
 
-const defaultEditorInputStyle: CSSProperties = {
-  width: "100%",
-  height: "100%",
-  border: "2px solid var(--bc-grid-focus-ring)",
-  borderRadius: "calc(var(--bc-grid-radius) - 1px)",
-  background: "var(--bc-grid-bg)",
-  color: "inherit",
-  font: "inherit",
-  paddingInline: "var(--bc-grid-cell-padding-x, 12px)",
-  outline: "none",
-  boxSizing: "border-box",
+function editorStateAttribute({
+  error,
+  pending,
+}: {
+  error?: string | undefined
+  pending?: boolean | undefined
+}): "idle" | "pending" | "error" {
+  if (pending) return "pending"
+  if (error) return "error"
+  return "idle"
 }
 
 function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {

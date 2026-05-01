@@ -1,5 +1,6 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { type CSSProperties, useEffect, useId, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react"
+import { editorControlState, editorInputClassName } from "./chrome"
 
 const DEBOUNCE_MS = 200
 
@@ -110,6 +111,7 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
     <>
       <input
         ref={inputRef}
+        className={editorInputClassName}
         type="text"
         list={datalistId}
         defaultValue={seeded}
@@ -118,8 +120,8 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
         autoComplete="off"
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="autocomplete"
+        data-bc-grid-editor-state={editorControlState({ error, pending })}
         onInput={handleInput}
-        style={autocompleteInputStyle}
       />
       <datalist id={datalistId} data-bc-grid-editor-datalist="true">
         {options.map((option) => (
@@ -137,17 +139,4 @@ function optionToString(value: unknown): string {
   if (typeof value === "string") return value
   if (typeof value === "number" || typeof value === "boolean") return String(value)
   return JSON.stringify(value)
-}
-
-const autocompleteInputStyle: CSSProperties = {
-  width: "100%",
-  height: "100%",
-  border: "2px solid var(--bc-grid-focus-ring)",
-  borderRadius: "calc(var(--bc-grid-radius) - 1px)",
-  background: "var(--bc-grid-bg)",
-  color: "inherit",
-  font: "inherit",
-  paddingInline: "var(--bc-grid-cell-padding-x, 12px)",
-  outline: "none",
-  boxSizing: "border-box",
 }

@@ -383,6 +383,42 @@ describe("@bc-grid/theming", () => {
     }
   })
 
+  test("editor surfaces expose shadcn-style token chrome", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    const input = ruleFor(".bc-grid-editor-input {")
+    expect(input).toContain("border: 1px solid var(--bc-grid-input-border)")
+    expect(input).toContain("background: var(--bc-grid-bg)")
+    expect(input).toContain("border-radius: calc(var(--bc-grid-radius) - 2px)")
+    expect(input).toContain("padding: 0 var(--bc-grid-cell-padding-x)")
+
+    const focus = ruleFor(".bc-grid-editor-input:focus-visible {")
+    expect(focus).toContain("border-color: var(--bc-grid-focus-ring)")
+    expect(focus).toContain("box-shadow: 0 0 0 2px color-mix")
+
+    const error = ruleFor('.bc-grid-editor-input[aria-invalid="true"],')
+    expect(error).toContain("border-color: var(--bc-grid-invalid)")
+    expect(error).toContain("var(--bc-grid-invalid) 18%")
+
+    const pending = ruleFor('.bc-grid-editor-input[data-bc-grid-editor-state="pending"] {')
+    expect(pending).toContain("var(--bc-grid-muted) 72%")
+    expect(pending).toContain("color: var(--bc-grid-muted-fg)")
+    expect(pending).toContain("cursor: progress")
+
+    expect(ruleFor('.bc-grid-editor-input[data-bc-grid-editor-kind="number"] {')).toContain(
+      "text-align: right",
+    )
+    expect(ruleFor('.bc-grid-editor-portal[data-bc-grid-editor-state="pending"] {')).toContain(
+      "cursor: progress",
+    )
+  })
+
   test("CSS includes accessibility media contracts", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     expect(css).toContain("@media (prefers-reduced-motion: reduce)")

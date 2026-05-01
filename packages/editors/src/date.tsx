@@ -1,5 +1,6 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { type CSSProperties, useEffect, useLayoutEffect, useRef } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
+import { editorControlState, editorInputClassName } from "./chrome"
 
 /**
  * Date editor — `kind: "date"`. Default for date columns per
@@ -61,13 +62,14 @@ function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
   return (
     <input
       ref={inputRef}
+      className={editorInputClassName}
       type="date"
       defaultValue={seeded}
       disabled={pending}
       aria-invalid={error ? true : undefined}
       data-bc-grid-editor-input="true"
       data-bc-grid-editor-kind="date"
-      style={inputStyle}
+      data-bc-grid-editor-state={editorControlState({ error, pending })}
     />
   )
 }
@@ -117,17 +119,4 @@ function toIsoDate(date: Date): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0")
   const dd = String(date.getDate()).padStart(2, "0")
   return `${yyyy}-${mm}-${dd}`
-}
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  height: "100%",
-  border: "2px solid var(--bc-grid-focus-ring)",
-  borderRadius: "calc(var(--bc-grid-radius) - 1px)",
-  background: "var(--bc-grid-bg)",
-  color: "inherit",
-  font: "inherit",
-  paddingInline: "var(--bc-grid-cell-padding-x, 12px)",
-  outline: "none",
-  boxSizing: "border-box",
 }
