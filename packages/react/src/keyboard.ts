@@ -110,6 +110,14 @@ export function nextKeyboardNav(input: KeyboardNavInput): KeyboardNavOutcome {
   return { type: "move", row, col }
 }
 
+export function isRangePasteShortcut(input: {
+  key: string
+  ctrlKey: boolean
+  metaKey: boolean
+}): boolean {
+  return (input.ctrlKey || input.metaKey) && (input.key === "v" || input.key === "V")
+}
+
 function arrowKeyDirection(key: string): KeyboardRangeDirection | null {
   if (key === "ArrowUp") return "up"
   if (key === "ArrowDown") return "down"

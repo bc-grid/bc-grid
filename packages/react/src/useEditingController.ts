@@ -237,6 +237,16 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
          * (Enter / Tab / Shift+Enter / Shift+Tab in the editor).
          */
         source?: BcCellEditCommitEvent<TRow>["source"]
+        /**
+         * Paste planning has already run valueParser for every cell as one
+         * atomic operation. Reusing the commit path should not parse again.
+         */
+        skipValueParser?: boolean
+        /**
+         * Paste planning has already validated every target cell atomically.
+         * Reusing the commit path should not re-run validation cell-by-cell.
+         */
+        skipValidation?: boolean
       },
       moveOnSettle: MoveOnSettle,
     ): Promise<void> => {
@@ -252,7 +262,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       // declares a parser. Typed editors (date, select, etc.) bypass.
       const parser = candidate.column.valueParser
       const parsedValue =
-        typeof candidate.value === "string" && parser
+        !candidate.skipValueParser && typeof candidate.value === "string" && parser
           ? (parser(candidate.value, candidate.row) as unknown)
           : candidate.value
 
@@ -260,16 +270,20 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
 
       const validator = options.validate
       let result: BcValidationResult
-      try {
-        result = validator
-          ? await Promise.resolve(
-              validator(parsedValue, candidate.row, candidate.columnId, ac.signal),
-            )
-          : { valid: true }
-      } catch (err) {
-        if (ac.signal.aborted) return // superseded; downstream dispatch handles it
-        const message = err instanceof Error ? err.message : "Validation failed."
-        result = { valid: false, error: message }
+      if (candidate.skipValidation) {
+        result = { valid: true }
+      } else {
+        try {
+          result = validator
+            ? await Promise.resolve(
+                validator(parsedValue, candidate.row, candidate.columnId, ac.signal),
+              )
+            : { valid: true }
+        } catch (err) {
+          if (ac.signal.aborted) return // superseded; downstream dispatch handles it
+          const message = err instanceof Error ? err.message : "Validation failed."
+          result = { valid: false, error: message }
+        }
       }
       if (ac.signal.aborted) return
       if (validateAbortRef.current === ac) validateAbortRef.current = null

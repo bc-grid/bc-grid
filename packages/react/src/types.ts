@@ -712,7 +712,7 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   column: BcReactGridColumn<TRow, TValue>
   previousValue: TValue
   nextValue: TValue
-  source: "keyboard" | "pointer" | "api"
+  source: "keyboard" | "pointer" | "api" | "paste"
 }
 
 export interface BcFilterDefinition<TValue = unknown> {

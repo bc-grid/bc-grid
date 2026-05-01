@@ -115,7 +115,7 @@ import {
   renderHeaderCell,
 } from "./headerCells"
 import type { BcGridContextMenuLayerProps } from "./internal/context-menu-layer"
-import { nextKeyboardNav } from "./keyboard"
+import { isRangePasteShortcut, nextKeyboardNav } from "./keyboard"
 import {
   BcGridPagination,
   DEFAULT_CLIENT_PAGE_SIZE,
@@ -132,6 +132,7 @@ import {
 } from "./persistence"
 import {
   buildRangeClipboard,
+  buildRangeTsvPasteApplyPlan,
   normaliseClipboardPayload,
   writeClipboardPayload,
 } from "./rangeClipboard"
@@ -1348,6 +1349,68 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [locale, onBeforeCopy, onCopy, rangeRowIds, rangeSelectionState, resolvedColumns, rowEntries],
   )
 
+  const pasteRangeFromClipboard = useCallback(
+    async (requestedRange: BcRange | undefined) => {
+      const range =
+        requestedRange ?? rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]
+      if (!range) return
+
+      const readText = globalThis.navigator?.clipboard?.readText
+      if (typeof readText !== "function") {
+        announceAssertive("Clipboard paste is not available.")
+        return
+      }
+
+      let tsv: string
+      try {
+        tsv = await readText.call(globalThis.navigator.clipboard)
+      } catch (err) {
+        announceAssertive(err instanceof Error ? err.message : "Clipboard paste failed.")
+        return
+      }
+
+      const result = await buildRangeTsvPasteApplyPlan({
+        range,
+        tsv,
+        columns: resolvedColumns,
+        rowEntries,
+        rowIds: rangeRowIds,
+        overflow: "reject",
+      })
+      if (!result.ok) {
+        announceAssertive(result.error.message)
+        return
+      }
+
+      await Promise.all(
+        result.plan.commits.map((commit) =>
+          editController.commit(
+            {
+              rowId: commit.rowId,
+              row: commit.row,
+              columnId: commit.columnId,
+              column: commit.column,
+              previousValue: commit.previousValue,
+              value: commit.nextValue,
+              source: "paste",
+              skipValueParser: true,
+              skipValidation: true,
+            },
+            "stay",
+          ),
+        ),
+      )
+    },
+    [
+      announceAssertive,
+      editController,
+      rangeRowIds,
+      rangeSelectionState,
+      resolvedColumns,
+      rowEntries,
+    ],
+  )
+
   const api = useMemo<BcGridApi<TRow>>(() => {
     const nextApi: BcGridApi<TRow> = {
       scrollToRow(targetRowId, opts) {
@@ -1716,6 +1779,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         return
       }
 
+      if (isRangePasteShortcut(event)) {
+        const activeRange = rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]
+        if (!activeRange) return
+        event.preventDefault()
+        void pasteRangeFromClipboard(activeRange).catch(() => undefined)
+        return
+      }
+
       const outcome = nextKeyboardNav({
         key: event.key,
         ctrlOrMeta: event.ctrlKey || event.metaKey,
@@ -1773,6 +1844,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       focusCell,
       isRowDisabled,
       pageRowCount,
+      pasteRangeFromClipboard,
       rangeSelectionState,
       rangeRowIds,
       resolvedColumns,

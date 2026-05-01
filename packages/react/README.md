@@ -76,6 +76,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Columns, filters, and pivot panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` / `?toolPanel=pivot` | `sidebar={["columns", "filters", "pivot"]}`, `pivotState` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
 | Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
+| Range clipboard paste | Available | Active range + Ctrl/Cmd+V | `editable`, `valueParser`, `validate`, `onCellEditCommit` |
 | Checkbox selection | Available | `?checkbox=1` | `checkboxSelection` |
 | Layout persistence | Available | Host-owned saved views | `initialLayout`, `layoutState`, `onLayoutStateChange` |
 | URL state persistence | Available | `?urlstate=1` | `gridId`, `urlStatePersistence` |
@@ -261,6 +262,19 @@ pass `contextMenuItems` as a factory and gate on `ctx.row` directly —
 falsy entries are filtered, so `ctx.row && { … }` reads cleanly. See
 `docs/api.md §5.1` for the full ID table and the
 `@bc-grid/react` docs site for an end-to-end recipe.
+
+## Range clipboard paste
+
+With an active range, Ctrl/Cmd+V reads `navigator.clipboard.readText()` and
+parses spreadsheet TSV. Paste targets follow the current visible row and column
+order from the active range start cell. Columns must be editable; `valueParser`
+and `validate` run before any commit is applied.
+
+Paste is atomic at the local grid layer: malformed TSV, overflow beyond visible
+rows/columns, read-only targets, parser failures, and validation failures reject
+the whole paste without partially dirtying cells. Successful cells reuse the
+normal edit commit path, so `onCellEditCommit` fires per cell with
+`source: "paste"` and existing dirty/pending/error rendering stays in sync.
 
 ## Layout persistence
 
