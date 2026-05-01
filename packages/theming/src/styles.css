@@ -2076,28 +2076,40 @@ select.bc-grid-editor-input {
   white-space: nowrap;
 }
 
+/*
+ * Disclosure toggle — shadcn-ghost button: no border on idle, just a
+ * subtle bg + colour brighten on hover. Keyboard focus gets a real
+ * outline ring (the previous rule used `outline: none` paired with a
+ * border-colour swap, which left keyboard users without a visible
+ * focus indicator).
+ */
 .bc-grid-detail-toggle {
   display: inline-flex;
   width: 1.75rem;
   height: 1.75rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: calc(var(--bc-grid-radius) - 2px);
   background: transparent;
   color: var(--bc-grid-muted-fg);
   cursor: pointer;
   font: inherit;
   line-height: 1;
+  outline: none;
   padding: 0;
 }
 
-.bc-grid-detail-toggle:hover,
-.bc-grid-detail-toggle:focus-visible {
-  border-color: var(--bc-grid-border);
+.bc-grid-detail-toggle:hover {
   background: var(--bc-grid-row-hover);
   color: var(--bc-grid-fg);
-  outline: none;
+}
+
+.bc-grid-detail-toggle:focus-visible {
+  background: var(--bc-grid-row-hover);
+  color: var(--bc-grid-fg);
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: 1px;
 }
 
 /*
@@ -2118,17 +2130,37 @@ select.bc-grid-editor-input {
   transform: rotate(90deg);
 }
 
+/*
+ * Expanded master row — subtle accent-soft stripe on the left edge so
+ * the master row visually anchors the detail panel below it. The
+ * `:not([aria-selected="true"])` rule still resets the background to
+ * grid-bg (preventing hover-bg leakage after expansion); the inset
+ * stripe lives on the box-shadow channel and coexists with both the
+ * default grid-bg and the selected-row accent. Same `inset 3px 0 0`
+ * idiom the invalid-cell marker uses — single-axis indicator, never
+ * a heavy left border that would shift layout.
+ */
+.bc-grid-row-expanded {
+  box-shadow: inset 3px 0 0 var(--bc-grid-accent-soft);
+}
+
 .bc-grid-row-expanded:not([aria-selected="true"]) {
   background: var(--bc-grid-bg);
 }
 
+/*
+ * Detail panel surface. Borders alone separate the panel from
+ * surrounding rows; the previous inset 1px highlight added visual
+ * noise without an affordance and competed with the new master-row
+ * stripe above. Kept the muted-tinted bg + symmetric padding —
+ * those calibrations stay calibrated.
+ */
 .bc-grid-detail-panel {
   box-sizing: border-box;
   border-top: 1px solid var(--bc-grid-border);
   border-bottom: 1px solid var(--bc-grid-border);
   background: var(--bc-grid-detail-panel-bg);
   color: var(--bc-grid-fg);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--bc-grid-bg) 82%, transparent);
   padding: 0.5rem max(var(--bc-grid-cell-padding-x), 0.75rem);
 }
 

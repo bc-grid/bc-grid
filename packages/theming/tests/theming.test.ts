@@ -552,6 +552,64 @@ describe("@bc-grid/theming", () => {
     expect(keyframe).not.toMatch(/\bfont-size:/)
   })
 
+  test("master/detail chrome polish — shadcn-ghost toggle, calm panel, expanded-row stripe", () => {
+    // Polish-pass invariants from `master-detail-chrome-polish-v040`:
+    // toggle is a clean ghost button (no border, real focus ring);
+    // detail panel is calm (no inset highlight competing with the
+    // master-row stripe); the expanded master row carries an inset
+    // accent-soft stripe so it visually owns the panel below it.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    function ruleFor(selector: string): string {
+      const start = css.indexOf(selector)
+      if (start < 0) return ""
+      const end = css.indexOf("}", start)
+      return css.slice(start, end + 1)
+    }
+
+    // Toggle: shadcn-ghost — no border on idle, real focus ring on
+    // keyboard focus. The previous rule used `border: 1px solid
+    // transparent` paired with `border-color` change on hover and
+    // `outline: none` on focus, which left keyboard users without a
+    // visible focus indicator.
+    const toggleRule = ruleFor(".bc-grid-detail-toggle ")
+    expect(toggleRule).toMatch(/\bborder:\s*0\b/)
+    expect(toggleRule).not.toMatch(/border:\s*1px\s+solid\s+transparent/)
+    expect(toggleRule).not.toMatch(/border-color:/)
+
+    // Hover doesn't flicker the border any more — only bg + colour
+    // change.
+    const toggleHoverRule = ruleFor(".bc-grid-detail-toggle:hover")
+    expect(toggleHoverRule).not.toMatch(/border-color:/)
+
+    // Focus-visible reinstates the standard outline ring shared with
+    // the rest of the chrome.
+    const toggleFocusRule = ruleFor(".bc-grid-detail-toggle:focus-visible")
+    expect(toggleFocusRule).toMatch(/outline:\s*2px\s+solid\s+var\(--bc-grid-focus-ring\)/)
+    expect(toggleFocusRule).toMatch(/outline-offset:/)
+
+    // Detail panel: dropped the inset 1px highlight box-shadow that
+    // competed with the new master-row stripe. Just border-top /
+    // border-bottom + the muted-tinted bg.
+    const panelRule = ruleFor(".bc-grid-detail-panel ")
+    expect(panelRule).not.toMatch(/box-shadow:/)
+    // Border-top + border-bottom remain the only visual separators.
+    expect(panelRule).toMatch(/border-top:\s*1px\s+solid\s+var\(--bc-grid-border\)/)
+    expect(panelRule).toMatch(/border-bottom:\s*1px\s+solid\s+var\(--bc-grid-border\)/)
+
+    // Expanded master row picks up an inset accent-soft stripe so the
+    // master row visually anchors the detail panel below it. Single-
+    // axis box-shadow so it never shifts layout — same idiom as the
+    // invalid-cell marker.
+    const expandedRule = ruleFor(".bc-grid-row-expanded ")
+    expect(expandedRule).toMatch(/box-shadow:\s*inset\s+3px\s+0\s+0\s+var\(--bc-grid-accent-soft\)/)
+
+    // The selection-suppression sibling rule still fires for the
+    // unselected-expanded combination so hover-bg doesn't leak after
+    // expansion. Pin alongside the new stripe.
+    expect(css).toContain('.bc-grid-row-expanded:not([aria-selected="true"])')
+  })
+
   test("CSS motion avoids text scaling and layout-property transitions", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
 
