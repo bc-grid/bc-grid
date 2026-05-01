@@ -72,6 +72,8 @@ Up to 4 agents on day 0. Mostly serial (architect + RFC authors first), then par
 ## Q2 — Editing + Read-Only Grid Features (Days 1-3)
 
 **Goal:** in-grid editing matching Excel feel + the read-only features deferred from Q1.
+The original editing RFC is `docs/design/editing-rfc.md`; the post-0.4 rich
+editing implementation roadmap is `docs/design/rich-editing-roadmap-v040.md`.
 
 ### Milestones
 
@@ -82,6 +84,8 @@ Up to 4 agents on day 0. Mostly serial (architect + RFC authors first), then par
 - M2.5 — Validation framework + dirty tracking (days 1-2)
 - M2.6 — Server-commit hooks + optimistic UI (day 2)
 - M2.7 — `<BcEditGrid>` complete (day 3)
+- M2.7b — Rich editing 0.4+ roadmap: editor catalog, server edit integration,
+  validation, async save states, and controlled/uncontrolled API boundaries
 - M2.8 — Q2 read-only catch-up: filter UIs (number/date/set/boolean), search, group-by, client + server pagination, column reorder/visibility/state persistence (parallel days 1-3)
 - M2.9 — End-to-end edit tests in Playwright (day 3)
 

@@ -1684,6 +1684,11 @@ consumers can pass column.cellEditor as either a built-in (`textEditor()`,
 or wire `onCellEditCommit` manually with `BcServerGridApi.queueServerRowMutation`
 and `BcServerGridApi.settleServerRowMutation`.
 
+The post-0.4 rich editing roadmap is tracked in
+[`docs/design/rich-editing-roadmap-v040.md`](./design/rich-editing-roadmap-v040.md).
+It covers editor families, validation, async save states, server integration,
+controlled/uncontrolled API boundaries, and the 0.4 / 0.5 / later split.
+
 ---
 
 ## 8. Server query types (location decision)
