@@ -2874,6 +2874,106 @@ table.bc-grid-detail-nested-grid {
   }
 }
 
+/*
+ * Actions column chrome (pinned-right by default in `<BcEditGrid>`).
+ * The action buttons render inside a `.bc-grid-actions` wrapper inside
+ * the pinned cell. The cell's pinned bg is owned by `.bc-grid-cell-pinned-right`
+ * (and the row-state-aware variants above); the buttons here are
+ * shadcn-style ghost buttons with `background: transparent` so the
+ * pinned cell's solid bg shows through cleanly in every row state
+ * (default / hover / focused / selected). Nothing in this block paints
+ * a non-token surface — forced-colors / dark / light all flow through
+ * the existing token cascade.
+ */
+.bc-grid-actions {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.bc-grid-action {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0 0.5rem;
+  transition: background-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), border-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
+}
+
+.bc-grid-action:hover:not(:disabled) {
+  background: var(--bc-grid-row-hover);
+  color: var(--bc-grid-fg);
+}
+
+/*
+ * Pressed state — accent-soft flash on tap-down so the click registers
+ * before the action handler resolves. Mirrors `.bc-grid-header-menu-button:active`
+ * and the filter-panel `:active` rules.
+ */
+.bc-grid-action:active:not(:disabled) {
+  background: var(--bc-grid-accent-soft);
+  color: var(--bc-grid-fg);
+}
+
+.bc-grid-action:focus-visible {
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: 2px;
+}
+
+/*
+ * Disabled treatment matches the pagination / filter-panel disabled
+ * rules — `cursor: default` + `pointer-events: none` instead of the
+ * legacy `cursor: not-allowed`. Keeps the row from intercepting the
+ * click and falling through to a row-level handler.
+ */
+.bc-grid-action:disabled {
+  color: var(--bc-grid-muted-fg);
+  cursor: default;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/*
+ * Destructive variant (Delete). Uses the `--bc-grid-invalid` token
+ * so the colour adapts across light / dark / forced-colors via the
+ * shadcn `--destructive` bridge. The `data-variant="destructive"`
+ * convention isn't applied here because the action button is a
+ * direct `<button>` element rather than a menu row — keep the class
+ * hook to stay consistent with the rest of the bc-grid chrome.
+ */
+.bc-grid-action-destructive {
+  color: var(--bc-grid-invalid);
+}
+
+.bc-grid-action-destructive:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bc-grid-invalid) 14%, transparent);
+  color: var(--bc-grid-invalid);
+}
+
+.bc-grid-action-destructive:active:not(:disabled) {
+  background: color-mix(in srgb, var(--bc-grid-invalid) 22%, transparent);
+  color: var(--bc-grid-invalid);
+}
+
+.bc-grid-action-icon {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+}
+
 .bc-grid-aggregation-footer-viewport {
   flex: 0 0 auto;
   overflow: hidden;

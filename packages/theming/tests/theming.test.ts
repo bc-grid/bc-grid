@@ -626,6 +626,117 @@ describe("@bc-grid/theming", () => {
     expect(active).not.toMatch(/border-color:/)
   })
 
+  test("pinned actions column buttons read as shadcn-style ghost buttons over the opaque pinned cell", () => {
+    // The pinned-right actions column relies on the cell's pinned bg
+    // (`.bc-grid-cell-pinned-right`) to fully obscure horizontally
+    // scrolled body cells; the action buttons themselves render with
+    // `background: transparent` so the pinned bg + any row-state
+    // variant (hover / focused / selected) shows through cleanly.
+    // Pre-cleanup the buttons had no rule at all and rendered with
+    // browser-default chrome inside the pinned cell, which read as
+    // unfinished against light or dark themes. Pin the contract so
+    // a regression that drops the rules surfaces here.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    const wrapper = ruleFor(".bc-grid-actions {")
+    expect(wrapper).toContain("display: flex")
+    expect(wrapper).toContain("align-items: center")
+    expect(wrapper).toContain("height: 100%")
+    expect(wrapper).toContain("gap: 0.25rem")
+
+    const action = ruleFor(".bc-grid-action {")
+    // Ghost button: transparent default, layout-stability transparent
+    // border, color: inherit so the row-state fg flows through (e.g.
+    // selected rows pick up `--bc-grid-row-selected-fg` from the
+    // cell rule above).
+    expect(action).toContain("background: transparent")
+    expect(action).toContain("border: 1px solid transparent")
+    expect(action).toContain("color: inherit")
+
+    const hover = ruleFor(".bc-grid-action:hover:not(:disabled) {")
+    expect(hover).toContain("background: var(--bc-grid-row-hover)")
+
+    const pressed = ruleFor(".bc-grid-action:active:not(:disabled) {")
+    // Pressed flash through accent-soft — mirrors the header menu
+    // button + filter-panel buttons.
+    expect(pressed).toContain("background: var(--bc-grid-accent-soft)")
+
+    const focus = ruleFor(".bc-grid-action:focus-visible {")
+    expect(focus).toContain("outline: 2px solid var(--bc-grid-focus-ring)")
+    expect(focus).toContain("outline-offset: 2px")
+
+    const disabled = ruleFor(".bc-grid-action:disabled {")
+    // shadcn-style disabled: muted fg + dimmed opacity + drops pointer
+    // events so a click can't fall through to a row-level handler.
+    expect(disabled).toContain("color: var(--bc-grid-muted-fg)")
+    expect(disabled).toContain("cursor: default")
+    expect(disabled).toContain("opacity: 0.55")
+    expect(disabled).toContain("pointer-events: none")
+
+    const destructive = ruleFor(".bc-grid-action-destructive {")
+    // Destructive variant uses `--bc-grid-invalid` so the colour
+    // adapts via the shadcn `--destructive` bridge across light /
+    // dark / forced-colors.
+    expect(destructive).toContain("color: var(--bc-grid-invalid)")
+
+    const destructiveHover = ruleFor(".bc-grid-action-destructive:hover:not(:disabled) {")
+    expect(destructiveHover).toMatch(/background:\s*color-mix\(in srgb,\s*var\(--bc-grid-invalid\)/)
+
+    const icon = ruleFor(".bc-grid-action-icon {")
+    expect(icon).toContain("width: 1rem")
+    expect(icon).toContain("height: 1rem")
+  })
+
+  test("pinned actions column inherits the pinned-cell bg in every row state (no transparent reveal)", () => {
+    // The complaint: hover / focused / selected row chrome must not
+    // reveal text from horizontally scrolled cells behind the actions
+    // column. The pinned-right cell already paints the per-state bg
+    // through `.bc-grid-row:hover .bc-grid-cell-pinned-right` etc.
+    // The action button rule above keeps the button background
+    // transparent so the cell paint is what the user sees. Pin both
+    // halves of the contract here so a refactor that drops the
+    // pinned-row-hover-bg rule (or paints a non-token bg on the
+    // button) surfaces during review.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    // The button rule MUST keep bg transparent so the cell-state bg
+    // flows through.
+    const action = ruleFor(".bc-grid-action {")
+    expect(action).toContain("background: transparent")
+
+    // The pinned-right cell base bg + the three row-state variants
+    // must consume their dedicated pinned tokens, so the cell stays
+    // opaque against the body's horizontally scrolled content.
+    const pinnedBase = ruleFor(
+      ".bc-grid-cell-pinned-left,\n.bc-grid-cell-pinned-right,\n.bc-grid-row .bc-grid-cell-pinned-left,\n.bc-grid-row .bc-grid-cell-pinned-right {",
+    )
+    expect(pinnedBase).toContain("background: var(--bc-grid-pinned-bg)")
+    expect(pinnedBase).toContain("background-clip: padding-box")
+
+    const pinnedHover = ruleFor(
+      ".bc-grid-row:hover .bc-grid-cell-pinned-left,\n.bc-grid-row:hover .bc-grid-cell-pinned-right {",
+    )
+    expect(pinnedHover).toContain("background: var(--bc-grid-pinned-row-hover-bg)")
+
+    const pinnedSelected = ruleFor(
+      '.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left,\n.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-right,\n.bc-grid-cell-pinned-left[aria-selected="true"],\n.bc-grid-cell-pinned-right[aria-selected="true"] {',
+    )
+    expect(pinnedSelected).toContain("background: var(--bc-grid-pinned-row-selected-bg)")
+    expect(pinnedSelected).toContain("color: var(--bc-grid-row-selected-fg)")
+  })
+
   test("tooltip surface no longer chains shadcn fallbacks (single-source bridge)", () => {
     // Pre-refactor the tooltip carried triple-chained fallbacks like
     // `var(--bc-grid-context-menu-bg, var(--popover, var(--background, ...)))`.

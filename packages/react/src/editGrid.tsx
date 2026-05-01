@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useMemo } from "react"
+import { type ReactNode, useMemo } from "react"
 import { BcGrid } from "./grid"
 import { classNames, defaultMessages } from "./gridInternals"
 import type { BcEditGridAction, BcEditGridProps, BcGridColumn } from "./types"
@@ -66,7 +66,7 @@ export function BcEditGrid<TRow>(props: BcEditGridProps<TRow>): ReactNode {
   return <BcGrid {...props} columns={editColumns} />
 }
 
-function createActionsColumn<TRow>(options: {
+export function createActionsColumn<TRow>(options: {
   canDelete: ((row: TRow) => boolean) | undefined
   canEdit: ((row: TRow) => boolean) | undefined
   deleteLabel: string
@@ -112,7 +112,7 @@ function createActionsColumn<TRow>(options: {
       // extras) stay enabled — re-edit is always allowed.
       const rowPending = params.rowState.pending === true
       return (
-        <div className="bc-grid-actions" style={actionsStyle}>
+        <div className="bc-grid-actions">
           {[...actions, ...extra].map((action) => (
             <button
               key={action.label}
@@ -139,12 +139,6 @@ function createActionsColumn<TRow>(options: {
       )
     },
   }
-}
-
-const actionsStyle: CSSProperties = {
-  display: "flex",
-  gap: "0.25rem",
-  minWidth: 0,
 }
 
 function isActionDisabled<TRow>(action: BcEditGridAction<TRow>, row: TRow): boolean {
