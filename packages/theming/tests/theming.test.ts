@@ -423,6 +423,50 @@ describe("@bc-grid/theming", () => {
     )
   })
 
+  test("range overlay layering stays below active and edit-state cell chrome", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    const layer = ruleFor(".bc-grid-range-overlay-layer {")
+    expect(layer).toContain("pointer-events: none")
+    expect(layer).toContain("z-index: 3")
+
+    const pinnedLayer = ruleFor(".bc-grid-range-overlay-layer-pinned {")
+    expect(pinnedLayer).toContain("z-index: 6")
+
+    const overlay = ruleFor(".bc-grid-range-overlay {")
+    expect(overlay).toContain("border: 2px solid var(--bc-grid-range-overlay-border)")
+    expect(overlay).toContain("background: var(--bc-grid-range-overlay-bg)")
+    expect(overlay).toContain("pointer-events: none")
+    expect(overlay).toContain("z-index: 1")
+  })
+
+  test("range overlay chrome reads only bc-grid tokens", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const rangeStart = css.indexOf(".bc-grid-range-overlay-layer {")
+    expect(rangeStart).toBeGreaterThan(-1)
+    const rangeEnd = css.indexOf(".bc-grid-filter-input", rangeStart)
+    expect(rangeEnd).toBeGreaterThan(rangeStart)
+    const rangeCss = css.slice(rangeStart, rangeEnd)
+
+    expect(rangeCss).toContain("var(--bc-grid-range-overlay-border)")
+    expect(rangeCss).toContain("var(--bc-grid-range-overlay-bg)")
+    for (const token of [
+      "var(--accent",
+      "var(--primary",
+      "var(--ring",
+      "var(--background",
+      "var(--foreground",
+    ]) {
+      expect(rangeCss).not.toContain(token)
+    }
+  })
+
   test("CSS includes accessibility media contracts", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     expect(css).toContain("@media (prefers-reduced-motion: reduce)")

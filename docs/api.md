@@ -2000,6 +2000,12 @@ The shipped CSS treats host shadcn tokens as complete CSS colors, so Tailwind v4
 complete CSS colors (`oklch(...)`, `hsl(...)`, hex, or system colors) when grid
 chrome needs to differ from the host app.
 
+Range selection chrome is layered above ordinary cells but below active-cell
+and edit-state cell chrome. The active cell focus outline and dirty/pending/error
+side markers stay visible even when the cell is inside a range selection; the
+range overlay remains `pointer-events: none` and uses only
+`--bc-grid-range-overlay-*` tokens.
+
 Column resize affordances use `--bc-grid-column-resize-affordance`,
 `--bc-grid-column-resize-affordance-hover`, and
 `--bc-grid-column-resize-affordance-active`. Resizable headers expose

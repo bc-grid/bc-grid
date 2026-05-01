@@ -805,7 +805,7 @@ select.bc-grid-editor-input {
   inset: 0;
   min-width: 100%;
   pointer-events: none;
-  z-index: 1;
+  z-index: 3;
 }
 
 .bc-grid-range-overlay-layer-pinned {

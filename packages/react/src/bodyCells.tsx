@@ -21,6 +21,14 @@ interface SearchTextPart {
   text: string
 }
 
+export type BcCellChromeState = "error" | "pending" | "dirty" | undefined
+
+interface CellChromeZIndexParams {
+  active: boolean
+  editState: BcCellChromeState
+  pinned: boolean
+}
+
 interface RenderBodyCellParams<TRow> {
   activeCell: BcCellPosition | null
   column: ResolvedColumn<TRow> | undefined
@@ -145,7 +153,7 @@ export function renderBodyCell<TRow>({
   const isDirty = overlayApplies
   const editPending = editEntry?.pending ?? false
   const editError = editEntry?.error
-  const cellEditState: "error" | "pending" | "dirty" | undefined = editError
+  const cellEditState: BcCellChromeState = editError
     ? "error"
     : editPending
       ? "pending"
@@ -170,6 +178,11 @@ export function renderBodyCell<TRow>({
   } satisfies BcCellRendererParams<TRow, unknown>
   const position = { rowId: entry.rowId, columnId: column.columnId }
   const active = activeCell?.rowId === position.rowId && activeCell.columnId === position.columnId
+  const chromeZIndex = cellChromeZIndex({
+    active,
+    editState: cellEditState,
+    pinned: virtualCol.pinned !== null,
+  })
   const coreClassName =
     typeof column.source.cellClass === "function"
       ? column.source.cellClass(value, entry.row)
@@ -228,6 +241,7 @@ export function renderBodyCell<TRow>({
             totalWidth,
             viewportWidth,
             width: virtualCol.width,
+            ...(chromeZIndex == null ? {} : { zIndex: chromeZIndex }),
           }),
           ...customStyle,
         }}
@@ -249,6 +263,16 @@ export function renderBodyCell<TRow>({
       </div>
     </BcGridTooltip>
   )
+}
+
+export function cellChromeZIndex({
+  active,
+  editState,
+  pinned,
+}: CellChromeZIndexParams): number | undefined {
+  if (active) return pinned ? 9 : 7
+  if (editState) return pinned ? 8 : 6
+  return undefined
 }
 
 export function renderGroupRowCell<TRow>({
