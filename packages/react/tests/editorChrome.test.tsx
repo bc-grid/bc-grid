@@ -130,6 +130,22 @@ describe("built-in editor chrome hooks", () => {
     expect(html).toContain('data-bc-grid-editor-option-count="2"')
   })
 
+  test("multi-select editor keeps typed options and exposes native listbox hooks", () => {
+    const html = renderEditor(
+      {
+        editor: multiSelectEditor,
+        initialValue: ["open"],
+        column: optionColumn,
+      },
+      { seedKey: "c" },
+    )
+
+    expect(html).toContain("multiple")
+    expect(html).toContain('aria-label="Status"')
+    expect(html).toContain('data-bc-grid-editor-kind="multi-select"')
+    expect(html).toContain('data-bc-grid-editor-option-count="2"')
+  })
+
   test("autocomplete editor exposes datalist, busy, and live status hooks", () => {
     const html = renderEditor(
       {

@@ -142,6 +142,12 @@ const featureDiscoveryRows = [
     api: "BcEditGrid, cellEditor",
   },
   {
+    feature: "Lookup/select editors",
+    status: "Available",
+    entry: "?edit=1 Status, Flags, Collector columns",
+    api: "selectEditor, multiSelectEditor, autocompleteEditor",
+  },
+  {
     feature: "Checkbox selection",
     status: "Available",
     entry: "?checkbox=1",
