@@ -129,11 +129,11 @@ import {
   normaliseClipboardPayload,
   writeClipboardPayload,
 } from "./rangeClipboard"
-import { applyKeyboardRangeExtension } from "./rangeNavigation"
 import {
   createRangeInteractionModel,
   shouldClearRangeSelectionForModelChange,
 } from "./rangeInteraction"
+import { applyKeyboardRangeExtension } from "./rangeNavigation"
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
