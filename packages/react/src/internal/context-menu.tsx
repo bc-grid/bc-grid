@@ -11,6 +11,7 @@ import {
 } from "../contextMenu"
 import type { ResolvedColumn, RowEntry } from "../gridInternals"
 import type { BcContextMenuContext, BcContextMenuItem, BcContextMenuItems } from "../types"
+import { contextMenuBuiltinIcon } from "./context-menu-icons"
 
 export interface BcGridContextMenuAnchor {
   x: number
@@ -135,6 +136,15 @@ export function BcGridContextMenu<TRow>({
       // the disabled predicate may have changed (e.g., a custom item
       // mutating filter state on the same click).
       if (context.cell) api.clearFilter(context.cell.columnId)
+    } else if (
+      item === "pin-column-left" ||
+      item === "pin-column-right" ||
+      item === "unpin-column" ||
+      item === "hide-column" ||
+      item === "autosize-column"
+    ) {
+      const targetColumnId = context.cell?.columnId
+      if (targetColumnId) dispatchColumnCommand(api, item, targetColumnId)
     }
     onClose()
   }
@@ -177,6 +187,7 @@ export function BcGridContextMenu<TRow>({
         const label = contextMenuItemLabel(item)
         const disabled = contextMenuItemDisabled(item, context)
         const active = activeIndex === index
+        const icon = isCustomContextMenuItem(item) ? null : contextMenuBuiltinIcon(item)
         return (
           <div
             aria-disabled={disabled || undefined}
@@ -198,6 +209,9 @@ export function BcGridContextMenu<TRow>({
             role="menuitem"
             tabIndex={-1}
           >
+            <span aria-hidden="true" className="bc-grid-context-menu-icon">
+              {icon}
+            </span>
             <span className="bc-grid-context-menu-label">{label}</span>
           </div>
         )
@@ -207,6 +221,35 @@ export function BcGridContextMenu<TRow>({
 }
 
 export default BcGridContextMenu
+
+function dispatchColumnCommand<TRow>(
+  api: BcGridApi<TRow>,
+  command:
+    | "pin-column-left"
+    | "pin-column-right"
+    | "unpin-column"
+    | "hide-column"
+    | "autosize-column",
+  columnId: ColumnId,
+): void {
+  switch (command) {
+    case "pin-column-left":
+      api.setColumnPinned(columnId, "left")
+      return
+    case "pin-column-right":
+      api.setColumnPinned(columnId, "right")
+      return
+    case "unpin-column":
+      api.setColumnPinned(columnId, null)
+      return
+    case "hide-column":
+      api.setColumnHidden(columnId, true)
+      return
+    case "autosize-column":
+      api.autoSizeColumn(columnId)
+      return
+  }
+}
 
 function handleContextMenuKeyDown<TRow>({
   event,

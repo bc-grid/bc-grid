@@ -34,6 +34,7 @@ import {
 } from "react"
 import { BcGridAggregationFooterRow, useAggregations } from "./aggregations"
 import { renderBodyCell, renderGroupRowCell } from "./bodyCells"
+import { computeAutosizeWidth, measureColumnWidths, upsertColumnStateEntry } from "./columnCommands"
 import {
   type ColumnVisibilityItem,
   ColumnVisibilityMenu,
@@ -1135,6 +1136,25 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           return
         }
         applyFilterState(removeColumnFromFilter(filterState, columnId))
+      },
+      setColumnPinned(columnId, pinned) {
+        setColumnState(upsertColumnStateEntry(columnState, columnId, { pinned }))
+      },
+      setColumnHidden(columnId, hidden) {
+        setColumnState(upsertColumnStateEntry(columnState, columnId, { hidden }))
+      },
+      autoSizeColumn(columnId) {
+        const root = rootRef.current
+        if (!root) return
+        const column = resolvedColumns.find((entry) => entry.columnId === columnId)
+        if (!column) return
+        const measurements = measureColumnWidths(root, columnId)
+        const next = computeAutosizeWidth(measurements, {
+          minWidth: column.source.minWidth ?? 48,
+          maxWidth: column.source.maxWidth ?? 800,
+        })
+        if (next == null) return
+        setColumnState(upsertColumnStateEntry(columnState, columnId, { width: next }))
       },
       setRangeSelection(next) {
         setRangeSelectionState(next)

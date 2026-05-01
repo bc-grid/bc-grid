@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { BcGridFilter, BcSelection } from "@bc-grid/core"
+import type { BcColumnStateEntry, BcGridFilter, BcSelection } from "@bc-grid/core"
 import {
   DEFAULT_CONTEXT_MENU_ITEMS,
   contextMenuItemDisabled,
@@ -39,6 +39,15 @@ function apiWithFilter(filter: BcGridFilter | null): BcContextMenuContext<Row>["
     getFilter: () => filter,
   } as BcContextMenuContext<Row>["api"]
 }
+
+function apiWithColumnState(state: BcColumnStateEntry[]): BcContextMenuContext<Row>["api"] {
+  return {
+    getRangeSelection: () => ({ ranges: [], anchor: null }),
+    getColumnState: () => state,
+  } as BcContextMenuContext<Row>["api"]
+}
+
+const dummyColumn = { field: "name", header: "Name" } as BcReactGridColumn<Row>
 
 describe("context menu items", () => {
   test("uses the minimal built-in actions by default", () => {
@@ -351,5 +360,161 @@ describe("context menu — filter clear built-ins", () => {
       makeContext({ api: apiWithFilter(nameFilter) }),
     )
     expect(items).toEqual(["copy", "separator", "clear-column-filter", "clear-all-filters"])
+  })
+})
+
+describe("context menu — column command built-ins", () => {
+  function columnContext(
+    state: BcColumnStateEntry[],
+    cellColumnId = "name",
+  ): BcContextMenuContext<Row> {
+    return makeContext({
+      api: apiWithColumnState(state),
+      cell: { rowId: "r1", columnId: cellColumnId },
+      column: dummyColumn,
+    })
+  }
+
+  const baseState: BcColumnStateEntry[] = [
+    { columnId: "name" },
+    { columnId: "email" },
+    { columnId: "balance" },
+  ]
+
+  test("labels match the design doc strings", () => {
+    expect(contextMenuItemLabel("pin-column-left")).toBe("Pin Left")
+    expect(contextMenuItemLabel("pin-column-right")).toBe("Pin Right")
+    expect(contextMenuItemLabel("unpin-column")).toBe("Unpin")
+    expect(contextMenuItemLabel("hide-column")).toBe("Hide Column")
+    expect(contextMenuItemLabel("autosize-column")).toBe("Autosize Column")
+  })
+
+  test("contextMenuItemKey returns the built-in id for the new actions", () => {
+    expect(contextMenuItemKey("pin-column-left", 0)).toBe("pin-column-left")
+    expect(contextMenuItemKey("pin-column-right", 1)).toBe("pin-column-right")
+    expect(contextMenuItemKey("unpin-column", 2)).toBe("unpin-column")
+    expect(contextMenuItemKey("hide-column", 3)).toBe("hide-column")
+    expect(contextMenuItemKey("autosize-column", 4)).toBe("autosize-column")
+  })
+
+  test("every column command is disabled when there's no column context", () => {
+    // Shift+F10 with no active cell — `context.column` and `context.cell`
+    // are both null, so column-targeted commands have nothing to act on.
+    const ctx = makeContext({ api: apiWithColumnState(baseState) })
+    expect(contextMenuItemDisabled("pin-column-left", ctx)).toBe(true)
+    expect(contextMenuItemDisabled("pin-column-right", ctx)).toBe(true)
+    expect(contextMenuItemDisabled("unpin-column", ctx)).toBe(true)
+    expect(contextMenuItemDisabled("hide-column", ctx)).toBe(true)
+    expect(contextMenuItemDisabled("autosize-column", ctx)).toBe(true)
+  })
+
+  test("pin-column-left disables when the column is already pinned left", () => {
+    const ctx = columnContext([{ columnId: "name", pinned: "left" }, ...baseState.slice(1)])
+    expect(contextMenuItemDisabled("pin-column-left", ctx)).toBe(true)
+  })
+
+  test("pin-column-left enables when unpinned or pinned to the other edge", () => {
+    expect(contextMenuItemDisabled("pin-column-left", columnContext(baseState))).toBe(false)
+    expect(
+      contextMenuItemDisabled(
+        "pin-column-left",
+        columnContext([{ columnId: "name", pinned: "right" }, ...baseState.slice(1)]),
+      ),
+    ).toBe(false)
+  })
+
+  test("pin-column-right disables when already pinned right; enables otherwise", () => {
+    expect(
+      contextMenuItemDisabled(
+        "pin-column-right",
+        columnContext([{ columnId: "name", pinned: "right" }, ...baseState.slice(1)]),
+      ),
+    ).toBe(true)
+    expect(contextMenuItemDisabled("pin-column-right", columnContext(baseState))).toBe(false)
+  })
+
+  test("unpin-column enables only when the column is currently pinned", () => {
+    // Unpinned (no entry, or pinned: null/undefined) → disabled
+    expect(contextMenuItemDisabled("unpin-column", columnContext(baseState))).toBe(true)
+    expect(
+      contextMenuItemDisabled(
+        "unpin-column",
+        columnContext([{ columnId: "name", pinned: null }, ...baseState.slice(1)]),
+      ),
+    ).toBe(true)
+    // Pinned → enabled
+    expect(
+      contextMenuItemDisabled(
+        "unpin-column",
+        columnContext([{ columnId: "name", pinned: "left" }, ...baseState.slice(1)]),
+      ),
+    ).toBe(false)
+    expect(
+      contextMenuItemDisabled(
+        "unpin-column",
+        columnContext([{ columnId: "name", pinned: "right" }, ...baseState.slice(1)]),
+      ),
+    ).toBe(false)
+  })
+
+  test("hide-column disables when the targeted column is already hidden", () => {
+    const ctx = columnContext([{ columnId: "name", hidden: true }, ...baseState.slice(1)])
+    expect(contextMenuItemDisabled("hide-column", ctx)).toBe(true)
+  })
+
+  test("hide-column refuses to hide the last visible column (UX guard)", () => {
+    // Two of three columns hidden. The targeted column is the only
+    // remaining visible one — hiding it would leave the grid empty.
+    const ctx = columnContext([
+      { columnId: "name" },
+      { columnId: "email", hidden: true },
+      { columnId: "balance", hidden: true },
+    ])
+    expect(contextMenuItemDisabled("hide-column", ctx)).toBe(true)
+  })
+
+  test("hide-column enables when there are at least two visible columns", () => {
+    expect(contextMenuItemDisabled("hide-column", columnContext(baseState))).toBe(false)
+  })
+
+  test("autosize-column disables when the targeted column is hidden", () => {
+    const ctx = columnContext([{ columnId: "name", hidden: true }, ...baseState.slice(1)])
+    expect(contextMenuItemDisabled("autosize-column", ctx)).toBe(true)
+  })
+
+  test("autosize-column enables for any visible column", () => {
+    expect(contextMenuItemDisabled("autosize-column", columnContext(baseState))).toBe(false)
+  })
+
+  test("the column command built-ins are NOT in DEFAULT_CONTEXT_MENU_ITEMS (consumer-opt-in)", () => {
+    // Per the v0.3 brief, default item set stays untouched — consumers
+    // opt in via the contextMenuItems prop.
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("pin-column-left")
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("pin-column-right")
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("unpin-column")
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("hide-column")
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("autosize-column")
+  })
+
+  test("resolveContextMenuItems accepts the column commands in a consumer-supplied list", () => {
+    const items = resolveContextMenuItems<Row>(
+      [
+        "pin-column-left",
+        "pin-column-right",
+        "unpin-column",
+        "separator",
+        "hide-column",
+        "autosize-column",
+      ],
+      columnContext(baseState),
+    )
+    expect(items).toEqual([
+      "pin-column-left",
+      "pin-column-right",
+      "unpin-column",
+      "separator",
+      "hide-column",
+      "autosize-column",
+    ])
   })
 })

@@ -22,6 +22,11 @@ const builtInLabels: Partial<Record<BcContextMenuBuiltinItem, string>> = {
   "clear-range": "Clear Range",
   "clear-all-filters": "Clear All Filters",
   "clear-column-filter": "Clear Filter",
+  "pin-column-left": "Pin Left",
+  "pin-column-right": "Pin Right",
+  "unpin-column": "Unpin",
+  "hide-column": "Hide Column",
+  "autosize-column": "Autosize Column",
 }
 
 export function resolveContextMenuItems<TRow>(
@@ -88,5 +93,45 @@ export function contextMenuItemDisabled<TRow>(
     if (!context.cell) return true
     return !filterHasColumn(context.api.getFilter(), context.cell.columnId)
   }
+  if (
+    item === "pin-column-left" ||
+    item === "pin-column-right" ||
+    item === "unpin-column" ||
+    item === "hide-column" ||
+    item === "autosize-column"
+  ) {
+    return !columnCommandEnabled(item, context)
+  }
   return false
+}
+
+function columnCommandEnabled<TRow>(
+  item: Extract<
+    BcContextMenuBuiltinItem,
+    "pin-column-left" | "pin-column-right" | "unpin-column" | "hide-column" | "autosize-column"
+  >,
+  context: BcContextMenuContext<TRow>,
+): boolean {
+  // All five column commands need a column-bound trigger context. Header
+  // / cell / filter-row right-clicks supply `context.column`; Shift+F10
+  // with no active cell does not.
+  const targetColumnId = context.cell?.columnId ?? null
+  if (!context.column || !targetColumnId) return false
+  const columnState = context.api.getColumnState()
+  const entry = columnState.find((row) => row.columnId === targetColumnId)
+  const pinned = entry?.pinned ?? null
+  if (item === "pin-column-left") return pinned !== "left"
+  if (item === "pin-column-right") return pinned !== "right"
+  if (item === "unpin-column") return pinned === "left" || pinned === "right"
+  if (item === "hide-column") {
+    if (entry?.hidden === true) return false
+    // Refuse to hide the last visible column — the grid would become
+    // useless and the user would have to re-show via the column chooser.
+    // Mirrors the protection in ColumnVisibilityMenu.
+    const visibleCount = columnState.filter((row) => row.hidden !== true).length
+    return visibleCount > 1
+  }
+  // autosize-column: the column needs to be visible for the DOM measurement
+  // to have anything to read, and not actively hidden by row state.
+  return entry?.hidden !== true
 }

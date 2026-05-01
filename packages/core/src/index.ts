@@ -291,6 +291,29 @@ export interface BcGridApi<TRow = unknown> {
    * is empty. Per `docs/design/context-menu-command-map.md §2.3`.
    */
   clearFilter(columnId?: ColumnId): void
+  /**
+   * Pin a column to the left or right edge, or unpin it (`pinned: null`).
+   * Convenience over `setColumnState`: walks the current state, updates
+   * just the targeted entry's `pinned` property, and writes the result.
+   * Per `docs/design/context-menu-command-map.md §2.4`.
+   */
+  setColumnPinned(columnId: ColumnId, pinned: "left" | "right" | null): void
+  /**
+   * Show or hide a column. Convenience over `setColumnState`: walks the
+   * current state, updates just the targeted entry's `hidden` property,
+   * and writes the result. Per `docs/design/context-menu-command-map.md §2.4`.
+   */
+  setColumnHidden(columnId: ColumnId, hidden: boolean): void
+  /**
+   * Autosize a column to fit the widest visible cell + its header.
+   * Best-effort heuristic — measures the rendered DOM in the visible
+   * window only; off-screen rows are not measured (consistent with
+   * AG Grid's `autoSizeColumn` behaviour). Writes the resulting width
+   * through `setColumnState`, clamped to the column's min/max bounds.
+   * No-op if the grid root isn't mounted yet. Per
+   * `docs/design/context-menu-command-map.md §2.4`.
+   */
+  autoSizeColumn(columnId: ColumnId): void
   setRangeSelection(selection: BcRangeSelection): void
   copyRange(range?: BcRange): Promise<void>
   clearRangeSelection(): void

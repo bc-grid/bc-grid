@@ -842,6 +842,11 @@ export type BcContextMenuBuiltinItem =
   | "clear-range"
   | "clear-all-filters"
   | "clear-column-filter"
+  | "pin-column-left"
+  | "pin-column-right"
+  | "unpin-column"
+  | "hide-column"
+  | "autosize-column"
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {
@@ -857,13 +862,23 @@ export type BcContextMenuItem<TRow = unknown> =
 ```
 
 The default `contextMenuItems` set is `["copy", "copy-with-headers", "separator",
-"clear-selection", "clear-range"]`. The two filter-clearing built-ins
-(`clear-all-filters`, `clear-column-filter`) are **consumer-opt-in**: pass them
-explicitly via `contextMenuItems` to surface them. Their disabled-state is wired
-through `BcGridApi.getFilter()` — `clear-all-filters` disables when no filter is
-active, and `clear-column-filter` disables unless the right-clicked cell's
-column has a filter entry. See `docs/design/context-menu-command-map.md` for the
-full v0.3 command map.
+"clear-selection", "clear-range"]`. Every other built-in below is
+**consumer-opt-in** — pass it explicitly via `contextMenuItems` to surface it.
+See `docs/design/context-menu-command-map.md` for the full v0.3 command map.
+
+| Built-in id | Action | Disabled when |
+|---|---|---|
+| `clear-all-filters` | Calls `BcGridApi.clearFilter()` (clears every column filter) | No filter is active |
+| `clear-column-filter` | Calls `BcGridApi.clearFilter(columnId)` for the right-clicked cell | No cell context, or that column has no filter entry |
+| `pin-column-left` | Calls `BcGridApi.setColumnPinned(columnId, "left")` | No column context, or the column is already pinned left |
+| `pin-column-right` | Calls `BcGridApi.setColumnPinned(columnId, "right")` | No column context, or the column is already pinned right |
+| `unpin-column` | Calls `BcGridApi.setColumnPinned(columnId, null)` | No column context, or the column is not pinned |
+| `hide-column` | Calls `BcGridApi.setColumnHidden(columnId, true)` | No column context, the column is already hidden, or it's the last visible column (UX guard — the user would need the column chooser to recover) |
+| `autosize-column` | Calls `BcGridApi.autoSizeColumn(columnId)` | No column context, or the column is hidden (no DOM to measure) |
+
+The icon set rendered next to these items is shipped by `@bc-grid/react` itself
+— consumers don't need to install lucide / heroicons / radix-icons to get the
+default look.
 
 ```ts
 export interface BcContextMenuContext<TRow = unknown> {
@@ -1264,6 +1279,9 @@ export interface BcGridApi<TRow = unknown> {
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter | null): void
   clearFilter(columnId?: ColumnId): void
+  setColumnPinned(columnId: ColumnId, pinned: "left" | "right" | null): void
+  setColumnHidden(columnId: ColumnId, hidden: boolean): void
+  autoSizeColumn(columnId: ColumnId): void
   setRangeSelection(selection: BcRangeSelection): void
   copyRange(range?: BcRange): Promise<void>
   clearRangeSelection(): void
@@ -1287,6 +1305,24 @@ collapsing surrounding `and` / `or` groups when only one branch survives.
 Designed for surface-level "clear this column's filter" UX (context menu,
 column header menu) without touching neighbouring columns. See
 `docs/design/context-menu-command-map.md` §2.3.
+
+`setColumnPinned(columnId, pinned)` walks the current `BcColumnStateEntry[]`
+and updates only the targeted entry's `pinned` property. Convenience over
+`setColumnState`: the rest of the column state is left untouched. Pass `null`
+to unpin. See `docs/design/context-menu-command-map.md` §2.4.
+
+`setColumnHidden(columnId, hidden)` walks the current column state and updates
+only the targeted entry's `hidden` property. Same single-entry-edit shape as
+`setColumnPinned`. See `docs/design/context-menu-command-map.md` §2.4.
+
+`autoSizeColumn(columnId)` measures the rendered DOM cells in the column's
+visible window (header + body) and writes the resulting width back through
+`setColumnState`. Best-effort heuristic — off-screen rows are not measured
+(consistent with AG Grid's `autoSizeColumn` behaviour, since the virtualizer
+only mounts visible rows). The result is clamped to the column's `minWidth` /
+`maxWidth` (defaulting to `[48, 800]`). No-op if the grid root is unmounted or
+the column has no DOM cells. See `docs/design/context-menu-command-map.md`
+§2.4 / §5.2.
 
 ### 6.2 `BcServerGridApi<TRow>` (frozen at v0.1)
 
