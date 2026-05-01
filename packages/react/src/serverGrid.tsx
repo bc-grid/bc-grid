@@ -233,6 +233,15 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       clearFilter(columnId) {
         gridApiRef.current?.clearFilter(columnId)
       },
+      setColumnPinned(columnId, pinned) {
+        gridApiRef.current?.setColumnPinned(columnId, pinned)
+      },
+      setColumnHidden(columnId, hidden) {
+        gridApiRef.current?.setColumnHidden(columnId, hidden)
+      },
+      autoSizeColumn(columnId) {
+        gridApiRef.current?.autoSizeColumn(columnId)
+      },
       setRangeSelection(selection) {
         gridApiRef.current?.setRangeSelection(selection)
       },

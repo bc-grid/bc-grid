@@ -244,6 +244,11 @@ export type BcContextMenuBuiltinItem =
   | "clear-range"
   | "clear-all-filters"
   | "clear-column-filter"
+  | "pin-column-left"
+  | "pin-column-right"
+  | "unpin-column"
+  | "hide-column"
+  | "autosize-column"
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {
