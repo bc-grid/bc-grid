@@ -73,6 +73,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
 | Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
+| Row grouping (client / server-page-window) | Available | Columns panel "Group by" zone, header menu, controlled `groupBy` | `groupBy`, `defaultGroupBy`, `onGroupByChange`, `groupableColumns`, `groupsExpandedByDefault` |
 | Columns, filters, and pivot panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` / `?toolPanel=pivot` | `sidebar={["columns", "filters", "pivot"]}`, `pivotState` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
 | Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
@@ -116,6 +117,151 @@ return (
 Use `defaultSearchText` for an uncontrolled initial query. For a host-owned
 search input, prefer controlling the query with `searchText` as shown above. Do
 not combine `defaultSearchText` with `searchText` on the same grid.
+
+## Row grouping
+
+bc-grid groups rows by one or more columns through the controlled
+`groupBy` / uncontrolled `defaultGroupBy` prop pair plus three built-in
+entry points so users can add a group without host code:
+
+```tsx
+<BcGrid
+  columns={columns}
+  data={rows}
+  rowId={(row) => row.id}
+  // Initial grouping (uncontrolled).
+  defaultGroupBy={["region", "status"]}
+  // Auto-expand new group rows so the grid reads as an organisational
+  // view rather than a manual drill-down. Honoured only when the host
+  // does NOT control `expansion`.
+  groupsExpandedByDefault
+  // Restrict the Columns-tool-panel "Group by" dropdown to this list.
+  // Defaults to every column with `groupable: true`.
+  groupableColumns={[
+    { columnId: "region", header: "Region" },
+    { columnId: "status", header: "Status" },
+  ]}
+  // Surface the Columns panel so users can add / remove groups.
+  sidebar={["columns"]}
+/>
+```
+
+Three ways a user can change the active groups:
+
+1. **Columns tool panel** (`sidebar={["columns"]}`) — drag a column into the "Group by" zone, click the per-row "Group" button, or pick from the "Add group" dropdown.
+2. **Column header menu** (the kebab on the right of every header) — "Group by this column" / "Remove from groups" for `groupable` columns.
+3. **Controlled `groupBy`** — a host toolbar applies a saved view by setting the controlled prop directly.
+
+Per-column opt-in: set `groupable: true` on a column to surface it in
+the panel and the header menu. The flag only controls discoverability —
+`groupBy` will group by any column id you point it at.
+
+### Client vs server grouping
+
+The chrome looks identical across all three modes; the difference is
+**which row set the grouping engine sees**.
+
+- **`<BcGrid data={rows}>` — client full-data grouping.** Groups every
+  row in `data` after client filter / search runs. Group buckets are
+  stable across pagination because the grid sees the whole dataset.
+- **`<BcServerGrid>` without server-side group support — current-page
+  grouping.** bc-grid runs the same client engine, but it only sees
+  the rows the server has loaded for the current page or block. Group
+  buckets reflect that **slice**, not the global dataset. A "Region"
+  group on page 2 of an unsorted server feed is "Region within page 2",
+  not "Region across all customers".
+- **`<BcServerGrid>` with server-side group delegation — full-dataset
+  grouping.** bc-grid forwards `groupBy` to your `loadPage` /
+  `loadBlock` callback as `query.view.groupBy: ServerGroup[]`. Whether
+  the rendered groups span the full dataset depends entirely on
+  whether your server applies the hint and returns rows in global
+  group order (or returns server-aggregated group rows). bc-grid
+  doesn't fabricate group rows the server didn't return — it groups
+  whatever the server hands back using the same client engine.
+
+```ts
+const loadPage: LoadServerPage<Customer> = async (query, { signal }) => {
+  const params = new URLSearchParams({
+    page: String(query.pageIndex),
+    pageSize: String(query.pageSize),
+    groupBy: query.view.groupBy.map((g) => g.columnId).join(","),
+  })
+  const response = await fetch(`/api/customers?${params}`, { signal })
+  const { rows, totalRows } = await response.json()
+  return { rows, totalRows }
+}
+```
+
+Grouping changes reset the requested server page to `0`, the same
+reset that fires on sort / filter / search / visible-column changes.
+
+### Current limitations (v0.4-alpha)
+
+Honest list so consumers don't plan against features that aren't here
+yet:
+
+- **No imperative `setGroupBy` on `BcGridApi`.** Drive grouping
+  through the controlled `groupBy` / `onGroupByChange` pair or
+  `defaultGroupBy` for one-shot host-toolbar wiring. (Reserved for
+  Q2.)
+- **`<BcServerGrid>` does not synthesise server-aggregated group
+  rows.** When the server returns rows already grouped (e.g. one
+  payload per group with subtotals embedded), bc-grid renders them
+  as ordinary rows. The expected production path is to return the
+  rows in group order and let the client engine layer in group-row
+  chrome over the loaded page; full server-aggregated group rows
+  with subtotal payloads are a Q2 surface.
+- **No drag-to-reorder of active group chips.** Users can add and
+  remove groups from the Columns tool panel and the header menu,
+  but reordering an existing chip means removing it and re-adding.
+- **`groupsExpandedByDefault` is uncontrolled-only.** When the host
+  controls `expansion` / `defaultExpansion`, the consumer's
+  expansion set is the source of truth and the auto-expand pass is
+  skipped.
+- **Group-row aggregations cascade automatically; pivoted aggregations
+  do not.** `aggregation: { type: "sum" }` reports a per-group
+  subtotal and the global total in the status bar. A column's
+  `aggregation` is independent of `pivotState`; pivoted rendering
+  is reserved for a later slice.
+
+### How to test grouping in the examples app
+
+The `apps/examples` AR Customers demo wires `groupableColumns` to
+`region`, `owner` (Collector), `terms`, and `status`. A focused
+walkthrough:
+
+1. **Surface the Columns tool panel.** Open the examples app at
+   `?toolPanel=columns`. The right-rail panel shows every column with
+   a "Group" button next to the four groupable rows and an "Add
+   group" dropdown at the bottom of the "Group by" zone.
+2. **Add a group.** Click "Group" next to *Region*, or pick *Region*
+   from the "Add group" dropdown. The grid switches to `treegrid`
+   role, group rows render with disclosure chevrons, and the data
+   rows fold under the matching group bucket.
+3. **Add a second group.** Repeat with *Status* — group rows now
+   nest, with *Status* buckets inside *Region* buckets in the
+   nesting order they were added.
+4. **Verify the aggregation cascade.** With `?aggregations=1`, the
+   `Balance` column's `sum` aggregation shows a global total in the
+   status bar and a per-group subtotal painted on each group row's
+   *Balance* cell. Collapse a group — the cascade keeps reporting
+   the totals because aggregation runs over `data`, not visible rows.
+5. **Verify expansion-state persistence.** With `?urlstate=1` or a
+   `gridId` set, the expanded / collapsed state of each group row
+   round-trips through the configured persistence backend; reload
+   and the previously expanded groups stay open. (Visibility of
+   the inline filter row never persists — see "Filter row toggle"
+   below.)
+6. **Switch to a server grid.** The `Server Edit Grid` example is
+   the closest path to validating `query.view.groupBy` — open the
+   network tab and watch the request fire when you add a group; the
+   group set goes out as part of the view diagnostics. The server
+   stub doesn't apply the group hint, so the rendered group buckets
+   are page-window-scoped — useful for confirming the wire format
+   without standing up a real server-side group endpoint.
+
+See `docs/api.md` §3.1 (state pairs), §3.2 (state-shape types), and
+§5.3 (server grid) for the typed surfaces.
 
 ## Filter row toggle
 
