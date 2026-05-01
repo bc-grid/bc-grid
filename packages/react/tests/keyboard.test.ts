@@ -178,13 +178,32 @@ describe("nextKeyboardNav — PageUp / PageDown", () => {
   })
 })
 
-describe("nextKeyboardNav — Q3-reserved keys swallow without moving", () => {
-  test("Shift+ArrowDown returns preventDefault, no move", () => {
+describe("nextKeyboardNav — range extension shortcuts", () => {
+  test("Shift+ArrowDown extends range down", () => {
     expect(nextKeyboardNav({ ...baseInput, key: "ArrowDown", shiftKey: true })).toEqual({
-      type: "preventDefault",
+      type: "extendRange",
+      direction: "down",
+      toEdge: false,
     })
   })
 
+  test("Shift+Ctrl/Cmd+ArrowRight extends range to edge", () => {
+    expect(
+      nextKeyboardNav({
+        ...baseInput,
+        key: "ArrowRight",
+        ctrlOrMeta: true,
+        shiftKey: true,
+      }),
+    ).toEqual({
+      type: "extendRange",
+      direction: "right",
+      toEdge: true,
+    })
+  })
+})
+
+describe("nextKeyboardNav — Q3-reserved keys swallow without moving", () => {
   test("Ctrl+A returns preventDefault, no move", () => {
     expect(nextKeyboardNav({ ...baseInput, key: "a", ctrlOrMeta: true })).toEqual({
       type: "preventDefault",
@@ -219,7 +238,7 @@ describe("nextKeyboardNav — row selection", () => {
   })
 })
 
-describe("nextKeyboardNav — Q2-reserved keys are noop (caller falls through to editor)", () => {
+describe("nextKeyboardNav — editor and fallback keys", () => {
   test("F2 is noop", () => {
     expect(nextKeyboardNav({ ...baseInput, key: "F2" })).toEqual({ type: "noop" })
   })
@@ -228,8 +247,8 @@ describe("nextKeyboardNav — Q2-reserved keys are noop (caller falls through to
     expect(nextKeyboardNav({ ...baseInput, key: "Enter" })).toEqual({ type: "noop" })
   })
 
-  test("Escape is noop", () => {
-    expect(nextKeyboardNav({ ...baseInput, key: "Escape" })).toEqual({ type: "noop" })
+  test("Escape clears active range state", () => {
+    expect(nextKeyboardNav({ ...baseInput, key: "Escape" })).toEqual({ type: "clearRange" })
   })
 
   test("Printable character (e.g. 'a' without Ctrl) is noop", () => {

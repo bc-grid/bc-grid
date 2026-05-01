@@ -124,6 +124,7 @@ import {
   normaliseClipboardPayload,
   writeClipboardPayload,
 } from "./rangeClipboard"
+import { applyKeyboardRangeExtension } from "./rangeNavigation"
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
@@ -1509,6 +1510,23 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (outcome.type === "noop") return
       event.preventDefault()
       if (outcome.type === "preventDefault") return
+      if (outcome.type === "clearRange") {
+        setRangeSelectionState(rangeClear(rangeSelectionState))
+        return
+      }
+      if (outcome.type === "extendRange") {
+        const nextRangeState = applyKeyboardRangeExtension({
+          activeCell,
+          columns: resolvedColumns,
+          direction: outcome.direction,
+          rangeSelection: rangeSelectionState,
+          rowIds: rangeRowIds,
+          toEdge: outcome.toEdge,
+        })
+        setRangeSelectionState(nextRangeState.rangeSelection)
+        if (nextRangeState.activeCell) focusCell(nextRangeState.activeCell)
+        return
+      }
       if (outcome.type === "toggleSelection") {
         const targetRow = rowEntries[currentRow]
         if (!targetRow) return
@@ -1536,10 +1554,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       isRowDisabled,
       pageRowCount,
       rangeSelectionState,
+      rangeRowIds,
       resolvedColumns,
       rowEntries,
       rowIndexById,
       selectionState,
+      setRangeSelectionState,
       setSelectionState,
       toggleGroupRow,
     ],
