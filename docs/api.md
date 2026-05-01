@@ -1031,6 +1031,171 @@ const contextMenuItems: BcContextMenuItems<Customer> = (ctx) => [
 `null` / `false` / `undefined` entries are filtered out, so a row-conditional
 item can be returned as `ctx.row && { ... }` without an extra check.
 
+#### Recipe: end-to-end menu
+
+A typical bsncraft-shaped grid wires the default clipboard items, the filter
+group, the column group, the bulk column commands, and one or two custom
+row actions. Compose them with `separator` strings between groups:
+
+```ts
+import { DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
+
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) => [
+  // Clipboard — uses the v0.3 default set (copy / copy-row /
+  // copy-with-headers + clear-selection / clear-range).
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+
+  "separator",
+  // Filter — clears for the right-clicked column or every column.
+  // Both items disable themselves when there's nothing to clear.
+  "clear-column-filter",
+  "clear-all-filters",
+
+  "separator",
+  // Column — pin / unpin the right-clicked column, hide it, autosize
+  // it. Each item disables itself when its action doesn't apply
+  // (e.g., `unpin-column` is disabled when the column isn't pinned).
+  "pin-column-left",
+  "pin-column-right",
+  "unpin-column",
+  "hide-column",
+  "autosize-column",
+
+  "separator",
+  // Bulk column commands — work on the grid's column state, no
+  // column context required.
+  "show-all-columns",
+  "autosize-all-columns",
+
+  // Row actions — only surfaced when the right-click landed on a
+  // data row. The `&&` short-circuit returns `false` for header /
+  // filter-row triggers, and the resolver drops `false` entries so
+  // a header right-click skips this group cleanly.
+  ctx.row && "separator",
+  ctx.row && {
+    id: "open-customer",
+    label: `Open ${ctx.row.name}`,
+    onSelect: () => navigate(`/customers/${ctx.row?.id}`),
+  },
+  ctx.row && {
+    id: "delete-customer",
+    label: `Delete ${ctx.row.name}`,
+    onSelect: () => confirmDelete(ctx.row),
+    // Custom item-level disabled predicate; runs on every render
+    // so a row that becomes locked mid-session disables the
+    // affordance without remounting the menu.
+    disabled: (innerCtx) => innerCtx.row?.locked === true,
+  },
+]
+```
+
+#### Recipe: disabled predicates
+
+Custom items accept either a static `disabled: boolean` or a predicate
+`disabled: (ctx) => boolean`. The predicate runs every time the menu opens, so
+a row's edit-lock state, the active selection size, or a server-side flag can
+all gate the item without re-mounting:
+
+```ts
+const deleteItem: BcContextMenuItem<Customer> = {
+  id: "delete-customer",
+  label: "Delete row",
+  onSelect: ({ row }) => row && confirmDelete(row),
+  // No row context (header / filter-row right-click) → disabled.
+  // Locked row → disabled.
+  // Otherwise enabled.
+  disabled: ({ row }) => row == null || row.locked === true,
+}
+```
+
+The built-in items have their own internal disabled-state predicates (the
+table above lists them). They run alongside any consumer-supplied custom
+predicates; the menu renders both with the same shadcn-style 0.5-opacity
+treatment and `pointer-events: none` so a disabled row never fires its
+`onSelect`.
+
+#### Recipe: conditional suppression with `false`
+
+Returning `false` (or `null` / `undefined`) from a factory drops that entry
+**before** the disabled-state predicate runs. Use this to hide an item
+entirely rather than render it greyed out:
+
+```ts
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) => [
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+  // Adjacent separators are kept as the consumer wrote them — return
+  // `false` for the separator too when the group below is empty so
+  // the user doesn't see a stray divider.
+  ctx.row ? "separator" : false,
+  ctx.row && {
+    id: "view-customer",
+    label: `View ${ctx.row.name}`,
+    onSelect: () => navigate(`/customers/${ctx.row?.id}`),
+  },
+]
+```
+
+`disabled` keeps the item visible but unactionable; `false` removes it
+entirely. Pick `disabled` when the user benefits from seeing the action
+exists (e.g., "Delete" on a locked row signals the delete affordance is
+present); pick `false` when the action makes no sense in the current
+context (e.g., row-actions on a header right-click).
+
+#### Recipe: header vs row vs cell context
+
+`BcContextMenuContext` carries three orthogonal hooks the factory can
+inspect. The right-click trigger determines which are populated:
+
+| Trigger surface | `ctx.cell` | `ctx.row` | `ctx.column` |
+|---|---|---|---|
+| Data cell | `{ rowId, columnId }` | the row | the column |
+| Header cell | `null` | `null` | the column |
+| Filter row cell | `null` | `null` | the column |
+| Empty grid area / Shift+F10 with no active cell | `null` | `null` | `null` |
+
+Use these to scope items appropriately:
+
+```ts
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) => [
+  // Clipboard makes sense everywhere there's a cell or a range.
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+
+  // Filter / column commands only make sense when a column was
+  // right-clicked (header, filter-row, or data cell).
+  ctx.column && "separator",
+  ctx.column && "clear-column-filter",
+  ctx.column && "pin-column-left",
+  ctx.column && "pin-column-right",
+  ctx.column && "unpin-column",
+
+  // Row actions only when a data row was right-clicked.
+  ctx.row && "separator",
+  ctx.row && {
+    id: "view-customer",
+    label: `View ${ctx.row.name}`,
+    onSelect: () => navigate(`/customers/${ctx.row?.id}`),
+  },
+]
+```
+
+The built-in column commands already self-disable when `ctx.column` is null,
+so the above explicit `ctx.column &&` short-circuit isn't strictly required —
+but it keeps the rendered menu shorter on header / empty-area triggers,
+which reads cleaner than a long list of greyed-out rows.
+
+#### Suppressing the menu entirely
+
+Returning an empty array (or a factory that always returns `[]`) suppresses
+the menu — the renderer closes immediately and the underlying
+`contextmenu` event is allowed to bubble:
+
+```ts
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) =>
+  ctx.row?.locked === true ? [] : DEFAULT_CONTEXT_MENU_ITEMS
+```
+
+Use this for read-only / locked surfaces where no menu actions are valid.
+
 ```ts
 export interface BcContextMenuContext<TRow = unknown> {
   cell: BcCellPosition | null

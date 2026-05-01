@@ -1,0 +1,341 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const defaultSnippet = `import { BcGrid, DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
+
+// The default set ships with the React layer:
+// ["copy", "copy-row", "copy-with-headers", "separator",
+//  "clear-selection", "clear-range"]
+//
+// Pass it explicitly when you want to extend it; pass nothing
+// (or omit \`contextMenuItems\`) to get the same default.
+const contextMenuItems = DEFAULT_CONTEXT_MENU_ITEMS
+
+;<BcGrid
+  data={rows}
+  columns={columns}
+  rowId={(row) => row.id}
+  contextMenuItems={contextMenuItems}
+/>
+`
+
+const optInSnippet = `import { DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
+import type { BcContextMenuItems } from "@bc-grid/react"
+
+// Spread the default + append the filter, column, and bulk-column
+// built-ins consumers usually want surfaced.
+const contextMenuItems: BcContextMenuItems<Customer> = [
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+  "separator",
+  // Filter group — both items disable themselves when there's
+  // nothing to clear.
+  "clear-column-filter",
+  "clear-all-filters",
+  "separator",
+  // Column group — pin / unpin / hide / autosize the right-clicked
+  // column. Each item self-disables when its action doesn't apply
+  // (e.g., \`unpin-column\` is disabled when the column isn't pinned).
+  "pin-column-left",
+  "pin-column-right",
+  "unpin-column",
+  "hide-column",
+  "autosize-column",
+  "separator",
+  // Bulk column group — work on the grid's column state, no
+  // column context required.
+  "show-all-columns",
+  "autosize-all-columns",
+]
+`
+
+const factorySnippet = `import { DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
+import type { BcContextMenuItems } from "@bc-grid/react"
+
+// Pass a function instead of a static array when items depend on
+// the right-click context. The factory runs every time the menu
+// opens, so a freshly-set selection or row state is reflected
+// without unmounting the menu.
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) => [
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+
+  // Row actions — only surfaced when the right-click landed on a
+  // data row. Header / filter-row triggers don't have a row,
+  // so the && short-circuit returns \`false\` and the resolver
+  // drops the entry.
+  ctx.row && "separator",
+  ctx.row && {
+    id: "open-customer",
+    label: \`Open \${ctx.row.name}\`,
+    onSelect: () => navigate(\`/customers/\${ctx.row?.id}\`),
+  },
+]
+`
+
+const disabledSnippet = `import type { BcContextMenuItem } from "@bc-grid/react"
+
+// Custom items support either a static \`disabled: boolean\` or a
+// predicate that runs against the live context every time the menu
+// opens. The predicate is the right tool for runtime gating —
+// row.locked, server-side flags, selection size — without
+// re-mounting the menu.
+const deleteRow: BcContextMenuItem<Customer> = {
+  id: "delete-customer",
+  label: "Delete row",
+  onSelect: ({ row }) => row && confirmDelete(row),
+  disabled: ({ row }) => row == null || row.locked === true,
+}
+`
+
+const suppressSnippet = `import { DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
+import type { BcContextMenuItems } from "@bc-grid/react"
+
+// Returning \`false\` (or \`null\` / \`undefined\`) drops the entry
+// before any disabled predicate runs. Use this when an action
+// makes no sense in the current context — e.g., row-actions on
+// a header right-click.
+//
+// \`disabled\` keeps the item visible but unactionable. Pick
+// \`disabled\` when the user benefits from seeing the action
+// exists; pick \`false\` when surfacing a greyed-out row would
+// just be noise.
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) => [
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+  // Drop the separator when the row group below is empty so the
+  // user doesn't see a stray divider.
+  ctx.row ? "separator" : false,
+  ctx.row && {
+    id: "view-customer",
+    label: \`View \${ctx.row.name}\`,
+    onSelect: () => navigate(\`/customers/\${ctx.row?.id}\`),
+  },
+]
+`
+
+const contextSnippet = `import type { BcContextMenuItems } from "@bc-grid/react"
+
+// BcContextMenuContext exposes three orthogonal hooks:
+//   ctx.cell    — the right-clicked cell, or null
+//   ctx.row     — the row at that cell, or null
+//   ctx.column  — the column at that cell, or null
+//   ctx.api     — full BcGridApi for programmatic actions
+//   ctx.selection — current row selection
+//
+// The trigger surface determines which are populated:
+//   data cell        → cell, row, column populated
+//   header cell      → column populated; cell + row null
+//   filter-row cell  → column populated; cell + row null
+//   empty-area / Shift+F10 with no active cell → all null
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) => [
+  // Clipboard makes sense everywhere there's a cell or a range.
+  "copy",
+  "copy-with-headers",
+
+  // Filter / column commands only make sense when a column was
+  // right-clicked. The built-ins self-disable when ctx.column is
+  // null, but suppressing the group entirely keeps a header menu
+  // shorter than a long list of greyed-out rows.
+  ctx.column && "separator",
+  ctx.column && "clear-column-filter",
+  ctx.column && "pin-column-left",
+  ctx.column && "pin-column-right",
+  ctx.column && "unpin-column",
+
+  // Row actions only when a data row was right-clicked.
+  ctx.row && "separator",
+  ctx.row && {
+    id: "view-customer",
+    label: \`View \${ctx.row.name}\`,
+    onSelect: () => navigate(\`/customers/\${ctx.row?.id}\`),
+  },
+]
+`
+
+const suppressMenuSnippet = `import { DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
+import type { BcContextMenuItems } from "@bc-grid/react"
+
+// Returning an empty array suppresses the menu entirely. The
+// renderer closes immediately and the underlying \`contextmenu\`
+// event continues to bubble. Use this for read-only or locked
+// surfaces where no menu actions are valid.
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) =>
+  ctx.row?.locked === true ? [] : DEFAULT_CONTEXT_MENU_ITEMS
+`
+---
+
+<DocsLayout
+  title="Context menu recipe"
+  description="Worked examples for the BcGrid context-menu surface — default items, opt-in built-ins, custom factories, separators, disabled predicates, and conditional suppression."
+  active="context-menu-recipe"
+>
+  <section class="section">
+    <p class="lead">
+      The right-click context menu is opt-in via the <code>contextMenuItems</code> prop on
+      <code>BcGrid</code>. Pass a static array (the same items on every right-click) or a factory
+      function that takes the live <code>BcContextMenuContext</code> and returns the items for
+      this trigger. The default set works without any wiring; the recipes below cover the
+      higher-level patterns.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>1. Default menu</h2>
+    <p>
+      The bundled default surfaces the actions every grid wants — copy / copy row / copy with
+      headers / clear selection / clear range. <code>DEFAULT_CONTEXT_MENU_ITEMS</code> is a
+      readonly array; spread it whenever you want to extend it.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>default menu</span>
+      </div>
+      <Code code={defaultSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>2. Opt-in built-ins</h2>
+    <p>
+      The filter / column / bulk-column built-ins stay opt-in to keep the default menu compact —
+      most of them only make sense when a column was right-clicked, and surfacing them on the
+      empty grid area would be noise. Spread <code>DEFAULT_CONTEXT_MENU_ITEMS</code>, then
+      append the groups your app needs with <code>"separator"</code> strings between them.
+    </p>
+    <p class="section-note">
+      Each built-in carries its own internal <code>disabled</code> predicate (see the
+      <a href="/api/#context-menu-built-ins">API reference</a> for the full table) — items
+      render greyed-out and skip activation when their action doesn't apply.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>opt-in groups</span>
+      </div>
+      <Code code={optInSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>3. Custom row actions via a factory</h2>
+    <p>
+      Custom items (<code>{`{ id, label, onSelect, disabled? }`}</code>) live alongside the
+      built-ins and are typically wired to row-action commands like "Open customer" or "Delete
+      row". Pass a factory function to <code>contextMenuItems</code> when the items depend on
+      the right-click context — the factory re-runs every time the menu opens, so a freshly-set
+      row state is reflected without unmounting.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>row-action factory</span>
+      </div>
+      <Code code={factorySnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>4. Disabled predicates</h2>
+    <p>
+      Custom items accept either a static <code>disabled: boolean</code> or a predicate
+      <code>(ctx) =&gt; boolean</code>. Use the predicate when the gating condition depends
+      on the live row / selection / API state — no remounting required.
+    </p>
+    <p class="section-note">
+      Disabled items render with shadcn's standard 0.5-opacity treatment +
+      <code>pointer-events: none</code>, so a disabled row never fires its <code>onSelect</code>
+      even on a stray click.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>disabled predicate</span>
+      </div>
+      <Code code={disabledSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>5. Conditional suppression with <code>false</code></h2>
+    <p>
+      Returning <code>false</code> (or <code>null</code> / <code>undefined</code>) from a
+      factory drops that entry <strong>before</strong> the disabled-state predicate runs. Use
+      this to remove an item entirely when the action makes no sense in the current
+      context — versus <code>disabled</code>, which keeps the item visible but unactionable.
+    </p>
+    <p class="section-note">
+      Pick <code>disabled</code> when the user benefits from seeing the action exists (e.g.,
+      "Delete" on a locked row signals the affordance is present); pick <code>false</code>
+      when surfacing a greyed-out row would just be noise (e.g., row-actions on a header
+      right-click).
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>conditional suppression</span>
+      </div>
+      <Code code={suppressSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>6. Header / row / cell context</h2>
+    <p>
+      The trigger surface determines which fields on
+      <code>BcContextMenuContext</code> are populated. A data-cell right-click gives you all
+      three of <code>ctx.cell</code> / <code>ctx.row</code> / <code>ctx.column</code>; a header
+      right-click only fills <code>ctx.column</code>; a Shift+F10 with no active cell leaves
+      everything <code>null</code>. Scope items to the surfaces where they make sense.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>per-surface scoping</span>
+      </div>
+      <Code code={contextSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>7. Suppressing the menu entirely</h2>
+    <p>
+      Returning an empty array suppresses the menu on this trigger — the renderer closes
+      immediately. Useful for read-only or locked surfaces where no menu actions are valid.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>per-row suppression</span>
+      </div>
+      <Code code={suppressMenuSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Checklist</h2>
+    <ul>
+      <li>
+        Use <code>DEFAULT_CONTEXT_MENU_ITEMS</code> as the base; never hand-roll the default
+        list — it evolves with the React package.
+      </li>
+      <li>
+        Place built-in column / filter commands behind their natural separators. Each built-in
+        carries its own disabled predicate, so you can include them safely on every trigger.
+      </li>
+      <li>
+        Prefer <code>false</code> over <code>disabled</code> when the action makes no sense in
+        the current context. The user shouldn't see "View customer" greyed out on a header
+        right-click — they should see no row-action group at all.
+      </li>
+      <li>
+        Custom items inherit shadcn-style disabled rendering (0.5 opacity,
+        <code>pointer-events: none</code>) automatically — don't add your own greyed-out
+        styling.
+      </li>
+      <li>
+        The factory runs every time the menu opens. Cheap by default; if you need expensive
+        per-trigger work, guard it inside <code>onSelect</code>, not the factory body.
+      </li>
+    </ul>
+  </section>
+</DocsLayout>
