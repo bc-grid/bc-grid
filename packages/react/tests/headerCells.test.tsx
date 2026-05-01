@@ -147,6 +147,100 @@ describe("renderHeaderCell column menu visibility", () => {
   })
 })
 
+describe("renderHeaderCell column menu trigger contract", () => {
+  // bsncraft reported the menu trigger as feeling "prototype-level".
+  // The polish slice replaces the CSS `::before` radial-gradient dot
+  // hack with an inline SVG glyph, hardens propagation handlers so
+  // a click never bubbles into sort / reorder / resize, and pins
+  // shadcn-quality ARIA attributes. These tests pin the contract a
+  // host app + e2e suite depends on so a future refactor that drops
+  // a hook fails noisily.
+  test("button renders an inline SVG glyph (no CSS-only ::before fallback)", () => {
+    const html = renderColumn(baseColumn)
+
+    // The new icon ships as `<svg class="bc-grid-header-menu-icon">…</svg>`
+    // inside the button. The legacy `::before` dot hack was fragile
+    // (consumer CSS overrides could blank it). Pin the SVG so a
+    // future regression that re-introduces a CSS-only icon path
+    // surfaces here.
+    expect(html).toContain('<svg aria-hidden="true" class="bc-grid-header-menu-icon"')
+    // Vertical three-dots glyph — three <circle> elements at the
+    // same x with stacked y values. Pin the count so a future glyph
+    // swap is intentional.
+    const circleMatches = html.match(/<circle[^>]*cy="(?:3\.5|8|12\.5)"/g) ?? []
+    expect(circleMatches.length).toBe(3)
+  })
+
+  test("trigger carries shadcn / Radix-style ARIA + data hooks for menu surfaces", () => {
+    const html = renderColumn(baseColumn)
+
+    // aria-haspopup="menu" tells AT the trigger opens a menu role
+    // (matches Radix DropdownMenuTrigger). aria-label is the
+    // accessible name driving announcement when only the SVG paints.
+    // data-bc-grid-column-menu-button is the e2e + integration hook
+    // — sub-systems detect "the click landed on the menu trigger"
+    // via this attribute (e.g., the click-outside dismiss path
+    // ignores trigger clicks so the menu doesn't open-then-close).
+    expect(html).toContain('aria-haspopup="menu"')
+    expect(html).toContain('aria-label="Column options for Name"')
+    expect(html).toContain('data-bc-grid-column-menu-button="true"')
+    expect(html).toMatch(/<button[^>]*type="button"/)
+  })
+
+  test("icon is aria-hidden so the button's accessible name is the aria-label, not the SVG", () => {
+    // shadcn IconButton convention. Without aria-hidden the SVG can
+    // leak into the accessible name on some AT clients. The
+    // `aria-label="Column options for Name"` is the only source.
+    const html = renderColumn(baseColumn)
+    const svgs = html.match(/<svg[^>]*bc-grid-header-menu-icon[^>]*>/g) ?? []
+    expect(svgs.length).toBeGreaterThan(0)
+    for (const svg of svgs) {
+      expect(svg).toContain('aria-hidden="true"')
+    }
+  })
+
+  test("icon stroke uses currentColor so dark / forced-colors inherit through the button text colour", () => {
+    // Light / dark / forced-colors all flow through the button's
+    // `color: var(--bc-grid-header-fg)` automatically when the SVG
+    // strokes / fills currentColor — no per-mode override needed.
+    const html = renderColumn(baseColumn)
+    expect(html).toContain('fill="currentColor"')
+  })
+
+  test("trigger does not paint visible body text when only the icon should render", () => {
+    // The button is icon-only; aria-label drives announcement. Pin
+    // the absence of literal "Column options for Name" inside the
+    // button body so a future change can't accidentally surface
+    // visible text on top of the icon.
+    const html = renderColumn(baseColumn)
+
+    // The aria-label appears as an attribute (containing the column
+    // name) but should NOT appear as a text-node child of the
+    // button. The button's only DOM child is the SVG glyph.
+    const buttonMatch = html.match(
+      /<button[^>]*data-bc-grid-column-menu-button="true"[^>]*>([\s\S]*?)<\/button>/,
+    )
+    expect(buttonMatch).not.toBeNull()
+    if (buttonMatch) {
+      const bodyHtml = buttonMatch[1] ?? ""
+      // Body is the SVG only — no text node "Column options".
+      expect(bodyHtml).not.toContain("Column options")
+      expect(bodyHtml.trimStart().startsWith("<svg")).toBe(true)
+    }
+  })
+
+  test("menu-trigger and resize handle co-exist on a resizable header", () => {
+    // The menu trigger sits inside the header cell; the resize
+    // handle is a separate sibling on the right edge. Both must
+    // render together on a default resizable column. Pin so a
+    // future layout refactor doesn't drop one.
+    const html = renderColumn(baseColumn)
+
+    expect(html).toContain('data-bc-grid-column-menu-button="true"')
+    expect(html).toContain('data-bc-grid-resize-handle="true"')
+  })
+})
+
 function renderTextFilterCellHtml(filterText: string, header = "Account"): string {
   const column: ResolvedColumn<Row> = {
     align: "left",

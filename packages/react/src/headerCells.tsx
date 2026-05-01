@@ -43,6 +43,7 @@ import {
   pinnedClassName,
   pinnedEdgeClassName,
 } from "./gridInternals"
+import { MoreVerticalIcon } from "./internal/header-icons"
 import { usePopupDismiss } from "./internal/popup-dismiss"
 import { computePopupPosition } from "./internal/popup-position"
 import type { BcGridMessages } from "./types"
@@ -354,10 +355,30 @@ export function renderHeaderCell<TRow>({
             const rect = event.currentTarget.getBoundingClientRect()
             onColumnMenu(column, { x: rect.left, y: rect.bottom + 4 })
           }}
+          onContextMenu={(event) => {
+            // Right-clicking the trigger should not open the column
+            // menu via the header's onContextMenu or the browser
+            // default — let the consumer right-click on the header
+            // background instead.
+            event.stopPropagation()
+            event.preventDefault()
+          }}
           onKeyDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => {
+            // Belt-and-braces against the parent header's reorder
+            // pointer handler: stop the event from bubbling to the
+            // sortable / reorder gesture and prevent the default
+            // focus-shift so a click doesn't lift the trigger out
+            // before the popup measures the bounding rect.
+            event.stopPropagation()
+            event.preventDefault()
+          }}
+          onPointerUp={(event) => event.stopPropagation()}
+          onPointerCancel={(event) => event.stopPropagation()}
           type="button"
-        />
+        >
+          {MoreVerticalIcon}
+        </button>
       ) : null}
       {column.source.resizable === false ? null : (
         // Drag handle pinned to the right edge of the header cell. Pointer
