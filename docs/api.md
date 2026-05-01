@@ -1551,12 +1551,15 @@ diagnostics continue to describe the active request view.
 
 When `onServerRowMutation` is used with paged mode, optimistic edit patches are
 tracked by row identity in the server-row-model mutation queue, not by the
-current visible page. Changing pages or refetching the current page must not
-drop a pending edit; if the edited row is loaded again before the mutation
-settles, the pending patch is overlaid on the freshly returned server row. The
-consumer still owns persistence, rejection/conflict policy, and any explicit
-refresh after commit, while bc-grid owns preserving the pending optimistic row
-state across page transitions.
+current visible page. Changing pages, refetching the current page, or changing
+sort/filter/search/group/visible-column state must not drop a pending edit; if
+the edited row is loaded again before the mutation settles, the pending patch is
+overlaid on the freshly returned server row. Accepted results clear the pending
+patch and reconcile cached rows with the server result; rejected or conflict
+results clear the pending patch and roll back cached rows to the last canonical
+server value. The consumer still owns persistence, rejection/conflict policy, and
+any explicit refresh after commit, while bc-grid owns preserving the pending
+optimistic row state across page and view transitions.
 
 The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are declared in `@bc-grid/core` with the rest of the server query contract and re-exported through `@bc-grid/react`. Runtime cache/state-machine helpers live in `@bc-grid/server-row-model`.
 
