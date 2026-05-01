@@ -118,6 +118,12 @@ export function BcGridSidebar<TRow>({
         {panels.map((panel, index) => {
           const panelIds = ids.get(panel.id)
           const selected = panel.id === activePanel?.id
+          // Roving-tabindex anchor: when the user closes the panel
+          // (`activePanel === null`) every tab loses `aria-selected`
+          // and would otherwise be `tabIndex=-1`, leaving no way to
+          // Tab into the rail. Per WAI-ARIA APG, the first tab is the
+          // tabbable fallback in that case.
+          const isTabbableAnchor = selected || (activePanel == null && index === 0)
           const Icon = panel.Icon
           return (
             <button
@@ -132,7 +138,16 @@ export function BcGridSidebar<TRow>({
               aria-selected={selected}
               data-state={selected ? "open" : "closed"}
               title={panel.label}
-              tabIndex={0}
+              // WAI-ARIA Authoring Practices for tabs: only the
+              // selected tab is in the Tab sequence; arrows + Home /
+              // End move focus between tabs (`handleTabKeyDown`).
+              // Tab from outside the rail lands on the active tab
+              // once and exits — without this, Tab cycled through
+              // every tab inside the rail before reaching the panel
+              // body. When no panel is selected (rail collapsed) the
+              // first tab is the tabbable anchor so keyboard users
+              // can still discover the rail.
+              tabIndex={isTabbableAnchor ? 0 : -1}
               onClick={() => activatePanel(panel.id, false)}
               onKeyDown={(event) =>
                 handleTabKeyDown({

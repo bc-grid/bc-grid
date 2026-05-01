@@ -145,3 +145,42 @@ A targeted visual pass on the context menu + column-visibility menu chrome that 
 - Full unit suite green.
 - **Coordinator-owned:** Playwright runs covering filter-popup / context-menu (`apps/examples/tests/`) — to verify the new clamp doesn't shift any visible position in the existing flows.
 - No bundle-size baseline shift — the helper is pure JS, no new dependencies.
+
+---
+
+## Slice 9 — Popup focus integration follow-up (this update)
+
+Audit + design note for the next implementation slice; ships one independent fix that doesn't depend on the shared roving-focus helper still in PR #261's review.
+
+### Audit — focus contract per surface (post-#261, pre-this-update)
+
+| Surface | Pattern | DOM-focus owner | Roving | Trap | Tab leaves cleanly | Notes |
+|---|---|---|---|---|---|---|
+| Context menu | aria-activedescendant | menu root (`tabIndex=-1`) | inline `nextFocusableIndex` / `nextTypeAheadIndex` (works) | no | yes | Ripe for refactor onto `useRovingFocus` once #261 lands. Keep the active-descendant flavour (do not flip to roving tabindex — would change AT semantics mid-pass). |
+| Column chooser | roving tabindex | per-item button `tabIndex={isActive ? 0 : -1}` | `useRovingFocus` (ships in #261) | no | yes | Already covered by #261. |
+| Filter popup | form-style | first editor field via `autoFocus` | n/a (not a menu) | no | yes | Apply / Clear stay tabbable; no inert / focus-trap markup. Locked in here. |
+| Sidebar tablist | tablist | per-tab button | inline arrow handler (works) | no | **gap fixed in this update** | Was `tabIndex={0}` on every tab — Tab cycled through every tab in the rail before reaching the panel body. Per WAI-ARIA APG, only the active tab is in the Tab sequence; arrows move within the rail. |
+| Sidebar panel body | tabpanel | panel root (`tabIndex=-1`) | n/a | no | yes | Programmatic focus on activate; standard. |
+| Tooltip | decorative | n/a | n/a | n/a | n/a | No focus state. |
+
+### What ships in this update
+
+- **Sidebar tablist roving tabindex.** `tabIndex={selected ? 0 : -1}` on each tab button, with a fallback to the first tab when the rail is collapsed (no `aria-selected="true"` tab). Existing `handleTabKeyDown` + `nextSidebarTabIndex` arrow / Home / End handler is unchanged — only the markup contract tightens. Per WAI-ARIA APG for tabs.
+- **`packages/react/tests/sidebar.markup.test.tsx`** — 6 SSR markup tests for the new contract: only the active tab is in the Tab sequence, the first tab is the fallback when the rail is collapsed, `aria-selected` / `data-state` track selection, panel body keeps `tabIndex=-1`, SSR-safe.
+- **`packages/react/tests/contextMenu.markup.test.tsx`** — 2 lock-in tests for the existing aria-activedescendant pattern: menu root has `tabIndex=-1` + `aria-activedescendant`, every item carries `tabIndex=-1`. Regression net for the slice that swaps the inline keyboard handler for `useRovingFocus`.
+- **`packages/react/tests/filterPopup.test.tsx`** — 3 focus-trap-absence tests: dialog root is not focusable, Apply / Clear footer buttons aren't `tabIndex=-1`, no `inert` on the popup or its descendants.
+
+### What's intentionally NOT in this update
+
+- **No wiring of the shared `useRovingFocus` helper.** The helper lives in PR #261 (still in coordinator review at the time of writing). Doing the wiring now would either duplicate the helper (will conflict at merge) or require branching off #261 (the brief explicitly said branch from main). Producing a design / test note + the sidebar fix is the safer follow-up.
+- **No change to `BcGridContextMenu`'s inline keyboard handler.** That's the next slice's target — see below.
+- **No tool-panel focus changes.** The Columns / Filters / Pivot tool panels render lists of form controls (checkboxes, drag handles, range inputs); Tab through is already the right pattern. They're not menus; roving-tabindex would be wrong there.
+- **No Escape-handling change.** `usePopupDismiss` keeps full ownership (popup-interaction-contracts invariant from slice 2).
+
+### Next implementation slice (slice 10 candidate)
+
+Once #261 merges:
+
+- Refactor `BcGridContextMenu`'s inline `handleContextMenuKeyDown` / `nextFocusableIndex` / `nextTypeAheadIndex` to call `useRovingFocus`. Keep aria-activedescendant rendering — the hook is pattern-agnostic.
+- Tests: the lock-in tests added here (menu root `tabIndex=-1` + `aria-activedescendant`, items at `tabIndex=-1`) are the regression net the refactor must keep green.
+- Removes ~80 lines of duplicated logic from `internal/context-menu.tsx` while preserving every existing keyboard contract (ArrowDown/Up cycling, Home/End, Enter/Space activation, type-ahead).

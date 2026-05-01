@@ -166,3 +166,46 @@ describe("FilterPopup Radix-style state attributes", () => {
     expect(html).toContain('data-align="start"')
   })
 })
+
+describe("FilterPopup focus contract (no trap; Tab can leave the popup)", () => {
+  // Per `accessibility-rfc.md` and the popup-interaction-contracts
+  // brief: bc-grid popups do NOT trap focus. Tab walks through the
+  // popup's interactive controls and then continues to the next
+  // tabbable in the page. These tests pin the load-bearing markup
+  // invariants so a future polish pass can't accidentally introduce
+  // an inert-style trap.
+
+  test("the dialog root does not carry tabIndex=-1 / 0 (the dialog is not a focus stop)", () => {
+    // Conventional Radix Dialog.Content is itself focusable so a
+    // close-then-open round trip can return focus there; bc-grid's
+    // FilterPopup keeps the dialog non-focusable because the editor
+    // body autofocuses inside on mount, and `usePopupDismiss` returns
+    // focus to the trigger on close. Pinning the existing contract.
+    const html = renderPopup()
+    expect(html).not.toMatch(/role="dialog"[^>]*tabindex="(?:-1|0)"/)
+    expect(html).not.toMatch(/tabindex="(?:-1|0)"[^>]*role="dialog"/)
+  })
+
+  test("footer Apply / Clear buttons are tabbable (no tabIndex=-1)", () => {
+    // Apply + Clear must remain in the natural Tab sequence so a
+    // keyboard user can step from the editor body into the buttons
+    // and out of the popup. A focus-trap regression would slap
+    // tabindex=-1 on these.
+    const html = renderPopup({ filterText: "CUST-00042" })
+    expect(html).not.toMatch(
+      /aria-label="Apply Filter Account"[^>]*tabindex="-1"|tabindex="-1"[^>]*aria-label="Apply Filter Account"/,
+    )
+    expect(html).not.toMatch(
+      /aria-label="Clear Filter Account"[^>]*tabindex="-1"|tabindex="-1"[^>]*aria-label="Clear Filter Account"/,
+    )
+  })
+
+  test("the popup root is not marked `inert` (browser-level focus-trap escape hatch)", () => {
+    // `inert` would block ALL focus inside, including the editor
+    // body — broken by construction. This is a defensive regression
+    // guard: the markup must never carry the attribute on either the
+    // dialog root or any descendant container.
+    const html = renderPopup()
+    expect(html).not.toMatch(/\binert\b/)
+  })
+})

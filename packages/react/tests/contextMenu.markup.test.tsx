@@ -184,3 +184,43 @@ describe("BcGridContextMenu — separator markup", () => {
     expect(html).toContain('aria-orientation="horizontal"')
   })
 })
+
+describe("BcGridContextMenu — focus contract (regression net for the next slice)", () => {
+  // These tests pin the existing aria-activedescendant pattern so a
+  // future slice that swaps the inline keyboard handler for the shared
+  // `useRovingFocus` hook (PR #261) doesn't accidentally regress to
+  // roving tabindex (which would change DOM focus semantics for AT
+  // users mid-pass). The shared hook is pattern-agnostic and CAN drive
+  // either pattern; whichever it's wired to, these contracts are what
+  // the context menu must continue to emit.
+
+  test("menu root holds DOM focus via tabIndex=-1 + aria-activedescendant (no roving tabindex)", () => {
+    const html = renderMenu()
+    // The menu root receives DOM focus programmatically (the
+    // `useLayoutEffect` calls `menuRef.current?.focus()`); the
+    // aria-activedescendant attribute publishes the currently
+    // highlighted item so AT users get the right announcement.
+    // Together these form the WAI-ARIA "active descendant" pattern,
+    // distinct from the roving-tabindex pattern used by the column
+    // chooser.
+    expect(html).toMatch(/role="menu"[^>]*tabindex="-1"|tabindex="-1"[^>]*role="menu"/)
+    expect(html).toMatch(
+      /role="menu"[^>]*aria-activedescendant="[^"]+"|aria-activedescendant="[^"]+"[^>]*role="menu"/,
+    )
+  })
+
+  test("every menu item carries tabIndex=-1 (no item is in the natural Tab sequence)", () => {
+    // Roving-tabindex puts the active item at tabIndex=0; aria-active-
+    // descendant keeps every item at tabIndex=-1 and uses the
+    // attribute on the root to track active. The context menu is the
+    // active-descendant flavour. Tab from outside the menu doesn't
+    // land on individual items — it lands on the root, which then
+    // delegates via the keyboard handler.
+    const html = renderMenu()
+    const items = html.match(/<div\b[^>]*role="menuitem"[^>]*>/g) ?? []
+    expect(items.length).toBeGreaterThan(0)
+    for (const item of items) {
+      expect(item).toMatch(/tabindex="-1"/)
+    }
+  })
+})
