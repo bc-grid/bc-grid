@@ -230,6 +230,21 @@ describe("@bc-grid/core range keyboard state machine", () => {
     })
   })
 
+  test("keyboard range actions are noops when no range is active", () => {
+    expect(
+      rangeKeydown(emptyBcRangeSelection, { type: "extend", direction: "down" }, columns, rowIds),
+    ).toEqual(emptyBcRangeSelection)
+    expect(rangeKeydown(emptyBcRangeSelection, { type: "select-row" }, columns, rowIds)).toEqual(
+      emptyBcRangeSelection,
+    )
+    expect(rangeKeydown(emptyBcRangeSelection, { type: "select-column" }, columns, rowIds)).toEqual(
+      emptyBcRangeSelection,
+    )
+    expect(rangeKeydown(emptyBcRangeSelection, { type: "clear" }, columns, rowIds)).toEqual(
+      emptyBcRangeSelection,
+    )
+  })
+
   test("select-all creates a single full-grid range", () => {
     expect(rangeSelectAll(columns, rowIds)).toEqual({
       ranges: [{ start: cell("r1", "c1"), end: cell("r4", "c3") }],

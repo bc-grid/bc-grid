@@ -130,6 +130,10 @@ import {
   writeClipboardPayload,
 } from "./rangeClipboard"
 import { applyKeyboardRangeExtension } from "./rangeNavigation"
+import {
+  createRangeInteractionModel,
+  shouldClearRangeSelectionForModelChange,
+} from "./rangeInteraction"
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
@@ -694,6 +698,22 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         : resolveColumns(layoutColumnDefinitions, columnState),
     [columnState, columns, consumerResolvedColumns, layoutColumnDefinitions],
   )
+  const rangeInteractionModel = useMemo(
+    () => createRangeInteractionModel(rangeRowIds, resolvedColumns),
+    [rangeRowIds, resolvedColumns],
+  )
+  const previousRangeInteractionModelRef = useRef<ReturnType<
+    typeof createRangeInteractionModel
+  > | null>(null)
+  useEffect(() => {
+    const previous = previousRangeInteractionModelRef.current
+    previousRangeInteractionModelRef.current = rangeInteractionModel
+    if (
+      shouldClearRangeSelectionForModelChange(rangeSelectionState, previous, rangeInteractionModel)
+    ) {
+      setRangeSelectionState(rangeClear(rangeSelectionState))
+    }
+  }, [rangeInteractionModel, rangeSelectionState, setRangeSelectionState])
   const aggregationResults = useAggregations(aggregationRows, consumerLeafColumns, {
     allRows: data,
     locale,

@@ -121,6 +121,41 @@ describe("range clipboard", () => {
     ).toBeUndefined()
   })
 
+  test("filtered-out range endpoints produce no payload", () => {
+    const filteredEntries = [rowEntries[0]]
+
+    expect(
+      buildRangeClipboard({
+        range: range("r1", "name", "r2", "amount"),
+        columns,
+        rowEntries: filteredEntries,
+        rowIds: filteredEntries.map((entry) => entry.rowId),
+        locale: "en-US",
+      }),
+    ).toBeUndefined()
+  })
+
+  test("empty row or column models produce no payload", () => {
+    expect(
+      buildRangeClipboard({
+        range: range("r1", "name", "r2", "amount"),
+        columns: [],
+        rowEntries,
+        rowIds,
+        locale: "en-US",
+      }),
+    ).toBeUndefined()
+    expect(
+      buildRangeClipboard({
+        range: range("r1", "name", "r2", "amount"),
+        columns,
+        rowEntries: [],
+        rowIds: [],
+        locale: "en-US",
+      }),
+    ).toBeUndefined()
+  })
+
   test("normaliseClipboardPayload builds HTML when a hook supplies TSV only", () => {
     expect(normaliseClipboardPayload({ tsv: 'A\t"B"\nC\tD' }).html).toBe(
       "<table><tbody><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></tbody></table>",
