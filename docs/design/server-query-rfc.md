@@ -426,7 +426,7 @@ LRU policy:
 - Loaded blocks are LRU-evicted when over budget.
 - Fetching blocks are not evicted.
 - Active/focused rows retained for accessibility do not pin an entire block forever; the row may be retained separately as a tiny focus-retention record.
-- Eviction is observable through `onServerRowModelEvent` for diagnostics and dev tools.
+- Eviction is observable through row-model diagnostics and dev tools.
 - Eviction is not an application error.
 
 Debounce and concurrency:
@@ -614,6 +614,7 @@ export interface BcServerGridApi {
   invalidateServerRows(invalidation: ServerInvalidation): void
   retryServerBlock(blockKey: ServerBlockKey): void
   getServerRowModelState(): ServerRowModelState<unknown>
+  getServerDiagnostics(): ServerRowModelDiagnostics<unknown>
 }
 ```
 

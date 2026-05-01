@@ -1395,6 +1395,7 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   queueServerRowMutation(patch: ServerRowPatch): void
   settleServerRowMutation(result: ServerMutationResult<TRow>): void
   getServerRowModelState(): ServerRowModelState<TRow>
+  getServerDiagnostics(): ServerRowModelDiagnostics
 }
 ```
 
@@ -1404,6 +1405,16 @@ Consumers with a websocket/SSE source can bridge push events into the grid with
 `rowAdded`, `rowUpdated`, and `rowRemoved` apply to loaded or stale cached
 server rows by row identity. Visible insertions reuse the existing row-insertion
 FLIP wiring; removal animation remains part of `animation-polish`.
+
+For support/debug logging, call `apiRef.current?.getServerDiagnostics()` from a
+developer panel or request logger. The returned snapshot includes the current
+`ServerViewState`, summarized search/filter/sort/group/visible-column counts,
+known row count, cache block states, pending mutation count, and the last
+paged/block/tree load status plus request metadata. This is the recommended
+way for bsncraft-style customer grids to verify exactly what bc-grid asked the
+server for before debugging endpoint behavior. Diagnostics intentionally avoid
+cached row payloads; call `getServerRowModelState()` only when you need the full
+state snapshot.
 
 ---
 
@@ -1474,7 +1485,7 @@ and `BcServerGridApi.settleServerRowMutation`.
 
 Per `server-query-rfc §Public Types`, the server-row-model types are:
 
-`RowId`, `ColumnId`, `ServerRowModelMode`, `ServerSort`, `ServerFilter`, `ServerFilterGroup`, `ServerColumnFilter`, `ServerGroup`, `ServerViewState`, `ServerQueryBase`, `ServerLoadContext`, `ServerPagedQuery/Result`, `ServerBlockQuery/Result`, `ServerTreeQuery/Result`, `ServerTreeRow`, `ServerGroupKey`, `ServerRowIdentity`, `ServerSelection`, `ServerSelectionSnapshot`, `ServerRowPatch`, `ServerMutationResult`, `ServerInvalidation`, `ServerCacheBlock`, `ServerBlockKey`, `ServerBlockCacheOptions`, `ServerExportQuery`, `ServerExportResult`, `ServerRowUpdate`, `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowModelState`, `ServerRowModelEvent`, `BcPivotState`, `BcPivotedDataDTO`.
+`RowId`, `ColumnId`, `ServerRowModelMode`, `ServerSort`, `ServerFilter`, `ServerFilterGroup`, `ServerColumnFilter`, `ServerGroup`, `ServerViewState`, `ServerViewDiagnostics`, `ServerQueryBase`, `ServerLoadContext`, `ServerPagedQuery/Result`, `ServerBlockQuery/Result`, `ServerTreeQuery/Result`, `ServerQueryDiagnostics`, `ServerTreeRow`, `ServerGroupKey`, `ServerRowIdentity`, `ServerSelection`, `ServerSelectionSnapshot`, `ServerRowPatch`, `ServerMutationResult`, `ServerInvalidation`, `ServerCacheBlock`, `ServerCacheDiagnostics`, `ServerBlockKey`, `ServerBlockCacheOptions`, `ServerExportQuery`, `ServerExportResult`, `ServerRowUpdate`, `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowModelState`, `ServerRowModelDiagnostics`, `ServerRowModelEvent`, `ServerLoadDiagnostics`, `ServerLoadStatus`, `BcPivotState`, `BcPivotedDataDTO`.
 
 `ServerQueryBase` is the shared shape every `ServerPagedQuery` / `ServerBlockQuery` / `ServerTreeQuery` extends (carries `view`, `requestId`, optional `viewKey`). `ServerRowIdentity` is the row-id contract (`rowId(row)` + optional `groupRowId`) the server-row-model passes to the React layer.
 
@@ -1489,8 +1500,8 @@ Reasoning:
 So:
 
 - **`@bc-grid/core` exports**: every type listed in `server-query-rfc §Public Types`.
-- **`@bc-grid/server-row-model` exports**: the state machine factory, the cache, helper utilities. No types — types come from `core`.
-- **`@bc-grid/react` re-exports**: `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowPatch`, `ServerMutationResult`, `ServerRowUpdate`, `BcServerGridProps`, `BcServerGridApi`, `BcServerEditMutationEvent`, `BcServerEditMutationHandler`, `BcServerEditMutationProps`, `BcServerEditPatchFactory`, and `useServerRowUpdates` for consumer convenience.
+- **`@bc-grid/server-row-model` exports**: the state machine factory, the cache, and pure diagnostics helpers (`summarizeServerViewState`, `summarizeServerQuery`, `summarizeServerCache`, `summarizeServerRowModelState`). Types come from `core`.
+- **`@bc-grid/react` re-exports**: `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowPatch`, `ServerMutationResult`, `ServerRowUpdate`, `ServerRowModelDiagnostics`, `ServerQueryDiagnostics`, `ServerLoadDiagnostics`, `BcServerGridProps`, `BcServerGridApi`, `BcServerEditMutationEvent`, `BcServerEditMutationHandler`, `BcServerEditMutationProps`, `BcServerEditPatchFactory`, and `useServerRowUpdates` for consumer convenience.
 
 ### 8.2 Resolved review-comments from server-query-rfc
 

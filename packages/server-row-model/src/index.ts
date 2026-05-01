@@ -8,12 +8,16 @@ import type {
   ServerBlockQuery,
   ServerBlockResult,
   ServerCacheBlock,
+  ServerCacheDiagnostics,
   ServerGroupKey,
   ServerInvalidation,
   ServerLoadContext,
+  ServerLoadDiagnostics,
   ServerMutationResult,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerQueryDiagnostics,
+  ServerRowModelDiagnostics,
   ServerRowModelEvent,
   ServerRowModelMode,
   ServerRowModelState,
@@ -23,6 +27,7 @@ import type {
   ServerTreeQuery,
   ServerTreeResult,
   ServerTreeRow,
+  ServerViewDiagnostics,
   ServerViewState,
 } from "@bc-grid/core"
 
@@ -281,6 +286,8 @@ const DEFAULT_BLOCK_CACHE_OPTIONS: ServerBlockCacheOptions = {
   staleTimeMs: 30_000,
 }
 
+const cacheBlockStates = ["queued", "fetching", "loaded", "stale", "error", "evicted"] as const
+
 export function defaultBlockKey(input: BlockKeyInput): ServerBlockKey {
   if (input.mode === "paged") {
     return `paged:${input.viewKey}:page:${input.pageIndex}:size:${input.pageSize}`
@@ -289,6 +296,97 @@ export function defaultBlockKey(input: BlockKeyInput): ServerBlockKey {
     return `infinite:${input.viewKey}:start:${input.blockStart}:size:${input.blockSize}`
   }
   return `tree:${input.viewKey}:parent:${input.parentRowId ?? "root"}:start:${input.childStart}:size:${input.childCount}`
+}
+
+export function summarizeServerViewState(view: ServerViewState): ServerViewDiagnostics {
+  return {
+    filterActive: !!view.filter,
+    groupByCount: view.groupBy.length,
+    searchActive: !!view.search?.trim(),
+    sortCount: view.sort.length,
+    visibleColumnCount: view.visibleColumns.length,
+    ...(view.locale ? { locale: view.locale } : {}),
+    ...(view.timeZone ? { timeZone: view.timeZone } : {}),
+  }
+}
+
+export function summarizeServerQuery(
+  query: ServerPagedQuery | ServerBlockQuery | ServerTreeQuery,
+): ServerQueryDiagnostics {
+  const base = {
+    requestId: query.requestId,
+    view: summarizeServerViewState(query.view),
+    ...(query.viewKey ? { viewKey: query.viewKey } : {}),
+  }
+
+  if (query.mode === "paged") {
+    return {
+      ...base,
+      mode: "paged",
+      pageIndex: query.pageIndex,
+      pageSize: query.pageSize,
+    }
+  }
+
+  if (query.mode === "infinite") {
+    return {
+      ...base,
+      blockSize: query.blockSize,
+      blockStart: query.blockStart,
+      mode: "infinite",
+    }
+  }
+
+  return {
+    ...base,
+    childCount: query.childCount,
+    childStart: query.childStart,
+    groupPath: query.groupPath,
+    mode: "tree",
+    parentRowId: query.parentRowId,
+  }
+}
+
+export function summarizeServerCache<TRow>(
+  blocks: ReadonlyMap<ServerBlockKey, ServerCacheBlock<TRow>>,
+): ServerCacheDiagnostics {
+  const states = Object.fromEntries(cacheBlockStates.map((state) => [state, 0])) as Record<
+    ServerCacheBlock<unknown>["state"],
+    number
+  >
+  let loadedRowCount = 0
+  const blockKeys: ServerBlockKey[] = []
+
+  for (const [blockKey, block] of blocks) {
+    blockKeys.push(blockKey)
+    states[block.state] += 1
+    if (block.state === "loaded" || block.state === "stale") {
+      loadedRowCount += block.rows.length
+    }
+  }
+
+  return {
+    blockCount: blocks.size,
+    blockKeys,
+    loadedRowCount,
+    states,
+  }
+}
+
+export function summarizeServerRowModelState<TRow>(
+  state: ServerRowModelState<TRow>,
+  lastLoad: ServerLoadDiagnostics = { status: "idle" },
+): ServerRowModelDiagnostics {
+  return {
+    cache: summarizeServerCache(state.blocks),
+    lastLoad,
+    mode: state.mode,
+    pendingMutationCount: state.pendingMutations.size,
+    rowCount: state.rowCount,
+    view: state.view,
+    viewKey: state.viewKey,
+    viewSummary: summarizeServerViewState(state.view),
+  }
 }
 
 export class ServerBlockCache<TRow> {
@@ -485,6 +583,7 @@ class ServerRowModelController<TRow> {
   #inFlightPaged = new Map<ServerBlockKey, InFlightPagedRequest<TRow>>()
   #inFlightTree = new Map<ServerBlockKey, InFlightTreeRequest<TRow>>()
   #infiniteQueueTimer: ReturnType<typeof setTimeout> | null = null
+  #lastLoad: ServerLoadDiagnostics = { status: "idle" }
   #metrics = createMetricsState()
   #onEvent: ((event: ServerRowModelEvent<TRow>) => void) | null = null
   #pendingMutations = new Map<string, ServerRowPatch>()
@@ -529,6 +628,10 @@ class ServerRowModelController<TRow> {
     this.#metrics = createMetricsState()
   }
 
+  getDiagnostics(input: StateSnapshotInput): ServerRowModelDiagnostics {
+    return summarizeServerRowModelState(this.getState(input), this.#lastLoad)
+  }
+
   loadPagedPage(input: LoadPagedPageInput<TRow>): LoadPagedPageResult<TRow> {
     const viewKey = input.viewKey ?? this.createViewKey(input.view)
     const blockKey = defaultBlockKey({
@@ -539,6 +642,7 @@ class ServerRowModelController<TRow> {
     })
     const existing = this.#inFlightPaged.get(blockKey)
     if (existing) {
+      this.setLastLoad({ blockKey, query: existing.query, status: "deduped" })
       return {
         blockKey,
         deduped: true,
@@ -561,6 +665,7 @@ class ServerRowModelController<TRow> {
       viewKey,
     })
     this.emit({ type: "blockFetching", blockKey, requestId: query.requestId })
+    this.setLastLoad({ blockKey, query, status: "loading" })
 
     const promise = input
       .loadPage(query, { signal: controller.signal })
@@ -576,10 +681,13 @@ class ServerRowModelController<TRow> {
           ...(result.revision ? { revision: result.revision } : {}),
         })
         this.emit({ type: "blockLoaded", blockKey, rowCount: result.totalRows })
+        this.setLastLoad({ blockKey, query, rowCount: result.totalRows, status: "success" })
         return rows === result.rows ? result : { ...result, rows }
       })
       .catch((error: unknown) => {
-        if (!isAbortError(error)) {
+        if (isAbortError(error)) {
+          this.setLastLoad({ blockKey, error, query, status: "aborted" })
+        } else {
           this.cache.markError({
             blockKey,
             error,
@@ -588,6 +696,7 @@ class ServerRowModelController<TRow> {
             viewKey,
           })
           this.emit({ type: "blockError", blockKey, error })
+          this.setLastLoad({ blockKey, error, query, status: "error" })
         }
         throw error
       })
@@ -619,6 +728,12 @@ class ServerRowModelController<TRow> {
 
     if (cached?.state === "loaded" && !isStale(cached, options.staleTimeMs)) {
       this.#metrics.cacheHits += 1
+      this.setLastLoad({
+        blockKey,
+        query,
+        rowCount: "unknown",
+        status: "cached",
+      })
       return {
         blockKey,
         cached: true,
@@ -638,6 +753,7 @@ class ServerRowModelController<TRow> {
     const existing = this.#inFlightInfinite.get(blockKey)
     if (existing) {
       this.#metrics.dedupedRequests += 1
+      this.setLastLoad({ blockKey, query: existing.query, status: "deduped" })
       return {
         blockKey,
         cached: false,
@@ -682,6 +798,7 @@ class ServerRowModelController<TRow> {
       this.#metrics.queuedRequests += 1
       this.observeQueueDepth()
       this.emit({ type: "blockQueued", blockKey })
+      this.setLastLoad({ blockKey, query, status: "queued" })
       this.scheduleInfinitePump(options)
     }
 
@@ -699,6 +816,7 @@ class ServerRowModelController<TRow> {
     })
     const existing = this.#inFlightTree.get(blockKey)
     if (existing) {
+      this.setLastLoad({ blockKey, query: existing.query, status: "deduped" })
       return {
         blockKey,
         deduped: true,
@@ -722,6 +840,7 @@ class ServerRowModelController<TRow> {
       start: input.childStart,
       viewKey,
     })
+    this.setLastLoad({ blockKey, query, status: "loading" })
 
     const promise = input
       .loadChildren(query, { signal: controller.signal })
@@ -745,6 +864,12 @@ class ServerRowModelController<TRow> {
           result,
           viewKey: result.viewKey ?? viewKey,
         })
+        this.setLastLoad({
+          blockKey,
+          query,
+          rowCount: result.totalChildCount ?? result.rows.length,
+          status: "success",
+        })
         if (rows === resultRows) return result
         return {
           ...result,
@@ -752,7 +877,9 @@ class ServerRowModelController<TRow> {
         }
       })
       .catch((error: unknown) => {
-        if (!isAbortError(error)) {
+        if (isAbortError(error)) {
+          this.setLastLoad({ blockKey, error, query, status: "aborted" })
+        } else {
           this.cache.markError({
             blockKey,
             error,
@@ -760,6 +887,7 @@ class ServerRowModelController<TRow> {
             start: input.childStart,
             viewKey,
           })
+          this.setLastLoad({ blockKey, error, query, status: "error" })
         }
         throw error
       })
@@ -1358,6 +1486,12 @@ class ServerRowModelController<TRow> {
     viewKey: string
   }): void {
     if (input.request.controller.signal.aborted) {
+      this.setLastLoad({
+        blockKey: input.blockKey,
+        error: createAbortError(),
+        query: input.query,
+        status: "aborted",
+      })
       input.deferred.reject(createAbortError())
       return
     }
@@ -1381,6 +1515,7 @@ class ServerRowModelController<TRow> {
       viewKey: input.viewKey,
     })
     this.emit({ type: "blockFetching", blockKey: input.blockKey, requestId: input.query.requestId })
+    this.setLastLoad({ blockKey: input.blockKey, query: input.query, status: "loading" })
 
     input.input
       .loadBlock(input.query, { signal: input.request.controller.signal })
@@ -1402,6 +1537,12 @@ class ServerRowModelController<TRow> {
           blockKey: input.blockKey,
           rowCount: getInfiniteRowCount(result),
         })
+        this.setLastLoad({
+          blockKey: input.blockKey,
+          query: input.query,
+          rowCount: getInfiniteRowCount(result),
+          status: "success",
+        })
         const evicted = this.cache.evictLoadedBlocks(input.options.maxBlocks)
         for (const blockKey of evicted) {
           this.#metrics.evictedBlocks += 1
@@ -1411,7 +1552,14 @@ class ServerRowModelController<TRow> {
       })
       .catch((error: unknown) => {
         observeFetchDuration()
-        if (!isAbortError(error)) {
+        if (isAbortError(error)) {
+          this.setLastLoad({
+            blockKey: input.blockKey,
+            error,
+            query: input.query,
+            status: "aborted",
+          })
+        } else {
           this.#metrics.blockFetchErrors += 1
           this.cache.markError({
             blockKey: input.blockKey,
@@ -1421,6 +1569,12 @@ class ServerRowModelController<TRow> {
             viewKey: input.viewKey,
           })
           this.emit({ type: "blockError", blockKey: input.blockKey, error })
+          this.setLastLoad({
+            blockKey: input.blockKey,
+            error,
+            query: input.query,
+            status: "error",
+          })
         }
         input.deferred.reject(error)
       })
@@ -1483,6 +1637,22 @@ class ServerRowModelController<TRow> {
 
   private emit(event: ServerRowModelEvent<TRow>): void {
     this.#onEvent?.(event)
+  }
+
+  private setLastLoad(input: {
+    blockKey: ServerBlockKey
+    error?: unknown
+    query: ServerPagedQuery | ServerBlockQuery | ServerTreeQuery
+    rowCount?: number | "unknown"
+    status: ServerLoadDiagnostics["status"]
+  }): void {
+    this.#lastLoad = {
+      blockKey: input.blockKey,
+      query: summarizeServerQuery(input.query),
+      status: input.status,
+      ...(input.rowCount != null ? { rowCount: input.rowCount } : {}),
+      ...(input.error != null ? { error: serverLoadErrorMessage(input.error) } : {}),
+    }
   }
 
   private captureCanonicalMutationRow(rowId: RowId, rowIdGetter: RowIdGetter<TRow>): void {
@@ -1703,6 +1873,12 @@ function isAbortError(error: unknown): boolean {
 
 function createAbortError(): DOMException {
   return new DOMException("Aborted", "AbortError")
+}
+
+function serverLoadErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string") return error
+  return "Unknown server row load error"
 }
 
 function createDeferred<T>(): Deferred<T> {

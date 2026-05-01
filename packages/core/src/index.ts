@@ -331,6 +331,7 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   queueServerRowMutation(patch: ServerRowPatch): void
   settleServerRowMutation(result: ServerMutationResult<TRow>): void
   getServerRowModelState(): ServerRowModelState<TRow>
+  getServerDiagnostics(): ServerRowModelDiagnostics
 }
 
 export type ServerRowModelMode = "paged" | "infinite" | "tree"
@@ -583,6 +584,80 @@ export interface ServerRowModelState<TRow> {
   blocks: Map<ServerBlockKey, ServerCacheBlock<TRow>>
   pendingMutations: Map<string, ServerRowPatch>
   selection: ServerSelection
+}
+
+export interface ServerViewDiagnostics {
+  sortCount: number
+  filterActive: boolean
+  searchActive: boolean
+  groupByCount: number
+  visibleColumnCount: number
+  locale?: string
+  timeZone?: string
+}
+
+export type ServerQueryDiagnostics =
+  | {
+      mode: "paged"
+      requestId: string
+      viewKey?: string
+      view: ServerViewDiagnostics
+      pageIndex: number
+      pageSize: number
+    }
+  | {
+      mode: "infinite"
+      requestId: string
+      viewKey?: string
+      view: ServerViewDiagnostics
+      blockStart: number
+      blockSize: number
+    }
+  | {
+      mode: "tree"
+      requestId: string
+      viewKey?: string
+      view: ServerViewDiagnostics
+      parentRowId: RowId | null
+      groupPath: ServerGroupKey[]
+      childStart: number
+      childCount: number
+    }
+
+export type ServerLoadStatus =
+  | "idle"
+  | "queued"
+  | "loading"
+  | "success"
+  | "error"
+  | "cached"
+  | "deduped"
+  | "aborted"
+
+export interface ServerLoadDiagnostics {
+  status: ServerLoadStatus
+  blockKey?: ServerBlockKey
+  query?: ServerQueryDiagnostics
+  rowCount?: number | "unknown"
+  error?: string
+}
+
+export interface ServerCacheDiagnostics {
+  blockCount: number
+  blockKeys: ServerBlockKey[]
+  loadedRowCount: number
+  states: Record<ServerCacheBlock<unknown>["state"], number>
+}
+
+export interface ServerRowModelDiagnostics {
+  mode: ServerRowModelMode
+  view: ServerViewState
+  viewKey: string
+  viewSummary: ServerViewDiagnostics
+  rowCount: number | "unknown"
+  cache: ServerCacheDiagnostics
+  pendingMutationCount: number
+  lastLoad: ServerLoadDiagnostics
 }
 
 export type ServerRowModelEvent<TRow> =
