@@ -47,6 +47,7 @@ export function createSelectionCheckboxColumn<TRow>(
     sortable: false,
     resizable: false,
     filter: false,
+    columnMenu: false,
     align: "center",
     cellRenderer(params) {
       const { rowId, rowState } = params

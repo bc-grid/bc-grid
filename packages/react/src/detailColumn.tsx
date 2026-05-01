@@ -24,6 +24,7 @@ export function createDetailToggleColumn<TRow>({
     sortable: false,
     resizable: false,
     filter: false,
+    columnMenu: false,
     align: "center",
     cellRenderer(params) {
       const expanded = expansionState.has(params.rowId)
