@@ -107,6 +107,14 @@ export const featureDiscoveryRows: readonly FeatureDiscoveryRow[] = [
     shortcutHref: "?toolPanel=filters#customer-grid",
   },
   {
+    feature: "Row grouping (client / server-page-window)",
+    status: "Available",
+    entry:
+      "?groupBy=region,status — Columns panel 'Group by' zone, header menu, controlled groupBy",
+    api: "groupBy, defaultGroupBy, onGroupByChange, groupableColumns, groupsExpandedByDefault",
+    shortcutHref: "?groupBy=region,status#customer-grid",
+  },
+  {
     feature: "Context menu",
     status: "Available",
     entry: "right-click grid cells",
