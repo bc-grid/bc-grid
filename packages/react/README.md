@@ -106,14 +106,14 @@ return (
       data={rows}
       rowId={(row) => row.id}
       searchText={searchText}
-      onSearchTextChange={(next) => setSearchText(next)}
     />
   </>
 )
 ```
 
-Use `defaultSearchText` for an uncontrolled initial query. Do not combine it
-with `searchText` on the same grid.
+Use `defaultSearchText` for an uncontrolled initial query. For a host-owned
+search input, prefer controlling the query with `searchText` as shown above. Do
+not combine `defaultSearchText` with `searchText` on the same grid.
 
 ## Bundle size
 

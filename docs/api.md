@@ -682,15 +682,15 @@ function CustomerGrid() {
         columns={columns}
         rowId={(row) => row.id}
         searchText={searchText}
-        onSearchTextChange={(next) => setSearchText(next)}
       />
     </>
   )
 }
 ```
 
-Use `defaultSearchText` only for uncontrolled initial state. Do not pass
-`searchText` and `defaultSearchText` to the same grid.
+Use `defaultSearchText` only for an uncontrolled initial query. For a host-owned
+search input, prefer controlling the query with `searchText` as shown above. Do
+not pass `searchText` and `defaultSearchText` to the same grid.
 
 ### 4.4 Filter shape (frozen at v0.1)
 
