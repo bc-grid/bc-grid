@@ -11,6 +11,7 @@ import {
   pinnedClassName,
   pinnedEdgeClassName,
 } from "./gridInternals"
+import { DisclosureChevron } from "./internal/disclosure-icon"
 import { BcGridTooltip } from "./tooltip"
 import type { BcCellRendererParams } from "./types"
 import { formatCellValue, getCellValue } from "./value"
@@ -292,9 +293,7 @@ export function renderGroupRowCell<TRow>({
         }}
         onKeyDown={stopGridKeyboardNav}
       >
-        <span aria-hidden="true" className="bc-grid-group-toggle-icon">
-          &gt;
-        </span>
+        <DisclosureChevron className="bc-grid-group-toggle-icon" />
       </button>
       <span className="bc-grid-group-label">{label}</span>
       <span className="bc-grid-group-count">({entry.childCount})</span>

@@ -208,6 +208,13 @@
   outline: none;
 }
 
+/*
+ * Group-row disclosure chevron. SVG vector — never a text glyph —
+ * rotates 90deg when the parent toggle reports `aria-expanded="true"`.
+ * Per the master/detail motion contract (`docs/api.md §5.4`):
+ * rotation runs on the SVG element only; no scale, no font-size morph,
+ * no height / max-height transitions on the disclosure path.
+ */
 .bc-grid-group-toggle-icon {
   display: inline-block;
   transform: rotate(0deg);
@@ -2013,24 +2020,18 @@
   outline: none;
 }
 
+/*
+ * Master/detail row disclosure chevron. SVG vector matching the group
+ * toggle — same shared `<DisclosureChevron>` component. Rotates 90deg
+ * when the parent toggle reports `aria-expanded="true"`. Replaces the
+ * previous CSS-pseudo-element border-arrow construction so consumers
+ * see a consistent disclosure affordance across master/detail and
+ * group rows.
+ */
 .bc-grid-detail-toggle-icon {
-  display: inline-flex;
-  width: 0.625rem;
-  height: 0.625rem;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
   transform: rotate(0deg);
   transition: transform var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
-}
-
-.bc-grid-detail-toggle-icon::before {
-  display: block;
-  width: 0.4375rem;
-  height: 0.4375rem;
-  border-right: 1.5px solid currentcolor;
-  border-bottom: 1.5px solid currentcolor;
-  content: "";
-  transform: rotate(-45deg);
 }
 
 .bc-grid-detail-toggle[aria-expanded="true"] .bc-grid-detail-toggle-icon {

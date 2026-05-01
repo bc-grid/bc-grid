@@ -175,4 +175,100 @@ describe("master detail panel slot", () => {
     expect(html).toContain('aria-colspan="2"')
     expect(html).toContain("Contacts for Acme")
   })
+
+  test("does not emit text-scaling / height-morph styles on the detail panel slot", () => {
+    // Regression net for the master/detail motion contract: the panel
+    // wrapper sets only `height` / `top` / `width` / layout props as
+    // inline styles; never `transform` (would risk text scaling on
+    // rotation / zoom), never `transition` (would risk a height-morph
+    // motion). Both properties are confirmed absent from
+    // `detailPanelStyle()` above; this guards the rendered markup too.
+    const html = renderToStaticMarkup(
+      <BcDetailPanelSlot<Row>
+        colSpan={1}
+        domBaseId="bc-grid-master-detail-test"
+        height={120}
+        renderDetailPanel={({ row }) => <span>{row.name}</span>}
+        row={rows[0]}
+        rowId="cust-1"
+        rowIndex={0}
+        top={36}
+        width={320}
+      />,
+    )
+    expect(html).not.toMatch(/style="[^"]*transform/)
+    expect(html).not.toMatch(/style="[^"]*transition/)
+    expect(html).not.toMatch(/style="[^"]*scale\(/)
+    expect(html).not.toMatch(/style="[^"]*max-height/)
+    expect(html).not.toMatch(/style="[^"]*animation/)
+  })
+})
+
+describe("master detail toggle disclosure affordance", () => {
+  // Brief: "Replace crude text chevrons with a compact disclosure
+  // affordance using existing internal icon/primitives style; keep it
+  // accessible with correct labels and aria-expanded."
+
+  function renderDetailToggle(expanded: boolean): string {
+    const column = createDetailToggleColumn<Row>({
+      domBaseId: "bc-grid-customers",
+      expansionState: expanded ? new Set<RowId>(["cust-1"]) : new Set<RowId>(),
+      setExpansionState: () => {},
+    })
+    return renderToStaticMarkup(
+      column.cellRenderer?.({
+        column,
+        editing: false,
+        formattedValue: "",
+        isDirty: false,
+        pending: false,
+        row: rows[0],
+        rowId: "cust-1",
+        rowState: { rowId: "cust-1", index: 0, expanded },
+        searchText: "",
+        value: undefined,
+      } as never) as ReactElement<Record<string, unknown>>,
+    )
+  }
+
+  test("renders a vector chevron (SVG), never a `&gt;` text glyph", () => {
+    // The pre-cleanup affordance was a literal `&gt;` text node that
+    // got rotated via CSS transform — exactly the "rotate text glyph"
+    // anti-pattern the brief calls out. Pin the SVG markup so the
+    // anti-pattern can't sneak back.
+    const closed = renderDetailToggle(false)
+    const open = renderDetailToggle(true)
+
+    // SVG present, with the disclosure chevron path.
+    expect(closed).toContain("<svg")
+    expect(closed).toMatch(/aria-hidden="true"[^>]*class="bc-grid-detail-toggle-icon"/)
+    expect(closed).toContain('viewBox="0 0 12 12"')
+    // No `&gt;` text content that could be rotated as a glyph.
+    expect(closed).not.toContain(">&gt;<")
+    expect(open).not.toContain(">&gt;<")
+  })
+
+  test("aria-expanded toggles with the expansion state and labels match the action", () => {
+    const closed = renderDetailToggle(false)
+    const open = renderDetailToggle(true)
+
+    expect(closed).toMatch(/aria-expanded="false"/)
+    expect(open).toMatch(/aria-expanded="true"/)
+    expect(closed).toContain('aria-label="Expand details for row cust-1"')
+    expect(open).toContain('aria-label="Collapse details for row cust-1"')
+  })
+
+  test("button keeps `aria-controls` linkage to the matching detail panel id", () => {
+    const html = renderDetailToggle(false)
+    expect(html).toContain('aria-controls="bc-grid-customers-detail-panel-cust-1"')
+  })
+
+  test("rendered toggle uses the shared bc-grid-detail-toggle class hooks (CSS surface)", () => {
+    // Pin the surface CSS hooks so the theming-test invariants
+    // (`transition` only on `transform`, no scale, no max-height)
+    // continue to apply on every theme override.
+    const html = renderDetailToggle(false)
+    expect(html).toContain('class="bc-grid-detail-toggle"')
+    expect(html).toMatch(/class="bc-grid-detail-toggle-icon"/)
+  })
 })

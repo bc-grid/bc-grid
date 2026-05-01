@@ -451,6 +451,71 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain("transition: height")
   })
 
+  test("master-detail / group disclosure motion is icon-only (no text-glyph rotation, no height morph)", () => {
+    // Brief: master/detail expansion must never scale text, morph
+    // font size, or look like a 1990s height animation. The pre-
+    // cleanup detail toggle drew its chevron from CSS pseudo-element
+    // borders; the group toggle rotated a literal `&gt;` text glyph.
+    // After the cleanup both toggles render an inline SVG vector
+    // chevron, and CSS rotates that SVG via the parent's
+    // `aria-expanded="true"` selector.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    // Both toggle icons exist and animate `transform` (the only
+    // property allowed to transition on the disclosure path).
+    expect(css).toMatch(
+      /\.bc-grid-group-toggle-icon\s*\{[^}]*transition:\s*transform\s+var\(--bc-grid-motion-duration-fast\)/,
+    )
+    expect(css).toMatch(
+      /\.bc-grid-detail-toggle-icon\s*\{[^}]*transition:\s*transform\s+var\(--bc-grid-motion-duration-fast\)/,
+    )
+
+    // The previous `::before` border-arrow construction is gone
+    // from the detail toggle. SVG affordance replaces it.
+    expect(css).not.toContain(".bc-grid-detail-toggle-icon::before")
+
+    // Neither toggle transitions or animates font-size / height /
+    // max-height — guards against a regression where someone wires
+    // a 1990s "expand the row by morphing the height" animation.
+    function ruleFor(selector: string): string {
+      const start = css.indexOf(selector)
+      if (start < 0) return ""
+      const end = css.indexOf("}", start)
+      return css.slice(start, end + 1)
+    }
+    for (const selector of [
+      ".bc-grid-group-toggle ",
+      ".bc-grid-group-toggle-icon ",
+      ".bc-grid-detail-toggle ",
+      ".bc-grid-detail-toggle-icon ",
+      ".bc-grid-detail-panel ",
+      ".bc-grid-detail-panel-region ",
+      ".bc-grid-row-expanded ",
+    ]) {
+      const rule = ruleFor(selector)
+      expect(rule).not.toMatch(/transition:[^;}]*\b(?:height|max-height|font-size|width)\b/)
+      expect(rule).not.toMatch(/animation:[^;}]*\b(?:height|max-height|font-size)\b/)
+      expect(rule).not.toMatch(/scale[XY]?\(/)
+    }
+
+    // The detail-panel content fade keyframe is translate-only —
+    // no scale, no height interpolation — and the existing global
+    // "CSS motion avoids text scaling" test enforces the no-scale
+    // rule across the file. Pin the detail-panel keyframe shape
+    // here too so future polish can't reintroduce a scale step.
+    const keyframeStart = css.indexOf("@keyframes bc-grid-detail-panel-content-in")
+    expect(keyframeStart).toBeGreaterThan(-1)
+    const keyframeEnd = css.indexOf("}", css.indexOf("}", keyframeStart) + 1)
+    const keyframe = css.slice(keyframeStart, keyframeEnd + 1)
+    expect(keyframe).toContain("opacity: 0")
+    expect(keyframe).toContain("opacity: 1")
+    expect(keyframe).toMatch(/translateY\(/)
+    expect(keyframe).not.toMatch(/scale[XY]?\(/)
+    expect(keyframe).not.toMatch(/\bheight:/)
+    expect(keyframe).not.toMatch(/\bmax-height:/)
+    expect(keyframe).not.toMatch(/\bfont-size:/)
+  })
+
   test("CSS motion avoids text scaling and layout-property transitions", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
 
