@@ -130,16 +130,23 @@ const featureDiscoveryRows = [
     api: 'sidebar={["filters"]}',
   },
   {
+    feature: "Row grouping",
+    status: "Available",
+    entry: "?groupBy=region,status — Columns panel 'Group by' zone, header menu",
+    api: "groupBy, defaultGroupBy, groupableColumns, groupsExpandedByDefault",
+  },
+  {
     feature: "Context menu",
     status: "Available",
     entry: "right-click grid cells",
     api: "contextMenuItems, showColumnMenu",
   },
   {
-    feature: "Cell editing",
+    feature: "Cell editing (built-in editors)",
     status: "Available",
-    entry: "?edit=1",
-    api: "BcEditGrid, cellEditor",
+    entry:
+      "?edit=1 — text / number / date / time / select / multi-select / autocomplete / checkbox",
+    api: "BcEditGrid, editable, cellEditor, valueParser, validate",
   },
   {
     feature: "Checkbox selection",
@@ -434,6 +441,42 @@ function initialToolPanel(): CustomerGridSidebarPanel | null {
   return isCustomerGridSidebarPanel(panel) ? panel : null
 }
 
+/**
+ * `?groupBy=region,status` URL flag seeds the example grid with an
+ * initial group-by stack. Demonstrates the `defaultGroupBy` +
+ * `groupsExpandedByDefault` pair from `docs/api.md` §4.5: client
+ * full-data grouping over the AR Customers ledger, with each group
+ * row pre-expanded so the demo reads as an organisational view.
+ *
+ * Pair with `?toolPanel=columns` to land on the Columns tool panel
+ * with the "Group by" zone visible — that's the third built-in entry
+ * point for users to add / remove groups on the fly.
+ *
+ * Accepts a comma-separated column-id list filtered against the
+ * curated `customerGridGroupableColumns` set so a stale share link
+ * never crashes the demo. An empty / missing flag leaves grouping
+ * off (the default).
+ */
+function initialGroupBy(): readonly string[] {
+  if (typeof window === "undefined") return []
+  const raw = new URLSearchParams(window.location.search).get("groupBy")
+  if (!raw) return []
+  const allowed = new Set<string>(customerGridGroupableColumns.map((column) => column.columnId))
+  return raw
+    .split(",")
+    .map((token) => token.trim())
+    .filter((token): token is string => token.length > 0 && allowed.has(token))
+}
+
+function groupsExpandedByDefaultEnabled(): boolean {
+  if (typeof window === "undefined") return false
+  // Default: when `?groupBy=` is supplied, expand groups so the demo
+  // is immediately readable; otherwise leave collapsed.
+  // `?groupBy=…&groupsCollapsed=1` opts back into the collapsed default.
+  if (new URLSearchParams(window.location.search).get("groupsCollapsed") === "1") return false
+  return initialGroupBy().length > 0
+}
+
 function isCustomerGridSidebarPanel(value: string | null): value is CustomerGridSidebarPanel {
   return value === "columns" || value === "filters" || value === "pivot"
 }
@@ -462,6 +505,8 @@ function CustomerGridDemo({
   const aggregationDemo = aggregationsEnabled()
   const masterDetailDemo = masterDetailEnabled()
   const gridHeight = autoHeightEnabled() ? "auto" : 560
+  const initialGroupByColumns = useMemo(() => initialGroupBy(), [])
+  const groupsExpandedDefault = groupsExpandedByDefaultEnabled()
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
   const urlStatePersistence = useMemo(
@@ -934,6 +979,12 @@ function CustomerGridDemo({
         ]}
         gridId="accounts-receivable.customers"
         groupableColumns={customerGridGroupableColumns}
+        {...(initialGroupByColumns.length > 0
+          ? {
+              defaultGroupBy: initialGroupByColumns,
+              groupsExpandedByDefault: groupsExpandedDefault,
+            }
+          : {})}
         height={gridHeight}
         linkField="legalName"
         locale="en-US"

@@ -43,7 +43,8 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Columns panel | Available | Tool panels control or `?toolPanel=columns` | `sidebar={["columns"]}` |
 | Filters panel | Available | Tool panels control or `?toolPanel=filters` | `sidebar={["filters"]}` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
-| Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
+| Cell editing | Available | `?edit=1` — text / number / date / time / select / multi-select / autocomplete / checkbox | `<BcEditGrid>`, `editable`, `cellEditor`, `valueParser`, `validate` |
+| Row grouping | Available | `?groupBy=region,status` — Columns panel "Group by" zone, header menu | `groupBy`, `defaultGroupBy`, `groupableColumns`, `groupsExpandedByDefault` |
 | Checkbox selection | Available | `?checkbox=1` | `checkboxSelection` |
 | URL state persistence | Available | `?urlstate=1` | `gridId`, `urlStatePersistence` |
 | Pagination | Available | `?pagination=1` | `pagination`, `pageSizeOptions` |
@@ -832,6 +833,121 @@ export interface BcFilterEditorProps<TValue = unknown> {
   locale?: string
 }
 ```
+
+### 4.5 Grouping (frozen at v0.1)
+
+Row grouping is a **first-class feature** in `<BcGrid>` and `<BcServerGrid>` — column values fold the row set into expandable group buckets, matching AG Grid's row-grouping semantics. The consumer surface is a single ordered list of column ids (`groupBy`); the grid handles bucket layout, group-row chrome, expansion state, and aggregation cascade automatically.
+
+#### Consumer API
+
+```ts
+export interface BcGridProps<TRow> {
+  // …
+  /** Active group-by columns, in nesting order (controlled). */
+  groupBy?: readonly ColumnId[]
+  /** Initial group-by columns, in nesting order (uncontrolled). */
+  defaultGroupBy?: readonly ColumnId[]
+  /** Fires after the user adds, removes, or reorders a group-by column. */
+  onGroupByChange?: (next: readonly ColumnId[], prev: readonly ColumnId[]) => void
+
+  /**
+   * Optional override that names the columns the Columns tool panel +
+   * column-menu offer as group-by candidates. Default is every column with
+   * `groupable: true`. Use the override to restrict the dropdown to a
+   * curated list (e.g., only the four columns that make sense as group
+   * roots in this view) without flipping `groupable: true` on every
+   * data column.
+   */
+  groupableColumns?: readonly { columnId: ColumnId; header: string }[]
+
+  /**
+   * When `true`, every group row that hasn't been explicitly collapsed
+   * starts expanded. Useful for grids that want grouping as an
+   * organizational view rather than a manual drill-down. Defaults to
+   * `false` (group rows start collapsed).
+   *
+   * Honoured only in uncontrolled-expansion mode. If the host controls
+   * `expansion` / `defaultExpansion`, the grid does not auto-expand —
+   * the consumer's expansion set is the source of truth.
+   */
+  groupsExpandedByDefault?: boolean
+}
+```
+
+Per-column opt-in:
+
+```ts
+export interface BcGridColumn<TRow, TValue = unknown> {
+  // …
+  /** Allow this column in the group-by dropdown (`groupableColumns` UI). */
+  groupable?: boolean
+}
+```
+
+The columns that show up in the Columns tool panel's "Group by" zone are:
+
+1. `groupableColumns` if explicitly supplied — the host curates the list.
+2. Otherwise every column with `groupable: true`.
+
+Setting `groupable: true` is **just** a UI opt-in — it does not enable grouping by itself. The grid still groups whatever `groupBy` (or the user-driven equivalent) names, regardless of `groupable`. The flag only controls discoverability through the built-in panel.
+
+#### How users add a group
+
+There are three built-in entry points; hosts can also drive `groupBy` directly:
+
+1. **Columns tool panel** (`sidebar={["columns"]}` or `?toolPanel=columns` in the examples app). The panel surfaces a "Group by" zone with chips for the active groups, a "Choose column" dropdown sourced from `groupableColumns`, drag-to-add from any panel item flagged `groupable: true`, and a per-row "Group" button that appends the column to `groupBy`. Removing a chip clears that column from the group-by list.
+2. **Column header menu** (the kebab on the right of every header) — the column-menu items include "Group by this column" / "Remove from groups" for `groupable` columns.
+3. **Direct prop** — a host toolbar can call `onGroupByChange` (or update its own `groupBy` state) to apply a saved view. `BcGridApi` does not yet expose a typed `setGroupBy` method (Q2).
+
+#### Client grouping vs server grouping
+
+The same `groupBy` shape covers three execution modes that differ in **what row set the grouping engine sees**. Be explicit about which one your grid uses — they look identical in the chrome but carry very different correctness implications.
+
+| Mode | What groups | Configure with |
+| --- | --- | --- |
+| **Client full-data grouping** | Every row in the **loaded client row model** (after client filter / search) — for `<BcGrid data={rows}>` that's the entire `data` array, so groups are stable across pagination. | `<BcGrid data={rows} groupBy={…} />` — the default. |
+| **Server page-window grouping** (client engine over the loaded page only) | Just the rows currently rendered in the loaded page or block from the server. The grid runs the same client engine, but it only sees the **loaded slice** — group buckets reflect that slice, not the global dataset. Useful in dev / for visual grouping inside a single page; misleading for a "Region" group that's really only "Region within page N". | `<BcServerGrid groupBy={…} />` without applying it server-side. |
+| **Server query delegation** | The server is the source of truth — bc-grid forwards `groupBy` to your `loadPage` / `loadBlock` callback as part of `query.view.groupBy: ServerGroup[]`, and your server returns rows already grouped (or the flattened slice of the active page). | `<BcServerGrid>` reads `query.view.groupBy` in the consumer-supplied loader; bc-grid does not apply client grouping on top. |
+
+Concrete client / server contract:
+
+- **Client grouping in `<BcGrid>`** groups the **loaded client row model**. With client `data`, that's every row; with a server-row-model adapter, it's only what's been loaded (i.e. the page or block window). Client grouping does **not** imply global grouping over rows the client hasn't seen.
+- **`<BcServerGrid>` always sends `groupBy` in the query** as `query.view.groupBy: ServerGroup[]`. Whether the rendered groups span the full dataset depends on the server: if the server applies the grouping and returns rows in global group order, the chrome shows a true full-dataset view; if the server ignores the group hint, the client engine groups only the loaded page and the chrome still renders bucket rows — but they're a slice of the dataset, not the global rollup. Treat the production path as **server delegation** and verify the back end honours `query.view.groupBy`.
+
+```tsx
+// Client full-data grouping (the default for <BcGrid>).
+<BcGrid
+  columns={columns}
+  data={rows}
+  rowId={(row) => row.id}
+  defaultGroupBy={["region", "status"]}
+  groupsExpandedByDefault
+/>
+```
+
+```ts
+// Server query delegation: forward `query.view.groupBy` to the back end.
+const loadPage: LoadServerPage<Customer> = async (query, { signal }) => {
+  const params = new URLSearchParams({
+    page: String(query.pageIndex),
+    pageSize: String(query.pageSize),
+    groupBy: query.view.groupBy.map((g) => g.columnId).join(","),
+  })
+  const response = await fetch(`/api/customers?${params}`, { signal })
+  const { rows, totalRows } = await response.json()
+  return { rows, totalRows }
+}
+```
+
+`ServerViewState.groupBy` is `readonly ServerGroup[]` (`{ columnId, direction? }`). Order is significant — the first entry is the outermost bucket, matching `BcGridProps.groupBy`. A grouping change on the client resets the requested server page to `0` (same reset rule as sort / filter / search / visible columns). `query.viewKey` includes the group set so a stale response that arrives after a user changes the grouping is dropped.
+
+#### Group-row chrome and aggregation
+
+Group rows render with `role="row" aria-level={depth}` and a built-in disclosure chevron. When the grid is grouped, the root carries `data-bc-grid-grouped="true"` and `role="treegrid"`; the disclosure motion + chrome contract is documented in §5.5. Group expansion state is the same `expansion: ReadonlySet<RowId>` pair used for master / detail rows (group row ids are stable for a given group path), and `groupsExpandedByDefault` is ignored when the host controls `expansion` / `defaultExpansion`.
+
+Aggregations cascade through groups: a column with `aggregation: { type: "sum" }` reports both the global total in the status bar and a per-group subtotal painted on each group row's value cell. Empty groups are pruned automatically; a group with zero matching rows after a filter does not render.
+
+`groupBy` round-trips through `BcGridLayoutState.groupBy` (saved-view layout) and through `gridId` localStorage as `bc-grid:{gridId}:groupBy`. URL persistence (via `urlStatePersistence`) carries `groupBy` alongside `columnState` and `sort`.
 
 ---
 
@@ -1909,6 +2025,139 @@ Server-backed consumers can use
 `<BcServerGrid onServerRowMutation>` for the built-in patch/queue/settle path,
 or wire `onCellEditCommit` manually with `BcServerGridApi.queueServerRowMutation`
 and `BcServerGridApi.settleServerRowMutation`.
+
+### 7.2 Practical editing guide — value pipeline, validate, pending, dirty, custom editors
+
+This section is the consumer-facing recap of cell editing in ERP /
+business-grid terms. The technical types live above in §7; the
+per-editor catalog lives in [`@bc-grid/editors` README](../packages/editors/README.md).
+
+#### The shipping editor catalog
+
+bc-grid ships nine built-in editors out of the box. They are React
+components implementing `BcCellEditor` and live in `@bc-grid/editors`:
+
+| Built-in | Cell type | Native control | Use for |
+| --- | --- | --- | --- |
+| `textEditor` | `string` | `<input type="text">` | free-form text — names, codes, descriptions |
+| `numberEditor` | `number` | `<input inputMode="decimal">` | quantities, prices, balances, percents |
+| `dateEditor` | `YYYY-MM-DD` string | `<input type="date">` | due dates, posted dates |
+| `datetimeEditor` | `YYYY-MM-DDTHH:mm` string | `<input type="datetime-local">` | timestamps, audit logs |
+| `timeEditor` | `HH:mm` string | `<input type="time">` | shift starts, working hours |
+| `selectEditor` | typed enum value | `<select>` | status, category, priority |
+| `multiSelectEditor` | typed enum array | `<select multiple>` | flags, tags, assignments |
+| `autocompleteEditor` | string | `<input list>` + `<datalist>` | reference fields with a long suggestion list |
+| `checkboxEditor` | `boolean` | `<input type="checkbox">` | active / paid / on-hold flags |
+
+Opt a column in by setting `editable: true` and assigning the
+appropriate `cellEditor`. The grid handles open / commit / cancel /
+focus return automatically — Enter / F2 / double-click open the
+editor, Enter / Tab commit, Escape cancels.
+
+```ts
+import { textEditor } from "@bc-grid/editors"
+
+const legalNameColumn = {
+  field: "legalName",
+  header: "Legal name",
+  editable: true,
+  cellEditor: textEditor,
+  valueParser: (input: string) => input.trim(),
+  validate: (next) =>
+    typeof next === "string" && next.length > 0
+      ? { valid: true }
+      : { valid: false, error: "Legal name is required." },
+}
+```
+
+#### Value pipeline — `valueParser` then `validate` then `onCellEditCommit`
+
+The lifecycle for **string-producing editors** (`textEditor`,
+`numberEditor`, `dateEditor`, `datetimeEditor`, `timeEditor`,
+`autocompleteEditor`):
+
+1. The user types into the native control. The editor commits
+   whatever string the input ended on (Enter / Tab / blur).
+2. **`column.valueParser(input, row)`** turns that string into the
+   typed `TValue`. Common patterns:
+   - `numberEditor`: `Number.parseFloat(input.replace(/,/g, "")) || 0`
+     (strip thousands separators, fall back to `0` so a partial typed
+     value never commits `NaN`).
+   - `textEditor` for codes: `input.trim().toUpperCase()`.
+   - `dateEditor`: identity (`(input) => input`) — the native
+     `<input type="date">` already emits ISO `YYYY-MM-DD`.
+3. **`column.validate(next, row)`** returns
+   `{ valid: true }` or `{ valid: false, error: "…" }`. Cross-row
+   invariants live here (e.g. "VIP and Manual Review can't both be
+   set" or "credit limit must be ≥ 0"). Returning a Promise puts the
+   cell into pending state until it resolves.
+4. **`onCellEditCommit({ row, column, previousValue, nextValue, source })`**
+   fires with the typed `nextValue`. Return a Promise to keep the
+   editor mounted in pending state until the commit settles — useful
+   when persistence is async and the host wants to surface a server
+   error inline.
+
+For **typed-value editors** (`selectEditor`, `multiSelectEditor`,
+`checkboxEditor`), `valueParser` is **bypassed** because the editor
+commits the typed value directly. `validate` and `onCellEditCommit`
+still run.
+
+#### Cell state hooks — pending, error, dirty
+
+The grid exposes the edit lifecycle through DOM hooks the editor
+chrome reads. `@bc-grid/theming` styles every state via `--bc-grid-*`
+tokens; hosts using a custom theme target the hooks directly.
+
+| State | Cell hook | Editor hook | When |
+| --- | --- | --- | --- |
+| Editing | `data-bc-grid-cell-state="editing"` | — | Editor portal mounted (Enter / F2 / double-click). |
+| Pending | `data-bc-grid-cell-state="pending"` | `data-bc-grid-editor-state="pending"` + `disabled` on the native control | Async `validate` or `onCellEditCommit` Promise in flight. |
+| Error | `data-bc-grid-cell-state="error"` | `data-bc-grid-editor-state="error"` + `aria-invalid="true"` | `validate` returned an error or the Promise rejected. |
+| Dirty | `data-bc-grid-cell-state="dirty"` | — | Server-grid optimistic patch waiting on the server to settle. |
+
+Validation errors render through the assertive live region owned by
+the React editor protocol (`messages.editValidationErrorAnnounce`),
+so AT users hear the error string returned from `validate`. The
+editor portal stays mounted on error so the user can correct the
+value without losing focus context. A keyboard cancel (`Escape`)
+clears both the pending edit and the error state.
+
+#### Custom editor escape hatch
+
+When a built-in editor isn't enough — picker dialogs, multi-step
+forms, async pre-load with rich popups — implement `BcCellEditor`
+directly. The protocol type is exported from `@bc-grid/react`; see
+§7 above for the full surface. Custom editors get the same
+`commit` / `cancel` / `moveOnSettle` keyboard contract as the
+built-ins, plus an optional `prepare(params)` hook for async data
+loading before the editor opens (the cell stays in pending state
+while `prepare` runs).
+
+```tsx
+import type { BcCellEditor } from "@bc-grid/react"
+
+const taxRegionEditor: BcCellEditor<CustomerRow, string> = {
+  kind: "tax-region",
+  Component({ initialValue, commit, cancel, focusRef }) {
+    return (
+      <TaxRegionPicker
+        ref={focusRef}
+        defaultValue={initialValue}
+        onSelect={(region) => commit(region, { moveOnSettle: "down" })}
+        onDismiss={cancel}
+      />
+    )
+  },
+  async prepare({ row, signal }) {
+    return { regions: await loadTaxRegions(row.country, signal) }
+  },
+}
+```
+
+The cell renders the picker over the native cell; commit / cancel
+return focus to the active cell so keyboard navigation continues
+seamlessly. The host owns picker chrome — bc-grid only manages the
+edit lifecycle.
 
 ---
 
