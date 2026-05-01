@@ -1485,8 +1485,14 @@ select.bc-grid-editor-input {
   flex-direction: column;
   align-items: center;
   gap: 0.25rem;
-  border-left: 1px solid transparent;
-  background: color-mix(in srgb, var(--bc-grid-sidebar-bg) 82%, var(--bc-grid-muted));
+  /*
+   * Rail shares the sidebar surface — the previous `color-mix` tint
+   * created a heavy seam against the panel and made the rail read as a
+   * detached strip. shadcn Sidebar keeps the rail and panel on the
+   * same surface; the icon-only buttons + active-state stripe carry
+   * the rail's identity instead of a separate background.
+   */
+  background: transparent;
   padding: 0.375rem 0.25rem;
 }
 
@@ -1509,21 +1515,33 @@ select.bc-grid-editor-input {
 }
 
 .bc-grid-sidebar-tab:hover {
-  border-color: var(--bc-grid-border);
+  /*
+   * Hover signals through bg + color only — shadcn buttons don't
+   * paint a hover border because the bg shift is enough and the
+   * extra colored frame adds visual weight at every pointer move.
+   */
   background: var(--bc-grid-row-hover);
   color: var(--bc-grid-fg);
 }
 
 .bc-grid-sidebar-tab:focus-visible {
-  border-color: var(--bc-grid-focus-ring);
-  background: var(--bc-grid-row-hover);
+  /*
+   * Focus is the outline ring with offset — the canonical shadcn
+   * focus-visible pattern. No bg shift, no border-color shift, so
+   * focus reads cleanly whether the button is active or inactive.
+   */
   color: var(--bc-grid-fg);
   outline: 2px solid var(--bc-grid-focus-ring);
   outline-offset: 2px;
 }
 
 .bc-grid-sidebar-tab[data-state="open"] {
-  border-color: var(--bc-grid-accent);
+  /*
+   * Active state: accent-soft surface + an inset accent stripe on
+   * the leading edge (the shadcn rail-active idiom). Drops the
+   * previous border-color tint so the active button doesn't read
+   * as a triple signal — bg, stripe, frame all competing.
+   */
   background: var(--bc-grid-accent-soft);
   box-shadow: inset 2px 0 0 var(--bc-grid-accent);
   color: var(--bc-grid-fg);
@@ -1540,7 +1558,12 @@ select.bc-grid-editor-input {
   width: var(--bc-grid-sidebar-width);
   min-width: 0;
   flex: 0 0 var(--bc-grid-sidebar-width);
-  border-left: 1px solid var(--bc-grid-sidebar-border);
+  /*
+   * No `border-left` between rail and panel — they share the
+   * sidebar surface so the active rail tab reads as continuous
+   * with the panel content it controls. The outer aside border-left
+   * separates the sidebar from the table chrome.
+   */
   background: var(--bc-grid-sidebar-bg);
   color: var(--bc-grid-fg);
   overflow: auto;
