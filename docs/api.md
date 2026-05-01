@@ -878,6 +878,11 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onRowDoubleClick?: (row: TRow, event: React.MouseEvent) => void
   onCellFocus?: (position: BcCellPosition) => void
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+  /**
+   * Fires after the editing overlay commits a value. Client grids can mirror
+   * into local state; server grids can convert the event into a ServerRowPatch.
+   */
+  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
 
@@ -996,8 +1001,7 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
 
   onEdit?: (row: TRow) => void
   onDelete?: (row: TRow) => void
-  /** Post-commit edit event. Reserved Q2. */
-  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void
+  // `onCellEditCommit` is inherited from BcGridProps.
   canEdit?: (row: TRow) => boolean
   canDelete?: (row: TRow) => boolean
 
@@ -1092,6 +1096,11 @@ export interface BcServerTreeProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef
 The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are declared in `@bc-grid/core` with the rest of the server query contract and re-exported through `@bc-grid/react`. Runtime cache/state-machine helpers live in `@bc-grid/server-row-model`.
 
 `ServerPagedQuery.pivotState?: BcPivotState` and `ServerPagedResult.pivotedRows?: BcPivotedDataDTO` are reserved for server-side pivot pushdown. Client-side pivot uses the pure `@bc-grid/aggregations` engine; server-side pivot consumers can return the same JSON-safe DTO shape without exposing the engine's internal lookup maps.
+
+Editable server-backed business grids use the same edit commit event as
+`<BcGrid>` / `<BcEditGrid>` and reconcile through `BcServerGridApi`. The
+contract is documented in
+[`docs/design/server-edit-grid-contract.md`](./design/server-edit-grid-contract.md).
 
 ---
 
@@ -1208,7 +1217,11 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
 }
 ```
 
-The `<BcEditGrid>` and (Q2) editing variant of `<BcGrid>` consume this protocol; consumers can pass column.cellEditor as either a built-in (`textEditor()`, `numberEditor()`) or a custom implementation.
+`<BcGrid>`, `<BcEditGrid>`, and `<BcServerGrid>` consume this protocol;
+consumers can pass column.cellEditor as either a built-in (`textEditor()`,
+`numberEditor()`) or a custom implementation. Server-backed consumers convert
+the event into a `ServerRowPatch` and settle persistence through their own
+mutation queue plus `BcServerGridApi` invalidation/update calls.
 
 ---
 
