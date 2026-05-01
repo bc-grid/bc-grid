@@ -965,9 +965,21 @@ select.bc-grid-editor-input {
 
 .bc-grid-filter-input,
 .bc-grid-filter-select {
+  /*
+   * Quiet, rectangular shadcn-style input chrome. `--bc-grid-input-border`
+   * keeps the inline filter row, the editor input, and the filters panel
+   * controls visually consistent — apps that override `--input` get a
+   * coherent set without per-surface wiring.
+   *
+   * `transition-colors` smooths the hover / focus / disabled state
+   * changes so they feel closer to a shadcn `<Input>` / `<Select>`
+   * rather than snap-cutting; the reduced-motion `*` rule zeroes the
+   * declarations automatically.
+   */
   width: 100%;
   height: 70%;
-  border: 1px solid var(--bc-grid-border);
+  min-height: 1.5rem;
+  border: 1px solid var(--bc-grid-input-border);
   border-radius: calc(var(--bc-grid-radius) - 2px);
   background: var(--bc-grid-bg);
   color: inherit;
@@ -975,6 +987,47 @@ select.bc-grid-editor-input {
   font-size: 0.8125rem;
   outline: none;
   padding: 0 0.5rem;
+  transition: border-color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
+    background-color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard), color
+    var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
+}
+
+/*
+ * Strip the native `<select>` chrome (Safari paints it pill-shaped
+ * with a thick chevron well; Firefox paints rounded ends) and
+ * replace with a quiet shadcn-style chevron. The SVG stroke is a
+ * neutral mid-grey so it reads on light + dark backgrounds without
+ * a per-mode override; the colour goes muted because the chevron is
+ * decorative chrome, not primary content. `padding-right` leaves
+ * room so the chevron doesn't overlap a long operator label.
+ */
+.bc-grid-filter-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 1.5rem;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1l4 4 4-4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 10px 6px;
+}
+
+.bc-grid-filter-input:hover:not(:disabled),
+.bc-grid-filter-select:hover:not(:disabled) {
+  border-color: var(--bc-grid-fg);
+}
+
+/*
+ * Browser-native `:invalid` paints a red ring on partial-typed values
+ * (most visible on `<input type="date">`). The grid uses the explicit
+ * `aria-invalid="true"` contract for validation feedback — pin a
+ * neutral border so a half-typed date never reads as an error in the
+ * inline filter row. `:focus-visible` below still wins for the active
+ * focus ring, so a focused invalid input keeps its focus treatment.
+ */
+.bc-grid-filter-input:invalid:not(:focus-visible),
+.bc-grid-filter-select:invalid:not(:focus-visible) {
+  border-color: var(--bc-grid-input-border);
+  box-shadow: none;
 }
 
 .bc-grid-filter-number,
@@ -986,6 +1039,14 @@ select.bc-grid-editor-input {
   display: flex;
   width: 100%;
   height: 70%;
+  /*
+   * `min-height` floor so compact density (header 28px → 70% =
+   * ~20px) doesn't crunch the controls below readability. The
+   * existing `height: 70%` keeps proportional sizing in normal /
+   * comfortable density; the floor only kicks in when the cell is
+   * unusually short.
+   */
+  min-height: 1.5rem;
   align-items: center;
   gap: 4px;
 }
@@ -1011,7 +1072,15 @@ select.bc-grid-editor-input {
 }
 
 .bc-grid-filter-text > .bc-grid-filter-input {
-  min-width: 0;
+  /*
+   * `min-width: 6rem` keeps the value field readable when the column is
+   * narrow — the cell's `overflow: hidden` clips controls from the
+   * right rather than letting the input collapse to a tiny unusable
+   * fragment. Together with the operator select's fixed 92 px and the
+   * 28 px modifier toggles, the row always reserves enough space for
+   * the value or clips cleanly.
+   */
+  min-width: 6rem;
   flex: 1 1 0;
 }
 
@@ -1020,7 +1089,7 @@ select.bc-grid-editor-input {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--bc-grid-border);
+  border: 1px solid var(--bc-grid-input-border);
   border-radius: calc(var(--bc-grid-radius) - 2px);
   background: var(--bc-grid-bg);
   color: var(--bc-grid-muted-fg);
@@ -1030,8 +1099,10 @@ select.bc-grid-editor-input {
   font-weight: 600;
   min-width: 28px;
   outline: none;
-  transition: background var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
-    color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
+  transition: background-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), border-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
 }
 
 .bc-grid-filter-text-toggle:hover {

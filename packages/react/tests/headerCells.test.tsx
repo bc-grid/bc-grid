@@ -326,6 +326,25 @@ describe("renderFilterCell — text filter aria-label structure", () => {
     expect(html).toContain("bc-grid-filter-text-toggle")
   })
 
+  test("text filter cell exposes operator select + value input + both modifier toggles in order", () => {
+    // Layout invariant for filter-row-shadcn-polish-v030. The text
+    // filter row must always render four stable controls — operator
+    // <select>, value <input>, case-sensitive <button>, regex
+    // <button> — in that DOM order. A future refactor that drops a
+    // toggle (or reorders them) breaks pointer-target assumptions in
+    // host apps' e2e suites.
+    const html = renderTextFilterCellHtml("")
+
+    const opIdx = html.indexOf('aria-label="Filter Account operator"')
+    const valIdx = html.indexOf('aria-label="Filter Account"')
+    const caseIdx = html.indexOf('aria-label="Filter Account case sensitive"')
+    const regexIdx = html.indexOf('aria-label="Filter Account regex"')
+    expect(opIdx).toBeGreaterThan(-1)
+    expect(valIdx).toBeGreaterThan(opIdx)
+    expect(caseIdx).toBeGreaterThan(valIdx)
+    expect(regexIdx).toBeGreaterThan(caseIdx)
+  })
+
   test("default contains+no-modifier persistence renders as plain-string value", () => {
     const html = renderTextFilterCellHtml("CUST-00042")
 
@@ -414,6 +433,65 @@ describe("renderFilterCell — text filter aria-label structure", () => {
 
     expect(pressed("Filter Account case sensitive", neither)).toBe(false)
     expect(pressed("Filter Account regex", neither)).toBe(false)
+  })
+})
+
+describe("renderFilterCell — empty filter cell rendering", () => {
+  function renderEmptyFilterCellHtml(filter: false | { type: "text"; variant: "popup" }): string {
+    const column: ResolvedColumn<Row> = {
+      align: "left",
+      columnId: "account",
+      left: 0,
+      pinned: null,
+      position: 0,
+      source: { columnId: "account", field: "name", header: "Account", filter },
+      width: 200,
+    }
+    return renderToStaticMarkup(
+      renderFilterCell({
+        column,
+        domBaseId: "grid",
+        filterText: "",
+        headerHeight: 40,
+        index: 0,
+        messages: defaultMessages,
+        onFilterChange: () => {},
+        pinnedEdge: null,
+        scrollLeft: 0,
+        totalWidth: 200,
+        viewportWidth: 200,
+      }),
+    )
+  }
+
+  test("filter:false renders an empty filter cell with no body controls", () => {
+    // bsncraft flagged unfinished-looking visual junk in the inline
+    // filter row. Pin that columns opting out of inline filtering
+    // (`filter: false`) emit just the cell wrapper for layout — no
+    // operator select, no value input, no toggle buttons. The cell
+    // keeps its layout role so column widths align.
+    const html = renderEmptyFilterCellHtml(false)
+
+    expect(html).toContain("bc-grid-filter-cell")
+    expect(html).not.toContain("bc-grid-filter-text")
+    expect(html).not.toContain("bc-grid-filter-input")
+    expect(html).not.toContain("bc-grid-filter-select")
+    expect(html).not.toContain("bc-grid-filter-text-toggle")
+    expect(html).not.toContain('aria-label="Filter Account')
+  })
+
+  test("popup-variant column renders an empty filter cell — the funnel lives on the header", () => {
+    // Popup-variant columns surface their filter via the header
+    // funnel button (rendered by renderHeaderCell), not in the
+    // inline filter row. Pin that the inline filter cell is empty
+    // body-side so the row reads cleanly when most columns are
+    // popup-only.
+    const html = renderEmptyFilterCellHtml({ type: "text", variant: "popup" })
+
+    expect(html).toContain("bc-grid-filter-cell")
+    expect(html).not.toContain("bc-grid-filter-text")
+    expect(html).not.toContain("bc-grid-filter-input")
+    expect(html).not.toContain('aria-label="Filter Account')
   })
 })
 

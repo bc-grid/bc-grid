@@ -1153,6 +1153,155 @@ describe("@bc-grid/theming", () => {
     expect(block).not.toMatch(/var\(--destructive[,)]/)
   })
 
+  test("inline filter row inputs / selects use the input-border token (matches editors + filters panel)", () => {
+    // bsncraft flagged the inline filter row as feeling unfinished.
+    // Pin the polished surface — the filter input + select consume
+    // `--bc-grid-input-border` (same token as the body editor and
+    // filters panel) instead of the generic `--bc-grid-border` that
+    // the legacy declaration used. Apps that override `--input` get a
+    // coherent set of input chrome across header / body / panel
+    // surfaces from a single token.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-filter-input,\n.bc-grid-filter-select {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("border: 1px solid var(--bc-grid-input-border)")
+    expect(rule).not.toMatch(/border:\s*1px solid var\(--bc-grid-border\)/)
+    // Multi-property transition smooths state changes (reduced-motion
+    // `*` rule zeroes them).
+    expect(rule).toMatch(/transition:\s*border-color[^;]*background-color[^;]*color\b/)
+    expect(rule).toContain("var(--bc-grid-motion-duration-fast)")
+  })
+
+  test("inline filter <select> strips the native chrome and paints a custom shadcn-style chevron", () => {
+    // Safari paints native `<select>` pill-shaped; Firefox rounds
+    // the ends. Both fight the rectangular shadcn aesthetic. Pin
+    // `appearance: none` + the inline SVG chevron + right-padding
+    // so the dropdown affordance reads cleanly across browsers.
+    // The shared `.bc-grid-filter-input,.bc-grid-filter-select` rule
+    // sets the surface; the second standalone `.bc-grid-filter-select`
+    // rule layers the appearance reset.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const sharedIdx = css.indexOf(".bc-grid-filter-input,\n.bc-grid-filter-select {")
+    expect(sharedIdx).toBeGreaterThan(-1)
+    // Search for the standalone select rule AFTER the shared rule's
+    // closing brace — `indexOf` would otherwise match the
+    // `.bc-grid-filter-select {` substring inside the combined
+    // selector.
+    const sharedEnd = css.indexOf("}", sharedIdx)
+    const idx = css.indexOf(".bc-grid-filter-select {", sharedEnd)
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("appearance: none")
+    expect(rule).toContain("-webkit-appearance: none")
+    expect(rule).toContain("background-image: url(")
+    expect(rule).toContain("padding-right: 1.5rem")
+  })
+
+  test("inline filter inputs suppress the browser-native :invalid red ring (focus state never reads as error)", () => {
+    // Browser native `:invalid` paints a red ring on partial-typed
+    // values — most visible on `<input type="date">`. The grid
+    // surfaces validation feedback via the explicit
+    // `aria-invalid="true"` contract; suppress the native pseudo-
+    // class noise so a half-typed date never reads as an error in
+    // the inline filter row. `:focus-visible` keeps winning for the
+    // active focus ring.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(
+      ".bc-grid-filter-input:invalid:not(:focus-visible),\n.bc-grid-filter-select:invalid:not(:focus-visible)",
+    )
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("border-color: var(--bc-grid-input-border)")
+    expect(rule).toContain("box-shadow: none")
+  })
+
+  test("inline filter inputs have a hover state that tints the border without tinting the background", () => {
+    // Quiet shadcn-style hover affordance — the border darkens to
+    // `--bc-grid-fg` on hover so the input feels interactive without
+    // shouting. The background stays on `--bc-grid-bg` (no row-hover
+    // tint inside the filter row chrome).
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(
+      ".bc-grid-filter-input:hover:not(:disabled),\n.bc-grid-filter-select:hover:not(:disabled)",
+    )
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("border-color: var(--bc-grid-fg)")
+  })
+
+  test("text-filter value input keeps a 6rem min-width so it never collapses to a tiny fragment", () => {
+    // Layout invariant — bsncraft reported the value input
+    // collapsing to an unusable sliver in narrow columns. The
+    // operator <select> reserves 92 px (fixed), the modifier toggles
+    // reserve 28 px each (no shrink), and the value input reserves a
+    // 6 rem floor so the row clips cleanly from the right rather
+    // than crushing the value field.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-filter-text > .bc-grid-filter-input {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("min-width: 6rem")
+    expect(rule).not.toMatch(/min-width:\s*0\b/)
+  })
+
+  test("inline filter row containers carry a min-height floor so compact density stays readable", () => {
+    // The row container's `height: 70%` keeps the controls
+    // proportional to the cell, but compact density would crunch
+    // them below readability. Floor at 1.5 rem so the controls stay
+    // usable across all density modes.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const containerIdx = css.indexOf(
+      ".bc-grid-filter-number,\n.bc-grid-filter-number-range,\n.bc-grid-filter-date,\n.bc-grid-filter-date-range,\n.bc-grid-filter-set,\n.bc-grid-filter-text",
+    )
+    expect(containerIdx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", containerIdx)
+    const rule = css.slice(containerIdx, ruleEnd)
+    expect(rule).toContain("min-height: 1.5rem")
+
+    // Same floor applies to the inputs / selects themselves.
+    const inputIdx = css.indexOf(".bc-grid-filter-input,\n.bc-grid-filter-select {")
+    const inputRule = css.slice(inputIdx, css.indexOf("}", inputIdx))
+    expect(inputRule).toContain("min-height: 1.5rem")
+  })
+
+  test("inline filter row chrome consumes `--bc-grid-*` tokens only (no direct shadcn-token reads)", () => {
+    // Single-place-override invariant — the polished filter row
+    // must not bypass the bridge. Slice the filter-row block (from
+    // `.bc-grid-filter-input` up to the next non-filter section,
+    // `.bc-grid-filter-popup` which is owned by a different polish
+    // slice) and pin tokens-only.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-filter-input,\n.bc-grid-filter-select {")
+    expect(idx).toBeGreaterThan(-1)
+    const sectionEnd = css.indexOf(".bc-grid-filter-popup > .bc-grid-filter-text {", idx)
+    expect(sectionEnd).toBeGreaterThan(idx)
+    const block = css.slice(idx, sectionEnd)
+
+    // Sanity — the block consumes the bc-grid tokens it should.
+    expect(block).toContain("var(--bc-grid-input-border)")
+    expect(block).toContain("var(--bc-grid-bg)")
+    expect(block).toContain("var(--bc-grid-fg)")
+    expect(block).toContain("var(--bc-grid-focus-ring)")
+    expect(block).toContain("var(--bc-grid-accent)")
+
+    // Forbidden direct reads — `tailwind-v4-token-compat` invariant.
+    expect(block).not.toMatch(/var\(--background[,)]/)
+    expect(block).not.toMatch(/var\(--foreground[,)]/)
+    expect(block).not.toMatch(/var\(--input[,)]/)
+    expect(block).not.toMatch(/var\(--ring[,)]/)
+    expect(block).not.toMatch(/var\(--accent[,)]/)
+    expect(block).not.toMatch(/var\(--popover[,)]/)
+    expect(block).not.toMatch(/var\(--primary[,)]/)
+    expect(block).not.toMatch(/var\(--muted-foreground[,)]/)
+    expect(block).not.toMatch(/var\(--destructive[,)]/)
+  })
+
   test("CSS uses the kebab-case class convention from design.md", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     expect(css).toContain(".bc-grid-row")
