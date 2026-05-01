@@ -5,6 +5,7 @@ import type {
   MouseEvent,
   ReactNode,
 } from "react"
+import { forwardRef } from "react"
 
 /**
  * Shared internal primitive for a single shadcn/Radix-style menu row.
@@ -122,32 +123,31 @@ export interface BcGridMenuCheckItemProps
   label: ReactNode
 }
 
-export function BcGridMenuCheckItem({
-  checked,
-  disabled,
-  label,
-  className,
-  onClick,
-  ...rest
-}: BcGridMenuCheckItemProps): ReactNode {
-  return (
-    <button
-      {...rest}
-      aria-checked={checked}
-      className={composeClassName("bc-grid-menu-item bc-grid-column-menu-item", className)}
-      data-checked={checked || undefined}
-      disabled={disabled}
-      onClick={onClick}
-      role="menuitemcheckbox"
-      type="button"
-    >
-      <span aria-hidden="true" className="bc-grid-menu-item-leading bc-grid-column-menu-check">
-        {checked ? <CheckmarkIcon /> : null}
-      </span>
-      <span className="bc-grid-menu-item-label bc-grid-column-menu-label">{label}</span>
-    </button>
-  )
-}
+export const BcGridMenuCheckItem = forwardRef<HTMLButtonElement, BcGridMenuCheckItemProps>(
+  function BcGridMenuCheckItem(
+    { checked, disabled, label, className, onClick, ...rest },
+    ref,
+  ): ReactNode {
+    return (
+      <button
+        {...rest}
+        aria-checked={checked}
+        className={composeClassName("bc-grid-menu-item bc-grid-column-menu-item", className)}
+        data-checked={checked || undefined}
+        disabled={disabled}
+        onClick={onClick}
+        ref={ref}
+        role="menuitemcheckbox"
+        type="button"
+      >
+        <span aria-hidden="true" className="bc-grid-menu-item-leading bc-grid-column-menu-check">
+          {checked ? <CheckmarkIcon /> : null}
+        </span>
+        <span className="bc-grid-menu-item-label bc-grid-column-menu-label">{label}</span>
+      </button>
+    )
+  },
+)
 
 function CheckmarkIcon(): ReactNode {
   // Inline 12x12 checkmark — tracks shadcn's DropdownMenuCheckboxItem
