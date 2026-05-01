@@ -47,6 +47,7 @@ import {
   resolveDetailPanelHeight,
 } from "./detailColumn"
 import { nextActiveCellAfterEdit } from "./editingStateMachine"
+import { getEditorActivationIntent } from "./editorKeyboard"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
 import {
   type ColumnFilterText,
@@ -1654,8 +1655,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       //   - F2 / Enter: toggle edit mode on the active cell
       //   - Printable single character (no Ctrl/Meta): seed the editor
       //   - Double-click is handled separately on the cell (onDoubleClick)
-      const isPrintable =
-        event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey
       const cellTarget = activeCell ?? null
       const cellRow = cellTarget ? rowEntries[currentRow] : null
       const cellColumn = cellTarget ? resolvedColumns[currentCol] : null
@@ -1689,14 +1688,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           row: cellRow.row,
           rowId: cellRow.rowId,
         }
-        if (event.key === "F2" || event.key === "Enter") {
+        const activationIntent = getEditorActivationIntent({
+          key: event.key,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          altKey: event.altKey,
+        })
+        if (activationIntent.type === "start") {
           event.preventDefault()
-          editController.start(cellTarget, event.key === "F2" ? "f2" : "enter", startOpts)
-          return
-        }
-        if (isPrintable) {
-          event.preventDefault()
-          editController.start(cellTarget, "printable", { ...startOpts, seedKey: event.key })
+          editController.start(cellTarget, activationIntent.activation, {
+            ...startOpts,
+            ...(activationIntent.activation === "printable"
+              ? { seedKey: activationIntent.seedKey }
+              : {}),
+          })
           return
         }
       }

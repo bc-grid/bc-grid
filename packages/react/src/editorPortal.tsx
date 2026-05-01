@@ -10,6 +10,7 @@ import {
   useRef,
 } from "react"
 import type { MoveOnSettle } from "./editingStateMachine"
+import { getEditorEditModeKeyboardIntent } from "./editorKeyboard"
 import type { DataRowEntry, ResolvedColumn } from "./gridInternals"
 import type { BcCellEditor } from "./types"
 import type { EditingController } from "./useEditingController"
@@ -238,31 +239,17 @@ function EditorMount<TRow>({
   // commit/cancel keys are intercepted here. Per editing-rfc §Keyboard
   // model in edit mode.
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" && !event.shiftKey) {
+    const intent = getEditorEditModeKeyboardIntent({
+      key: event.key,
+      shiftKey: event.shiftKey,
+    })
+    if (intent.type === "commit") {
       event.preventDefault()
       const value = readEditorInputValue(focusRef.current)
-      handleCommit(value, "down", "keyboard")
+      handleCommit(value, intent.moveOnSettle, "keyboard")
       return
     }
-    if (event.key === "Enter" && event.shiftKey) {
-      event.preventDefault()
-      const value = readEditorInputValue(focusRef.current)
-      handleCommit(value, "up", "keyboard")
-      return
-    }
-    if (event.key === "Tab" && !event.shiftKey) {
-      event.preventDefault()
-      const value = readEditorInputValue(focusRef.current)
-      handleCommit(value, "right", "keyboard")
-      return
-    }
-    if (event.key === "Tab" && event.shiftKey) {
-      event.preventDefault()
-      const value = readEditorInputValue(focusRef.current)
-      handleCommit(value, "left", "keyboard")
-      return
-    }
-    if (event.key === "Escape") {
+    if (intent.type === "cancel") {
       event.preventDefault()
       cancel()
       return
