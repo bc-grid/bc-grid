@@ -324,3 +324,100 @@ describe("FilterPopup — text filter operators surface", () => {
     expect(html).not.toContain('spellcheck="false"')
   })
 })
+
+/**
+ * Build a minimal DOMRect-shaped object for SSR tests. The real DOMRect
+ * exists only in browsers; on the server React just hands the value to
+ * the component which reads `.left` / `.top` / etc.
+ */
+function rect(x: number, y: number, width: number, height: number): DOMRect {
+  return {
+    x,
+    y,
+    width,
+    height,
+    left: x,
+    top: y,
+    right: x + width,
+    bottom: y + height,
+    toJSON() {
+      return { x, y, width, height }
+    },
+  } as DOMRect
+}
+
+describe("FilterPopup — SSR markup contract", () => {
+  test("renders without throwing on the server (no `window` access at first paint)", () => {
+    const html = renderToStaticMarkup(
+      <FilterPopup
+        anchor={rect(120, 100, 40, 24)}
+        columnId="account"
+        filterType="text"
+        filterText=""
+        filterLabel="Account"
+        onFilterChange={() => {}}
+        onClear={() => {}}
+        onClose={() => {}}
+        messages={defaultMessages}
+      />,
+    )
+    expect(html).toContain('data-bc-grid-filter-popup="true"')
+    expect(html).toContain('role="dialog"')
+  })
+
+  test("emits Radix-style data-side / data-align attributes on the popup root", () => {
+    // Single-source-of-truth invariant: the FilterPopup's resolved
+    // placement is exposed via `data-side` / `data-align` so consumer
+    // CSS can hook into it the same way it would for a Radix Popper —
+    // and so future shadcn/Radix swaps don't change the rendered
+    // markup contract.
+    const html = renderToStaticMarkup(
+      <FilterPopup
+        anchor={rect(120, 100, 40, 24)}
+        columnId="account"
+        filterType="text"
+        filterText=""
+        filterLabel="Account"
+        onFilterChange={() => {}}
+        onClear={() => {}}
+        onClose={() => {}}
+        messages={defaultMessages}
+      />,
+    )
+    expect(html).toContain('data-side="bottom"')
+    expect(html).toContain('data-align="start"')
+  })
+
+  test("data-active reflects whether a filter value is present", () => {
+    const empty = renderToStaticMarkup(
+      <FilterPopup
+        anchor={rect(120, 100, 40, 24)}
+        columnId="account"
+        filterType="text"
+        filterText=""
+        filterLabel="Account"
+        onFilterChange={() => {}}
+        onClear={() => {}}
+        onClose={() => {}}
+        messages={defaultMessages}
+      />,
+    )
+    const active = renderToStaticMarkup(
+      <FilterPopup
+        anchor={rect(120, 100, 40, 24)}
+        columnId="account"
+        filterType="text"
+        filterText="acme"
+        filterLabel="Account"
+        onFilterChange={() => {}}
+        onClear={() => {}}
+        onClose={() => {}}
+        messages={defaultMessages}
+      />,
+    )
+    expect(empty).not.toContain('data-active="true"')
+    expect(active).toContain('data-active="true"')
+    // Clear button is disabled when the filter is empty.
+    expect(empty).toContain("disabled=")
+  })
+})

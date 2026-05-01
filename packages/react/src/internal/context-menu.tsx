@@ -12,6 +12,7 @@ import {
 import type { ResolvedColumn, RowEntry } from "../gridInternals"
 import type { BcContextMenuContext, BcContextMenuItem, BcContextMenuItems } from "../types"
 import { contextMenuBuiltinIcon } from "./context-menu-icons"
+import { computePopupPosition } from "./popup-position"
 
 export interface BcGridContextMenuAnchor {
   x: number
@@ -154,6 +155,12 @@ export function BcGridContextMenu<TRow>({
       aria-activedescendant={activeItemId}
       aria-label="Context menu"
       className="bc-grid-context-menu"
+      // Radix-style placement attributes for consumer CSS hooks. The
+      // right-click context menu is point-anchored, so these are
+      // constants — but they're set so apps can target the popup the
+      // same way they'd target a Radix `[data-side="bottom"]` rule.
+      data-side="bottom"
+      data-align="start"
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={(event) =>
         handleContextMenuKeyDown({
@@ -336,16 +343,24 @@ function nextTypeAheadIndex<TRow>(
   return -1
 }
 
-function clampContextMenu(anchor: BcGridContextMenuAnchor, width: number, height: number) {
+function clampContextMenu(
+  anchor: BcGridContextMenuAnchor,
+  width: number,
+  height: number,
+): { x: number; y: number } {
   const margin = 8
+  // Right-click context menu = point anchor — the click coordinate is
+  // where the popup's top-left should land, viewport-clamped. Shared
+  // helper enforces the same margin / clamp rule used by every popup.
   const viewportWidth = typeof window === "undefined" ? width + margin * 2 : window.innerWidth
   const viewportHeight = typeof window === "undefined" ? height + margin * 2 : window.innerHeight
-  const maxLeft = Math.max(margin, viewportWidth - width - margin)
-  const maxTop = Math.max(margin, viewportHeight - height - margin)
-  return {
-    x: Math.min(Math.max(margin, anchor.x), maxLeft),
-    y: Math.min(Math.max(margin, anchor.y), maxTop),
-  }
+  const position = computePopupPosition({
+    anchor: { x: anchor.x, y: anchor.y },
+    popup: { width, height },
+    viewport: { width: viewportWidth, height: viewportHeight },
+    viewportMargin: margin,
+  })
+  return { x: position.x, y: position.y }
 }
 
 function contextMenuStyle(position: BcGridContextMenuAnchor): CSSProperties {

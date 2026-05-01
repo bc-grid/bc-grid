@@ -41,6 +41,7 @@ import {
   pinnedClassName,
   pinnedEdgeClassName,
 } from "./gridInternals"
+import { computePopupPosition } from "./internal/popup-position"
 import type { BcGridMessages } from "./types"
 
 /**
@@ -1031,6 +1032,35 @@ interface FilterPopupProps {
 }
 
 /**
+ * Pre-measurement estimate for the filter popup. Width tracks the
+ * `.bc-grid-filter-popup` CSS contract (`width: min(20rem, ...)`);
+ * height is a generic fallback before the actual editor renders. The
+ * `useLayoutEffect` re-measures and re-positions once the DOM lands,
+ * so this is only the first-paint estimate.
+ */
+const FILTER_POPUP_ESTIMATED_SIZE = { width: 320, height: 200 }
+const FILTER_POPUP_VIEWPORT_MARGIN = 8
+
+function computeFilterPopupPosition(anchor: DOMRect, popup: { width: number; height: number }) {
+  // SSR fallback: when `window` isn't present, render at the anchor
+  // origin without clamping. The component remounts on the client and
+  // the layout effect re-measures, so the SSR position is ephemeral.
+  const viewport =
+    typeof window === "undefined"
+      ? { width: anchor.left + popup.width + 32, height: anchor.bottom + popup.height + 32 }
+      : { width: window.innerWidth, height: window.innerHeight }
+  return computePopupPosition({
+    anchor: { x: anchor.left, y: anchor.top, width: anchor.width, height: anchor.height },
+    popup,
+    viewport,
+    side: "bottom",
+    align: "start",
+    sideOffset: 4,
+    viewportMargin: FILTER_POPUP_VIEWPORT_MARGIN,
+  })
+}
+
+/**
  * Floating filter editor anchored below a header funnel button. Per
  * `filter-popup-variant`. Click-outside or Escape closes; focus moves
  * to the editor on mount; `×` button in the footer clears the filter.
@@ -1077,21 +1107,37 @@ export function FilterPopup({
   const filterId = `bc-grid-filter-popup-${domToken(columnId)}`
   const titleId = `${filterId}-title`
   const isActive = filterText.length > 0
-  // Position is the only thing that has to be inline — it's derived from
-  // the trigger's bounding rect at click time. All chrome (background,
-  // border, shadow, padding) lives in the theming CSS so dark mode and
-  // shadcn token overrides apply without re-rendering.
-  const top = anchor.bottom + 4
-  const left = anchor.left
+  const popupRef = useRef<HTMLDivElement | null>(null)
+  // Initial position estimate, refined to the actual popup size after
+  // mount. The estimate uses the .bc-grid-filter-popup CSS contract
+  // (`width: min(20rem, ...)` so ~320px) and a generic editor height.
+  // See docs/coordination/radix-shadcn-chrome-cleanup.md.
+  const [position, setPosition] = useState(() =>
+    computeFilterPopupPosition(anchor, FILTER_POPUP_ESTIMATED_SIZE),
+  )
+  useLayoutEffect(() => {
+    const node = popupRef.current
+    if (!node) return
+    const rect = node.getBoundingClientRect()
+    setPosition(
+      computeFilterPopupPosition(anchor, {
+        width: rect.width || FILTER_POPUP_ESTIMATED_SIZE.width,
+        height: rect.height || FILTER_POPUP_ESTIMATED_SIZE.height,
+      }),
+    )
+  }, [anchor])
   return (
     <div
       data-bc-grid-filter-popup="true"
       data-column-id={columnId}
       data-active={isActive ? "true" : undefined}
+      data-side={position.side}
+      data-align={position.align}
       role="dialog"
       aria-labelledby={titleId}
       className="bc-grid-filter-popup"
-      style={{ top, left }}
+      ref={popupRef}
+      style={{ top: position.y, left: position.x }}
     >
       <div className="bc-grid-filter-popup-header">
         <span id={titleId} className="bc-grid-filter-popup-title">
