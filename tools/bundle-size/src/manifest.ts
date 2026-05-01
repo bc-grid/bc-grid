@@ -24,7 +24,7 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/core",
       bundlePath: "packages/core/dist/index.js",
-      baselineGzipBytes: 2012,
+      baselineGzipBytes: 2120,
     },
     {
       packageName: "@bc-grid/virtualizer",
@@ -34,12 +34,12 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/animations",
       bundlePath: "packages/animations/dist/index.js",
-      baselineGzipBytes: 1693,
+      baselineGzipBytes: 1759,
     },
     {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
-      baselineGzipBytes: 54842,
+      baselineGzipBytes: 63572,
     },
   ],
 }

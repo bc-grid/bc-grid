@@ -51,7 +51,7 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Master detail | Available | `?masterDetail=1` | `renderDetailPanel` |
 | Auto height | Available | `?autoHeight=1` | `height = "auto"` |
 | Server row model | Available | Package API | `<BcServerGrid>` |
-| Pivot panel | Planned | Not exposed in examples | Pivot sidebar implementation |
+| Pivot panel | Available | Tool panels control or `?toolPanel=pivot` | `sidebar={["pivot"]}`, `pivotState` |
 | Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
 
 ---
@@ -308,7 +308,7 @@ export interface BcScrollOptions {
 
 `BcScrollAlign` and `BcScrollOptions` are the named alias for the `opts` shape on `BcGridApi.scrollToRow` / `scrollToCell` (§6.1). They live in `@bc-grid/core` so that consumers writing their own scroll helpers can type the options without redeclaring the union.
 
-`BcPivotState` and the `BcPivot*DTO` types are the JSON-safe pivot contract used by the pure `@bc-grid/aggregations` engine and reserved server-side pivot results. React pivot rendering is implemented separately in the Track 4 pivot UI tasks.
+`BcPivotState` and the `BcPivot*DTO` types are the JSON-safe pivot contract used by the pure `@bc-grid/aggregations` engine and reserved server-side pivot results. The React sidebar pivot panel reads and writes `pivotState` for row groups, column groups, and values. Rendering a pivoted grid body from that state is still blocked on the pivot row/column rendering integration; chart previews and chart adapters remain post-1.0.
 
 ### 1.3 React column extension (frozen at v0.1 in `@bc-grid/react`)
 
@@ -479,6 +479,7 @@ Filter state uses `null` for "no active filter"; clearing the inline, popup, or 
 | Range selection | `rangeSelection: BcRangeSelection` | `onRangeSelectionChange(next, prev)` | `defaultRangeSelection` |
 | Expansion | `expansion: ReadonlySet<RowId>` | `onExpansionChange(next, prev)` | `defaultExpansion` |
 | Group-by | `groupBy: ColumnId[]` | `onGroupByChange(next, prev)` | `defaultGroupBy` |
+| Pivot | `pivotState: BcPivotState` | `onPivotStateChange(next, prev)` | `defaultPivotState` |
 | Column state | `columnState: BcColumnStateEntry[]` | `onColumnStateChange(next, prev)` | `defaultColumnState` |
 | Active cell | `activeCell: BcCellPosition` | `onActiveCellChange(next, prev)` | `defaultActiveCell` |
 | Pagination | `page: number` + `pageSize: number` | `onPaginationChange({ page, pageSize })` | `defaultPage`, `defaultPageSize` |
@@ -600,6 +601,10 @@ export interface BcGridStateProps {
   groupBy?: readonly ColumnId[]
   defaultGroupBy?: readonly ColumnId[]
   onGroupByChange?: (next: readonly ColumnId[], prev: readonly ColumnId[]) => void
+
+  pivotState?: BcPivotState
+  defaultPivotState?: BcPivotState
+  onPivotStateChange?: (next: BcPivotState, prev: BcPivotState) => void
 
   columnState?: readonly BcColumnStateEntry[]
   defaultColumnState?: readonly BcColumnStateEntry[]
@@ -855,13 +860,15 @@ export interface BcSidebarContext<TRow = unknown> {
   setFilterState: (state: BcGridFilter | null) => void
   groupBy: readonly ColumnId[]
   setGroupBy: (state: readonly ColumnId[]) => void
+  pivotState: BcPivotState
+  setPivotState: (state: BcPivotState) => void
   groupableColumns: readonly { columnId: ColumnId; header: string }[]
   columnFilterText: Readonly<Record<ColumnId, string>>
   setColumnFilterText: (columnId: ColumnId, value: string) => void
   clearColumnFilterText: (columnId?: ColumnId) => void
   getSetFilterOptions?: (columnId: ColumnId) => readonly { value: string; label: string }[]
   messages: BcGridMessages
-  pivot?: unknown
+  pivot?: unknown // legacy placeholder; use pivotState / setPivotState
 }
 
 export type BcContextMenuBuiltinItem =
@@ -1119,14 +1126,14 @@ the panel rail is discoverable without covering pointer-heavy grid workflows on
 first paint:
 
 ```tsx
-const [toolPanel, setToolPanel] = useState<"columns" | "filters" | null>(null)
+const [toolPanel, setToolPanel] = useState<"columns" | "filters" | "pivot" | null>(null)
 
 <BcGrid
   // ...
-  sidebar={["columns", "filters"]}
+  sidebar={["columns", "filters", "pivot"]}
   sidebarPanel={toolPanel}
   onSidebarPanelChange={(next) =>
-    setToolPanel(next === "columns" || next === "filters" ? next : null)
+    setToolPanel(next === "columns" || next === "filters" || next === "pivot" ? next : null)
   }
   sidebarWidth={320}
 />
@@ -1136,7 +1143,8 @@ const [toolPanel, setToolPanel] = useState<"columns" | "filters" | null>(null)
 should open a panel immediately. `sidebarWidth` controls the open panel width in
 pixels and falls back to `280`. Passing `defaultSidebarPanel={null}` explicitly
 starts collapsed, even when a persisted sidebar panel exists. The examples app
-uses `?toolPanel=columns` or `?toolPanel=filters` as its opt-in URL path.
+uses `?toolPanel=columns`, `?toolPanel=filters`, or `?toolPanel=pivot` as its
+opt-in URL path.
 
 ```ts
 type BcStatusBarSegment<TRow = unknown> =

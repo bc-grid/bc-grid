@@ -11,6 +11,7 @@ import {
 import { BcColumnsToolPanel } from "./columnToolPanel"
 import { BcFiltersToolPanel } from "./filterToolPanel"
 import { domToken } from "./gridInternals"
+import { BcPivotToolPanel } from "./pivotToolPanel"
 import type { BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarPanel } from "./types"
 
 export const DEFAULT_SIDEBAR_WIDTH = 280
@@ -241,6 +242,7 @@ function resolveBuiltInPanel<TRow>(panelId: BcSidebarBuiltInPanel): ResolvedSide
     render: (context) => {
       if (panelId === "columns") return <BcColumnsToolPanel context={context} />
       if (panelId === "filters") return <BcFiltersToolPanel context={context} />
+      if (panelId === "pivot") return <BcPivotToolPanel context={context} />
       return <BuiltInPanelSlot panelId={panelId} label={config.label} />
     },
   }

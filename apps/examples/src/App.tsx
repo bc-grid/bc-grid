@@ -50,6 +50,7 @@ const themeModes = [
 const customerGridSidebarPanels = [
   "columns",
   "filters",
+  "pivot",
 ] as const satisfies readonly BcSidebarPanel<CustomerRow>[]
 
 type CustomerGridSidebarPanel = (typeof customerGridSidebarPanels)[number]
@@ -190,9 +191,9 @@ const featureDiscoveryRows = [
   },
   {
     feature: "Pivot panel",
-    status: "Planned",
-    entry: "not exposed in examples",
-    api: "pivot sidebar slot",
+    status: "Available",
+    entry: "Tool panels control or ?toolPanel=pivot",
+    api: 'sidebar={["pivot"]}, pivotState',
   },
   {
     feature: "Charts",
@@ -440,7 +441,7 @@ function initialToolPanel(): CustomerGridSidebarPanel | null {
 }
 
 function isCustomerGridSidebarPanel(value: string | null): value is CustomerGridSidebarPanel {
-  return value === "columns" || value === "filters"
+  return value === "columns" || value === "filters" || value === "pivot"
 }
 
 function CustomerGridDemo({
@@ -909,6 +910,13 @@ function CustomerGridDemo({
                 onClick={() => toggleToolPanel("filters")}
               >
                 Filters
+              </button>
+              <button
+                type="button"
+                aria-pressed={toolPanel === "pivot"}
+                onClick={() => toggleToolPanel("pivot")}
+              >
+                Pivot
               </button>
             </div>
           </div>

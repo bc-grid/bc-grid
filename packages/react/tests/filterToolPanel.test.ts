@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { emptyBcPivotState } from "@bc-grid/core"
 import {
   BcFiltersToolPanel,
   activeFilterToolPanelItems,
@@ -76,10 +77,12 @@ describe("filters sidebar slot", () => {
       groupableColumns: [],
       groupBy: [],
       messages: defaultMessages,
+      pivotState: emptyBcPivotState,
       setColumnFilterText: () => {},
       setColumnState: () => {},
       setFilterState: () => {},
       setGroupBy: () => {},
+      setPivotState: () => {},
     }
 
     expect(panel?.id).toBe("filters")

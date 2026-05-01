@@ -17,16 +17,17 @@ describe("sidebar state", () => {
   })
 
   test("normalizes active panel ids against registered panels", () => {
-    const panels = [{ id: "columns" }, { id: "filters" }]
+    const panels = [{ id: "columns" }, { id: "filters" }, { id: "pivot" }]
 
     expect(normalizeSidebarPanelId("columns", panels)).toBe("columns")
-    expect(normalizeSidebarPanelId("pivot", panels)).toBeNull()
+    expect(normalizeSidebarPanelId("pivot", panels)).toBe("pivot")
+    expect(normalizeSidebarPanelId("missing", panels)).toBeNull()
     expect(normalizeSidebarPanelId(null, panels)).toBeNull()
     expect(normalizeSidebarPanelId(undefined, panels)).toBeNull()
   })
 
   test("normalizes default and persisted panel ids before opening", () => {
-    const panels = [{ id: "columns" }, { id: "filters" }]
+    const panels = [{ id: "columns" }, { id: "filters" }, { id: "pivot" }]
 
     expect(
       resolveInitialSidebarPanelId({
@@ -51,11 +52,11 @@ describe("sidebar state", () => {
     ).toBe("filters")
     expect(
       resolveInitialSidebarPanelId({
-        defaultPanelId: "columns",
+        defaultPanelId: "pivot",
         persistedPanelId: "filters",
         panels,
       }),
-    ).toBe("columns")
+    ).toBe("pivot")
     expect(
       resolveInitialSidebarPanelId({
         defaultPanelId: "missing",
