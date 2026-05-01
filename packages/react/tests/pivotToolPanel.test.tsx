@@ -142,6 +142,7 @@ describe("pivot sidebar panel", () => {
   test("renders compact empty states", () => {
     const markup = renderToStaticMarkup(<BcPivotToolPanel context={sidebarContext(pivotState())} />)
 
+    expect(markup).toContain("bc-grid-sidebar-panel-header")
     expect(markup).toContain("Search pivot fields")
     expect(markup).toContain("No row groups")
     expect(markup).toContain("No column groups")

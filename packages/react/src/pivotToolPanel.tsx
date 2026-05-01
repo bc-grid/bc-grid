@@ -83,7 +83,9 @@ export function BcPivotToolPanel<TRow>({
 
   return (
     <section className="bc-grid-pivot-panel">
-      <h2 className="bc-grid-sidebar-panel-title">Pivot</h2>
+      <div className="bc-grid-sidebar-panel-header">
+        <h2 className="bc-grid-sidebar-panel-title">Pivot</h2>
+      </div>
       <label className="bc-grid-pivot-panel-search">
         <span className="bc-grid-pivot-panel-label">Search fields</span>
         <input

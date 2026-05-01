@@ -34,7 +34,7 @@ export function BcFiltersToolPanel<TRow>({
 
   return (
     <section className="bc-grid-filters-panel">
-      <div className="bc-grid-filters-panel-header">
+      <div className="bc-grid-sidebar-panel-header bc-grid-filters-panel-header">
         <h2 className="bc-grid-sidebar-panel-title">Filters</h2>
         <button
           className="bc-grid-filters-panel-clear"
