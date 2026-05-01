@@ -165,21 +165,27 @@ export function resolveDetailPanelHeight<TRow>({
     typeof detailPanelHeight === "function"
       ? detailPanelHeight(params)
       : (detailPanelHeight ?? defaultHeight)
-  return Math.max(0, height)
+  return normalizeDetailPanelHeight(height)
 }
 
 export function detailRowHeight(rowHeight: number, detailHeight: number): number {
-  return rowHeight + Math.max(0, detailHeight)
+  return normalizeDetailPanelHeight(rowHeight) + normalizeDetailPanelHeight(detailHeight)
+}
+
+export function normalizeDetailPanelHeight(height: number): number {
+  return Number.isFinite(height) ? Math.max(0, height) : 0
 }
 
 export function detailPanelStyle(top: number, height: number, width: number): CSSProperties {
+  const normalizedHeight = normalizeDetailPanelHeight(height)
+  const normalizedWidth = Number.isFinite(width) ? Math.max(width, 1) : 1
   return {
-    height,
+    height: normalizedHeight,
     left: 0,
     minWidth: "100%",
     overflow: "auto",
     position: "absolute",
-    top,
-    width: Math.max(width, 1),
+    top: normalizeDetailPanelHeight(top),
+    width: normalizedWidth,
   }
 }
