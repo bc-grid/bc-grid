@@ -23,20 +23,31 @@ That single import wires every `.bc-grid-*` class needed by `@bc-grid/react`. Dr
 
 ## Theming model
 
-bc-grid CSS variables fall back to shadcn token names with hard-coded defaults:
+bc-grid CSS variables are real CSS color values. They fall back to the latest
+shadcn token names, which can be OKLCH in Tailwind v4, and then to neutral
+defaults:
 
 ```css
 .bc-grid {
-  --bc-grid-bg: hsl(var(--background, 0 0% 100%));
-  --bc-grid-fg: hsl(var(--foreground, 222 47% 11%));
-  --bc-grid-row-hover: hsl(var(--accent, 210 40% 96%) / 0.7);
+  --bc-grid-bg: var(--background, hsl(0 0% 100%));
+  --bc-grid-fg: var(--foreground, hsl(222 47% 11%));
+  --bc-grid-row-hover: color-mix(
+    in srgb,
+    var(--accent, hsl(210 40% 96%)) 70%,
+    transparent
+  );
   /* ... */
 }
 ```
 
-If your app already declares shadcn tokens on `:root` (the standard shadcn setup), bc-grid inherits them. If not, the fallbacks render a sensible neutral theme.
+If your app already declares current shadcn tokens on `:root`, bc-grid inherits
+them. If not, the fallbacks render a sensible neutral theme.
 
-To override per-grid, set the variables on a parent of the grid root.
+To override per-grid, set the `--bc-grid-*` variables on a parent of the grid
+root. Use complete CSS colors such as `oklch(...)`, `hsl(...)`, hex, or named
+system colors. Older Tailwind v3/shadcn apps that still expose HSL channel
+tokens can bridge explicitly by assigning bc-grid tokens to `hsl(var(--token))`
+in host CSS.
 
 ## Tailwind preset (optional)
 

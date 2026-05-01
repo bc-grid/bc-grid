@@ -32,14 +32,14 @@ const apiRef = useBcGridApi<Customer>()
 
 const themingSnippet = `/* Host app globals.css */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-  --border: 214 32% 91%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 210 40% 96%;
-  --ring: 221 83% 53%;
-  --destructive: 0 84% 60%;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --border: oklch(0.922 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --ring: oklch(0.708 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
 }
 
 /* App entry */
@@ -1166,10 +1166,11 @@ function statusClass(status: keyof typeof statusLabels) {
       <article class="panel">
         <h3>Host App Tokens</h3>
         <p>
-          bc-grid consumes the host app's shadcn-style CSS variables such as
+          bc-grid consumes the host app's shadcn-style CSS color variables such as
           <code>--background</code>, <code>--foreground</code>, <code>--border</code>,
           <code>--muted</code>, <code>--accent</code>, <code>--ring</code>, and
-          <code>--destructive</code>. It does not ship opinionated product themes.
+          <code>--destructive</code>. Tailwind v4 / current shadcn OKLCH tokens work
+          directly; bc-grid does not wrap host tokens in HSL channel functions.
         </p>
         <p>
           See the
@@ -1181,7 +1182,9 @@ function statusClass(status: keyof typeof statusLabels) {
         <h3>bc-grid Tokens</h3>
         <p>
           Override <code>--bc-grid-*</code> variables only when the grid chrome needs to differ
-          from the rest of the app. Use <code>bcGridPreset</code> for Tailwind utility mapping and
+          from the rest of the app. Values should be complete CSS colors such as
+          <code>oklch(...)</code>, <code>hsl(...)</code>, hex, or system color keywords.
+          Use <code>bcGridPreset</code> for Tailwind utility mapping and
           <code>createBcGridThemeVars</code> for typed override maps.
         </p>
       </article>

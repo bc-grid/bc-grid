@@ -29,6 +29,8 @@ describe("@bc-grid/theming", () => {
 
   test("creates typed CSS variable override maps", () => {
     expect(bcGridThemeVars.focusRing).toBe("--bc-grid-focus-ring")
+    expect(bcGridThemeVars.accent).toBe("--bc-grid-accent")
+    expect(bcGridThemeVars.contextMenuFg).toBe("--bc-grid-context-menu-fg")
     expect(bcGridThemeVars.searchMatchBg).toBe("--bc-grid-search-match-bg")
     expect(
       createBcGridThemeVars({
@@ -46,7 +48,39 @@ describe("@bc-grid/theming", () => {
     expect(colors["bc-grid"]?.bg).toBe("var(--bc-grid-bg)")
     expect(colors["bc-grid"]?.["header-bg"]).toBe("var(--bc-grid-header-bg)")
     expect(colors["bc-grid"]?.ring).toBe("var(--bc-grid-focus-ring)")
+    expect(colors["bc-grid"]?.accent).toBe("var(--bc-grid-accent)")
+    expect(colors["bc-grid"]?.["context-menu-fg"]).toBe("var(--bc-grid-context-menu-fg)")
     expect(colors["bc-grid"]?.["search-match"]).toBe("var(--bc-grid-search-match-bg)")
+  })
+
+  test("CSS token bridge accepts Tailwind v4/shadcn full color tokens", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain("--bc-grid-bg: var(--background, hsl(0 0% 100%))")
+    expect(css).toContain("--bc-grid-focus-ring: var(--ring, hsl(221 83% 53%))")
+    expect(css).toContain("--bc-grid-context-menu-fg: var(--popover-foreground, var(--bc-grid-fg))")
+    expect(css).toContain("--bc-grid-row-hover: color-mix(")
+    expect(css).not.toContain("hsl(var(")
+  })
+
+  test("React and editor inline styles use bc-grid tokens instead of shadcn HSL channels", () => {
+    const sources = [
+      "../../react/src/headerCells.tsx",
+      "../../react/src/editorPortal.tsx",
+      "../../editors/src/autocomplete.tsx",
+      "../../editors/src/date.tsx",
+      "../../editors/src/datetime.tsx",
+      "../../editors/src/multiSelect.tsx",
+      "../../editors/src/number.tsx",
+      "../../editors/src/select.tsx",
+      "../../editors/src/text.tsx",
+      "../../editors/src/time.tsx",
+    ]
+
+    for (const source of sources) {
+      const text = readFileSync(new URL(source, import.meta.url), "utf8")
+      expect(text).not.toContain("hsl(var(")
+    }
   })
 
   test("CSS includes accessibility media contracts", () => {
