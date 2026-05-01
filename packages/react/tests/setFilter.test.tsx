@@ -74,81 +74,39 @@ function renderSetFilterPopup(filterText: string): string {
   )
 }
 
-describe("renderFilterCell — set filter trigger", () => {
-  test("inactive trigger shows the operator select + 'Select values' summary", () => {
+describe("renderFilterCell — set filter inline contract", () => {
+  // Per the inline-filter-row UX contract (docs/api.md §"Inline filter
+  // row UX contract"), set filters do NOT render a value picker
+  // inline. The advanced multi-value picker belongs in the popup
+  // variant or the Filters tool panel; the inline cell stays empty
+  // so the row reads as a quick-filter row. Hosts surface the picker
+  // via `filter: { type: "set", variant: "popup" }` (header funnel)
+  // or `sidebar={["filters", …]}`.
+
+  test("set-type column renders an empty inline cell — no operator select, no values trigger", () => {
     const html = renderSetFilterCell({ filterText: "" })
 
-    expect(html).toContain("bc-grid-filter-set")
-    expect(html).toContain('aria-label="Filter Status operator"')
-    expect(html).toContain('aria-label="Filter Status values"')
-    expect(html).toContain("Select values")
-    // The trigger button is not in the active state when filterText is
-    // empty — `data-active` must NOT be emitted (omitted, not "false",
-    // so CSS [data-active] selectors only match the active branch).
-    expect(html).not.toMatch(/data-active="(true|false)"/)
+    expect(html).toContain("bc-grid-filter-cell")
+    expect(html).not.toContain("bc-grid-filter-set")
+    expect(html).not.toContain("bc-grid-filter-set-button")
+    expect(html).not.toContain('aria-label="Filter Status operator"')
+    expect(html).not.toContain('aria-label="Filter Status values"')
   })
 
-  test("active trigger reflects the selected count + carries data-active=true", () => {
+  test("active set filter still renders an empty inline cell — visibility lives elsewhere", () => {
+    // The inline cell is empty regardless of whether the filter is
+    // active. The Filters tool panel surfaces an "active filter
+    // summary" card that tells the user the filter is on; the
+    // inline cell deliberately stays out of the way so the header
+    // row remains compact.
     const html = renderSetFilterCell({
       filterText: encodeSetFilterInput({ op: "in", values: ["Open", "Past Due"] }),
     })
 
-    expect(html).toContain("2 selected")
-    expect(html).toContain('data-active="true"')
-    // Aria-label is unchanged so AT users still target by stable name.
-    expect(html).toContain('aria-label="Filter Status values"')
-  })
-
-  test("op=blank disables the values trigger and shows 'Blank rows' summary", () => {
-    const html = renderSetFilterCell({
-      filterText: encodeSetFilterInput({ op: "blank", values: [] }),
-    })
-
-    expect(html).toContain("Blank rows")
-    expect(html).toContain('data-active="true"')
-    // Native `disabled` attribute renders on the values trigger so a
-    // user can't accidentally open the values menu while the operator
-    // is set to "blank".
-    expect(html).toMatch(
-      /aria-label="Filter Status values"[^>]*disabled|disabled[^>]*aria-label="Filter Status values"/,
-    )
-  })
-
-  test("operator select renders all three operators in v0.3 contract order", () => {
-    const html = renderSetFilterCell({ filterText: "" })
-
-    // The DOM order is the user-facing operator-list order; pin it so
-    // a future re-shuffle triggers an explicit decision. Match the
-    // option content rather than a single attribute fragment so
-    // selected="" / surrounding chrome doesn't break the assertion.
-    const opIndex = html.indexOf('aria-label="Filter Status operator"')
-    const inIndex = html.indexOf(">In</option>")
-    const notInIndex = html.indexOf(">Not in</option>")
-    const blankIndex = html.indexOf(">Blank</option>")
-
-    expect(opIndex).toBeGreaterThan(-1)
-    expect(inIndex).toBeGreaterThan(opIndex)
-    expect(notInIndex).toBeGreaterThan(inIndex)
-    expect(blankIndex).toBeGreaterThan(notInIndex)
-  })
-
-  test("unknown values from filterText project as themselves (legacy compat)", () => {
-    // A filterText payload may contain values that are not in the
-    // currently-loaded options (e.g., the filter was persisted in a
-    // prior session, or the option list hasn't been computed yet).
-    // The trigger summary still reports the selected count so the
-    // user sees the filter is active. Menu rendering of those values
-    // happens on open and is exercised at the helper level via
-    // filter.test.ts.
-    const html = renderSetFilterCell({
-      filterText: encodeSetFilterInput({
-        op: "in",
-        values: ["legacy-key-1", "legacy-key-2", "legacy-key-3"],
-      }),
-    })
-
-    expect(html).toContain("3 selected")
-    expect(html).toContain('data-active="true"')
+    expect(html).toContain("bc-grid-filter-cell")
+    expect(html).not.toContain("bc-grid-filter-set")
+    expect(html).not.toContain("Select values")
+    expect(html).not.toContain("2 selected")
   })
 })
 

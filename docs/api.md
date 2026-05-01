@@ -1269,6 +1269,49 @@ its own column/settings surface. Individual columns can opt out with
 `columnMenu: false`, which is how built-in selection, detail, and action
 columns avoid rendering a column menu.
 
+#### Inline filter row UX contract
+
+The grid splits the **filter editing surfaces** into a quick filter (the
+inline row beneath the header) and an advanced filter (the popup variant
+opened by the header funnel button, plus the Filters tool panel in the
+sidebar). The inline row is intentionally compact so it stays aligned
+with shadcn-style table chrome and AG Grid's floating-filter row even at
+narrow column widths.
+
+| Surface | Renders | Drives |
+| --- | --- | --- |
+| Inline row (`showFilterRow !== false`) | Single value input per column. Operator defaults: text `contains`, number `=`, date `is`. Range filters (`number-range` / `date-range`) keep their two-input form. Boolean keeps the tri-state select. | Quick filtering against a single value. |
+| Popup variant (`filter: { variant: "popup" }`) | Funnel button on the header opens a floating dialog with the full editor — operator picker, modifier toggles (case sensitive / regex), set-filter dropdown, range inputs. | Advanced operators and modifiers without taking up inline-row space. |
+| Filters tool panel (`sidebar={["filters", …]}`) | Per-column "active filter" cards with the operator label, value summary, and the full editor body when expanded. | Reading the current filter set at a glance + advanced editing for any column. |
+
+**Inline row contract.** The inline row hosts only the quick-filter
+controls listed above. Operator pickers, the regex / case-sensitive
+modifier toggles, and the set-filter value picker are deliberately
+omitted from the inline cell — they live in the popup variant and the
+panel. Hosts that need any of these affordances reachable directly
+from the header should configure the column with `filter: { type:
+"set", variant: "popup" }` (or any other type with `variant: "popup"`)
+so the funnel button takes the user to the popup editor.
+
+**Set filters and inline.** A column configured as `filter: { type: "set" }`
+without a variant renders an **empty inline cell** — set value pickers
+do not fit the quick-filter contract. The host should either set
+`variant: "popup"` to surface the funnel button or wire the Filters
+tool panel via `sidebar={["filters", …]}` so the picker is reachable
+from there.
+
+**Non-data columns.** Columns without a data source — no `field`, no
+`valueGetter`, and no explicit `filter` config — render an empty
+inline filter cell so action / render-only columns don't carry a
+filter input that would never match. Setting `filter: { … }`
+explicitly opts a column in regardless of whether it has a data
+source.
+
+Persistence is identical across surfaces: a value typed inline
+serialises to the same `columnFilterText` / `BcGridFilter` shape that
+the popup and panel produce, so a host can switch between surfaces
+without reformatting the stored draft.
+
 When `renderDetailPanel` is supplied, `<BcGrid>` renders a small pinned-left
 disclosure column. Expanding a row mounts the returned React node below that
 row, using the existing `expansion` state pair. Detail panels are fixed-height

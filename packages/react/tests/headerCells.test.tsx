@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 import { type ResolvedColumn, defaultMessages } from "../src/gridInternals"
-import { FilterPopup, renderFilterCell, renderHeaderCell } from "../src/headerCells"
+import {
+  FilterPopup,
+  isInlineFilterApplicable,
+  renderFilterCell,
+  renderHeaderCell,
+} from "../src/headerCells"
 
 interface Row {
   name: string
@@ -299,140 +304,60 @@ function countMatches(haystack: string, needle: string): number {
   return count
 }
 
-describe("renderFilterCell — text filter aria-label structure", () => {
-  test("operator/value/case-sensitive/regex controls have distinct aria-labels", () => {
+describe("renderFilterCell — inline filter row UX contract", () => {
+  // Coordinator's inline-filter-row UX contract (see docs/api.md
+  // §"Inline filter row UX contract"): the inline row hosts a quick
+  // filter only — single value input for text / number / date,
+  // existing two-input form for ranges, tri-state select for boolean.
+  // Operator pickers, modifier toggles (case sensitive / regex), and
+  // set-filter value pickers belong to the popup variant and the
+  // Filters tool panel.
+
+  test("text filter inline cell renders only the value input — no operator select, no modifier toggles", () => {
     const html = renderTextFilterCellHtml("")
 
+    // Single value input — the only labelled control inline.
     expect(html).toContain('aria-label="Filter Account"')
-    expect(html).toContain('aria-label="Filter Account operator"')
-    expect(html).toContain('aria-label="Filter Account case sensitive"')
-    expect(html).toContain('aria-label="Filter Account regex"')
+    // Advanced surfaces are absent inline.
+    expect(html).not.toContain("bc-grid-filter-select")
+    expect(html).not.toContain("bc-grid-filter-text-toggle")
+    expect(html).not.toContain('aria-label="Filter Account operator"')
+    expect(html).not.toContain('aria-label="Filter Account case sensitive"')
+    expect(html).not.toContain('aria-label="Filter Account regex"')
+    expect(html).not.toContain('title="Case sensitive"')
+    expect(html).not.toContain('title="Regular expression"')
   })
 
-  test("only one element carries the bare 'Filter Account' aria-label", () => {
+  test("only one element carries the bare 'Filter Account' aria-label inline", () => {
     const html = renderTextFilterCellHtml("CUST-00042")
 
-    // The exact-match locator pattern in vertical-slice.pw.ts depends on
-    // there being exactly one element whose aria-label equals
-    // "Filter Account". Operator/case-sensitive/regex labels must add a
-    // descriptive suffix so they do not collide as substrings.
     expect(countMatches(html, 'aria-label="Filter Account"')).toBe(1)
   })
 
-  test("text filter cell uses the bc-grid-filter-text wrapper", () => {
-    const html = renderTextFilterCellHtml("")
-
-    expect(html).toContain("bc-grid-filter-text")
-    expect(html).toContain("bc-grid-filter-text-toggle")
-  })
-
-  test("text filter cell exposes operator select + value input + both modifier toggles in order", () => {
-    // Layout invariant for filter-row-shadcn-polish-v030. The text
-    // filter row must always render four stable controls — operator
-    // <select>, value <input>, case-sensitive <button>, regex
-    // <button> — in that DOM order. A future refactor that drops a
-    // toggle (or reorders them) breaks pointer-target assumptions in
-    // host apps' e2e suites.
-    const html = renderTextFilterCellHtml("")
-
-    const opIdx = html.indexOf('aria-label="Filter Account operator"')
-    const valIdx = html.indexOf('aria-label="Filter Account"')
-    const caseIdx = html.indexOf('aria-label="Filter Account case sensitive"')
-    const regexIdx = html.indexOf('aria-label="Filter Account regex"')
-    expect(opIdx).toBeGreaterThan(-1)
-    expect(valIdx).toBeGreaterThan(opIdx)
-    expect(caseIdx).toBeGreaterThan(valIdx)
-    expect(regexIdx).toBeGreaterThan(caseIdx)
-  })
-
-  test("default contains+no-modifier persistence renders as plain-string value", () => {
+  test("inline value input hydrates from the legacy plain-string contract", () => {
     const html = renderTextFilterCellHtml("CUST-00042")
 
     expect(html).toContain('value="CUST-00042"')
-    expect(html).toContain('value="contains"')
   })
 
-  test("structured persistence hydrates operator + modifier toggles", () => {
+  test("inline value input hydrates the value from structured persistence (operator + modifiers stay implicit)", () => {
+    // Persistence interop: structured drafts written by the popup /
+    // panel still surface the value inline. Operator + modifiers stay
+    // in the stored draft until the user opens the advanced editor.
     const html = renderTextFilterCellHtml(
       JSON.stringify({ op: "equals", value: "CUST-00042", caseSensitive: true }),
     )
 
-    expect(html).toContain('value="equals"')
     expect(html).toContain('value="CUST-00042"')
-    // The case-sensitive toggle reflects pressed state via aria-pressed.
-    expect(html).toMatch(
-      /aria-label="Filter Account case sensitive"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*aria-label="Filter Account case sensitive"/,
-    )
+    // The inline cell never emits the operator <select> nor the
+    // modifier toggles — those surface in the popup / panel.
+    expect(html).not.toContain("bc-grid-filter-select")
+    expect(html).not.toContain("aria-pressed=")
   })
 
-  test("toggle buttons carry hover-tooltip titles for sighted users", () => {
-    // The toggles render as 2-character glyphs ("Aa" / ".*"). Sighted
-    // pointer users get the human-readable label via the native
-    // tooltip; AT users get the same intent via the aria-label suffix
-    // pinned in the test above.
+  test("inline value input renders with autoComplete=off so consumer browser autofill never fires inside the grid", () => {
     const html = renderTextFilterCellHtml("")
-
-    expect(html).toContain('title="Case sensitive"')
-    expect(html).toContain('title="Regular expression"')
-  })
-
-  test("regex mode swaps placeholder, disables spellcheck, and disables autocomplete on the value input", () => {
-    // When the user toggles regex, the value-input switches role from
-    // "free text needle" to "regex pattern". Browsers' spellcheck and
-    // autocomplete heuristics misfire on patterns like `^AC[0-9]+$`,
-    // so we mute both and switch the placeholder to a regex hint.
-    const html = renderTextFilterCellHtml(
-      JSON.stringify({ op: "contains", value: "", regex: true }),
-    )
-
-    expect(html).toContain('placeholder="Regex pattern"')
-    // react-dom/server `renderToStaticMarkup` preserves the React prop
-    // casing for `spellCheck` / `autoComplete` (the live DOM lower-cases
-    // them; static markup keeps the JSX form). Match either casing so
-    // the test stays valid across React versions.
-    expect(html).toMatch(/spell[Cc]heck="false"/)
     expect(html).toMatch(/auto[Cc]omplete="off"/)
-  })
-
-  test("regex toggle is unset by default (no spellcheck/autocomplete override on the value input)", () => {
-    const html = renderTextFilterCellHtml("CUST-00042")
-
-    // Without regex, the value input is plain text; we don't override
-    // spellcheck or autocomplete (host-app preference wins).
-    expect(html).not.toMatch(/spell[Cc]heck=/)
-    expect(html).not.toMatch(/auto[Cc]omplete=/)
-    // Default placeholder is the host's filterPlaceholder message.
-    expect(html).not.toContain('placeholder="Regex pattern"')
-  })
-
-  test("toggle pressed state reflects the persisted modifier flags", () => {
-    const caseOnly = renderTextFilterCellHtml(
-      JSON.stringify({ op: "contains", value: "x", caseSensitive: true }),
-    )
-    const regexOnly = renderTextFilterCellHtml(
-      JSON.stringify({ op: "contains", value: "^x", regex: true }),
-    )
-    const both = renderTextFilterCellHtml(
-      JSON.stringify({ op: "contains", value: "^X", caseSensitive: true, regex: true }),
-    )
-    const neither = renderTextFilterCellHtml("CUST-00042")
-
-    const pressed = (label: string, html: string) =>
-      new RegExp(
-        `aria-label="${label}"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*aria-label="${label}"`,
-      ).test(html)
-
-    expect(pressed("Filter Account case sensitive", caseOnly)).toBe(true)
-    expect(pressed("Filter Account regex", caseOnly)).toBe(false)
-
-    expect(pressed("Filter Account case sensitive", regexOnly)).toBe(false)
-    expect(pressed("Filter Account regex", regexOnly)).toBe(true)
-
-    expect(pressed("Filter Account case sensitive", both)).toBe(true)
-    expect(pressed("Filter Account regex", both)).toBe(true)
-
-    expect(pressed("Filter Account case sensitive", neither)).toBe(false)
-    expect(pressed("Filter Account regex", neither)).toBe(false)
   })
 })
 
@@ -492,6 +417,185 @@ describe("renderFilterCell — empty filter cell rendering", () => {
     expect(html).not.toContain("bc-grid-filter-text")
     expect(html).not.toContain("bc-grid-filter-input")
     expect(html).not.toContain('aria-label="Filter Account')
+  })
+
+  test("set-type column renders an empty inline cell — the value picker belongs to popup / panel", () => {
+    // Per the inline-filter-row UX contract, set filters never paint
+    // a value picker inline. The inline cell is empty so the row
+    // stays compact; hosts surface the picker via `variant: "popup"`
+    // (header funnel) or the Filters tool panel.
+    const column: ResolvedColumn<Row> = {
+      align: "left",
+      columnId: "status",
+      left: 0,
+      pinned: null,
+      position: 0,
+      source: {
+        columnId: "status",
+        field: "name",
+        header: "Status",
+        filter: { type: "set" },
+      },
+      width: 200,
+    }
+    const html = renderToStaticMarkup(
+      renderFilterCell({
+        column,
+        domBaseId: "grid",
+        filterText: "",
+        headerHeight: 40,
+        index: 0,
+        messages: defaultMessages,
+        onFilterChange: () => {},
+        pinnedEdge: null,
+        scrollLeft: 0,
+        totalWidth: 200,
+        viewportWidth: 200,
+      }),
+    )
+
+    expect(html).toContain("bc-grid-filter-cell")
+    expect(html).not.toContain("bc-grid-filter-set")
+    expect(html).not.toContain("bc-grid-filter-set-button")
+    expect(html).not.toContain('aria-label="Filter Status')
+  })
+
+  test("non-data column (no field, no valueGetter, no explicit filter) renders an empty inline cell", () => {
+    // Action / render-only columns shouldn't carry a filter input —
+    // the cell value would be undefined and a text filter against it
+    // is never useful. Per the inline-filter-row UX contract, the
+    // inline cell skips the editor body entirely.
+    const column: ResolvedColumn<Row> = {
+      align: "left",
+      columnId: "actions",
+      left: 0,
+      pinned: null,
+      position: 0,
+      source: { columnId: "actions", header: "Actions" },
+      width: 120,
+    }
+    const html = renderToStaticMarkup(
+      renderFilterCell({
+        column,
+        domBaseId: "grid",
+        filterText: "",
+        headerHeight: 40,
+        index: 0,
+        messages: defaultMessages,
+        onFilterChange: () => {},
+        pinnedEdge: null,
+        scrollLeft: 0,
+        totalWidth: 120,
+        viewportWidth: 120,
+      }),
+    )
+
+    expect(html).toContain("bc-grid-filter-cell")
+    expect(html).not.toContain("bc-grid-filter-input")
+    expect(html).not.toContain("bc-grid-filter-text")
+    expect(html).not.toContain('aria-label="Filter Actions')
+  })
+
+  test("non-data column with explicit filter config still renders inline (host opt-in)", () => {
+    // The contract is "no field + no valueGetter + no filter config →
+    // empty inline". An explicit `filter: { ... }` opts the column
+    // back in regardless of data backing — useful for synthetic /
+    // computed columns where the host wires the filter through a
+    // custom hook.
+    const column: ResolvedColumn<Row> = {
+      align: "left",
+      columnId: "computed",
+      left: 0,
+      pinned: null,
+      position: 0,
+      source: { columnId: "computed", header: "Computed", filter: { type: "text" } },
+      width: 160,
+    }
+    const html = renderToStaticMarkup(
+      renderFilterCell({
+        column,
+        domBaseId: "grid",
+        filterText: "",
+        headerHeight: 40,
+        index: 0,
+        messages: defaultMessages,
+        onFilterChange: () => {},
+        pinnedEdge: null,
+        scrollLeft: 0,
+        totalWidth: 160,
+        viewportWidth: 160,
+      }),
+    )
+
+    expect(html).toContain("bc-grid-filter-input")
+    expect(html).toContain('aria-label="Filter Computed"')
+  })
+})
+
+describe("renderFilterCell — inline number / date quick filter", () => {
+  function renderInlineQuickFilterHtml(filterType: "number" | "date", filterText: string): string {
+    const column: ResolvedColumn<Row> = {
+      align: "left",
+      columnId: "value",
+      left: 0,
+      pinned: null,
+      position: 0,
+      source: {
+        columnId: "value",
+        field: "name",
+        header: "Value",
+        filter: { type: filterType },
+      },
+      width: 200,
+    }
+    return renderToStaticMarkup(
+      renderFilterCell({
+        column,
+        domBaseId: "grid",
+        filterText,
+        headerHeight: 40,
+        index: 0,
+        messages: defaultMessages,
+        onFilterChange: () => {},
+        pinnedEdge: null,
+        scrollLeft: 0,
+        totalWidth: 200,
+        viewportWidth: 200,
+      }),
+    )
+  }
+
+  test("number filter inline renders only a single input — no operator select", () => {
+    const html = renderInlineQuickFilterHtml("number", "")
+
+    expect(html).toContain('aria-label="Filter Value"')
+    expect(html).toContain("bc-grid-filter-input")
+    // No operator <select> or modifier toggles inline.
+    expect(html).not.toContain("bc-grid-filter-select")
+    expect(html).not.toContain('aria-label="Filter Value operator"')
+    // No range chrome — number-range is a separate type.
+    expect(html).not.toContain("bc-grid-filter-number-range")
+  })
+
+  test("date filter inline renders a single date input — no operator select", () => {
+    const html = renderInlineQuickFilterHtml("date", "")
+
+    expect(html).toContain('aria-label="Filter Value"')
+    expect(html).toMatch(/<input[^>]*type="date"/)
+    // The lone date input is the only labelled control inline.
+    const inputCount = (html.match(/<input/g) ?? []).length
+    expect(inputCount).toBe(1)
+    expect(html).not.toContain("bc-grid-filter-select")
+    expect(html).not.toContain('aria-label="Filter Value operator"')
+  })
+
+  test("number filter inline hydrates from structured persistence (value only)", () => {
+    const html = renderInlineQuickFilterHtml("number", JSON.stringify({ op: ">=", value: "1000" }))
+
+    // The single input shows the value; the operator stays in the
+    // stored draft until the popup / panel is opened.
+    expect(html).toContain('value="1000"')
+    expect(html).not.toContain('aria-label="Filter Value operator"')
   })
 })
 
@@ -755,5 +859,52 @@ describe("filter popup trigger — Radix-style ARIA linkage", () => {
     const active = renderFilterPopupTriggerHtml("CUST-00042", true)
     expect(active).toContain("bc-grid-header-filter-icon")
     expect(active).toContain('fill="currentColor"')
+  })
+})
+
+describe("isInlineFilterApplicable — inline filter row UX contract", () => {
+  function makeColumn(overrides: Partial<ResolvedColumn<Row>["source"]> = {}): ResolvedColumn<Row> {
+    return {
+      align: "left",
+      columnId: "value",
+      left: 0,
+      pinned: null,
+      position: 0,
+      source: { columnId: "value", header: "Value", ...overrides },
+      width: 120,
+    }
+  }
+
+  test("data column with field is inline-filterable by default", () => {
+    expect(isInlineFilterApplicable(makeColumn({ field: "name" }))).toBe(true)
+  })
+
+  test("data column with valueGetter is inline-filterable by default", () => {
+    expect(isInlineFilterApplicable(makeColumn({ valueGetter: (row) => row.name }))).toBe(true)
+  })
+
+  test("non-data column with no field, no valueGetter, no filter config is NOT inline-filterable", () => {
+    // Action / render-only columns shouldn't carry a filter input
+    // since the cell value would be undefined.
+    expect(isInlineFilterApplicable(makeColumn())).toBe(false)
+  })
+
+  test("non-data column with explicit filter config opts back in (host opt-in)", () => {
+    // Synthetic / computed columns where the host wires the filter
+    // through a custom value pipeline can still surface the inline
+    // editor by setting `filter: { ... }`.
+    expect(isInlineFilterApplicable(makeColumn({ filter: { type: "text" } }))).toBe(true)
+  })
+
+  test("filter:false always disables the inline cell, even for data columns", () => {
+    expect(isInlineFilterApplicable(makeColumn({ field: "name", filter: false }))).toBe(false)
+  })
+
+  test("popup-variant column is NOT inline-filterable — funnel goes on the header instead", () => {
+    expect(
+      isInlineFilterApplicable(
+        makeColumn({ field: "name", filter: { type: "text", variant: "popup" } }),
+      ),
+    ).toBe(false)
   })
 })

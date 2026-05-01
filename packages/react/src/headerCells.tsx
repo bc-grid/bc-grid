@@ -454,6 +454,28 @@ interface RenderFilterCellParams<TRow> {
   messages: BcGridMessages
 }
 
+/**
+ * Inline-filter-row UX contract: a column is filterable inline only
+ * when (a) the host has not opted out via `filter: false`, (b) the
+ * column has a data backing — either an explicit `filter` config, a
+ * `field`, or a `valueGetter` — and (c) the variant isn't the
+ * popup-only one (which renders the funnel button on the header
+ * instead). Action / render-only columns therefore render an empty
+ * inline filter cell so the row stays clean.
+ *
+ * Pure helper, exported for unit testing.
+ */
+export function isInlineFilterApplicable<TRow>(column: ResolvedColumn<TRow>): boolean {
+  const source = column.source
+  if (source.filter === false) return false
+  if (source.filter && (source.filter as BcColumnFilter).variant === "popup") return false
+  // Explicit filter config opts in regardless of `field` / `valueGetter`.
+  if (source.filter) return true
+  // Otherwise the column must be data-backed to make sense as a
+  // filter target.
+  return source.field != null || source.valueGetter != null
+}
+
 export function renderFilterCell<TRow>({
   column,
   domBaseId,
@@ -468,12 +490,8 @@ export function renderFilterCell<TRow>({
   viewportWidth,
   messages,
 }: RenderFilterCellParams<TRow>): ReactNode {
-  const filterDisabled = column.source.filter === false
+  const filterApplicable = isInlineFilterApplicable(column)
   const filterType = column.source.filter ? column.source.filter.type : "text"
-  const isPopupVariant =
-    Boolean(column.source.filter) &&
-    column.source.filter !== false &&
-    (column.source.filter as BcColumnFilter).variant === "popup"
   const columnLabel =
     typeof column.source.header === "string" ? column.source.header : column.columnId
   const filterLabel = messages.filterAriaLabel({ columnLabel })
@@ -508,7 +526,7 @@ export function renderFilterCell<TRow>({
         event.stopPropagation()
       }}
     >
-      {filterDisabled || isPopupVariant ? null : (
+      {filterApplicable ? (
         <FilterEditorBody
           filterType={filterType}
           filterText={filterText}
@@ -518,15 +536,158 @@ export function renderFilterCell<TRow>({
             loadSetFilterOptions ? () => loadSetFilterOptions(column.columnId) : undefined
           }
           onFilterChange={onFilterChange}
+          surface="inline"
           messages={messages}
         />
-      )}
+      ) : null}
     </div>
   )
 }
 
 type FilterFocusElement = HTMLInputElement | HTMLSelectElement | HTMLButtonElement
 type FilterKeyDownHandler = (event: KeyboardEvent<HTMLElement>) => void
+
+/**
+ * Inline-row quick-filter controls per the inline-filter-row UX
+ * contract: text / number / date filters render a single value input
+ * inside the header's filter row. Operator pickers, regex /
+ * case-sensitive modifier toggles, and the set-filter value picker
+ * are deliberately omitted so the row stays compact and aligned with
+ * shadcn / AG Grid floating-filter conventions. Advanced operators
+ * live in the popup-variant editor and the Filters tool panel.
+ *
+ * The quick-filter inputs preserve persistence-side compatibility
+ * with the structured editor — a value typed inline persists as the
+ * legacy plain-string contract (text → `op: "contains"`, number →
+ * `op: "="`, date → `op: "is"`) so toggling between inline and
+ * popup keeps the same active filter without reformatting the
+ * stored draft.
+ */
+function TextQuickFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+  onFilterKeyDown,
+  primaryRef,
+  placeholder,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+  onFilterKeyDown: FilterKeyDownHandler
+  primaryRef?: { current: FilterFocusElement | null }
+  placeholder?: string
+}): ReactNode {
+  // Decode in case the host hydrates from structured persistence —
+  // we only paint the value, but we want the input to reflect what's
+  // actually stored. Operator + modifiers stay implicit.
+  const decoded = decodeTextFilterInput(filterText)
+  return (
+    <input
+      ref={(el) => {
+        if (primaryRef) primaryRef.current = el
+      }}
+      aria-label={filterLabel}
+      autoComplete="off"
+      className="bc-grid-filter-input"
+      id={filterId}
+      onChange={(event) => onFilterChange(event.currentTarget.value)}
+      onKeyDown={onFilterKeyDown}
+      placeholder={placeholder}
+      type="text"
+      value={decoded.value}
+    />
+  )
+}
+
+function NumberQuickFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+  onFilterKeyDown,
+  primaryRef,
+  placeholder,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+  onFilterKeyDown: FilterKeyDownHandler
+  primaryRef?: { current: FilterFocusElement | null }
+  placeholder?: string
+}): ReactNode {
+  // Mirror the structured editor's persistence so a value typed
+  // inline survives a switch to the popup variant. `op: "="` is the
+  // most common quick-filter intent for numbers; advanced operators
+  // (≠, <, ≤, >, ≥, between) are reachable from the popup or panel.
+  const decoded = decodeNumberFilterInput(filterText)
+  const value = decoded.value
+  const emit = (next: string) => {
+    if (next.trim().length === 0) {
+      onFilterChange("")
+      return
+    }
+    onFilterChange(encodeNumberFilterInput({ op: "=", value: next }))
+  }
+  return (
+    <input
+      ref={(el) => {
+        if (primaryRef) primaryRef.current = el
+      }}
+      aria-label={filterLabel}
+      className="bc-grid-filter-input"
+      id={filterId}
+      inputMode="decimal"
+      onChange={(event) => emit(event.currentTarget.value)}
+      onKeyDown={onFilterKeyDown}
+      placeholder={placeholder}
+      type="text"
+      value={value}
+    />
+  )
+}
+
+function DateQuickFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+  onFilterKeyDown,
+  primaryRef,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+  onFilterKeyDown: FilterKeyDownHandler
+  primaryRef?: { current: FilterFocusElement | null }
+}): ReactNode {
+  const decoded = decodeDateFilterInput(filterText)
+  const emit = (next: string) => {
+    if (next.length === 0) {
+      onFilterChange("")
+      return
+    }
+    onFilterChange(encodeDateFilterInput({ op: "is", value: next }))
+  }
+  return (
+    <input
+      ref={(el) => {
+        if (primaryRef) primaryRef.current = el
+      }}
+      aria-label={filterLabel}
+      className="bc-grid-filter-input"
+      id={filterId}
+      onChange={(event) => emit(event.currentTarget.value)}
+      onKeyDown={onFilterKeyDown}
+      type="date"
+      value={decoded.value}
+    />
+  )
+}
 
 function TextFilterControl({
   filterId,
@@ -1052,6 +1213,7 @@ export function FilterEditorBody({
   onFilterChange,
   allowEscapeKeyPropagation = false,
   autoFocus,
+  surface = "popup",
   messages,
 }: {
   filterType: BcColumnFilter["type"]
@@ -1062,6 +1224,27 @@ export function FilterEditorBody({
   onFilterChange: (next: string) => void
   allowEscapeKeyPropagation?: boolean
   autoFocus?: boolean
+  /**
+   * Where this editor body is rendered. Drives the
+   * **inline-filter-row UX contract**:
+   *
+   *   - `"inline"` (the column's filter row beneath the header) renders
+   *     a quick-filter only — a single value input for `text` /
+   *     `number` / `date`, the existing two-input range for `number-
+   *     range` / `date-range`, and the boolean tri-state select.
+   *     Operator pickers, regex / case-sensitive modifier toggles, and
+   *     the set-filter value picker are deliberately omitted; the
+   *     advanced surfaces live in the popup-variant (`variant:
+   *     "popup"`) and the Filters tool panel.
+   *   - `"popup"` (the floating filter dialog opened by the header
+   *     funnel button, plus the Filters sidebar panel) renders the
+   *     full editor — operator picker, modifiers, set-filter
+   *     dropdown, range inputs.
+   *
+   * Default `"popup"` so existing call sites that don't opt in keep
+   * the full editor.
+   */
+  surface?: "inline" | "popup"
   messages: BcGridMessages
 }): ReactNode {
   const focusRef = useRef<FilterFocusElement | null>(null)
@@ -1094,6 +1277,19 @@ export function FilterEditorBody({
     )
   }
   if (filterType === "number") {
+    if (surface === "inline") {
+      return (
+        <NumberQuickFilterControl
+          filterId={filterId}
+          filterLabel={filterLabel}
+          filterText={filterText}
+          onFilterChange={onFilterChange}
+          onFilterKeyDown={onFilterKeyDown}
+          primaryRef={focusRef}
+          placeholder={messages.filterPlaceholder}
+        />
+      )
+    }
     return (
       <NumberFilterControl
         filterId={filterId}
@@ -1122,6 +1318,18 @@ export function FilterEditorBody({
     )
   }
   if (filterType === "date") {
+    if (surface === "inline") {
+      return (
+        <DateQuickFilterControl
+          filterId={filterId}
+          filterLabel={filterLabel}
+          filterText={filterText}
+          onFilterChange={onFilterChange}
+          onFilterKeyDown={onFilterKeyDown}
+          primaryRef={focusRef}
+        />
+      )
+    }
     return (
       <DateFilterControl
         filterId={filterId}
@@ -1146,6 +1354,14 @@ export function FilterEditorBody({
     )
   }
   if (filterType === "set") {
+    // Set-filter inline surface is intentionally empty per the
+    // inline-filter-row UX contract — the inline row is "quick filter
+    // only", and the multi-value picker belongs in popup or panel.
+    // Hosts wanting set filters reachable from the header should
+    // configure `filter: { type: "set", variant: "popup" }` so the
+    // header funnel button takes them there. The inline cell renders
+    // null so the row stays clean.
+    if (surface === "inline") return null
     return (
       <SetFilterControl
         filterId={filterId}
@@ -1159,6 +1375,19 @@ export function FilterEditorBody({
     )
   }
   if (filterType === "text") {
+    if (surface === "inline") {
+      return (
+        <TextQuickFilterControl
+          filterId={filterId}
+          filterLabel={filterLabel}
+          filterText={filterText}
+          onFilterChange={onFilterChange}
+          onFilterKeyDown={onFilterKeyDown}
+          primaryRef={focusRef}
+          placeholder={messages.filterPlaceholder}
+        />
+      )
+    }
     return (
       <TextFilterControl
         filterId={filterId}
