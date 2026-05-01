@@ -64,16 +64,37 @@ Internal pure helper `computePopupPosition` (`packages/react/src/internal/popup-
 
 ## Follow-up slices
 
-| Slice | Touches | Risk | Justification |
-|---|---|---|---|
-| 2: column-chooser positioning | `grid.tsx` `openColumnMenu` + `ColumnVisibilityMenu` | Low | Use `computePopupPosition` for the third surface; remove the third instance of inline clamp math. |
-| 3: shared menu-item primitive | `internal/context-menu.tsx`, `columnVisibility.tsx` | Medium | Extract `<MenuItem>` / `<MenuCheckboxItem>` into `packages/react/src/internal/menu-item.tsx`. Standardises spacing, focus ring, disabled state across the two menus. Test impact: existing context-menu / column-chooser unit tests need to follow the new DOM. |
-| 4: Radix-Popper trial | `packages/react/package.json`, `FilterPopup`, possibly `BcGridContextMenu` | Medium-High | Trial `@radix-ui/react-popper`. Compare bundle size + visual parity. Decision recorded in this doc. **Coordinator approval required** before adding the dep. |
-| 5: shared focus-management hook | new `internal/use-popup-focus.ts` | Low | Encapsulate "autofocus on mount, return focus on close, swallow Tab inside" once at least three popups need it (filter popup, context menu, column chooser). |
-| 6: Radix-Tooltip trial | `tooltip.tsx`, `package.json` | Medium | Replace the bespoke tooltip with `@radix-ui/react-tooltip` if bundle / SSR story checks out. Likely after slice 4. |
-| 7: shared overlay primitive | new `internal/popup-shell.tsx` | Medium | Once all popups use the helper + matching focus, lift the box-shadow / radius / border / `data-state="open"` into a shared shell. Currently each popup re-declares these classes in `styles.css`. |
+| Slice | Status | Touches | Risk | Justification |
+|---|---|---|---|---|
+| 2: popup interaction contracts | **landed in this update** | `internal/popup-dismiss.ts` (new) + `FilterPopup`, `BcGridContextMenu`, `ColumnVisibilityMenu`, `grid.tsx` | Low | Shared `usePopupDismiss` hook (Escape + outside-pointer + focus-return-to-trigger). Column chooser now uses `computePopupPosition` (the third inline-clamp site is gone). Every popup root now carries `data-state="open"` + `data-side` + `data-align`. Pure decision helpers (`shouldDismissOnOutsidePointer`, `shouldDismissOnKey`) unit-tested without a live DOM. |
+| 3: shared menu-item primitive | open | `internal/context-menu.tsx`, `columnVisibility.tsx` | Medium | Extract `<MenuItem>` / `<MenuCheckboxItem>` into `packages/react/src/internal/menu-item.tsx`. Standardises spacing, focus ring, disabled state across the two menus. Test impact: existing context-menu / column-chooser unit tests need to follow the new DOM. |
+| 4: Radix-Popper trial | open | `packages/react/package.json`, `FilterPopup`, possibly `BcGridContextMenu` | Medium-High | Trial `@radix-ui/react-popper`. Compare bundle size + visual parity. Decision recorded in this doc. **Coordinator approval required** before adding the dep. |
+| 5: keyboard-nav primitive | open | new `internal/use-roving-focus.ts` | Low | Right now context-menu manages its own roving focus inline; column chooser relies on Tab. A shared roving-focus hook unifies both and matches the Radix DropdownMenu / DropdownMenuCheckboxItem keyboard contract (ArrowDown/Up cycle, Home/End, type-ahead). |
+| 6: Radix-Tooltip trial | open | `tooltip.tsx`, `package.json` | Medium | Replace the bespoke tooltip with `@radix-ui/react-tooltip` if bundle / SSR story checks out. Likely after slice 4. |
+| 7: shared overlay primitive | open | new `internal/popup-shell.tsx` | Medium | Once all popups use the helper + matching focus, lift the box-shadow / radius / border / `data-state="open"` into a shared shell. Currently each popup re-declares these classes in `styles.css`. |
 
-Slices 1–3 give the visible polish without a dependency change; 4–7 are the Radix-conversion track and need a coordinator-level dep decision.
+Slices 1–2 give the visible polish + interaction contract without any dependency change; 3 is also dep-free; 4–7 are the Radix-conversion track and need a coordinator-level dep decision.
+
+---
+
+## Slice 2 — Popup interaction contracts (landed)
+
+The four popup / menu surfaces now share a single interaction contract. The matrix below is updated relative to the original audit:
+
+| Surface | data-state | data-side | data-align | shared dismiss | shared clamp | focus return | SSR safe |
+|---|---|---|---|---|---|---|---|
+| Filter popup | ✅ `open` | ✅ resolved | ✅ resolved | ✅ `usePopupDismiss` | ✅ `computePopupPosition` | ✅ to trigger | ✅ |
+| Context menu | ✅ `open` | ✅ const | ✅ const | ✅ `usePopupDismiss` | ✅ `computePopupPosition` | ✅ to trigger | ✅ |
+| Column chooser | ✅ `open` | ✅ const | ✅ const | ✅ `usePopupDismiss` | ✅ `computePopupPosition` | ✅ to trigger | ✅ |
+| Tooltip | ✅ `open` (existing) | (transient) | (transient) | n/a (no dismiss path) | inline clamp (one line) | n/a (decorative) | ✅ |
+| Sidebar | ✅ existing | n/a (docked) | n/a | inline Esc handler (different shape — docked panel, not popup) | n/a | ✅ existing | ✅ |
+
+What this means for consumers:
+
+- **`[data-bc-grid-filter-popup][data-state="open"]`** / **`.bc-grid-context-menu[data-state="open"]`** / **`.bc-grid-column-menu[data-state="open"]`** can be styled the same way they would a Radix `DropdownMenu.Content`, including consistent enter/exit animation hooks (`@starting-style` or `data-state` selectors).
+- **Focus return** to the element that had focus when the popup opened is now automatic across all three popup surfaces. Apps that opened a popup via a keyboard shortcut don't need to remember the trigger and re-focus it on close.
+- **Escape stops propagation** by default so a popup nested inside an Escape-aware sidebar panel doesn't double-dismiss (close the popup AND the panel on the same keystroke).
+- **Single source of truth** for the dismiss decision: `shouldDismissOnOutsidePointer` and `shouldDismissOnKey` are pure functions exported alongside `usePopupDismiss` for unit testing without a live DOM.
 
 ---
 

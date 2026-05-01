@@ -1648,21 +1648,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const openColumnMenu = useCallback(
     (_column: (typeof resolvedColumns)[number], anchor: ColumnMenuAnchor) => {
       if (!showColumnMenu) return
-      const margin = 8
-      const menuWidth = 260
-      const menuHeight = 360
-      const viewportWidth = typeof window === "undefined" ? menuWidth : window.innerWidth
-      const viewportHeight = typeof window === "undefined" ? menuHeight : window.innerHeight
-      setColumnMenu({
-        x: Math.min(
-          Math.max(margin, anchor.x),
-          Math.max(margin, viewportWidth - menuWidth - margin),
-        ),
-        y: Math.min(
-          Math.max(margin, anchor.y),
-          Math.max(margin, viewportHeight - menuHeight - margin),
-        ),
-      })
+      // Viewport-clamp moved into ColumnVisibilityMenu via the shared
+      // `computePopupPosition` helper — same Radix-Popper-style flip
+      // and clamp the filter popup and context menu use. The anchor
+      // here is the trigger button's bottom-left; the menu measures
+      // its own DOM and re-positions on first layout.
+      setColumnMenu({ x: anchor.x, y: anchor.y })
     },
     [showColumnMenu],
   )
@@ -1683,30 +1674,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     },
     [columnState, columnVisibilityItems, setColumnState],
   )
-
-  useEffect(() => {
-    if (!columnMenu) return
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target
-      if (!(target instanceof Element)) return
-      if (
-        target.closest(".bc-grid-column-menu") ||
-        target.closest('[data-bc-grid-column-menu-button="true"]')
-      ) {
-        return
-      }
-      setColumnMenu(null)
-    }
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setColumnMenu(null)
-    }
-    document.addEventListener("pointerdown", handlePointerDown)
-    document.addEventListener("keydown", handleKeyDown, true)
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown)
-      document.removeEventListener("keydown", handleKeyDown, true)
-    }
-  }, [columnMenu])
 
   // Pinned-edge scroll-shadow indicators. Surfaces as data attrs on the
   // grid root so theming can render shadows when content has scrolled

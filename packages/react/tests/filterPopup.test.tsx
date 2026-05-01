@@ -147,3 +147,22 @@ describe("FilterPopup data hooks", () => {
     expect(countMatches(html, 'data-bc-grid-filter-clear="true"')).toBe(1)
   })
 })
+
+describe("FilterPopup Radix-style state attributes", () => {
+  test("emits data-state='open' on the dialog root for shadcn / Radix CSS hooks", () => {
+    // Mirrors the Radix Popover.Content contract — even though the popup
+    // is unmount-on-close (so the value is constant), apps can target
+    // the popup with `[data-bc-grid-filter-popup][data-state="open"]
+    // { … }` exactly the way they would Radix.
+    const html = renderPopup()
+    expect(html).toMatch(/role="dialog"[^>]*data-state="open"|data-state="open"[^>]*role="dialog"/)
+  })
+
+  test("emits data-side and data-align (resolved placement, not requested)", () => {
+    const html = renderPopup()
+    // Default placement: bottom + start. The helper resolves these
+    // values; consumers can detect a flip via the rendered attribute.
+    expect(html).toContain('data-side="bottom"')
+    expect(html).toContain('data-align="start"')
+  })
+})

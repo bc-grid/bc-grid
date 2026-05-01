@@ -12,6 +12,7 @@ import {
 import type { ResolvedColumn, RowEntry } from "../gridInternals"
 import type { BcContextMenuContext, BcContextMenuItem, BcContextMenuItems } from "../types"
 import { contextMenuBuiltinIcon } from "./context-menu-icons"
+import { usePopupDismiss } from "./popup-dismiss"
 import { computePopupPosition } from "./popup-position"
 
 export interface BcGridContextMenuAnchor {
@@ -92,22 +93,11 @@ export function BcGridContextMenu<TRow>({
     setPosition(clampContextMenu(anchor, rect?.width ?? 240, rect?.height ?? 48))
   }, [anchor])
 
-  useEffect(() => {
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target
-      if (target instanceof Node && menuRef.current?.contains(target)) return
-      onClose()
-    }
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") onClose()
-    }
-    document.addEventListener("pointerdown", handlePointerDown, true)
-    document.addEventListener("keydown", handleKeyDown, true)
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown, true)
-      document.removeEventListener("keydown", handleKeyDown, true)
-    }
-  }, [onClose])
+  // Shared dismiss-and-focus-return contract — Escape closes, outside
+  // pointer-down closes (pointer events inside the menu root are
+  // skipped via the popupRef containment check), focus returns to the
+  // trigger element when the menu unmounts.
+  usePopupDismiss({ open: true, onClose, popupRef: menuRef })
 
   if (items.length === 0) return null
 
@@ -155,10 +145,12 @@ export function BcGridContextMenu<TRow>({
       aria-activedescendant={activeItemId}
       aria-label="Context menu"
       className="bc-grid-context-menu"
-      // Radix-style placement attributes for consumer CSS hooks. The
-      // right-click context menu is point-anchored, so these are
-      // constants — but they're set so apps can target the popup the
-      // same way they'd target a Radix `[data-side="bottom"]` rule.
+      // Radix-style placement / state attributes for consumer CSS
+      // hooks. The right-click context menu is point-anchored and
+      // unmount-on-close, so these are constants — but they're set
+      // so apps can target the popup exactly the same way they would
+      // a Radix `[data-state="open"][data-side="bottom"]` rule.
+      data-state="open"
       data-side="bottom"
       data-align="start"
       onContextMenu={(event) => event.preventDefault()}
