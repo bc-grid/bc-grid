@@ -1,4 +1,5 @@
 import type {
+  BcColumnStateEntry,
   BcGridFilter,
   BcGridSort,
   BcPaginationState,
@@ -24,7 +25,14 @@ import { emptyBcRangeSelection } from "@bc-grid/core"
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { BcGrid, useBcGridApi } from "./grid"
-import { assignRef, createEmptySelection, hasProp } from "./gridInternals"
+import { assignRef, columnIdFor, createEmptySelection, hasProp } from "./gridInternals"
+import {
+  BcGridPagination,
+  type PaginationWindow,
+  getPaginationWindow,
+  isPaginationEnabled,
+  normalisePageSizeOptions,
+} from "./pagination"
 import type {
   BcCellEditCommitEvent,
   BcGridProps,
@@ -39,21 +47,34 @@ interface PagedServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
   error: unknown
   getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
+  gridShell: ServerPagedGridShell<TRow>
+  handleColumnStateChange: (
+    next: readonly BcColumnStateEntry[],
+    prev: readonly BcColumnStateEntry[],
+  ) => void
+  handleGroupByChange: (next: readonly ColumnId[], prev: readonly ColumnId[]) => void
   getModelState: () => ServerRowModelState<TRow>
   handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
+  handlePaginationChange: (next: BcPaginationState) => void
+  handleSearchTextChange: (next: string, prev: string) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   invalidate: (invalidation: ServerInvalidation) => void
   loading: boolean
-  pageIndex: number
-  pageSize: number
   queueMutation: (patch: ServerRowPatch) => void
   refresh: (opts?: { purge?: boolean }) => void
   retryBlock: (blockKey: ServerBlockKey) => void
   rows: readonly TRow[]
   rowCount: number | "unknown"
   settleMutation: (result: ServerMutationResult<TRow>) => void
-  updatePagination: (next: BcPaginationState) => void
   view: ServerViewState
+}
+
+export interface ServerPagedGridShell<TRow> {
+  gridRows: readonly TRow[]
+  gridPagination: false
+  paginationEnabled: boolean
+  paginationWindow: PaginationWindow
+  pageSizeOptions: readonly number[]
 }
 
 interface InfiniteServerState<TRow> {
@@ -122,19 +143,77 @@ interface TreeSnapshot<TRow> {
   rootIds: RowId[]
 }
 
+export function resolveServerPagedGridShell<TRow>(input: {
+  pageIndex: number
+  pageSize: number
+  pageSizeOptions?: readonly number[] | undefined
+  pagination?: boolean | undefined
+  rows: readonly TRow[]
+  totalRows: number
+}): ServerPagedGridShell<TRow> {
+  const paginationWindow = getPaginationWindow(input.totalRows, input.pageIndex, input.pageSize)
+  const configuredPageSizeOptions = normalisePageSizeOptions(input.pageSizeOptions)
+  const pageSizeOptions = configuredPageSizeOptions.includes(paginationWindow.pageSize)
+    ? configuredPageSizeOptions
+    : normalisePageSizeOptions([...configuredPageSizeOptions, paginationWindow.pageSize])
+
+  return {
+    gridPagination: false,
+    gridRows: input.rows,
+    pageSizeOptions,
+    paginationEnabled: isPaginationEnabled(
+      input.pagination,
+      paginationWindow.totalRows,
+      paginationWindow.pageSize,
+    ),
+    paginationWindow,
+  }
+}
+
+export function resolveServerPagedRequestPage(input: {
+  pageIndex: number
+  previousViewKey: string
+  viewKey: string
+}): number {
+  return input.previousViewKey === input.viewKey ? input.pageIndex : 0
+}
+
+export function shouldResetServerPagedPage(input: {
+  pageIndex: number
+  previousViewKey: string
+  viewKey: string
+}): boolean {
+  return input.pageIndex > 0 && input.previousViewKey !== input.viewKey
+}
+
+export function resolveServerVisibleColumns<TRow>(
+  columns: readonly BcReactGridColumn<TRow>[],
+  columnState: readonly BcColumnStateEntry[],
+): ColumnId[] {
+  const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
+  return columns.flatMap((column, index) => {
+    const columnId = columnIdFor(column, index)
+    const state = stateById.get(columnId)
+    const hidden = state?.hidden ?? column.hidden ?? false
+    return hidden ? [] : [columnId]
+  })
+}
+
+function sameColumnIds(left: readonly ColumnId[], right: readonly ColumnId[]): boolean {
+  if (left.length !== right.length) return false
+  return left.every((columnId, index) => columnId === right[index])
+}
+
 export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   const gridApiRef = useBcGridApi<TRow>()
   const externalApiRef = props.apiRef
-  const visibleColumns = useMemo(
-    () =>
-      props.columns
-        .filter((column) => !column.hidden)
-        .map((column, index) => column.columnId ?? column.field ?? `column-${index}`),
+  const baseVisibleColumns = useMemo(
+    () => resolveServerVisibleColumns(props.columns, []),
     [props.columns],
   )
-  const paged = usePagedServerState(props, visibleColumns)
-  const infinite = useInfiniteServerState(props, visibleColumns)
-  const tree = useTreeServerState(props, visibleColumns)
+  const paged = usePagedServerState(props)
+  const infinite = useInfiniteServerState(props, baseVisibleColumns)
+  const tree = useTreeServerState(props, baseVisibleColumns)
   const mutationCounterRef = useRef(0)
 
   const queueServerRowMutation = useCallback(
@@ -193,6 +272,20 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   )
   const cellEditCommitHandler =
     props.onServerRowMutation || props.onCellEditCommit ? handleCellEditCommit : undefined
+  const pagedFooter =
+    props.rowModel === "paged"
+      ? (props.footer ??
+        (paged.gridShell.paginationEnabled ? (
+          <BcGridPagination
+            page={paged.gridShell.paginationWindow.page}
+            pageCount={paged.gridShell.paginationWindow.pageCount}
+            pageSize={paged.gridShell.paginationWindow.pageSize}
+            pageSizeOptions={paged.gridShell.pageSizeOptions}
+            totalRows={paged.gridShell.paginationWindow.totalRows}
+            onChange={paged.handlePaginationChange}
+          />
+        ) : null))
+      : undefined
 
   const serverApi = useMemo<BcServerGridApi<TRow>>(() => {
     const mode = props.rowModel
@@ -359,33 +452,13 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
           ? "Failed to load rows"
           : undefined)
 
-  // Manual pagination: paged rowModel ships only the current page's rows
-  // to BcGrid, so the inner grid must source pageCount + total from the
-  // server's `ServerPagedResult.totalRows` rather than slicing
-  // `data.length`. We override `paginationMode` / `paginationTotalRows` /
-  // `page` / `pageSize` / `onPaginationChange` for paged mode so the
-  // built-in pager renders "Rows 1-25 of 36,302" and Next / Prev call
-  // back into `updatePagination`, which triggers `loadPage` via the
-  // pageIndex / pageSize state effect. `pagination={true}` forces the
-  // pager on even when the loaded slice is smaller than the threshold.
-  const pagedPaginationProps =
-    props.rowModel === "paged"
-      ? {
-          pagination: gridProps.pagination ?? true,
-          paginationMode: "manual" as const,
-          ...(typeof paged.rowCount === "number" ? { paginationTotalRows: paged.rowCount } : {}),
-          page: paged.pageIndex,
-          pageSize: paged.pageSize,
-          onPaginationChange: paged.updatePagination,
-        }
-      : {}
   return (
     <BcGrid
       {...gridProps}
       columns={props.rowModel === "tree" ? tree.columns : gridProps.columns}
       data={
         props.rowModel === "paged"
-          ? paged.rows
+          ? paged.gridShell.gridRows
           : props.rowModel === "infinite"
             ? infinite.rows
             : props.rowModel === "tree"
@@ -393,10 +466,14 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
               : []
       }
       apiRef={gridApiRef}
+      {...(props.rowModel === "paged" ? { footer: pagedFooter } : {})}
       loading={loading}
       loadingOverlay={loadingOverlay}
-      {...pagedPaginationProps}
+      {...(props.rowModel === "paged" ? { pagination: paged.gridShell.gridPagination } : {})}
       {...(cellEditCommitHandler ? { onCellEditCommit: cellEditCommitHandler } : {})}
+      {...(props.rowModel === "paged"
+        ? { onColumnStateChange: paged.handleColumnStateChange }
+        : {})}
       onFilterChange={
         props.rowModel === "tree"
           ? tree.handleFilterChange
@@ -404,6 +481,8 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
             ? infinite.handleFilterChange
             : paged.handleFilterChange
       }
+      {...(props.rowModel === "paged" ? { onGroupByChange: paged.handleGroupByChange } : {})}
+      {...(props.rowModel === "paged" ? { onSearchTextChange: paged.handleSearchTextChange } : {})}
       onSortChange={
         props.rowModel === "tree"
           ? tree.handleSortChange
@@ -458,10 +537,7 @@ function useServerSortFilterState<TRow>(
   }
 }
 
-function usePagedServerState<TRow>(
-  props: BcServerGridProps<TRow>,
-  visibleColumns: readonly ColumnId[],
-): PagedServerState<TRow> {
+function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerState<TRow> {
   const modelRef = useRef(createServerRowModel<TRow>())
   const latestBlockKeyRef = useRef<ServerBlockKey | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
@@ -509,8 +585,53 @@ function usePagedServerState<TRow>(
     props,
     resetUncontrolledPage,
   )
-  const searchText = props.searchText ?? props.defaultSearchText
-  const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
+  const searchControlled = hasProp(props, "searchText")
+  const [uncontrolledSearchText, setUncontrolledSearchText] = useState(
+    () => props.defaultSearchText ?? "",
+  )
+  const searchText = searchControlled ? (props.searchText ?? "") : uncontrolledSearchText
+  const handleSearchTextChange = useCallback(
+    (next: string, prev: string) => {
+      if (!searchControlled) setUncontrolledSearchText(next)
+      resetUncontrolledPage()
+      props.onSearchTextChange?.(next, prev)
+    },
+    [props.onSearchTextChange, resetUncontrolledPage, searchControlled],
+  )
+
+  const groupByControlled = hasProp(props, "groupBy")
+  const [uncontrolledGroupBy, setUncontrolledGroupBy] = useState<readonly ColumnId[]>(
+    () => props.defaultGroupBy ?? [],
+  )
+  const groupBy = groupByControlled ? (props.groupBy ?? []) : uncontrolledGroupBy
+  const handleGroupByChange = useCallback(
+    (next: readonly ColumnId[], prev: readonly ColumnId[]) => {
+      if (!groupByControlled) setUncontrolledGroupBy(next)
+      resetUncontrolledPage()
+      props.onGroupByChange?.(next, prev)
+    },
+    [groupByControlled, props.onGroupByChange, resetUncontrolledPage],
+  )
+
+  const columnStateControlled = hasProp(props, "columnState")
+  const [uncontrolledColumnState, setUncontrolledColumnState] = useState<
+    readonly BcColumnStateEntry[]
+  >(() => props.defaultColumnState ?? [])
+  const columnState = columnStateControlled ? (props.columnState ?? []) : uncontrolledColumnState
+  const visibleColumns = useMemo(
+    () => resolveServerVisibleColumns(props.columns, columnState),
+    [columnState, props.columns],
+  )
+  const handleColumnStateChange = useCallback(
+    (next: readonly BcColumnStateEntry[], prev: readonly BcColumnStateEntry[]) => {
+      if (!columnStateControlled) setUncontrolledColumnState(next)
+      const prevVisible = resolveServerVisibleColumns(props.columns, prev)
+      const nextVisible = resolveServerVisibleColumns(props.columns, next)
+      if (!sameColumnIds(prevVisible, nextVisible)) resetUncontrolledPage()
+      props.onColumnStateChange?.(next, prev)
+    },
+    [columnStateControlled, props.columns, props.onColumnStateChange, resetUncontrolledPage],
+  )
   const loadPage = props.rowModel === "paged" ? props.loadPage : undefined
   const view = useMemo(
     () =>
@@ -525,21 +646,12 @@ function usePagedServerState<TRow>(
     [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
   )
   const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
-  // Any change to the composite view (sort, filter, search, groupBy,
-  // locale, visible columns) invalidates the current page index — page
-  // 5 of the previous result set isn't meaningful in the new one. The
-  // sort/filter handlers above already reset to page 0 when the change
-  // originates inside the grid; this effect catches axes that flow in
-  // purely through props (search text, groupBy, locale, column
-  // visibility) so the reset behaviour is uniform.
-  const initialViewKeyRef = useRef(viewKey)
-  const shouldDeferPageLoadForViewReset = initialViewKeyRef.current !== viewKey && pageIndex !== 0
-  useEffect(() => {
-    if (initialViewKeyRef.current === viewKey) return
-    initialViewKeyRef.current = viewKey
-    if (pageIndex === 0) return
-    updatePagination({ page: 0, pageSize })
-  }, [pageIndex, pageSize, updatePagination, viewKey])
+  const previousViewKeyRef = useRef(viewKey)
+  const requestPageIndex = resolveServerPagedRequestPage({
+    pageIndex,
+    previousViewKey: previousViewKeyRef.current,
+    viewKey,
+  })
   const serverRowId = useCallback((row: TRow) => props.rowId(row, 0), [props.rowId])
 
   const refresh = useCallback((opts?: { purge?: boolean }) => {
@@ -627,13 +739,26 @@ function usePagedServerState<TRow>(
   )
 
   useEffect(() => {
+    if (
+      !shouldResetServerPagedPage({
+        pageIndex,
+        previousViewKey: previousViewKeyRef.current,
+        viewKey,
+      })
+    ) {
+      previousViewKeyRef.current = viewKey
+      return
+    }
+    resetUncontrolledPage()
+  }, [pageIndex, resetUncontrolledPage, viewKey])
+
+  useEffect(() => {
     if (!loadPage) return
-    if (shouldDeferPageLoadForViewReset) return
     void refreshVersion
 
     const request = modelRef.current.loadPagedPage({
       loadPage,
-      pageIndex,
+      pageIndex: requestPageIndex,
       pageSize,
       view,
       viewKey,
@@ -658,20 +783,20 @@ function usePagedServerState<TRow>(
         setError(nextError)
         setLoading(false)
       })
-  }, [
-    loadPage,
-    pageIndex,
-    pageSize,
-    refreshVersion,
-    shouldDeferPageLoadForViewReset,
-    view,
-    viewKey,
-  ])
+  }, [loadPage, pageSize, refreshVersion, requestPageIndex, view, viewKey])
 
   useEffect(() => () => modelRef.current.abortAll(), [])
 
   const rows = props.rowModel === "paged" ? (result?.rows ?? []) : []
   const rowCount = props.rowModel === "paged" ? (result?.totalRows ?? 0) : "unknown"
+  const gridShell = resolveServerPagedGridShell({
+    pageIndex: requestPageIndex,
+    pageSize,
+    pageSizeOptions: props.pageSizeOptions,
+    pagination: props.pagination,
+    rows,
+    totalRows: typeof rowCount === "number" ? rowCount : 0,
+  })
   const getModelState = useCallback(
     () =>
       modelRef.current.getState({
@@ -699,20 +824,22 @@ function usePagedServerState<TRow>(
     applyRowUpdate,
     error,
     getDiagnostics,
+    gridShell,
+    handleColumnStateChange,
+    handleGroupByChange,
     getModelState,
     handleFilterChange,
+    handlePaginationChange: updatePagination,
+    handleSearchTextChange,
     handleSortChange,
     invalidate,
     loading,
-    pageIndex,
-    pageSize,
     queueMutation,
     refresh,
     retryBlock,
     rowCount,
     rows,
     settleMutation,
-    updatePagination,
     view,
   }
 }

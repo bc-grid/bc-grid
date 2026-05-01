@@ -411,13 +411,16 @@ API design principles:
 Three modes:
 
 ### 10.1 Server-paged (simple)
-Pagination + sort + filter on server. Each page swap = one fetch. Uses TanStack's `manualPagination + manualSorting + manualFiltering`.
+Pagination + sort + filter on server. Each page swap = one fetch. `loadPage`
+receives `pageIndex`, `pageSize`, and the `ServerViewState` (`sort`, `filter`,
+`search`, `groupBy`, `visibleColumns`). It returns the current page rows plus
+`totalRows`; the React adapter uses that server total for page count and does
+not client-slice the returned page.
 
 ```tsx
 <BcServerGrid
   columns={columns}
-  loadRows={async ({ page, pageSize, sort, filter }) => ...}
-  totalRowsHint={total}
+  loadPage={async ({ pageIndex, pageSize, view }, { signal }) => ...}
   pageSize={50}
   rowModel="paged"
 />
