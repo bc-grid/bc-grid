@@ -82,13 +82,29 @@ describe("built-in editor chrome hooks", () => {
     }
   })
 
-  test("lookup-style editors expose accessible names and option-count hooks", () => {
+  test("every built-in editor exposes an accessible name", () => {
+    for (const entry of editorCases) {
+      const html = renderEditor(entry)
+
+      expect(html).toContain(`aria-label="${entry.column?.header ?? "Name"}"`)
+    }
+  })
+
+  test("every built-in editor links validation errors with aria-describedby", () => {
+    for (const entry of editorCases) {
+      const html = renderEditor(entry, { error: "Required" })
+
+      expect(html).toContain("aria-describedby=")
+      expect(html).toContain("Required")
+    }
+  })
+
+  test("lookup-style editors expose option-count hooks", () => {
     for (const entry of editorCases.filter((item) =>
       ["select", "multi-select", "autocomplete"].includes(item.kind),
     )) {
       const html = renderEditor(entry)
 
-      expect(html).toContain('aria-label="Status"')
       expect(html).toContain("data-bc-grid-editor-option-count")
     }
   })

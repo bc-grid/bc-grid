@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type RefObject,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
 } from "react"
@@ -327,6 +328,7 @@ export const defaultTextEditor: BcCellEditor<unknown> = {
 
 interface DefaultTextEditorProps {
   initialValue: unknown
+  column?: { header?: unknown; field?: unknown; columnId?: unknown }
   commit: (next: unknown) => void
   cancel: () => void
   focusRef?: RefObject<HTMLElement | null>
@@ -337,17 +339,24 @@ interface DefaultTextEditorProps {
 
 function DefaultTextEditor({
   initialValue,
+  column,
   focusRef,
   seedKey,
   error,
   pending,
 }: DefaultTextEditorProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const errorId = useId()
   // Hand the focusRef back up to the controller — it's the element the
   // grid will focus after mount.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (focusRef && inputRef.current) {
       ;(focusRef as { current: HTMLElement | null }).current = inputRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
     }
   }, [focusRef])
 
@@ -355,19 +364,29 @@ function DefaultTextEditor({
   // with that char; else default to the formatted current value. Native
   // input maintains its own state from this point.
   const seeded = seedKey != null ? seedKey : initialValue == null ? "" : String(initialValue)
+  const accessibleName = editorAccessibleName(column, "Text value")
 
   return (
-    <input
-      ref={inputRef}
-      className="bc-grid-editor-input"
-      type="text"
-      defaultValue={seeded}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="text-default"
-      data-bc-grid-editor-state={editorStateAttribute({ error, pending })}
-    />
+    <>
+      <input
+        ref={inputRef}
+        className="bc-grid-editor-input"
+        type="text"
+        defaultValue={seeded}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={error ? errorId : undefined}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="text-default"
+        data-bc-grid-editor-state={editorStateAttribute({ error, pending })}
+      />
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
   )
 }
 
@@ -420,4 +439,26 @@ const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
 
 type BcGridSelectElement = HTMLSelectElement & {
   [bcGridSelectOptionValuesKey]?: readonly unknown[]
+}
+
+function editorAccessibleName(
+  column: { header?: unknown; field?: unknown; columnId?: unknown } | undefined,
+  fallback: string,
+): string {
+  const header = typeof column?.header === "string" ? column.header : undefined
+  const field = typeof column?.field === "string" ? column.field : undefined
+  const columnId = typeof column?.columnId === "string" ? column.columnId : undefined
+  return header || field || columnId || fallback
+}
+
+const visuallyHiddenStyle: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0,
 }

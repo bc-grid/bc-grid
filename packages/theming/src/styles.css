@@ -924,6 +924,11 @@ select.bc-grid-editor-input {
   accent-color: var(--bc-grid-focus-ring);
 }
 
+.bc-grid-editor-checkbox-shell:focus-within {
+  border-color: var(--bc-grid-focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bc-grid-focus-ring) 24%, transparent);
+}
+
 .bc-grid-editor-checkbox-control:disabled {
   cursor: not-allowed;
 }
@@ -3368,6 +3373,12 @@ table.bc-grid-detail-nested-grid {
   }
 
   .bc-grid-editor-input:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+    box-shadow: none;
+  }
+
+  .bc-grid-editor-checkbox-shell:focus-within {
     outline: 2px solid Highlight;
     outline-offset: -2px;
     box-shadow: none;

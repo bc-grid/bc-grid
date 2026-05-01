@@ -20,7 +20,17 @@ describe("default editor chrome", () => {
     expect(pending).toContain("disabled")
     expect(pending).toContain('data-bc-grid-editor-state="pending"')
     expect(error).toContain('aria-invalid="true"')
+    expect(error).toContain("aria-describedby=")
+    expect(error).toContain("Required")
     expect(error).toContain('data-bc-grid-editor-state="error"')
+  })
+
+  test("uses column context for the default editor accessible name", () => {
+    const html = renderDefaultEditor({
+      column: { header: "Trading Name", field: "tradingName", columnId: "tradingName" },
+    })
+
+    expect(html).toContain('aria-label="Trading Name"')
   })
 })
 
@@ -51,6 +61,31 @@ describe("readEditorInputValue", () => {
     } as unknown as HTMLElement
 
     expect(readEditorInputValue(input)).toBe("Acme")
+  })
+
+  test("reads select typed option values without running valueParser", () => {
+    const select = {
+      tagName: "SELECT",
+      selectedIndex: 1,
+      value: "2",
+      __bcGridSelectOptionValues: ["open", { id: 2, code: "hold" }],
+    } as unknown as HTMLElement
+
+    expect(readEditorInputValue(select)).toEqual({ id: 2, code: "hold" })
+  })
+
+  test("reads multi-select typed option arrays without running valueParser", () => {
+    const multiSelect = {
+      tagName: "SELECT",
+      multiple: true,
+      selectedOptions: [
+        { index: 0, value: "open" },
+        { index: 2, value: "vip" },
+      ],
+      __bcGridSelectOptionValues: ["open", "hold", { id: "vip" }],
+    } as unknown as HTMLElement
+
+    expect(readEditorInputValue(multiSelect)).toEqual(["open", { id: "vip" }])
   })
 })
 

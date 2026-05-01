@@ -1851,13 +1851,16 @@ array or a row function:
 
 ```ts
 import type { BcCellEditor, BcReactGridColumn } from "@bc-grid/react"
-import { selectEditor } from "@bc-grid/editors"
+import { autocompleteEditor, multiSelectEditor, selectEditor } from "@bc-grid/editors"
 
 type CustomerStatus = "prospect" | "active" | "hold"
+type CustomerFlag = "vip" | "tax-exempt" | "manual-review"
 
 interface CustomerRow {
   id: string
   status: CustomerStatus
+  flags: readonly CustomerFlag[]
+  owner: string
 }
 
 const statusOptions: readonly { value: CustomerStatus; label: string }[] = [
@@ -1877,6 +1880,37 @@ export const statusColumn: BcReactGridColumn<CustomerRow, CustomerStatus> = {
       ? { valid: true }
       : { valid: false, error: "Choose a known status." },
 }
+
+export const flagsColumn: BcReactGridColumn<CustomerRow, readonly CustomerFlag[]> = {
+  field: "flags",
+  header: "Flags",
+  editable: true,
+  cellEditor: multiSelectEditor as unknown as BcCellEditor<
+    CustomerRow,
+    readonly CustomerFlag[]
+  >,
+  options: [
+    { value: "vip", label: "VIP" },
+    { value: "tax-exempt", label: "Tax exempt" },
+    { value: "manual-review", label: "Manual review" },
+  ],
+}
+
+export const ownerColumn: BcReactGridColumn<CustomerRow, string> = {
+  field: "owner",
+  header: "Collector",
+  editable: true,
+  cellEditor: autocompleteEditor as unknown as BcCellEditor<CustomerRow, string>,
+  fetchOptions: (query, signal) =>
+    fetch(`/api/collectors?q=${encodeURIComponent(query)}`, { signal }).then((response) =>
+      response.json(),
+    ),
+  valueParser: (input) => input.trim(),
+  validate: (next) =>
+    next.length > 0
+      ? { valid: true }
+      : { valid: false, error: "Collector is required." },
+}
 ```
 
 The option `label` is display text. The option `value` is the committed value.
@@ -1886,12 +1920,19 @@ produce typed values directly, so `column.valueParser` is bypassed. Use
 `valueParser` on string-producing editors such as `textEditor`, `numberEditor`,
 the date/time editors, and `autocompleteEditor`.
 
+Printable activation on `selectEditor` preselects the first option whose label
+or value starts with the typed character, then browser-native typeahead continues
+after focus lands on the `<select>`. `multiSelectEditor` keeps native listbox
+semantics and exposes the seeded-state hook without auto-toggling values.
+
 `autocompleteEditor` calls `column.fetchOptions(query, signal)` after mount and
 as the user types. Implementations should pass `signal` through to `fetch` or
 equivalent request APIs so superseded lookups abort cleanly. A failed lookup is
 not itself a validation error: bc-grid leaves the current suggestions as-is and
 allows free-text editing to continue. Use `valueParser` and `validate` when the
-typed string must resolve to a known domain value.
+typed string must resolve to a known domain value. If a lookup request fails,
+the editor keeps the current text editable; final accept/reject belongs in
+`validate`.
 
 `checkboxEditor` commits a boolean and only treats the literal boolean `true` as
 checked on mount. String and numeric lookalikes (`"true"`, `1`) stay unchecked,
@@ -1903,7 +1944,10 @@ Accessible names come from `column.header` when it is a plain string, then
 `columnId` human-readable or provide a custom editor with its own label. Pending
 async validation/server commit disables the native control; validation errors
 surface through `aria-invalid`, `aria-describedby`, and the assertive live
-region owned by the React editor protocol.
+region owned by the React editor protocol. All built-ins use the shared
+`bc-grid-editor-input` class and `data-bc-grid-editor-state` value so themes can
+apply the same focus, pending, error, disabled, and density treatment across text,
+number, date/time, lookup, and checkbox editors.
 
 Server-backed consumers can use
 `<BcServerGrid onServerRowMutation>` for the built-in patch/queue/settle path,

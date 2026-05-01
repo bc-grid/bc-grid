@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useEffect, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { useId, useLayoutEffect, useRef } from "react"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 /**
  * Datetime editor — `kind: "datetime"`. Default for date-with-time
@@ -39,12 +44,18 @@ export const datetimeEditor: BcCellEditor<unknown, unknown> = {
 }
 
 function DatetimeEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending } = props
+  const { initialValue, error, focusRef, seedKey, pending, column } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const errorId = useId()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (focusRef && inputRef.current) {
       ;(focusRef as { current: HTMLElement | null }).current = inputRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
     }
   }, [focusRef])
 
@@ -58,19 +69,29 @@ function DatetimeEditor(props: BcCellEditorProps<unknown, unknown>) {
   void seedKey
 
   const seeded = normalizeDatetimeValue(initialValue)
+  const accessibleName = editorAccessibleName(column, "Datetime value")
 
   return (
-    <input
-      ref={inputRef}
-      className={editorInputClassName}
-      type="datetime-local"
-      defaultValue={seeded}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="datetime"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
-    />
+    <>
+      <input
+        ref={inputRef}
+        className={editorInputClassName}
+        type="datetime-local"
+        defaultValue={seeded}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={error ? errorId : undefined}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="datetime"
+        data-bc-grid-editor-state={editorControlState({ error, pending })}
+      />
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
   )
 }
 

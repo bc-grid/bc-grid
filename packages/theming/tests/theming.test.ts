@@ -697,6 +697,9 @@ describe("@bc-grid/theming", () => {
       "text-align: right",
     )
     expect(ruleFor(".bc-grid-editor-checkbox-shell {")).toContain("justify-content: center")
+    expect(ruleFor(".bc-grid-editor-checkbox-shell:focus-within {")).toContain(
+      "border-color: var(--bc-grid-focus-ring)",
+    )
     expect(ruleFor(".bc-grid-editor-checkbox-control {")).toContain(
       "accent-color: var(--bc-grid-focus-ring)",
     )

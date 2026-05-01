@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useId, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName, visuallyHiddenStyle } from "./chrome"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 /**
  * Text editor — `kind: "text"`. The default for string-typed columns
@@ -90,8 +95,7 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
   // function). Per `editing-rfc §ARIA states on the cell` — the input
   // inherits its name from the column context so AT announces "{column}
   // edit text" instead of just "edit text".
-  const accessibleName =
-    typeof column.header === "string" ? column.header : (column.field ?? column.columnId ?? "")
+  const accessibleName = editorAccessibleName(column, "Text value")
 
   // v0.1 commit/cancel happens via Enter / Tab / Escape on the framework's
   // editor portal — the input is uncontrolled and the portal reads
@@ -106,7 +110,7 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
         defaultValue={seeded}
         disabled={pending}
         aria-invalid={error ? true : undefined}
-        aria-label={accessibleName || undefined}
+        aria-label={accessibleName}
         aria-describedby={error ? errorId : undefined}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="text"
