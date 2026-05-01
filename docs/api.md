@@ -1295,6 +1295,19 @@ The consumer-facing guide is in
 [`apps/docs/src/pages/server-edit-grid.astro`](../apps/docs/src/pages/server-edit-grid.astro),
 with a live example in `apps/examples/#server-edit-grid`.
 
+### 5.4 Touch and coarse-pointer behaviour
+
+Per [`docs/design/accessibility-rfc.md` §Pointer and Touch Fallback](./design/accessibility-rfc.md):
+
+- **Coarse-pointer hit targets** — under `@media (pointer: coarse)`, every interactive surface in the grid (cells with action affordances, header column-menu / filter buttons, group + detail toggles, pagination controls, sidebar tabs, tool-panel chips, context-menu items, column chooser items, filter editor toggles, column-resize handle, and Q3 range-selection handles) is sized to a 44px minimum hit-target via the `--bc-grid-hit-target-min` CSS variable. The visible icon stays at its design size — only the touch area grows.
+- **Tap delay disabled** — interactive surfaces ship with `touch-action: manipulation` so single-tap selection responds immediately (no 350ms tap delay) and `dblclick` fires reliably for two quick taps. This is a no-op on mouse pointers.
+- **Single tap** focuses + selects the cell (same as a mouse click).
+- **Double tap** activates edit mode on editable cells. Internally this routes through the same `onDoubleClick` handler the desktop double-click path uses; with `touch-action: manipulation` the browser fires `dblclick` after two quick taps. The pure timing primitive `isDoubleTap(prev, next, opts)` lives in `packages/react/src/touchInteraction.ts` (default thresholds: 300ms between taps, 16px movement tolerance) and is available for follow-up work that needs a JS-level fallback on platforms where browser-fired `dblclick` is unreliable.
+- **Long press** (default 500ms) opens the context menu on coarse pointers (touch / pen). The press is cancelled if the pointer drifts more than 10px from the start, so a finger-drag flips cleanly into a scroll instead of firing a context menu. Mouse continues to use the native `contextmenu` event.
+- **Compact density on a coarse pointer** lifts row + header heights to the `normal` density values so cells meet the 44px guideline, while font-size and padding keep their compact look. This is automatic — no consumer opt-in.
+- **Header column-menu button** is hover-revealed on fine pointers; on coarse pointers it is always visible (touch has no hover signal to discover the affordance).
+- **Pointer selection handles** introduced by the Q3 range-selection track are pre-styled to the 44px minimum via the `.bc-grid-range-handle` selector — they ship at the correct hit-target size from day one.
+
 ---
 
 ## 6. Imperative API

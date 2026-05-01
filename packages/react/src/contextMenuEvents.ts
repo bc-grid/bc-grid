@@ -1,5 +1,11 @@
 import type { BcCellPosition, ColumnId, RowId } from "@bc-grid/core"
 import type { RowEntry } from "./gridInternals"
+import {
+  LONG_PRESS_DEFAULT_THRESHOLD_MS,
+  type LongPressState,
+  isCoarsePointerType,
+  shouldCancelLongPressOnMove,
+} from "./touchInteraction"
 
 export interface BcGridContextMenuState {
   anchor: { x: number; y: number }
@@ -13,11 +19,13 @@ export function attachContextMenuEvents(
 ): () => void {
   let longPressTimer: ReturnType<typeof setTimeout> | null = null
   let longPressOpened = false
+  let longPressOrigin: LongPressState | null = null
 
   const clearLongPress = () => {
     if (longPressTimer == null) return
     clearTimeout(longPressTimer)
     longPressTimer = null
+    longPressOrigin = null
   }
   const handleContextMenu = (event: MouseEvent) => {
     const state = contextMenuStateFromTarget(event.target, {
@@ -31,18 +39,33 @@ export function attachContextMenuEvents(
     applyContextMenuState(state)
   }
   const handlePointerDown = (event: PointerEvent) => {
-    if (event.button !== 0 || event.pointerType === "mouse") return
+    // Long-press fallback only applies to coarse pointers (touch / pen)
+    // — mouse uses the native `contextmenu` event. Anything other than
+    // primary button is ignored so right-click + a stray finger don't
+    // double-fire.
+    if (event.button !== 0 || !isCoarsePointerType(event.pointerType)) return
     const state = contextMenuStateFromTarget(event.target, {
       x: event.clientX,
       y: event.clientY,
     })
     if (!state) return
     clearLongPress()
+    longPressOrigin = { startX: event.clientX, startY: event.clientY }
     longPressTimer = setTimeout(() => {
       longPressTimer = null
+      longPressOrigin = null
       longPressOpened = true
       applyContextMenuState(state)
-    }, 500)
+    }, LONG_PRESS_DEFAULT_THRESHOLD_MS)
+  }
+  const handlePointerMove = (event: PointerEvent) => {
+    // If the pointer drifts beyond the tap-slop threshold the user has
+    // started panning, not pressing — cancel the pending long-press so
+    // the gesture flips to "scroll" without firing a context menu.
+    if (longPressTimer == null || longPressOrigin == null) return
+    if (shouldCancelLongPressOnMove(longPressOrigin, { x: event.clientX, y: event.clientY })) {
+      clearLongPress()
+    }
   }
   const handleClick = (event: MouseEvent) => {
     if (!longPressOpened) return
@@ -53,6 +76,7 @@ export function attachContextMenuEvents(
 
   root.addEventListener("contextmenu", handleContextMenu)
   root.addEventListener("pointerdown", handlePointerDown)
+  root.addEventListener("pointermove", handlePointerMove)
   root.addEventListener("pointerup", clearLongPress)
   root.addEventListener("pointercancel", clearLongPress)
   root.addEventListener("pointerleave", clearLongPress)
@@ -62,6 +86,7 @@ export function attachContextMenuEvents(
     clearLongPress()
     root.removeEventListener("contextmenu", handleContextMenu)
     root.removeEventListener("pointerdown", handlePointerDown)
+    root.removeEventListener("pointermove", handlePointerMove)
     root.removeEventListener("pointerup", clearLongPress)
     root.removeEventListener("pointercancel", clearLongPress)
     root.removeEventListener("pointerleave", clearLongPress)
