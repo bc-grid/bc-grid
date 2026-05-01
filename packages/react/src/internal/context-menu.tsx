@@ -1,6 +1,7 @@
 import type { BcGridApi, BcRange, BcSelection, ColumnId, RowId } from "@bc-grid/core"
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react"
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { dispatchColumnCommand } from "../columnCommands"
 import {
   contextMenuItemDisabled,
   contextMenuItemKey,
@@ -259,35 +260,6 @@ export function BcGridContextMenu<TRow>({
 }
 
 export default BcGridContextMenu
-
-function dispatchColumnCommand<TRow>(
-  api: BcGridApi<TRow>,
-  command:
-    | "pin-column-left"
-    | "pin-column-right"
-    | "unpin-column"
-    | "hide-column"
-    | "autosize-column",
-  columnId: ColumnId,
-): void {
-  switch (command) {
-    case "pin-column-left":
-      api.setColumnPinned(columnId, "left")
-      return
-    case "pin-column-right":
-      api.setColumnPinned(columnId, "right")
-      return
-    case "unpin-column":
-      api.setColumnPinned(columnId, null)
-      return
-    case "hide-column":
-      api.setColumnHidden(columnId, true)
-      return
-    case "autosize-column":
-      api.autoSizeColumn(columnId)
-      return
-  }
-}
 
 function handleContextMenuKeyDown<TRow>({
   event,
