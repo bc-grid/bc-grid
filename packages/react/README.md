@@ -75,7 +75,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
 | Columns, filters, and pivot panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` / `?toolPanel=pivot` | `sidebar={["columns", "filters", "pivot"]}`, `pivotState` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
-| Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
+| Cell editing | Available | `?edit=1` status / flags / collector columns | `<BcEditGrid>`, `cellEditor`, `options`, `fetchOptions` |
 | Checkbox selection | Available | `?checkbox=1` | `checkboxSelection` |
 | Layout persistence | Available | Host-owned saved views | `initialLayout`, `layoutState`, `onLayoutStateChange` |
 | URL state persistence | Available | `?urlstate=1` | `gridId`, `urlStatePersistence` |

@@ -1851,7 +1851,7 @@ array or a row function:
 
 ```ts
 import type { BcCellEditor, BcReactGridColumn } from "@bc-grid/react"
-import { selectEditor } from "@bc-grid/editors"
+import { autocompleteEditor, multiSelectEditor, selectEditor } from "@bc-grid/editors"
 
 type CustomerStatus = "prospect" | "active" | "hold"
 
@@ -1886,12 +1886,59 @@ produce typed values directly, so `column.valueParser` is bypassed. Use
 `valueParser` on string-producing editors such as `textEditor`, `numberEditor`,
 the date/time editors, and `autocompleteEditor`.
 
+A common customer/vendor editing pattern is to keep lookup enums typed while
+normalizing free-text autocomplete at the column boundary:
+
+```ts
+type VendorTag = "preferred" | "tax-exempt" | "requires-review"
+
+const tagOptions: readonly { value: VendorTag; label: string }[] = [
+  { value: "preferred", label: "Preferred" },
+  { value: "tax-exempt", label: "Tax exempt" },
+  { value: "requires-review", label: "Requires review" },
+]
+
+const vendorTagColumn: BcReactGridColumn<VendorRow, readonly VendorTag[]> = {
+  field: "tags",
+  header: "Tags",
+  editable: true,
+  cellEditor: multiSelectEditor as unknown as BcCellEditor<
+    VendorRow,
+    readonly VendorTag[]
+  >,
+  options: tagOptions,
+  validate: (next) =>
+    Array.isArray(next)
+      ? { valid: true }
+      : { valid: false, error: "Choose at least one valid tag." },
+}
+
+const vendorContactColumn: BcReactGridColumn<VendorRow, string> = {
+  field: "contactName",
+  header: "Contact",
+  editable: true,
+  cellEditor: autocompleteEditor as unknown as BcCellEditor<VendorRow, string>,
+  fetchOptions: (query, signal) =>
+    fetch(`/api/vendors/contacts?q=${encodeURIComponent(query)}`, { signal }).then(
+      (response) => response.json(),
+    ),
+  valueParser: (input) => input.trim(),
+  validate: (next) =>
+    next.length > 0
+      ? { valid: true }
+      : { valid: false, error: "Contact is required." },
+}
+```
+
 `autocompleteEditor` calls `column.fetchOptions(query, signal)` after mount and
 as the user types. Implementations should pass `signal` through to `fetch` or
 equivalent request APIs so superseded lookups abort cleanly. A failed lookup is
 not itself a validation error: bc-grid leaves the current suggestions as-is and
 allows free-text editing to continue. Use `valueParser` and `validate` when the
-typed string must resolve to a known domain value.
+typed string must resolve to a known domain value. The pending/error surface is
+the same one used by the other built-ins: pending disables the native control,
+validation errors set `aria-invalid` / `aria-describedby`, and the React editor
+protocol announces the error through its assertive live region.
 
 `checkboxEditor` commits a boolean and only treats the literal boolean `true` as
 checked on mount. String and numeric lookalikes (`"true"`, `1`) stay unchecked,
