@@ -1,0 +1,366 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const wireSnippet = `import {
+  BcGrid,
+  DEFAULT_CONTEXT_MENU_ITEMS,
+  type BcContextMenuItems,
+  type BcGridColumn,
+} from "@bc-grid/react"
+import "@bc-grid/theming/styles.css"
+
+type Customer = {
+  id: string
+  code: string
+  name: string
+  balance: number
+  active: boolean
+}
+
+const columns: BcGridColumn<Customer>[] = [
+  { field: "code", header: "Code", width: 120, pinned: "left", format: "code" },
+  {
+    field: "name",
+    header: "Customer",
+    minWidth: 240,
+    flex: 1,
+    filter: { type: "text" },
+  },
+  {
+    field: "balance",
+    header: "Balance",
+    align: "right",
+    format: "currency",
+    filter: { type: "number" },
+  },
+]
+
+// Spread the default clipboard items, then layer the column +
+// filter built-ins. The defaults are
+// ["copy", "copy-row", "copy-with-headers", "separator",
+//  "clear-selection", "clear-range"]; everything below is
+// consumer-opt-in.
+const contextMenuItems: BcContextMenuItems<Customer> = [
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+  "separator",
+  "clear-column-filter",
+  "clear-all-filters",
+  "separator",
+  "pin-column-left",
+  "pin-column-right",
+  "unpin-column",
+  "separator",
+  "hide-column",
+  "show-all-columns",
+  "autosize-column",
+  "autosize-all-columns",
+]
+
+<BcGrid
+  data={customers}
+  columns={columns}
+  rowId={(row) => row.id}
+  contextMenuItems={contextMenuItems}
+/>`
+
+const factorySnippet = `import {
+  DEFAULT_CONTEXT_MENU_ITEMS,
+  type BcContextMenuItems,
+} from "@bc-grid/react"
+
+// A factory receives the right-click context (cell, row, column,
+// selection, api) and returns the items to render. \`null\` /
+// \`false\` / \`undefined\` entries are filtered out, so a
+// row-conditional item can be returned as \`ctx.row && {…}\` without
+// an extra check.
+const contextMenuItems: BcContextMenuItems<Customer> = (ctx) => [
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+  "separator",
+  "clear-column-filter",
+  "clear-all-filters",
+
+  ctx.row && {
+    id: "open-customer",
+    label: \`Open \${ctx.row.name}\`,
+    onSelect: ({ row }) => {
+      if (row) navigate(\`/customers/\${row.id}\`)
+    },
+  },
+
+  ctx.row && "separator",
+
+  // Destructive variant — shadcn DropdownMenu's \`data-variant=
+  // "destructive"\` convention. The bundled theme paints the row's
+  // text colour and hover background using the \`--bc-grid-invalid\`
+  // token. Reserve this for irreversible actions.
+  ctx.row?.active && {
+    id: "deactivate-customer",
+    label: \`Deactivate \${ctx.row.name}\`,
+    variant: "destructive",
+    onSelect: ({ row }) => {
+      if (row) deactivate(row.id)
+    },
+  },
+]`
+
+const disabledSnippet = `// Custom items can be programmatically disabled. The boolean form
+// is static; the function form re-evaluates against the current
+// trigger context every time the menu opens.
+const item = {
+  id: "approve-invoice",
+  label: "Approve invoice",
+  disabled: (ctx) => ctx.row?.status !== "pending",
+  onSelect: ({ row }) => approve(row?.id),
+}`
+
+const triggersSnippet = `// Three ways the menu opens, all wired by the bundled grid:
+//
+//   - Right-click on any data cell or row.
+//   - Shift+F10 (keyboard equivalent) on the focused cell. Opens
+//     the menu anchored to the active cell.
+//   - Long-press (500ms) on coarse pointers (touch / pen). Cancels
+//     if the pointer drifts more than 10px from the start, so a
+//     finger-drag flips cleanly into a scroll.
+//
+// Escape and outside pointer-down both close the menu and return
+// focus to the trigger cell. No focus trap.`
+
+const builtIns = [
+  {
+    group: "Clipboard",
+    rows: [
+      { id: "copy", desc: "Range or active cell, TSV, no headers." },
+      { id: "copy-cell", desc: "Single right-clicked cell. Ignores any range." },
+      { id: "copy-row", desc: "Every visible-column cell of the right-clicked row." },
+      {
+        id: "copy-with-headers",
+        desc: "Same shape as copy, prepends column-header row.",
+      },
+    ],
+  },
+  {
+    group: "Filter",
+    rows: [
+      {
+        id: "clear-column-filter",
+        desc: "Calls BcGridApi.clearFilter(columnId) on the right-clicked cell.",
+      },
+      {
+        id: "clear-all-filters",
+        desc: "Calls BcGridApi.clearFilter() — clears every column.",
+      },
+    ],
+  },
+  {
+    group: "Column",
+    rows: [
+      {
+        id: "pin-column-left / pin-column-right / unpin-column",
+        desc: "Calls BcGridApi.setColumnPinned(columnId, side). Disabled when already in target state.",
+      },
+      {
+        id: "hide-column / show-all-columns",
+        desc: "Calls BcGridApi.setColumnHidden(columnId, true) or batch-resets every hidden flag.",
+      },
+      {
+        id: "autosize-column / autosize-all-columns",
+        desc: "Calls BcGridApi.autoSizeColumn(columnId) or loops over every visible column.",
+      },
+    ],
+  },
+  {
+    group: "Range / selection",
+    rows: [
+      { id: "clear-range", desc: "Clears the active range selection." },
+      { id: "clear-selection", desc: "Clears the row-level selection state." },
+    ],
+  },
+  {
+    group: "Layout",
+    rows: [
+      {
+        id: "separator",
+        desc: 'Visual divider. Render multiple groups by interleaving "separator" between built-ins.',
+      },
+    ],
+  },
+]
+---
+
+<DocsLayout
+  title="Context menu recipe"
+  description="A worked example wiring the bundled context-menu built-ins (copy, clear-filter, pin/hide/autosize) alongside a custom destructive row action. Use this when the consumer needs more than the default copy + clear menu."
+  active="context-menu-recipe"
+>
+  <section class="section">
+    <h2>What you're building</h2>
+    <p>
+      A right-click menu that mixes the bundled clipboard / filter / column
+      built-ins with one consumer-supplied "Open customer" entry and a
+      destructive-variant "Deactivate" action. The menu's open / close,
+      keyboard navigation, focus return, and ARIA wiring are owned by
+      <code>BcGrid</code>; the consumer only declares the items.
+    </p>
+    <p>
+      No runtime dependency, no shadcn install. Every icon is shipped by
+      <code>@bc-grid/react</code>.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>Built-in IDs at a glance</h2>
+    <p>
+      The full reference (per-id label, BcGridApi call, disabled-when rule)
+      is in
+      <a href="https://github.com/bc-grid/bc-grid/blob/main/docs/api.md#5-components" rel="noreferrer"><code>docs/api.md §5.1</code></a>.
+      Copy / row / range items render in the default menu; everything else is
+      consumer-opt-in.
+    </p>
+    {builtIns.map((group) => (
+      <div class="builtin-group">
+        <h3>{group.group}</h3>
+        <ul>
+          {group.rows.map((row) => (
+            <li>
+              <code>{row.id}</code> — {row.desc}
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))}
+  </section>
+
+  <section class="section">
+    <h2>1. Static array — declarative items</h2>
+    <p>
+      Spread <code>DEFAULT_CONTEXT_MENU_ITEMS</code> for the bundled clipboard
+      group, then layer extras with <code>"separator"</code> between groups.
+      Order matches render order; the renderer collapses adjacent separators
+      automatically.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>static items</span>
+      </div>
+      <Code code={wireSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>2. Factory form — row-conditional + destructive</h2>
+    <p>
+      A factory receives <code>ctx</code> with the right-clicked
+      <code>cell</code>, <code>row</code>, <code>column</code>,
+      <code>selection</code>, and <code>api</code>. Return any
+      <code>BcContextMenuItem</code> array; falsy entries are filtered, so
+      <code>ctx.row && {`{ … }`}</code> is the idiomatic row-conditional
+      pattern.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>App.tsx</span>
+        <span>factory items</span>
+      </div>
+      <Code code={factorySnippet} lang="tsx" theme="github-dark" />
+    </div>
+    <p>
+      <code>variant: "destructive"</code> emits
+      <code>data-variant="destructive"</code> on the menu row. Bundled CSS
+      paints the destructive token through <code>--bc-grid-invalid</code>;
+      consumer CSS can layer on top with the same selector. The visual
+      treatment matches the rest of the popup chrome — same hover background,
+      same focus ring, same disabled rule — so destructive items don't look
+      bolted on.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>3. Dynamic disabled state</h2>
+    <p>
+      Custom items take a <code>disabled</code> field. The function form
+      re-evaluates against the current trigger context every time the menu
+      opens, so it's safe to gate on <code>ctx.row</code>,
+      <code>ctx.selection</code>, or any other state.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>item.ts</span>
+        <span>disabled predicate</span>
+      </div>
+      <Code code={disabledSnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>4. How the menu opens</h2>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>triggers</span>
+        <span>built-in</span>
+      </div>
+      <Code code={triggersSnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Checklist</h2>
+    <ul>
+      <li>
+        Spread <code>DEFAULT_CONTEXT_MENU_ITEMS</code> instead of hand-rolling
+        the clipboard group — it tracks future bundled defaults.
+      </li>
+      <li>
+        Use <code>"separator"</code> to group items; the renderer collapses
+        adjacent separators automatically.
+      </li>
+      <li>
+        For row-conditional items, return them via the factory form and gate
+        on <code>ctx.row && {`{ … }`}</code> rather than mounting a separate
+        custom predicate.
+      </li>
+      <li>
+        Mark irreversible actions with <code>variant: "destructive"</code>.
+        Reserve it — every destructive item paints with the
+        <code>--bc-grid-invalid</code> token, so consumers should treat it as a
+        scarce signal.
+      </li>
+      <li>
+        For dynamic disabled state, prefer the predicate form
+        (<code>disabled: (ctx) =&gt; …</code>) over recomputing the items
+        array on every render — the menu only re-evaluates on open.
+      </li>
+      <li>
+        The menu owns Escape, outside-click, focus return, and Shift+F10
+        keyboard activation. Don't reach into those — the bundled contract is
+        enforced by tests in <code>contextMenu.test.ts</code> and
+        <code>contextMenu.markup.test.tsx</code>.
+      </li>
+    </ul>
+  </section>
+</DocsLayout>
+
+<style>
+  .builtin-group {
+    margin-bottom: 1.25rem;
+  }
+  .builtin-group h3 {
+    margin: 0.75rem 0 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: hsl(var(--muted-foreground, 215 16% 47%));
+  }
+  .builtin-group ul {
+    margin: 0;
+    padding-left: 1.25rem;
+  }
+  .builtin-group li {
+    margin: 0.25rem 0;
+  }
+  .builtin-group code {
+    font-size: 0.8125rem;
+  }
+</style>
