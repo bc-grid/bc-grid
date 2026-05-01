@@ -915,6 +915,84 @@ describe("createServerRowModel", () => {
     ).toBe(0)
   })
 
+  test("settles accepted mutations without a canonical row by keeping the optimistic patch", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ amount: 1, id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { amount: 2, name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "m1", status: "accepted" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(false)
+    expect(result.updatedRows).toBe(1)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([
+      { amount: 2, id: "a", name: "optimistic" },
+    ])
+  })
+
+  test("ignores stale mutation settlements after the queue no longer contains the mutation", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "current" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+
+    const result = model.settleMutation({
+      result: { mutationId: "stale", row: { id: "a", name: "late-server" }, status: "accepted" },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(false)
+    expect(result.updatedRows).toBe(0)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([{ id: "a", name: "current" }])
+  })
+
+  test("settles accepted mutations that remap row identity", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "temp-a", name: "optimistic create" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "draft" }, mutationId: "m1", rowId: "temp-a" },
+      rowId: (row) => row.id,
+    })
+
+    const result = model.settleMutation({
+      result: {
+        mutationId: "m1",
+        previousRowId: "temp-a",
+        row: { id: "customer-1", name: "server canonical" },
+        rowId: "customer-1",
+        status: "accepted",
+      },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(false)
+    expect(result.updatedRows).toBe(1)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([
+      { id: "customer-1", name: "server canonical" },
+    ])
+  })
+
   test("rolls back rejected mutations", () => {
     const model = createServerRowModel<Row>()
     model.cache.markLoaded({
