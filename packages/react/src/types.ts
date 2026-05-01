@@ -240,6 +240,8 @@ export type BcContextMenuBuiltinItem =
   | "copy-with-headers"
   | "clear-selection"
   | "clear-range"
+  | "clear-all-filters"
+  | "clear-column-filter"
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {

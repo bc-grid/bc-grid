@@ -147,6 +147,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       getColumnState() {
         return gridApiRef.current?.getColumnState() ?? []
       },
+      getFilter() {
+        return gridApiRef.current?.getFilter() ?? null
+      },
       setColumnState(state) {
         gridApiRef.current?.setColumnState(state)
       },
@@ -155,6 +158,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       },
       setFilter(filter) {
         gridApiRef.current?.setFilter(filter)
+      },
+      clearFilter(columnId) {
+        gridApiRef.current?.clearFilter(columnId)
       },
       setRangeSelection(selection) {
         gridApiRef.current?.setRangeSelection(selection)

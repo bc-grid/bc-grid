@@ -271,10 +271,26 @@ export interface BcGridApi<TRow = unknown> {
   getSelection(): BcSelection
   getRangeSelection(): BcRangeSelection
   getColumnState(): BcColumnStateEntry[]
+  /**
+   * Read the active grid filter, or `null` when no filter is set.
+   * Companion to `setFilter` / `clearFilter`. Useful for context-menu
+   * items and consumer-side affordances that need to reason about the
+   * current filter without mounting controlled state. Per
+   * `docs/design/context-menu-command-map.md §2.3`.
+   */
+  getFilter(): BcGridFilter | null
 
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter | null): void
+  /**
+   * Clear the grid filter. With no `columnId` this is equivalent to
+   * `setFilter(null)`. With a `columnId`, removes only that column's
+   * leaf entries from the active filter and preserves the rest;
+   * collapses single-child groups and returns `null` when the result
+   * is empty. Per `docs/design/context-menu-command-map.md §2.3`.
+   */
+  clearFilter(columnId?: ColumnId): void
   setRangeSelection(selection: BcRangeSelection): void
   copyRange(range?: BcRange): Promise<void>
   clearRangeSelection(): void

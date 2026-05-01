@@ -127,6 +127,14 @@ export function BcGridContextMenu<TRow>({
       clearSelection()
     } else if (item === "clear-range") {
       api.clearRangeSelection()
+    } else if (item === "clear-all-filters") {
+      api.clearFilter()
+    } else if (item === "clear-column-filter") {
+      // Disabled-state predicate guards on `context.cell` already, but
+      // the dispatch path checks again because activate() runs after
+      // the disabled predicate may have changed (e.g., a custom item
+      // mutating filter state on the same click).
+      if (context.cell) api.clearFilter(context.cell.columnId)
     }
     onClose()
   }
