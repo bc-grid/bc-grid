@@ -25,6 +25,7 @@ import {
   customerRows,
   packageRows,
 } from "./examples"
+import { ServerEditGridExample } from "./serverEditExample"
 
 type ThemeMode = "light" | "dark"
 
@@ -171,8 +172,8 @@ const featureDiscoveryRows = [
   {
     feature: "Server row model",
     status: "Available",
-    entry: "package API",
-    api: "BcServerGrid",
+    entry: "Server Edit Grid",
+    api: "BcServerGrid, onServerRowMutation",
   },
   {
     feature: "Pivot panel",
@@ -279,6 +280,10 @@ export function App() {
             <span>Feature Map</span>
             <small>flags and entry points</small>
           </a>
+          <a className="nav-item" href="#server-edit-grid">
+            <span>Server Edit Grid</span>
+            <small>customers API pattern</small>
+          </a>
           <a className="nav-item" href="#package-matrix">
             <span>Package Matrix</span>
             <small>Q1 packages</small>
@@ -301,6 +306,7 @@ export function App() {
           onThemeChange={setTheme}
           theme={theme}
         />
+        <ServerEditGridExample />
         <FeatureDiscoveryMap />
         <PackageMatrix />
       </section>

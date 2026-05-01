@@ -221,3 +221,17 @@ A bsncraft-style customers grid should be wired as a server-owned business grid:
 This keeps bc-grid responsible for grid mechanics and keeps domain-specific
 customer validation, authorization, conflict copy, and persistence inside the
 consumer application.
+
+## Example and Docs Path
+
+The consumer-grade server edit example lives in `apps/examples` at the
+`#server-edit-grid` section. It uses a customer-style editable data set,
+controlled search/filter/sort/page state, `onServerRowMutation`, optimistic
+pending saves, rejected rollback, conflict results, and row/view refresh
+affordances.
+
+The docs page at `apps/docs/src/pages/server-edit-grid.astro` mirrors that
+pattern as a bsncraft-style integration guide: customers are loaded through
+`BcServerGrid`, edits settle through `ServerMutationResult`, and the consumer
+owns validation copy, authorization, conflict policy, and cache invalidation
+decisions.
