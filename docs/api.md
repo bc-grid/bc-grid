@@ -1192,6 +1192,14 @@ expand/collapse. Use `bc-grid-detail-empty`, `bc-grid-detail-loading`, and
 `bc-grid-detail-error` for async states instead of resizing text or animating
 row height.
 
+For host-owned async child data, keep the detail row mounted at its declared
+`detailPanelHeight` while data loads. Use `role="status"` + `aria-live="polite"`
+for loading text, `role="alert"` for failed child loads, and stable title/body
+children via `bc-grid-detail-state-title` and
+`bc-grid-detail-state-description`. Retry buttons can live in
+`bc-grid-detail-state-actions`; avoid autofocus so keyboard users return to the
+same disclosure control after collapse.
+
 ```tsx
 <BcGrid<Customer>
   // ...
@@ -1203,8 +1211,30 @@ row height.
         <p>{row.collectorNotes}</p>
       </section>
       <section className="bc-grid-detail-section">
-        <p className="bc-grid-detail-kicker">Customer Contacts</p>
-        {row.contacts.length > 0 ? (
+        <div className="bc-grid-detail-section-header">
+          <p className="bc-grid-detail-kicker">Customer Contacts</p>
+          <span>{row.contacts.length} contacts</span>
+        </div>
+        {row.contactsState === "loading" ? (
+          <div className="bc-grid-detail-loading" role="status" aria-live="polite">
+            <span className="bc-grid-detail-state-title">Loading contacts</span>
+            <span className="bc-grid-detail-state-description">
+              Fetching contacts without changing the row height.
+            </span>
+          </div>
+        ) : row.contactsError ? (
+          <div className="bc-grid-detail-error" role="alert">
+            <span className="bc-grid-detail-state-title">Contacts unavailable</span>
+            <span className="bc-grid-detail-state-description">
+              Retry from the host customer screen.
+            </span>
+            <div className="bc-grid-detail-state-actions">
+              <button type="button" onClick={row.reloadContacts}>
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : row.contacts.length > 0 ? (
           <div className="bc-grid-detail-nested-grid" role="grid">
             <div role="row">
               <span role="columnheader">Name</span>
@@ -1220,7 +1250,12 @@ row height.
             ))}
           </div>
         ) : (
-          <p className="bc-grid-detail-empty">No customer contacts are on file.</p>
+          <div className="bc-grid-detail-empty">
+            <span className="bc-grid-detail-state-title">No contacts on file</span>
+            <span className="bc-grid-detail-state-description">
+              Add an AP contact before scheduling follow-up.
+            </span>
+          </div>
         )}
       </section>
     </div>
