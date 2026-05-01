@@ -327,7 +327,7 @@ When the user presses Ctrl/Cmd+V with at least one cell focused:
 1. Read clipboard via `navigator.clipboard.read()`. Prefer `text/html` if available (richer); fall back to `text/plain` (TSV).
 2. Parse:
    - HTML: extract `<tr>` / `<td>` text content (strip nested HTML — paste destination is plain text values).
-   - TSV: use the range TSV parser helper for the Excel / Google Sheets subset: tabs split cells, CRLF/LF/CR split rows, quoted cells may contain tabs/newlines, doubled quotes unescape to one quote, trailing row delimiters do not create an extra blank row, and malformed quotes are parsed best-effort with diagnostics.
+   - TSV: use `@bc-grid/core.parseTsvClipboard(input)`. It handles the spreadsheet TSV subset needed for Excel / Google Sheets interop: tabs split cells, CRLF/LF/CR split rows, quoted cells may contain tabs/newlines, doubled quotes unescape to one quote, trailing row delimiters do not create an extra blank row, and malformed quotes are parsed best-effort with diagnostics.
 3. Apply at the active cell (or the start of the active range if a range is active):
    - Rows iterate down from anchor row.
    - Cells iterate right from anchor column.

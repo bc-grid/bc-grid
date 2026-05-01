@@ -567,6 +567,23 @@ export interface BcClipboardPayload {
   custom?: Record<string, string>
 }
 
+export type BcTsvParseDiagnosticCode =
+  | "unexpected-quote"
+  | "unexpected-character-after-closing-quote"
+  | "unterminated-quoted-cell"
+
+export interface BcTsvParseDiagnostic {
+  code: BcTsvParseDiagnosticCode
+  rowIndex: number
+  columnIndex: number
+  charIndex: number
+}
+
+export interface BcTsvParseResult {
+  cells: string[][]
+  diagnostics: BcTsvParseDiagnostic[]
+}
+
 export interface BcRangeBeforeCopyEvent<TRow> {
   range: BcRange
   rows: readonly TRow[]
@@ -641,7 +658,7 @@ export interface BcGridStateProps {
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
 
-Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `normaliseRange`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React renders a pointer-inert active range overlay and clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); paste and fill handle behavior remain separate Track 2 implementation tasks.
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `normaliseRange`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, `parseRangeSelection`, and `parseTsvClipboard`. These are pure state-machine / clipboard helpers. `parseTsvClipboard(input)` returns `{ cells, diagnostics }` for spreadsheet-style TSV: tabs split cells, CRLF/LF/CR split rows, quoted cells may contain tabs/newlines, doubled quotes unescape to one quote, a trailing row delimiter does not add an extra blank row, and malformed quotes are parsed best-effort with diagnostics. React renders a pointer-inert active range overlay and clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); paste and fill handle behavior remain separate Track 2 implementation tasks.
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
@@ -1933,6 +1950,7 @@ export {
   expandRangeTo,
   newRangeAt,
   normaliseRange,
+  parseTsvClipboard,
   parseRangeSelection,
   rangeBounds,
   rangeClear,
@@ -1949,7 +1967,7 @@ export {
 // Framework-agnostic column/state/API types (§1.1-1.2, §3, §4, §6).
 // All Server* types from server-query-rfc (§8).
 // Helpers: ColumnId, RowId, BcCellPosition, BcRange, BcNormalisedRange,
-//   BcRangeSelection, BcRangeKeyAction,
+//   BcRangeSelection, BcRangeKeyAction, BcTsvParse*,
 //   BcScrollAlign, BcScrollOptions, BcAggregation, BcGridIdentity, BcRowState,
 //   BcPivotState, BcPivotValue, BcPivotedDataDTO, BcPivot*DTO.
 // Excludes React component props, React renderers, refs, DOM events, and editor components.

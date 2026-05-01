@@ -1,4 +1,13 @@
-import type { BcRange, BcValidationResult, ColumnId, RowId } from "@bc-grid/core"
+import { parseTsvClipboard } from "@bc-grid/core"
+import type {
+  BcRange,
+  BcTsvParseDiagnostic,
+  BcTsvParseDiagnosticCode,
+  BcTsvParseResult,
+  BcValidationResult,
+  ColumnId,
+  RowId,
+} from "@bc-grid/core"
 import type { RowEntry } from "./gridInternals"
 import { type ResolvedColumn, isDataRowEntry } from "./gridInternals"
 import type { BcClipboardPayload, BcReactGridColumn } from "./types"
@@ -19,22 +28,9 @@ interface BuildRangeClipboardParams<TRow> {
   includeHeaders?: boolean
 }
 
-export type RangeTsvParseDiagnosticCode =
-  | "unexpected-quote"
-  | "unexpected-character-after-closing-quote"
-  | "unterminated-quoted-cell"
-
-export interface RangeTsvParseDiagnostic {
-  code: RangeTsvParseDiagnosticCode
-  rowIndex: number
-  columnIndex: number
-  charIndex: number
-}
-
-export interface RangeTsvParseResult {
-  cells: string[][]
-  diagnostics: RangeTsvParseDiagnostic[]
-}
+export type RangeTsvParseDiagnosticCode = BcTsvParseDiagnosticCode
+export type RangeTsvParseDiagnostic = BcTsvParseDiagnostic
+export type RangeTsvParseResult = BcTsvParseResult
 
 export interface BuildRangeTsvPastePlanParams {
   cells: readonly (readonly string[])[]
@@ -244,107 +240,11 @@ export function cellsToHtmlTable(rows: readonly (readonly string[])[]): string {
 /**
  * Parse spreadsheet-style TSV clipboard text into a row/column matrix.
  *
- * Supported input matches the practical Excel / Google Sheets subset: tabs
- * split cells, CRLF/LF/CR split rows, quoted cells may contain tabs/newlines,
- * and doubled quotes inside quoted cells unescape to a single quote. Malformed
- * quote usage is parsed best-effort and returned as diagnostics so future paste
- * code can reject or warn without this helper throwing.
+ * React keeps this compatibility wrapper for range paste helpers while the
+ * parser itself lives in `@bc-grid/core`.
  */
 export function parseRangeTsv(input: string): RangeTsvParseResult {
-  const cells: string[][] = []
-  const diagnostics: RangeTsvParseDiagnostic[] = []
-  let row: string[] = []
-  let cell = ""
-  let inQuotes = false
-  let afterClosingQuote = false
-  let endedWithRowDelimiter = false
-
-  const currentColumnIndex = () => row.length
-  const pushDiagnostic = (code: RangeTsvParseDiagnosticCode, charIndex: number) => {
-    diagnostics.push({
-      code,
-      rowIndex: cells.length,
-      columnIndex: currentColumnIndex(),
-      charIndex,
-    })
-  }
-  const finishCell = () => {
-    row.push(cell)
-    cell = ""
-    inQuotes = false
-    afterClosingQuote = false
-    endedWithRowDelimiter = false
-  }
-  const finishRow = () => {
-    row.push(cell)
-    cells.push(row)
-    row = []
-    cell = ""
-    inQuotes = false
-    afterClosingQuote = false
-    endedWithRowDelimiter = true
-  }
-
-  for (let index = 0; index < input.length; index += 1) {
-    const char = input[index]
-    const next = input[index + 1]
-
-    if (inQuotes) {
-      if (char === '"' && next === '"') {
-        cell += '"'
-        index += 1
-      } else if (char === '"') {
-        inQuotes = false
-        afterClosingQuote = true
-      } else {
-        cell += char
-      }
-      continue
-    }
-
-    if (char === "\t") {
-      finishCell()
-      continue
-    }
-
-    if (char === "\n" || char === "\r") {
-      finishRow()
-      if (char === "\r" && next === "\n") index += 1
-      continue
-    }
-
-    if (afterClosingQuote) {
-      pushDiagnostic("unexpected-character-after-closing-quote", index)
-      afterClosingQuote = false
-      cell += char
-      continue
-    }
-
-    if (char === '"') {
-      if (cell.length === 0) {
-        inQuotes = true
-      } else {
-        pushDiagnostic("unexpected-quote", index)
-        cell += char
-      }
-      endedWithRowDelimiter = false
-      continue
-    }
-
-    cell += char
-    endedWithRowDelimiter = false
-  }
-
-  if (inQuotes) {
-    pushDiagnostic("unterminated-quoted-cell", input.length)
-  }
-
-  if (!endedWithRowDelimiter || row.length > 0 || cell.length > 0) {
-    row.push(cell)
-    cells.push(row)
-  }
-
-  return { cells, diagnostics }
+  return parseTsvClipboard(input)
 }
 
 export function buildRangeTsvPastePlan({
@@ -661,7 +561,6 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;")
 }
-
 function isRangePasteCellEditable<TRow>(column: ResolvedColumn<TRow>, row: TRow): boolean {
   const editable = column.source.editable
   if (typeof editable === "function") return editable(row)

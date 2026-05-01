@@ -1,4 +1,10 @@
 import type { BcRangeSelection } from "./range"
+export { parseTsvClipboard } from "./clipboard"
+export type {
+  BcTsvParseDiagnostic,
+  BcTsvParseDiagnosticCode,
+  BcTsvParseResult,
+} from "./clipboard"
 
 export type ColumnId = string
 export type RowId = string
