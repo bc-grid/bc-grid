@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test"
+import type { ServerSelection } from "@bc-grid/core"
+import { createServerRowModel } from "@bc-grid/server-row-model"
 import type {
   BcCellEditCommitEvent,
   BcReactGridColumn,
   ServerMutationResult,
+  ServerPagedResult,
   ServerRowPatch,
 } from "../src"
 import {
@@ -30,6 +33,22 @@ const editEvent: BcCellEditCommitEvent<Row, string> = {
   row: { id: "customer-1", name: "Acme Inc." },
   rowId: "customer-1",
   source: "keyboard",
+}
+
+const emptySelection: ServerSelection = { mode: "explicit", rowIds: new Set() }
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
 }
 
 function mutationHarness() {
@@ -171,6 +190,100 @@ describe("server edit mutation helpers", () => {
         reason: "Network unavailable.",
         status: "rejected",
       },
+    ])
+  })
+
+  test("keeps a pending server edit overlay across page changes and page refetches", async () => {
+    const model = createServerRowModel<Row>()
+    const view = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name"],
+    })
+    const viewKey = model.createViewKey(view)
+    const page0Request = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "customer-1", name: "Acme Inc." }],
+        totalRows: 51,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view,
+      viewKey,
+    })
+    const page0 = await page0Request.promise
+    expect(page0.rows).toEqual([{ id: "customer-1", name: "Acme Inc." }])
+
+    const serverSettle = deferred<ServerMutationResult<Row>>()
+    const commit = commitServerEditMutation({
+      event: editEvent,
+      mutationId: "mutation-paged",
+      onServerRowMutation: () => serverSettle.promise,
+      queueServerRowMutation: (patch) => model.queueMutation({ patch, rowId: (row) => row.id }),
+      settleServerRowMutation: (result) => model.settleMutation({ result, rowId: (row) => row.id }),
+    })
+
+    expect(model.cache.get(page0Request.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+    ])
+    expect(
+      model.getState({ mode: "paged", rowCount: 51, selection: emptySelection, view, viewKey })
+        .pendingMutations.size,
+    ).toBe(1)
+
+    const page1Request = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "customer-26", name: "Beta Ltd." }],
+        totalRows: 51,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 1,
+      pageSize: 25,
+      view,
+      viewKey,
+    })
+    const page1 = await page1Request.promise
+    expect(page1.rows).toEqual([{ id: "customer-26", name: "Beta Ltd." }])
+    expect(
+      model.getState({ mode: "paged", rowCount: 51, selection: emptySelection, view, viewKey })
+        .pendingMutations.size,
+    ).toBe(1)
+
+    model.cache.clear()
+    const reloadedPage0Request = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "customer-1", name: "Acme Inc." }],
+        totalRows: 51,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view,
+      viewKey,
+    })
+    const reloadedPage0 = await reloadedPage0Request.promise
+    expect(reloadedPage0.rows).toEqual([{ id: "customer-1", name: "Acme Co." }])
+
+    serverSettle.resolve({
+      mutationId: "mutation-paged",
+      row: { id: "customer-1", name: "Acme Co." },
+      status: "accepted",
+    })
+    await commit
+
+    expect(
+      model.getState({ mode: "paged", rowCount: 51, selection: emptySelection, view, viewKey })
+        .pendingMutations.size,
+    ).toBe(0)
+    expect(model.cache.get(reloadedPage0Request.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
     ])
   })
 })
