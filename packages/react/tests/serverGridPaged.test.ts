@@ -370,6 +370,63 @@ describe("server paged query reset semantics", () => {
     }
   })
 
+  test("groupBy is server query state and resets the requested page", async () => {
+    const filter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["active", "pending"],
+    }
+    const groupedView = model.createViewState({
+      filter,
+      groupBy: ["status", "name"],
+      searchText: "priority",
+      sort: [{ columnId: "status", direction: "asc" }],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const groupedViewKey = viewKeyFor(groupedView)
+    const pageIndex = resolveServerPagedRequestPage({
+      pageIndex: 8,
+      previousViewKey: baseViewKey,
+      viewKey: groupedViewKey,
+    })
+    let capturedQuery: ServerPagedQuery | undefined
+
+    await model.loadPagedPage({
+      loadPage: async (query) => {
+        capturedQuery = query
+        return {
+          pageIndex: query.pageIndex,
+          pageSize: query.pageSize,
+          rows: pageRows.slice(0, 4),
+          totalRows: 42,
+          viewKey: query.viewKey,
+        }
+      },
+      pageIndex,
+      pageSize: 25,
+      view: groupedView,
+      viewKey: groupedViewKey,
+    }).promise
+
+    expect(pageIndex).toBe(0)
+    expect(capturedQuery).toMatchObject({
+      mode: "paged",
+      pageIndex: 0,
+      pageSize: 25,
+      viewKey: groupedViewKey,
+    })
+    expect(capturedQuery?.view).toEqual(groupedView)
+    expect(capturedQuery?.view).toMatchObject({
+      filter,
+      groupBy: [{ columnId: "status" }, { columnId: "name" }],
+      search: "priority",
+      sort: [{ columnId: "status", direction: "asc" }],
+      visibleColumns: ["id", "name", "status"],
+    })
+  })
+
   test("same-view refresh preserves the requested page and full query payload", async () => {
     const filter: BcGridFilter = {
       columnId: "status",
@@ -742,6 +799,111 @@ describe("server paged stale response ordering", () => {
       rowCount: 1,
       status: "success",
     })
+  })
+
+  test("ignores a slow old grouped view response after a newer query becomes active", async () => {
+    const model = createServerRowModel<Row>()
+    const oldFilter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["inactive"],
+    }
+    const nextFilter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["active"],
+    }
+    const firstView = model.createViewState({
+      filter: oldFilter,
+      groupBy: ["status"],
+      searchText: "old",
+      sort: [{ columnId: "name", direction: "desc" }],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const nextView = model.createViewState({
+      filter: nextFilter,
+      groupBy: ["status", "name"],
+      searchText: "new",
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "status"],
+    })
+    const firstLoad = deferred<ServerPagedResult<Row>>()
+    const nextLoad = deferred<ServerPagedResult<Row>>()
+    const acceptedRows: string[] = []
+    let activeBlockKey: string | null = null
+
+    const firstRequest = model.loadPagedPage({
+      loadPage: () => firstLoad.promise,
+      pageIndex: 6,
+      pageSize: 25,
+      view: firstView,
+    })
+    activeBlockKey = firstRequest.blockKey
+    const firstObserver = firstRequest.promise.then((result) => {
+      if (
+        isActiveServerPagedResponse({
+          activeBlockKey,
+          responseBlockKey: firstRequest.blockKey,
+        })
+      ) {
+        acceptedRows.push(...result.rows.map((row) => row.id))
+      }
+    })
+
+    const nextRequest = model.loadPagedPage({
+      loadPage: () => nextLoad.promise,
+      pageIndex: 0,
+      pageSize: 25,
+      view: nextView,
+    })
+    activeBlockKey = nextRequest.blockKey
+    const nextObserver = nextRequest.promise.then((result) => {
+      if (
+        isActiveServerPagedResponse({
+          activeBlockKey,
+          responseBlockKey: nextRequest.blockKey,
+        })
+      ) {
+        acceptedRows.push(...result.rows.map((row) => row.id))
+      }
+    })
+
+    expect(firstRequest.query.view).toMatchObject({
+      filter: oldFilter,
+      groupBy: [{ columnId: "status" }],
+      search: "old",
+      sort: [{ columnId: "name", direction: "desc" }],
+      visibleColumns: ["id", "name", "status"],
+    })
+    expect(nextRequest.query.view).toMatchObject({
+      filter: nextFilter,
+      groupBy: [{ columnId: "status" }, { columnId: "name" }],
+      search: "new",
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "status"],
+    })
+
+    nextLoad.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "new", name: "New", status: "active" }],
+      totalRows: 1,
+    })
+    await nextObserver
+    expect(acceptedRows).toEqual(["new"])
+
+    firstLoad.resolve({
+      pageIndex: 6,
+      pageSize: 25,
+      rows: [{ id: "old", name: "Old", status: "inactive" }],
+      totalRows: 151,
+    })
+    await firstObserver
+    expect(acceptedRows).toEqual(["new"])
   })
 })
 

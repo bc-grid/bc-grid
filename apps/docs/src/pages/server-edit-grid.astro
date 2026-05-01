@@ -130,9 +130,9 @@ if (diagnostics) {
         <h3>Consumer owns controls</h3>
         <p>
           Keep search, filter, sort, and page state controlled in the host app. <code>loadPage</code>
-          receives <code>pageIndex</code>, <code>pageSize</code>, sort, filter, search, group, and visible
-          column metadata, then returns page rows plus <code>totalRows</code>. Server query changes reset
-          the requested page to zero.
+          receives <code>pageIndex</code>, <code>pageSize</code>, sort, filter, search, server
+          <code>groupBy</code>, and visible column metadata, then returns the current server page
+          rows plus <code>totalRows</code>. Server query changes reset the requested page to zero.
         </p>
       </article>
       <article class="panel">

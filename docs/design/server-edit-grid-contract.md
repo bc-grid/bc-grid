@@ -55,6 +55,11 @@ not slice those rows again on the client. A bsncraft customers endpoint should
 therefore return exactly the requested page plus the full matching customer
 count.
 
+`groupBy` in a server grid is not automatic full-dataset grouping performed in
+the browser. It is part of `query.view`. The consumer/server must translate it
+into the backend query, build any group rows or grouped windows that the product
+needs, and return rows plus `totalRows` that match that grouped server view.
+
 Row identity is required. `rowId(row)` must resolve to the stable business row
 ID, not the row index inside a page or block. If a create or merge causes the
 server ID to change, the mutation result must map the old and new IDs with
