@@ -370,7 +370,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // click; consumed (and reset) by shift-click. Held in a ref so we don't
   // re-render the grid just to update the anchor.
   const selectionAnchorRef = useRef<RowId | null>(null)
-  const [columnMenu, setColumnMenu] = useState<ColumnVisibilityMenuAnchor | null>(null)
+  const [columnMenu, setColumnMenu] = useState<
+    (ColumnVisibilityMenuAnchor & { columnId: ColumnId }) | null
+  >(null)
   const showColumnMenu = props.showColumnMenu !== false
   const showFilterRow = props.showFilterRow ?? props.showFilters
   const sidebarPanels = useMemo(() => resolveSidebarPanels(props.sidebar), [props.sidebar])
@@ -1835,14 +1837,18 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setColumnState,
   })
   const openColumnMenu = useCallback(
-    (_column: (typeof resolvedColumns)[number], anchor: ColumnMenuAnchor) => {
+    (column: (typeof resolvedColumns)[number], anchor: ColumnMenuAnchor) => {
       if (!showColumnMenu) return
       // Viewport-clamp moved into ColumnVisibilityMenu via the shared
       // `computePopupPosition` helper — same Radix-Popper-style flip
       // and clamp the filter popup and context menu use. The anchor
       // here is the trigger button's bottom-left; the menu measures
       // its own DOM and re-positions on first layout.
-      setColumnMenu({ x: anchor.x, y: anchor.y })
+      // Track the source `columnId` so the per-column trigger can
+      // render `data-state="open"` + `aria-expanded` only on the
+      // header that opened the menu, mirroring the filter-popup
+      // trigger contract.
+      setColumnMenu({ x: anchor.x, y: anchor.y, columnId: column.columnId })
     },
     [showColumnMenu],
   )
@@ -1991,6 +1997,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   domBaseId,
                   headerHeight,
                   index,
+                  columnMenuOpen: columnMenu?.columnId === column.columnId,
                   onColumnMenu: openColumnMenu,
                   onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
                   onReorderEnd: endReorder,

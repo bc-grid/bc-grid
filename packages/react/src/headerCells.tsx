@@ -127,6 +127,14 @@ interface RenderHeaderCellParams<TRow> {
   filterText?: string
   filterPopupOpen?: boolean
   onOpenFilterPopup?: (column: ResolvedColumn<TRow>, anchor: DOMRect) => void
+  /**
+   * `true` while the column-options menu is open with this header as the
+   * trigger. Drives `aria-expanded` and `data-state="open"` on the
+   * trigger button so the open trigger keeps a Radix-style highlight
+   * (no neighbouring trigger lights up — only the column that owns the
+   * menu). Mirrors the filter-popup `filterPopupOpen` plumbing.
+   */
+  columnMenuOpen?: boolean
 }
 
 interface RenderColumnGroupHeaderCellParams<TRow> {
@@ -206,6 +214,7 @@ export function renderHeaderCell<TRow>({
   filterText,
   filterPopupOpen,
   onOpenFilterPopup,
+  columnMenuOpen,
 }: RenderHeaderCellParams<TRow>): ReactNode {
   const sortIndex = sortState.findIndex((entry) => entry.columnId === column.columnId)
   const sort = sortIndex >= 0 ? sortState[sortIndex] : undefined
@@ -345,9 +354,17 @@ export function renderHeaderCell<TRow>({
       {columnMenuEnabled ? (
         <button
           aria-haspopup="menu"
+          aria-expanded={columnMenuOpen ? true : undefined}
           aria-label={`Column options for ${headerLabel}`}
           className="bc-grid-header-menu-button"
           data-bc-grid-column-menu-button="true"
+          // Mirrors the Radix DropdownMenu trigger contract — `data-state`
+          // tracks the column-options menu state ("open" / "closed") so
+          // consumer CSS hooks the trigger the same way it would a Radix
+          // DropdownMenuTrigger. Lets the trigger keep an open-state
+          // accent-soft background while the menu is mounted, without a
+          // separate boolean class.
+          data-state={columnMenuOpen ? "open" : "closed"}
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()

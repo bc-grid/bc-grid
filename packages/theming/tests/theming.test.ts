@@ -673,6 +673,56 @@ describe("@bc-grid/theming", () => {
     expect(body).toMatch(/min-height:\s*var\(--bc-grid-hit-target-min\)/)
   })
 
+  test("resize separator only reacts when the handle itself is hovered or actively dragged", () => {
+    // Regression for header-focus-menu-state-v040. The earlier rule lit
+    // up the resize-handle ::before / ::after whenever the header cell
+    // was hovered OR when ANY descendant was focused (`:focus-within`).
+    // That meant focusing the menu / filter button or hovering the
+    // header label visually fired the neighbouring column's resize
+    // separator. Lock the new scope: only the resize handle's own
+    // `:hover` and the active-drag `data-bc-grid-resizing="true"`
+    // selector may activate the affordance.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    // The tightened selectors must exist.
+    expect(css).toContain(".bc-grid-header-resize-handle:hover::before")
+    expect(css).toContain(".bc-grid-header-resize-handle:hover::after")
+    expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::before')
+    expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after')
+
+    // The cell-level activations are gone for both pseudo-elements.
+    expect(css).not.toContain(
+      ".bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::before",
+    )
+    expect(css).not.toContain(
+      ".bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::after",
+    )
+    expect(css).not.toContain(
+      ".bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::before",
+    )
+    expect(css).not.toContain(
+      ".bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::after",
+    )
+  })
+
+  test("header menu trigger mirrors the Radix DropdownMenuTrigger open-state highlight", () => {
+    // The column-options trigger keeps an accent-soft pressed background
+    // while its menu is mounted (driven by `data-state="open"` on the
+    // button, set from `columnMenuOpen` in headerCells.tsx). Mirrors the
+    // existing filter-button [data-state="open"] rule. Locks tokens-only
+    // styling — the open-state surface must come from `--bc-grid-*`,
+    // never from a direct shadcn token read.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf('.bc-grid-header-menu-button[data-state="open"] {')
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("background: var(--bc-grid-accent-soft)")
+    expect(rule).toContain("color: var(--bc-grid-fg)")
+    expect(rule).toContain("opacity: 1")
+    expect(rule).toContain("pointer-events: auto")
+  })
+
   test("CSS uses the kebab-case class convention from design.md", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     expect(css).toContain(".bc-grid-row")

@@ -21,10 +21,15 @@ const baseColumn: ResolvedColumn<Row> = {
   width: 120,
 }
 
-function renderColumn(column: ResolvedColumn<Row>, showColumnMenu = true): string {
+function renderColumn(
+  column: ResolvedColumn<Row>,
+  showColumnMenu = true,
+  columnMenuOpen = false,
+): string {
   return renderToStaticMarkup(
     renderHeaderCell({
       column,
+      columnMenuOpen,
       domBaseId: "grid",
       headerHeight: 40,
       index: 0,
@@ -144,6 +149,50 @@ describe("renderHeaderCell column menu visibility", () => {
     expect(html).toContain("bc-grid-header-menu-button")
     expect(html).not.toContain("&gt;...&lt;")
     expect(html).not.toContain(">...</button>")
+  })
+})
+
+describe("renderHeaderCell column menu trigger open-state contract", () => {
+  test("closed-by-default trigger emits data-state='closed' and no aria-expanded", () => {
+    const html = renderColumn(baseColumn)
+
+    expect(html).toContain('data-bc-grid-column-menu-button="true"')
+    expect(html).toContain('data-state="closed"')
+    expect(html).not.toContain('aria-expanded="true"')
+  })
+
+  test("columnMenuOpen=true emits data-state='open' + aria-expanded='true'", () => {
+    const html = renderColumn(baseColumn, true, true)
+
+    expect(html).toContain('data-bc-grid-column-menu-button="true"')
+    expect(html).toContain('data-state="open"')
+    expect(html).toContain('aria-expanded="true"')
+  })
+
+  test("only the trigger that owns the menu carries data-state='open'", () => {
+    const openHtml = renderColumn(
+      {
+        ...baseColumn,
+        columnId: "open-col",
+        source: { ...baseColumn.source, columnId: "open-col", header: "Open" },
+      },
+      true,
+      true,
+    )
+    const closedHtml = renderColumn(
+      {
+        ...baseColumn,
+        columnId: "closed-col",
+        source: { ...baseColumn.source, columnId: "closed-col", header: "Closed" },
+      },
+      true,
+      false,
+    )
+
+    expect(openHtml).toContain('data-state="open"')
+    expect(openHtml).toContain('aria-expanded="true"')
+    expect(closedHtml).toContain('data-state="closed"')
+    expect(closedHtml).not.toContain('aria-expanded="true"')
   })
 })
 

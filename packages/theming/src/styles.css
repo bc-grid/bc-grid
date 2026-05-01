@@ -304,8 +304,17 @@
   box-shadow: inset -2px 0 0 var(--bc-grid-focus-ring);
 }
 
-.bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::before,
-.bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::before,
+/*
+ * Resize separator only reacts when the separator itself is hovered or
+ * actively being dragged. Keyed off `.bc-grid-header-resize-handle:hover`
+ * (and the `data-bc-grid-resizing="true"` active state below). The
+ * cell-level `:hover` / `:focus-within` selectors deliberately do NOT
+ * activate the affordance — focusing the menu / filter button (which
+ * triggers cell-level `:focus-within`) and hovering the header label
+ * must not bleed into the neighbouring column's resize separator. This
+ * keeps the separator a precise interaction target instead of a
+ * whole-cell highlight.
+ */
 .bc-grid-header-resize-handle:hover::before {
   border-right-color: var(--bc-grid-column-resize-affordance-hover);
   background: linear-gradient(
@@ -317,8 +326,6 @@
   opacity: 1;
 }
 
-.bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::after,
-.bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::after,
 .bc-grid-header-resize-handle:hover::after {
   height: calc(100% - 14px);
   background: var(--bc-grid-column-resize-affordance-hover);
@@ -405,6 +412,22 @@
 .bc-grid-header-menu-button:hover {
   background: var(--bc-grid-row-hover);
   color: var(--bc-grid-fg);
+}
+
+/*
+ * Trigger open-state highlight. Mirrors the Radix DropdownMenuTrigger
+ * `[data-state="open"]` convention: while the column-options menu is
+ * mounted with this header as the trigger, the button keeps the
+ * accent-soft pressed background and stays fully visible (no
+ * hover-to-reveal). The `columnMenuOpen` flag in `headerCells.tsx`
+ * drives `data-state` so only the trigger that opened the menu lights
+ * up — not every menu trigger in the row.
+ */
+.bc-grid-header-menu-button[data-state="open"] {
+  background: var(--bc-grid-accent-soft);
+  color: var(--bc-grid-fg);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ---- header funnel button (filter-popup-variant trigger) ---- */
@@ -2934,8 +2957,6 @@ table.bc-grid-detail-nested-grid {
     border-right-color: var(--bc-grid-column-resize-affordance);
   }
 
-  .bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::before,
-  .bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::before,
   .bc-grid-header-resize-handle:hover::before,
   .bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::before {
     background: none;
@@ -2947,8 +2968,6 @@ table.bc-grid-detail-nested-grid {
     opacity: 1;
   }
 
-  .bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::after,
-  .bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::after,
   .bc-grid-header-resize-handle:hover::after,
   .bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after {
     background: var(--bc-grid-column-resize-affordance-hover);
