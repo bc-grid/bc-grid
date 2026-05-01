@@ -54,13 +54,22 @@ The v1 grid motion system keeps every runtime animation on compositor-friendly p
 for cell flash, row entrance fade, tooltips, and pinned-edge shadows. Sidebar open/close no longer
 animates width because it is a layout property.
 
+For v0.3 and later, grid motion must not scale text-bearing containers. FLIP defaults to
+translate-only motion; `scale: true` is reserved for non-text decorative targets only. Pure
+dimension changes, including master/detail height changes, should settle through layout or clip/opacity
+affordances that do not stretch glyphs. Avoid `transition: all`, `transition: height`, `scale()`, and
+row-height morphs on `.bc-grid-row`, `.bc-grid-cell`, detail panels, tool panels, and filter/header
+surfaces.
+
 React row motion is split by trigger:
 
 - Sort captures visible row rects before state commit and plays FLIP after the sorted render.
-- Filter, group expand/collapse, detail expand/collapse, row insert, and row remove animate surviving
-  visible rows from their previous rects to their new rects. Newly visible rows slide/fade in. Rows
-  removed by filtering/collapse leave immediately because virtualization has already released their
-  DOM nodes; the survivor FLIP keeps the transition readable without retaining arbitrary exits.
+- Filter, group expand/collapse, row insert, and row remove animate surviving visible rows from their
+  previous position to their new position. Newly visible rows slide/fade in over a short distance.
+  Rows removed by filtering/collapse leave immediately because virtualization has already released
+  their DOM nodes; survivor FLIP keeps the transition readable without retaining arbitrary exits.
+- Detail expand/collapse does not animate row height. The disclosure icon rotates, and the row/detail
+  content appears at its resolved size without scaling or stretching text.
 - Cell flash uses the same `AnimationBudget` path as row motion, so rapid edit commits cannot start
   unbounded Web Animations.
 
