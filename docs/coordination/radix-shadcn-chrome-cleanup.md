@@ -185,3 +185,63 @@ Polish pass on the filter popup chrome to align with the broader popup-interacti
 - No structural change to FilterPopup component. Existing tests for the dialog labelling, footer button labels, click-outside dismiss, and aria-controls linkage (PRs #252, #256) all carry over unchanged.
 - No new runtime dependency.
 - Reusing `usePopupDismiss` and `computePopupPosition` (already in place from slices 1–2). The roving-focus hook from slice 5 doesn't apply here since the popup contains form inputs, not a menu list.
+
+---
+
+## Slice 9 — Pagination + footer chrome polish (this PR)
+
+Audit + safe slice on the pagination chrome and the previously-unstyled `.bc-grid-footer` wrapper. Rich-but-bounded scope: the buttons + select were tokens-only and density-aware before this slice but read like text-only browser-default controls in dense ERP grids. This slice promotes them to first-class shadcn IconButton + chevron-Select quality without changing pagination behaviour or pagination-semantics.
+
+### Audit findings
+
+| Surface | Status before this slice | Notes |
+|---|---|---|
+| `.bc-grid-pagination` container | tokens-only, flex space-between | ✅ shadcn-aligned |
+| `.bc-grid-pagination-button` | text-only "First / Prev / Next / Last", min-height 2 rem | Read like browser-default controls. No `transition-colors`. No `pointer-events: none` on disabled. `:active` had no styling. |
+| `.bc-grid-pagination-size select` | shared button base; `--bc-grid-input-border` for the input look | Native platform chevron varied across browsers; in dark mode some browsers (notably Safari) painted a dark-on-dark glyph. No appearance reset. |
+| `.bc-grid-pagination-button:disabled` | opacity 0.5, `cursor: not-allowed` | Mismatched with shadcn DropdownMenu disabled (`cursor: default`) and the rest of the grid chrome. |
+| `.bc-grid-footer` wrapper | **no CSS rule defined** | Grid renders `<div class="bc-grid-footer">` around the pager + any custom footer ReactNode but the class had no styling — a consumer-supplied footer butted against the last row with no separator. |
+| `.bc-grid-statusbar` chrome | tokens-only, density-aware, forced-colors covered | ✅ shadcn-aligned |
+| Forced-colors / coarse-pointer | `min-width` / `min-height: 44px` already covers pagination | ✅ |
+| Reduced-motion | `*` rule zeroes `transition-duration` | ✅ existing rule covers any new transition the slice adds |
+
+### What ships
+
+`packages/react/src/internal/pagination-icons.tsx` (new) — four `Icon`-helper SVG glyphs in the same shape as `context-menu-icons.tsx`: `ChevronLeftDoubleIcon` (First), `ChevronLeftIcon` (Prev), `ChevronRightIcon` (Next), `ChevronRightDoubleIcon` (Last). 14 × 14, stroke `currentColor`, `aria-hidden="true"`, `class="bc-grid-pagination-icon"`.
+
+`packages/react/src/pagination.tsx`:
+- Replaces visible `"First" / "Prev" / "Next" / "Last"` button text with the four chevron glyphs. `aria-label` (already present) drives AT announcement; the buttons read as shadcn IconButton-style square controls.
+- New `.bc-grid-pagination-size-control` `<span>` wrapper around the native `<select>` so the chevron `::after` pseudo can sit on the inside-right edge of the control.
+
+`packages/theming/src/styles.css`:
+- New `.bc-grid-footer` rule with `border-top: 1px solid var(--bc-grid-border)`, `background: var(--bc-grid-bg)`, `color: var(--bc-grid-fg)`, padding `0.5rem var(--bc-grid-cell-padding-x)`. Tokens-only — picks up dark mode + forced-colors via the existing token cascade with no new HC override.
+- `.bc-grid-pagination-button` becomes a square `width: 2rem; min-height: 2rem; padding: 0; display: inline-flex; align-items: center; justify-content: center;` IconButton. Hover / `:active` / `:focus-visible` / `:disabled` states all keyed off `--bc-grid-*` tokens. New `:active` style uses `--bc-grid-accent-soft` for a more visible "pressed" affordance.
+- `.bc-grid-pagination-button:disabled` swapped from `cursor: not-allowed` to `cursor: default` + `pointer-events: none` to match slice 3.5.
+- `.bc-grid-pagination-button, .bc-grid-pagination-size select` shared rule gains a `transition: background-color, color, border-color, opacity` declaration using `--bc-grid-motion-duration-fast` / `--bc-grid-motion-ease-standard`. The existing reduced-motion `*` rule zeroes the transition.
+- `.bc-grid-pagination-size select` gains `appearance: none` + `-webkit-appearance: none` + an explicit `color: var(--bc-grid-fg)` so option text reads correctly in dark mode.
+- `.bc-grid-pagination-size-control::after` paints a custom 10 × 6 chevron via `mask-image` + `background: var(--bc-grid-muted-fg)`. Hover / focus-within on the wrapper brightens the chevron to `--bc-grid-fg`. `pointer-events: none` so clicks pass through to the underlying `<select>`. Forced-colors inherits via the existing `--bc-grid-muted-fg → CanvasText` mapping.
+- `.bc-grid-pagination-size select:disabled` matches the button disabled treatment for consistency when a consumer wires `<select disabled>`.
+
+### What this slice does NOT do
+
+- **No JSX reshape beyond the icon swap + the new `.bc-grid-pagination-size-control` wrapper.** `BcGridPagination` keeps its public props, the page-size dropdown uses the native `<select>` (preserves platform UX: typeahead, OS-native scrim), the row-count summary keeps `aria-live="polite"`.
+- **No behaviour change.** Disabled buttons were already non-actionable via the React `disabled={...}` prop — the `pointer-events: none` is purely a hover / cursor cleanup. Click handlers, page-clamping, server-paged manual mode, page-size routing all unchanged.
+- **No pagination-semantics change.** "Rows X-Y of Z" formatting, manual / client modes, the `paginationMode="manual"` server-paged contract all stay the same.
+- **No status-bar visual change** — the audit confirmed no shadcn-feel gap; the segment / aggregation tokens already track the cascade.
+- **No new tokens.** Every new CSS reference uses existing `--bc-grid-*` tokens. The CSS-contract test `pagination button styling reads only bc-grid tokens (no direct shadcn-token reads)` enforces this — slicing the pagination block and asserting no `var(--background`, `var(--input`, `var(--ring`, `var(--accent`, `var(--popover`, `var(--foreground`, `var(--muted-foreground` direct reads.
+
+### Tests pinned
+
+`packages/react/tests/pagination.test.tsx` — three new describe blocks (12 tests, all pure SSR markup):
+
+- **`BcGridPagination — CSS-contract markup hooks` (7 tests)** — `.bc-grid-pagination` + `aria-label="Pagination"`, child container classes, the new `.bc-grid-pagination-size-control` wrapper, `aria-live="polite"` on the summary, button class on every boundary, native `disabled` attribute emission, page-size `<option>` order + `selected`.
+- **`BcGridPagination — icon-only navigation buttons` (4 tests)** — every button renders an SVG glyph (no visible text "First" / "Prev" / "Next" / "Last"); aria-label preservation; `aria-hidden="true"` on every glyph; `stroke="currentColor"` for the cross-mode adapt.
+- **`BcGrid footer wrapper — CSS-contract markup hooks` (1 test)** — `<div class="bc-grid-footer">` rendered around the pager.
+
+`packages/theming/tests/theming.test.ts` — six new CSS-contract tests pinning the rule-level invariants (footer rule contents, transition declaration shared between button and select, disabled treatment, `appearance: none` reset, chevron `::after` token + mask, no direct shadcn-token reads in the pagination block).
+
+### Out of scope
+
+- AG-Grid-style numbered page buttons. The pager renders the current page as text ("Page X of Y"); a numbered-button variant is a behaviour change that belongs in a separate task.
+- BcStatusBar polish — the audit confirmed no shadcn-feel gap.
+- A bundled icon registry. The four chevron glyphs live in `packages/react/src/internal/pagination-icons.tsx` next to `context-menu-icons.tsx`; consolidating into one `internal/icons.tsx` is a follow-up if the icon set grows.

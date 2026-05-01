@@ -182,6 +182,111 @@ describe("@bc-grid/theming", () => {
     expect(rule).toContain("border-color: var(--bc-grid-input-border)")
   })
 
+  test("pagination footer wrapper paints with bc-grid tokens (border-top + bg + fg + cell padding)", () => {
+    // The grid renders `<div class="bc-grid-footer">` around the
+    // pager + any custom footer. Pin the rule so a refactor that
+    // accidentally drops the chrome surfaces here.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-footer {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("border-top: 1px solid var(--bc-grid-border)")
+    expect(rule).toContain("background: var(--bc-grid-bg)")
+    expect(rule).toContain("color: var(--bc-grid-fg)")
+    expect(rule).toContain("padding: 0.5rem var(--bc-grid-cell-padding-x)")
+  })
+
+  test("pagination button + select share a transition-colors declaration", () => {
+    // Smooth hover / focus / disabled transitions match the
+    // menu-item polish (slice 3.5). Pin the shared declaration
+    // so the snap-cut behaviour can't silently come back.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-pagination-button,\n.bc-grid-pagination-size select")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("transition: background-color")
+    expect(rule).toContain("var(--bc-grid-motion-duration-fast)")
+    expect(rule).toContain("var(--bc-grid-motion-ease-standard)")
+  })
+
+  test("pagination button disabled uses cursor: default + pointer-events: none (matches shadcn DropdownMenu)", () => {
+    // `cursor: not-allowed` was the legacy treatment; the rest of
+    // the grid chrome uses `cursor: default` for disabled. Pin the
+    // alignment so a future refactor doesn't accidentally fork the
+    // disabled treatment again.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-pagination-button:disabled {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("cursor: default")
+    expect(rule).toContain("pointer-events: none")
+    expect(rule).not.toContain("cursor: not-allowed")
+  })
+
+  test("pagination size <select> strips the platform chevron (appearance: none)", () => {
+    // The CSS chevron `::after` rule below depends on the platform
+    // chevron being suppressed. Pin both the appearance reset and
+    // the prefixed `-webkit-appearance` for older Safari.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const lastIdx = css.lastIndexOf(".bc-grid-pagination-size select {")
+    expect(lastIdx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", lastIdx)
+    const rule = css.slice(lastIdx, ruleEnd)
+    expect(rule).toContain("appearance: none")
+    expect(rule).toContain("-webkit-appearance: none")
+  })
+
+  test("pagination size <select> wrapper paints a custom chevron via mask + currentColor token", () => {
+    // The chevron `::after` is the load-bearing dark-mode hook —
+    // it inherits `--bc-grid-muted-fg` from the wrapper so the
+    // glyph adapts to light / dark / forced-colors automatically.
+    // Pin both the mask-image and the muted-fg token.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-pagination-size-control::after {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("background: var(--bc-grid-muted-fg)")
+    expect(rule).toContain("mask-image:")
+    expect(rule).toContain("pointer-events: none")
+  })
+
+  test("pagination button styling reads only bc-grid tokens (no direct shadcn-token reads)", () => {
+    // The brief constraint: do not read Tailwind v3-style
+    // `hsl(var(--…))` host tokens directly in chrome rules. Slice
+    // the pagination CSS block and assert no `var(--background`,
+    // `var(--input`, `var(--ring`, etc. direct reads.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-pagination {")
+    expect(idx).toBeGreaterThan(-1)
+    // Slice from the pagination block start to the next non-pagination
+    // rule (`.bc-grid-status` is the next CSS section).
+    const sectionEnd = css.indexOf(".bc-grid-status {", idx)
+    expect(sectionEnd).toBeGreaterThan(idx)
+    const block = css.slice(idx, sectionEnd)
+    // Allowed bc-grid tokens (positive examples) — sanity check
+    // the block actually consumes them.
+    expect(block).toContain("var(--bc-grid-bg)")
+    expect(block).toContain("var(--bc-grid-fg)")
+    expect(block).toContain("var(--bc-grid-muted-fg)")
+    expect(block).toContain("var(--bc-grid-input-border)")
+    // Forbidden direct reads — the block must NOT bypass the bridge.
+    // The mask-image data URL contains a hardcoded "%23000" stroke
+    // colour for the SVG pattern; that's an SVG attribute, not a
+    // CSS token read, so it's allowed (the painted colour comes from
+    // `background: var(--bc-grid-muted-fg)`).
+    expect(block).not.toMatch(/var\(--background[,)]/)
+    expect(block).not.toMatch(/var\(--input[,)]/)
+    expect(block).not.toMatch(/var\(--ring[,)]/)
+    expect(block).not.toMatch(/var\(--accent[,)]/)
+    expect(block).not.toMatch(/var\(--popover[,)]/)
+    expect(block).not.toMatch(/var\(--foreground[,)]/)
+    expect(block).not.toMatch(/var\(--muted-foreground[,)]/)
+  })
+
   test("tooltip surface no longer chains shadcn fallbacks (single-source bridge)", () => {
     // Pre-refactor the tooltip carried triple-chained fallbacks like
     // `var(--bc-grid-context-menu-bg, var(--popover, var(--background, ...)))`.
