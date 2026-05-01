@@ -512,4 +512,27 @@ describe("filter popup trigger — Radix-style ARIA linkage", () => {
     const m = html.match(/aria-controls="(bc-grid-filter-popup-[A-Za-z0-9_-]+)"/)
     expect(m).not.toBeNull()
   })
+
+  test("data-state mirrors the popup state ('open' | 'closed') for shadcn CSS hooks", () => {
+    // Radix PopoverTrigger sets `data-state="open" | "closed"` on the
+    // trigger so consumers can render an open-state highlight or
+    // animate the trigger icon. Mirrors that contract on bc-grid's
+    // funnel button — the popup root already carries `data-state`
+    // (PR #252); this is the matching trigger-side hook.
+    const closed = renderFilterPopupTriggerHtml("", false)
+    const open = renderFilterPopupTriggerHtml("", true)
+    expect(closed).toContain('data-state="closed"')
+    expect(open).toContain('data-state="open"')
+  })
+
+  test("data-state and data-bc-grid-filter-button coexist on the same button", () => {
+    // The dismiss-helper looks up `[data-bc-grid-filter-button]` to
+    // skip outside-pointer dismiss when the trigger is clicked; the
+    // shadcn `data-state` is independent. Both must coexist on the
+    // same node.
+    const html = renderFilterPopupTriggerHtml("", true)
+    expect(html).toMatch(
+      /data-bc-grid-filter-button="true"[^>]*data-state="open"|data-state="open"[^>]*data-bc-grid-filter-button="true"/,
+    )
+  })
 })

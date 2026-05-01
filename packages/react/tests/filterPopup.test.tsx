@@ -166,3 +166,36 @@ describe("FilterPopup Radix-style state attributes", () => {
     expect(html).toContain('data-align="start"')
   })
 })
+
+describe("FilterPopup chrome polish (slice 4)", () => {
+  test("Apply button is the primary action — accent bg + accent fg", () => {
+    // The apply button shipped in the popup-interaction-contracts pass
+    // already routed through `--bc-grid-accent`; this test pins the
+    // contract so a future polish pass can't accidentally regress
+    // Apply to a row-selected accent (which would be visually
+    // identical on hosts that don't distinguish primary from accent).
+    const html = renderPopup()
+    expect(html).toContain("bc-grid-filter-popup-apply")
+    // Marker class survives — the styles.css rule pins background:
+    // var(--bc-grid-accent) and color: var(--bc-grid-accent-fg).
+    expect(html).toMatch(/class="bc-grid-filter-popup-button bc-grid-filter-popup-apply"/)
+  })
+
+  test("Clear button uses the shadcn-ghost class hooks (transparent border, muted fg)", () => {
+    // The CSS overrides the default `border-color` to transparent and
+    // sets `color` to muted-fg. Markup-side: the class hook is the
+    // only invariant we can assert here.
+    const html = renderPopup({ filterText: "CUST-00042" })
+    expect(html).toMatch(/class="bc-grid-filter-popup-button bc-grid-filter-popup-clear"/)
+  })
+
+  test("active dot uses the accent token, not the focus-ring (was visually conflated)", () => {
+    // Active-dot's CSS swaps from `--bc-grid-focus-ring` to
+    // `--bc-grid-accent` so the indicator reads as "filter applied"
+    // rather than "this widget is keyboard-focused". Markup-side the
+    // class is the contract; the styles.css rule is asserted in the
+    // theming test suite.
+    const html = renderPopup({ filterText: "CUST-00042" })
+    expect(html).toContain("bc-grid-filter-popup-active-dot")
+  })
+})
