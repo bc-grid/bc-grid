@@ -50,10 +50,16 @@ function apiWithColumnState(state: BcColumnStateEntry[]): BcContextMenuContext<R
 const dummyColumn = { field: "name", header: "Name" } as BcReactGridColumn<Row>
 
 describe("context menu items", () => {
-  test("uses the minimal built-in actions by default", () => {
+  test("uses the v0.3 default built-in actions when no consumer items are supplied", () => {
     expect(resolveContextMenuItems(undefined, makeContext())).toEqual(DEFAULT_CONTEXT_MENU_ITEMS)
+    // Promoted to a richer default in `context-menu-clipboard-and-bulk-commands`
+    // so consumers get a useful menu out of the box. Column-only commands
+    // are NOT in the default — they need column context that depends on
+    // the click target and would render disabled at the empty-grid
+    // right-click point.
     expect(DEFAULT_CONTEXT_MENU_ITEMS.filter((item) => item !== "separator")).toEqual([
       "copy",
+      "copy-row",
       "copy-with-headers",
       "clear-selection",
       "clear-range",
@@ -515,6 +521,194 @@ describe("context menu — column command built-ins", () => {
       "separator",
       "hide-column",
       "autosize-column",
+    ])
+  })
+})
+
+describe("context menu — clipboard built-ins", () => {
+  // The v0.3 menu surface promotes `copy-row` to default and adds the
+  // explicit `copy-cell` variant (alongside the existing implicit
+  // `copy` that adapts to range/cell). Pin the labels, key uniqueness,
+  // and the disabled-state predicate matrix so the renderer's dispatch
+  // contract stays stable.
+  test("labels for the new clipboard items match the v0.3 strings", () => {
+    expect(contextMenuItemLabel("copy-cell")).toBe("Copy Cell")
+    expect(contextMenuItemLabel("copy-row")).toBe("Copy Row")
+  })
+
+  test("contextMenuItemKey returns the built-in id for the new clipboard items", () => {
+    expect(contextMenuItemKey("copy-cell", 0)).toBe("copy-cell")
+    expect(contextMenuItemKey("copy-row", 0)).toBe("copy-row")
+  })
+
+  test("copy-cell is disabled when the trigger has no cell context", () => {
+    expect(contextMenuItemDisabled("copy-cell", makeContext())).toBe(true)
+  })
+
+  test("copy-cell is enabled when the right-click landed on a data cell", () => {
+    expect(
+      contextMenuItemDisabled(
+        "copy-cell",
+        makeContext({
+          cell: { rowId: "r1", columnId: "name" },
+          row: { id: "r1", name: "Acme" },
+        }),
+      ),
+    ).toBe(false)
+  })
+
+  test("copy-cell ignores an active range — only the cell context matters", () => {
+    // The existing implicit `copy` adapts to range; the explicit
+    // `copy-cell` is single-cell-only by design. With a range but no
+    // cell context, copy-cell stays disabled.
+    const apiWithRange = {
+      getRangeSelection: () => ({
+        ranges: [
+          { start: { rowId: "r1", columnId: "name" }, end: { rowId: "r2", columnId: "id" } },
+        ],
+        anchor: { rowId: "r1", columnId: "name" },
+      }),
+    } as unknown as BcContextMenuContext<Row>["api"]
+    expect(contextMenuItemDisabled("copy-cell", makeContext({ api: apiWithRange }))).toBe(true)
+  })
+
+  test("copy-row is disabled when neither cell nor row context exists", () => {
+    expect(contextMenuItemDisabled("copy-row", makeContext())).toBe(true)
+  })
+
+  test("copy-row is enabled when the right-click landed on a data row", () => {
+    expect(
+      contextMenuItemDisabled(
+        "copy-row",
+        makeContext({
+          cell: { rowId: "r1", columnId: "name" },
+          row: { id: "r1", name: "Acme" },
+        }),
+      ),
+    ).toBe(false)
+  })
+
+  test("copy-row stays enabled when row context exists without an explicit cell", () => {
+    // Some consumer-driven flows (Shift+F10 with no active cell but a
+    // selected row) supply `row` without `cell`. copy-row should still
+    // be a valid action.
+    expect(
+      contextMenuItemDisabled("copy-row", makeContext({ row: { id: "r1", name: "Acme" } })),
+    ).toBe(false)
+  })
+
+  test("copy and copy-with-headers stay adaptive (cell or range)", () => {
+    // Sanity check the existing adaptive behaviour didn't regress when
+    // we added the explicit copy-cell / copy-row siblings.
+    const noContext = makeContext()
+    expect(contextMenuItemDisabled("copy", noContext)).toBe(true)
+    expect(contextMenuItemDisabled("copy-with-headers", noContext)).toBe(true)
+
+    const withCell = makeContext({
+      cell: { rowId: "r1", columnId: "name" },
+      row: { id: "r1", name: "Acme" },
+    })
+    expect(contextMenuItemDisabled("copy", withCell)).toBe(false)
+    expect(contextMenuItemDisabled("copy-with-headers", withCell)).toBe(false)
+  })
+
+  test("the new clipboard items appear in DEFAULT_CONTEXT_MENU_ITEMS for out-of-the-box use", () => {
+    // Per the brief: "It should expose expected grid commands without
+    // bsncraft needing custom wiring for basics." copy-row is one of
+    // those; copy-cell stays opt-in (most users want the implicit
+    // `copy` that also handles ranges).
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).toContain("copy-row")
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("copy-cell")
+  })
+})
+
+describe("context menu — bulk column built-ins", () => {
+  // show-all-columns and autosize-all-columns are grid-state-driven
+  // (they don't need a column context) and ship as opt-in extras
+  // alongside the existing per-column command set.
+  const visibleState: BcColumnStateEntry[] = [
+    { columnId: "name" },
+    { columnId: "amount" },
+    { columnId: "status" },
+  ]
+  const partlyHiddenState: BcColumnStateEntry[] = [
+    { columnId: "name" },
+    { columnId: "amount", hidden: true },
+    { columnId: "status" },
+  ]
+  const allHiddenState: BcColumnStateEntry[] = [
+    { columnId: "name", hidden: true },
+    { columnId: "amount", hidden: true },
+  ]
+
+  test("labels for the bulk column items match the v0.3 strings", () => {
+    expect(contextMenuItemLabel("show-all-columns")).toBe("Show All Columns")
+    expect(contextMenuItemLabel("autosize-all-columns")).toBe("Autosize All Columns")
+  })
+
+  test("contextMenuItemKey returns the built-in id for the bulk items", () => {
+    expect(contextMenuItemKey("show-all-columns", 0)).toBe("show-all-columns")
+    expect(contextMenuItemKey("autosize-all-columns", 0)).toBe("autosize-all-columns")
+  })
+
+  test("show-all-columns is disabled when every column is already visible", () => {
+    expect(
+      contextMenuItemDisabled(
+        "show-all-columns",
+        makeContext({ api: apiWithColumnState(visibleState) }),
+      ),
+    ).toBe(true)
+  })
+
+  test("show-all-columns is enabled when at least one column is hidden", () => {
+    expect(
+      contextMenuItemDisabled(
+        "show-all-columns",
+        makeContext({ api: apiWithColumnState(partlyHiddenState) }),
+      ),
+    ).toBe(false)
+  })
+
+  test("autosize-all-columns is disabled when every column is hidden (nothing to measure)", () => {
+    expect(
+      contextMenuItemDisabled(
+        "autosize-all-columns",
+        makeContext({ api: apiWithColumnState(allHiddenState) }),
+      ),
+    ).toBe(true)
+  })
+
+  test("autosize-all-columns is enabled whenever at least one column is visible", () => {
+    expect(
+      contextMenuItemDisabled(
+        "autosize-all-columns",
+        makeContext({ api: apiWithColumnState(visibleState) }),
+      ),
+    ).toBe(false)
+    expect(
+      contextMenuItemDisabled(
+        "autosize-all-columns",
+        makeContext({ api: apiWithColumnState(partlyHiddenState) }),
+      ),
+    ).toBe(false)
+  })
+
+  test("bulk column items are NOT in DEFAULT_CONTEXT_MENU_ITEMS (opt-in)", () => {
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("show-all-columns")
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("autosize-all-columns")
+  })
+
+  test("resolveContextMenuItems accepts the bulk column items in a consumer-supplied list", () => {
+    const items = resolveContextMenuItems<Row>(
+      ["hide-column", "show-all-columns", "separator", "autosize-column", "autosize-all-columns"],
+      makeContext({ api: apiWithColumnState(partlyHiddenState) }),
+    )
+    expect(items).toEqual([
+      "hide-column",
+      "show-all-columns",
+      "separator",
+      "autosize-column",
+      "autosize-all-columns",
     ])
   })
 })

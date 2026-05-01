@@ -72,8 +72,49 @@ const AutosizeIcon = (
   </Icon>
 )
 
+const AutosizeAllIcon = (
+  <Icon>
+    {/* Two stacked autosize bars — multi-column fit */}
+    <path d="M4 4 2 6l2 2" />
+    <path d="M12 4l2 2-2 2" />
+    <path d="M2 6h12" />
+    <path d="M4 10l-2 2 2 2" />
+    <path d="M12 10l2 2-2 2" />
+    <path d="M2 12h12" />
+  </Icon>
+)
+
+const ShowAllColumnsIcon = (
+  <Icon>
+    {/* Eye glyph (counterpart to HideColumnIcon's slashed eye) */}
+    <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z" />
+    <circle cx="8" cy="8" r="1.6" />
+  </Icon>
+)
+
+const CopyCellIcon = (
+  <Icon>
+    {/* Single-rectangle copy-of glyph for the explicit single-cell variant */}
+    <rect x="3" y="5" width="9" height="9" rx="1.4" />
+    <path d="M5 3h7a1 1 0 0 1 1 1v7" />
+  </Icon>
+)
+
+const CopyRowIcon = (
+  <Icon>
+    {/* Row-shaped copy glyph: a wide stripe + a row "ditto" mark */}
+    <rect x="2" y="4" width="12" height="3" rx="1" />
+    <rect x="2" y="9" width="12" height="3" rx="1" />
+    <path d="M3 4v8" />
+  </Icon>
+)
+
 export function contextMenuBuiltinIcon(item: BcContextMenuBuiltinItem): ReactNode | null {
   switch (item) {
+    case "copy-cell":
+      return CopyCellIcon
+    case "copy-row":
+      return CopyRowIcon
     case "pin-column-left":
       return PinLeftIcon
     case "pin-column-right":
@@ -82,8 +123,12 @@ export function contextMenuBuiltinIcon(item: BcContextMenuBuiltinItem): ReactNod
       return UnpinIcon
     case "hide-column":
       return HideColumnIcon
+    case "show-all-columns":
+      return ShowAllColumnsIcon
     case "autosize-column":
       return AutosizeIcon
+    case "autosize-all-columns":
+      return AutosizeAllIcon
     default:
       return null
   }

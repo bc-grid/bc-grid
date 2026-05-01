@@ -125,6 +125,32 @@ export function BcGridContextMenu<TRow>({
       void copyRangeToClipboard(range, api, {
         includeHeaders: item === "copy-with-headers",
       }).catch(() => undefined)
+    } else if (item === "copy-cell") {
+      // Explicit single-cell variant: ignores any active range and
+      // copies just the right-clicked cell. The disabled predicate
+      // already guarded on `context.cell`, but re-check defensively
+      // because activate() can fire after async predicate-state churn.
+      if (context.cell) {
+        const range = { start: context.cell, end: context.cell }
+        void copyRangeToClipboard(range, api).catch(() => undefined)
+      }
+    } else if (item === "copy-row") {
+      // Build a range that spans every visible column of the
+      // right-clicked row, then dispatch through the existing
+      // copy-range path. `resolvedColumns` is the post-state ordered
+      // visible-column list, so the clipboard TSV matches the grid's
+      // visible row order.
+      if (context.cell && resolvedColumns.length > 0) {
+        const firstColumnId = resolvedColumns[0]?.columnId
+        const lastColumnId = resolvedColumns[resolvedColumns.length - 1]?.columnId
+        if (firstColumnId && lastColumnId) {
+          const range = {
+            start: { rowId: context.cell.rowId, columnId: firstColumnId },
+            end: { rowId: context.cell.rowId, columnId: lastColumnId },
+          }
+          void copyRangeToClipboard(range, api).catch(() => undefined)
+        }
+      }
     } else if (item === "clear-selection") {
       clearSelection()
     } else if (item === "clear-range") {
@@ -146,6 +172,21 @@ export function BcGridContextMenu<TRow>({
     ) {
       const targetColumnId = context.cell?.columnId
       if (targetColumnId) dispatchColumnCommand(api, item, targetColumnId)
+    } else if (item === "show-all-columns") {
+      // Bulk show: collapse every hidden flag to false in a single
+      // setColumnState write so the grid renders once, not N times.
+      const state = api.getColumnState()
+      const next = state.map((entry) =>
+        entry.hidden === true ? { ...entry, hidden: false } : entry,
+      )
+      api.setColumnState(next)
+    } else if (item === "autosize-all-columns") {
+      // Bulk autosize: loop the existing per-column API. Each call
+      // measures + writes column state; multiple writes are acceptable
+      // here because autoSizeColumn is rarely on the hot path.
+      for (const entry of api.getColumnState()) {
+        if (entry.hidden !== true) api.autoSizeColumn(entry.columnId)
+      }
     }
     onClose()
   }
