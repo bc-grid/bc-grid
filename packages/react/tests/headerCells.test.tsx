@@ -48,6 +48,55 @@ function renderColumn(column: ResolvedColumn<Row>, showColumnMenu = true): strin
   )
 }
 
+function renderFilterPopupTriggerHtml(
+  filterText: string,
+  filterPopupOpen: boolean,
+  header = "Account",
+  columnId = "account",
+): string {
+  const column: ResolvedColumn<Row> = {
+    align: "left",
+    columnId,
+    left: 0,
+    pinned: null,
+    position: 0,
+    source: {
+      columnId,
+      field: "name",
+      header,
+      filter: { type: "text", variant: "popup" },
+    },
+    width: 200,
+  }
+  return renderToStaticMarkup(
+    renderHeaderCell({
+      column,
+      domBaseId: "grid",
+      headerHeight: 40,
+      index: 0,
+      filterText,
+      filterPopupOpen,
+      onColumnMenu: () => {},
+      onConsumeReorderClickSuppression: () => false,
+      onOpenFilterPopup: () => {},
+      onReorderEnd: () => {},
+      onReorderMove: () => {},
+      onReorderStart: () => {},
+      onResizeEnd: () => {},
+      onResizeMove: () => {},
+      onResizeStart: () => {},
+      onSort: () => {},
+      pinnedEdge: null,
+      reorderingColumnId: undefined,
+      scrollLeft: 0,
+      showColumnMenu: true,
+      sortState: [],
+      totalWidth: 200,
+      viewportWidth: 200,
+    }),
+  )
+}
+
 describe("renderHeaderCell resize affordance", () => {
   test("marks resizable headers for the always-visible affordance", () => {
     const html = renderColumn(baseColumn)
@@ -419,5 +468,48 @@ describe("FilterPopup — SSR markup contract", () => {
     expect(active).toContain('data-active="true"')
     // Clear button is disabled when the filter is empty.
     expect(empty).toContain("disabled=")
+  })
+})
+
+describe("filter popup trigger — Radix-style ARIA linkage", () => {
+  test("aria-haspopup='dialog' is always set on the trigger", () => {
+    const closed = renderFilterPopupTriggerHtml("", false)
+    const open = renderFilterPopupTriggerHtml("", true)
+    expect(closed).toContain('aria-haspopup="dialog"')
+    expect(open).toContain('aria-haspopup="dialog"')
+  })
+
+  test("aria-expanded toggles with the popup state (omitted when closed)", () => {
+    const closed = renderFilterPopupTriggerHtml("", false)
+    const open = renderFilterPopupTriggerHtml("", true)
+    // Closed: attribute omitted entirely (omitted-vs-false semantics so
+    // CSS `[aria-expanded]` exists/not-exists patterns work cleanly).
+    expect(closed).not.toMatch(/aria-expanded=/)
+    // Open: aria-expanded="true" — React renders boolean true as the
+    // string "true" in static markup.
+    expect(open).toMatch(/aria-expanded="true"/)
+  })
+
+  test("aria-controls links the trigger to the popup id while open (Radix Popover convention)", () => {
+    // Closed: no aria-controls (the dialog isn't in the DOM).
+    const closed = renderFilterPopupTriggerHtml("", false)
+    expect(closed).not.toMatch(/aria-controls=/)
+
+    // Open: aria-controls=<filterPopupDomId(columnId)>. The id matches
+    // what the FilterPopup itself uses for its own root, so AT users
+    // can navigate from the trigger to the popup via the linkage.
+    const open = renderFilterPopupTriggerHtml("", true, "Account", "account")
+    expect(open).toContain('aria-controls="bc-grid-filter-popup-account"')
+  })
+
+  test("aria-controls uses domToken to escape special characters in column ids", () => {
+    // domToken normalises non-ID-safe characters; the helper guarantees
+    // the popup root and the trigger's aria-controls agree on the
+    // generated id.
+    const html = renderFilterPopupTriggerHtml("", true, "Customer Number", "customer:number/v1")
+    // domToken converts non-[a-zA-Z0-9_-] characters to `-`; the
+    // generated id is purely ascii and HTML-id-safe.
+    const m = html.match(/aria-controls="(bc-grid-filter-popup-[A-Za-z0-9_-]+)"/)
+    expect(m).not.toBeNull()
   })
 })

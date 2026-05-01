@@ -73,6 +73,15 @@ export interface SortModifiers {
  *
  * Exported for unit testing; `renderHeaderCell` uses it inline.
  */
+/**
+ * Stable DOM id for a column's filter popup. Single source of truth so
+ * the popup root and the trigger button's `aria-controls` linkage agree.
+ * Exported for unit testing.
+ */
+export function filterPopupDomId(columnId: ColumnId): string {
+  return `bc-grid-filter-popup-${domToken(columnId)}`
+}
+
 export function ariaSortFor(
   direction: "asc" | "desc" | undefined,
   sortable: boolean,
@@ -301,6 +310,11 @@ export function renderHeaderCell<TRow>({
         <button
           aria-haspopup="dialog"
           aria-expanded={filterPopupOpen ? true : undefined}
+          // Radix-style trigger linkage: while the popup is open, the
+          // trigger announces what surface it controls. Stable id is
+          // shared with `<FilterPopup>`'s own DOM id via
+          // `filterPopupDomId(columnId)`.
+          aria-controls={filterPopupOpen ? filterPopupDomId(column.columnId) : undefined}
           aria-label={`Filter ${headerLabel}${filterText ? " (active)" : ""}`}
           className={classNames(
             "bc-grid-header-filter-button",
@@ -1202,7 +1216,7 @@ export function FilterPopup({
   onClose,
   messages,
 }: FilterPopupProps): ReactNode {
-  const filterId = `bc-grid-filter-popup-${domToken(columnId)}`
+  const filterId = filterPopupDomId(columnId)
   const titleId = `${filterId}-title`
   const isActive = filterText.length > 0
   const popupRef = useRef<HTMLDivElement | null>(null)
