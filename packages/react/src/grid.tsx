@@ -17,7 +17,6 @@ import type {
 } from "@bc-grid/core"
 import { Virtualizer } from "@bc-grid/virtualizer"
 import {
-  type CSSProperties,
   type ComponentType,
   type FocusEvent,
   type KeyboardEvent,
@@ -41,7 +40,12 @@ import {
   ColumnVisibilityMenu,
   type ColumnVisibilityMenuAnchor,
 } from "./columnVisibility"
-import { createDetailToggleColumn } from "./detailColumn"
+import {
+  BcDetailPanelSlot,
+  createDetailToggleColumn,
+  detailRowHeight,
+  resolveDetailPanelHeight,
+} from "./detailColumn"
 import { nextActiveCellAfterEdit } from "./editingStateMachine"
 import { EditorPortal, defaultTextEditor } from "./editorPortal"
 import {
@@ -626,15 +630,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   ])
   const aggregationRows = useMemo(() => allRowEntries.map((entry) => entry.row), [allRowEntries])
   const getDetailHeight = useCallback(
-    (entry: DataRowEntry<TRow>) => {
-      if (!hasDetail) return 0
-      const params = { row: entry.row, rowId: entry.rowId, rowIndex: entry.index }
-      const height =
-        typeof detailPanelHeight === "function"
-          ? detailPanelHeight(params)
-          : (detailPanelHeight ?? DEFAULT_DETAIL_HEIGHT)
-      return Math.max(0, height)
-    },
+    (entry: DataRowEntry<TRow>) =>
+      resolveDetailPanelHeight({
+        defaultHeight: DEFAULT_DETAIL_HEIGHT,
+        detailPanelHeight,
+        entry,
+        hasDetail,
+      }),
     [hasDetail, detailPanelHeight],
   )
 
@@ -658,6 +660,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     if (hasDetail) {
       syntheticColumns.push(
         createDetailToggleColumn<TRow>({
+          domBaseId,
           expansionState,
           setExpansionState,
         }),
@@ -675,6 +678,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     return syntheticColumns.length > 0 ? [...syntheticColumns, ...columns] : columns
   }, [
     columns,
+    domBaseId,
     hasDetail,
     expansionState,
     props.checkboxSelection,
@@ -865,7 +869,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       rowEntries.forEach((entry, index) => {
         if (!isDataRowEntry(entry)) return
         if (!expansionState.has(entry.rowId)) return
-        next.setRowHeight(index, defaultRowHeight + getDetailHeight(entry))
+        next.setRowHeight(index, detailRowHeight(defaultRowHeight, getDetailHeight(entry)))
       })
     }
     next.setScrollTop(scrollOffsetRef.current.top)
@@ -2024,24 +2028,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                       }),
                     )}
                     {expanded && renderDetailPanel ? (
-                      <div
-                        className="bc-grid-detail-panel"
-                        role="region"
-                        aria-label="Detail"
-                        style={detailPanelStyle(
-                          defaultRowHeight,
-                          detailHeight,
-                          virtualWindow.totalWidth,
-                        )}
-                        onClick={(event) => event.stopPropagation()}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                      >
-                        {renderDetailPanel({
-                          row: entry.row,
-                          rowId: entry.rowId,
-                          rowIndex: entry.index,
-                        })}
-                      </div>
+                      <BcDetailPanelSlot
+                        colSpan={resolvedColumns.length}
+                        domBaseId={domBaseId}
+                        height={detailHeight}
+                        renderDetailPanel={renderDetailPanel}
+                        row={entry.row}
+                        rowId={entry.rowId}
+                        rowIndex={entry.index}
+                        top={defaultRowHeight}
+                        width={virtualWindow.totalWidth}
+                      />
                     ) : null}
                   </div>
                 )
@@ -2255,16 +2252,4 @@ function buildColumnVisibilityItems<TRow>(
 
 function columnVisibilityLabel<TRow>(column: BcReactGridColumn<TRow>, columnId: ColumnId): string {
   return typeof column.header === "string" ? column.header : columnId
-}
-
-function detailPanelStyle(top: number, height: number, width: number): CSSProperties {
-  return {
-    height,
-    left: 0,
-    minWidth: "100%",
-    overflow: "auto",
-    position: "absolute",
-    top,
-    width: Math.max(width, 1),
-  }
 }

@@ -1078,6 +1078,14 @@ common child-panel states: `bc-grid-detail-section`,
 `bc-grid-detail-nested-grid`, `bc-grid-detail-empty`,
 `bc-grid-detail-loading`, and `bc-grid-detail-error`.
 
+Recommended child-grid pattern: keep detail content inside one or more
+`bc-grid-detail-section` blocks, give nested tables/grids their own heading via
+`aria-labelledby`, and use stable keys from the child records. Avoid autofocus
+on mount; the disclosure button remains the user's focus anchor after
+expand/collapse. Use `bc-grid-detail-empty`, `bc-grid-detail-loading`, and
+`bc-grid-detail-error` for async states instead of resizing text or animating
+row height.
+
 ```tsx
 <BcGrid<Customer>
   // ...
