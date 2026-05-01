@@ -1747,6 +1747,31 @@ select.bc-grid-editor-input {
   padding: 0.5rem 0.625rem;
 }
 
+/*
+ * Filters panel empty state. Slightly taller card centred horizontally
+ * so the slashed-funnel glyph + "No active filters" label read as a
+ * proper shadcn-style empty surface rather than a one-line muted
+ * sentence. The icon is a separate flex child so the gap token
+ * controls the spacing between glyph and label.
+ */
+.bc-grid-filters-panel-empty {
+  min-height: 4.5rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.875rem 0.75rem;
+  text-align: center;
+}
+
+.bc-grid-filters-panel-empty-icon {
+  color: var(--bc-grid-muted-fg);
+  opacity: 0.7;
+}
+
+.bc-grid-filters-panel-empty-label {
+  font-weight: 500;
+}
+
 .bc-grid-columns-panel-group-chip {
   display: inline-flex;
   max-width: 100%;
@@ -1804,6 +1829,18 @@ select.bc-grid-editor-input {
   border-radius: calc(var(--bc-grid-radius) - 2px);
   background: color-mix(in srgb, var(--bc-grid-sidebar-bg) 72%, var(--bc-grid-bg));
   padding: 0.625rem;
+  /*
+   * Smooth border + background transitions so the focus-within ring
+   * (driven by descendant inputs) eases in rather than snap-cutting,
+   * matching shadcn `<Card>` chrome quality. The `*` reduced-motion
+   * rule zeroes them automatically.
+   */
+  transition: border-color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
+    background-color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
+}
+
+.bc-grid-filters-panel-item:focus-within {
+  border-color: var(--bc-grid-focus-ring);
 }
 
 .bc-grid-filters-panel-item-header {
@@ -1832,6 +1869,9 @@ select.bc-grid-editor-input {
 
 .bc-grid-filters-panel-clear,
 .bc-grid-filters-panel-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 1.75rem;
   border: 1px solid var(--bc-grid-border);
   border-radius: calc(var(--bc-grid-radius) - 2px);
@@ -1858,13 +1898,35 @@ select.bc-grid-editor-input {
 .bc-grid-filters-panel-clear:hover:not(:disabled),
 .bc-grid-filters-panel-remove:hover {
   background: var(--bc-grid-row-hover);
+  border-color: var(--bc-grid-input-border);
 }
 
+/*
+ * Pressed state on both panel buttons. Mirrors shadcn `<Button
+ * variant="outline">` press feel — accent-soft surface flashes on
+ * tap-down so the click registers visually before the column-filter
+ * state updates. Also covers the keyboard Space / Enter activation
+ * cycle.
+ */
+.bc-grid-filters-panel-clear:active:not(:disabled),
+.bc-grid-filters-panel-remove:active {
+  background: var(--bc-grid-accent-soft);
+  border-color: var(--bc-grid-input-border);
+  color: var(--bc-grid-fg);
+}
+
+/*
+ * Disabled treatment matches shadcn `<DropdownMenuItem disabled>` and
+ * the rest of the bc-grid chrome — `cursor: default` + drop pointer
+ * events instead of the legacy `cursor: not-allowed`. Same alignment
+ * as the pagination disabled rule (slice 3.5).
+ */
 .bc-grid-filters-panel-clear:disabled {
   background: transparent;
   color: var(--bc-grid-muted-fg);
-  cursor: not-allowed;
+  cursor: default;
   opacity: 0.55;
+  pointer-events: none;
 }
 
 .bc-grid-filters-panel-clear:focus-visible,
