@@ -86,6 +86,21 @@ apiRef.current?.invalidateServerRows({ scope: "rows", rowIds: [customerId] })
 
 // User-visible reload affordance:
 apiRef.current?.refreshServerRows({ purge: true })`
+
+const diagnosticsSnippet = `const diagnostics = apiRef.current?.getServerDiagnostics()
+
+if (diagnostics) {
+  console.info("customers grid query", {
+    mode: diagnostics.mode,
+    rowCount: diagnostics.rowCount,
+    search: diagnostics.view.search ?? "",
+    sort: diagnostics.view.sort,
+    filter: diagnostics.view.filter ?? null,
+    lastLoadStatus: diagnostics.lastLoad.status,
+    lastQuery: diagnostics.lastLoad.query,
+    cache: diagnostics.cache.states,
+  })
+}`
 ---
 
 <DocsLayout
@@ -206,6 +221,25 @@ apiRef.current?.refreshServerRows({ purge: true })`
         <span>BcServerGridApi</span>
       </div>
       <Code code={refreshSnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Diagnostics</h2>
+    <p class="section-note">
+      For a bsncraft-style customers grid, read <code>getServerDiagnostics()</code> from the
+      <code>BcServerGridApi</code> when debugging a support ticket or server endpoint. The snapshot
+      includes the current <code>ServerViewState</code>, row count, cache states, pending mutation
+      count, and the last paged/block/tree load status. Log this beside the API request ID to see
+      exactly what bc-grid asked the server for. The diagnostics summary omits cached row payloads;
+      use <code>getServerRowModelState()</code> only when you need the full state.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>debug-server-query.ts</span>
+        <span>diagnostics snapshot</span>
+      </div>
+      <Code code={diagnosticsSnippet} lang="ts" theme="github-dark" />
     </div>
   </section>
 

@@ -490,6 +490,12 @@ const serverApi = [
     "partial",
     "Returns a static snapshot over current props and base selection.",
   ],
+  [
+    "getServerDiagnostics",
+    "() => ServerRowModelDiagnostics",
+    "implemented",
+    "Summarizes current query, row count, cache state, pending mutations, and last load status for developer logging.",
+  ],
 ]
 
 const coreTypes = [
@@ -603,11 +609,17 @@ const reactCoreReExports = [
   "RowId",
   "ServerBlockQuery",
   "ServerBlockResult",
+  "ServerCacheDiagnostics",
   "ServerLoadContext",
+  "ServerLoadDiagnostics",
+  "ServerLoadStatus",
   "ServerPagedQuery",
   "ServerPagedResult",
+  "ServerQueryDiagnostics",
+  "ServerRowModelDiagnostics",
   "ServerTreeQuery",
   "ServerTreeResult",
+  "ServerViewDiagnostics",
 ]
 
 const editingProtocol = [

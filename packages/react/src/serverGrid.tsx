@@ -12,6 +12,7 @@ import type {
   ServerInvalidation,
   ServerMutationResult,
   ServerPagedResult,
+  ServerRowModelDiagnostics,
   ServerRowModelMode,
   ServerRowModelState,
   ServerRowPatch,
@@ -37,6 +38,7 @@ const DEFAULT_SERVER_BLOCK_SIZE = 100
 interface PagedServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
   error: unknown
+  getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
   getModelState: () => ServerRowModelState<TRow>
   handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
@@ -57,6 +59,7 @@ interface PagedServerState<TRow> {
 interface InfiniteServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
   error: unknown
+  getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
   getModelState: () => ServerRowModelState<TRow>
   handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
@@ -83,6 +86,7 @@ interface TreeServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
   columns: readonly BcReactGridColumn<TRow>[]
   error: unknown
+  getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
   getModelState: () => ServerRowModelState<TRow>
   handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
@@ -314,6 +318,13 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
           selection: toServerSelection(gridApiRef.current?.getSelection(), paged.view),
           view: paged.view,
         })
+      },
+      getServerDiagnostics() {
+        const selection = gridApiRef.current?.getSelection()
+        if (mode === "paged") return paged.getDiagnostics(selection)
+        if (mode === "infinite") return infinite.getDiagnostics(selection)
+        if (mode === "tree") return tree.getDiagnostics(selection)
+        return paged.getDiagnostics(selection)
       },
     }
   }, [
@@ -672,10 +683,22 @@ function usePagedServerState<TRow>(
       }),
     [props.rowModel, result?.viewKey, rowCount, view, viewKey],
   )
+  const getDiagnostics = useCallback(
+    (selection?: BcSelection) =>
+      modelRef.current.getDiagnostics({
+        mode: props.rowModel,
+        rowCount,
+        selection: toServerSelection(selection, view),
+        view,
+        viewKey: result?.viewKey ?? viewKey,
+      }),
+    [props.rowModel, result?.viewKey, rowCount, view, viewKey],
+  )
 
   return {
     applyRowUpdate,
     error,
+    getDiagnostics,
     getModelState,
     handleFilterChange,
     handleSortChange,
@@ -915,10 +938,22 @@ function useInfiniteServerState<TRow>(
       }),
     [props.rowModel, rowCount, view, viewKey],
   )
+  const getDiagnostics = useCallback(
+    (selection?: BcSelection) =>
+      modelRef.current.getDiagnostics({
+        mode: props.rowModel,
+        rowCount,
+        selection: toServerSelection(selection, view),
+        view,
+        viewKey,
+      }),
+    [props.rowModel, rowCount, view, viewKey],
+  )
 
   return {
     applyRowUpdate,
     error,
+    getDiagnostics,
     getModelState,
     handleFilterChange,
     handleSortChange,
@@ -1203,11 +1238,23 @@ function useTreeServerState<TRow>(
       }),
     [props.rowModel, rows.length, view, viewKey],
   )
+  const getDiagnostics = useCallback(
+    (selection?: BcSelection) =>
+      modelRef.current.getDiagnostics({
+        mode: props.rowModel,
+        rowCount: rows.length,
+        selection: toServerSelection(selection, view),
+        view,
+        viewKey,
+      }),
+    [props.rowModel, rows.length, view, viewKey],
+  )
 
   return {
     applyRowUpdate,
     columns,
     error,
+    getDiagnostics,
     getModelState,
     handleFilterChange,
     handleSortChange,

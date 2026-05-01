@@ -24,14 +24,20 @@ import type {
   RowId,
   ServerBlockQuery,
   ServerBlockResult,
+  ServerCacheDiagnostics,
   ServerLoadContext,
+  ServerLoadDiagnostics,
+  ServerLoadStatus,
   ServerMutationResult,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerQueryDiagnostics,
+  ServerRowModelDiagnostics,
   ServerRowPatch,
   ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
+  ServerViewDiagnostics,
 } from "@bc-grid/core"
 import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
 
@@ -678,14 +684,20 @@ export type {
   RowId,
   ServerBlockQuery,
   ServerBlockResult,
+  ServerCacheDiagnostics,
   ServerLoadContext,
+  ServerLoadDiagnostics,
+  ServerLoadStatus,
   ServerMutationResult,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerQueryDiagnostics,
+  ServerRowModelDiagnostics,
   ServerRowPatch,
   ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
+  ServerViewDiagnostics,
 }
 
 export type { BcNormalisedRange, BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"

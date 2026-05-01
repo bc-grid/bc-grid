@@ -15,6 +15,7 @@ Pulled in transitively by `@bc-grid/react` when consumers use `<BcServerGrid>`. 
 - `createServerRowModel<TRow>()` — factory
 - `ServerBlockCache<TRow>` — cache class
 - `defaultBlockKey({ mode, ... })` — stable block-key formatter
+- `summarizeServerViewState`, `summarizeServerQuery`, `summarizeServerCache`, `summarizeServerRowModelState` — pure diagnostics helpers for request logging and developer panels
 
 The React-facing wiring lives in `@bc-grid/react/serverGrid` (the `<BcServerGrid>` component).
 
