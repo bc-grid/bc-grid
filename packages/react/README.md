@@ -118,7 +118,7 @@ not combine `defaultSearchText` with `searchText` on the same grid.
 
 ## Bundle size
 
-Current main baseline for `core+virtualizer+animations+react`: 64.05 KiB gzipped. Enforced under a 100 KiB hard cap with a 10% per-PR drift guard from the latest accepted main baseline by `tools/bundle-size`.
+Current main baseline for `core+virtualizer+animations+react`: 72.75 KiB gzipped. Enforced under a 100 KiB hard cap with a 10% per-PR drift guard from the latest accepted main baseline by `tools/bundle-size`.
 
 ## Documentation
 
