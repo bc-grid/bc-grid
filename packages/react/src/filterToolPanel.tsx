@@ -1,5 +1,6 @@
 import type { BcColumnFilter, ColumnId } from "@bc-grid/core"
 import { type ReactNode, useCallback, useId, useMemo } from "react"
+import { summarizeColumnFilter } from "./filter"
 import { domToken, flattenColumnDefinitions } from "./gridInternals"
 import { FilterEditorBody } from "./headerCells"
 import { FilterEmptyIcon, XIcon } from "./internal/panel-icons"
@@ -50,44 +51,13 @@ export function BcFiltersToolPanel<TRow>({
       <ul className="bc-grid-filters-panel-list" aria-label="Active filters">
         {hasFilters ? (
           activeItems.map((item) => (
-            <li
-              aria-labelledby={`${idBase}-${domToken(item.columnId)}-title`}
-              className="bc-grid-filters-panel-item"
+            <BcFiltersToolPanelItem
+              context={context}
+              idBase={idBase}
+              item={item}
               key={item.columnId}
-            >
-              <div className="bc-grid-filters-panel-item-header">
-                <h3
-                  className="bc-grid-filters-panel-item-title"
-                  id={`${idBase}-${domToken(item.columnId)}-title`}
-                >
-                  {item.label}
-                </h3>
-                <button
-                  aria-label={`Clear filter on ${item.label}`}
-                  className="bc-grid-filters-panel-remove"
-                  type="button"
-                  onClick={() => clearFilter(item.columnId)}
-                >
-                  {XIcon}
-                </button>
-              </div>
-              <div className="bc-grid-filters-panel-control">
-                <FilterEditorBody
-                  allowEscapeKeyPropagation
-                  filterId={`${idBase}-${domToken(item.columnId)}-control`}
-                  filterLabel={context.messages.filterAriaLabel({ columnLabel: item.label })}
-                  filterText={item.filterText}
-                  filterType={item.type}
-                  getSetFilterOptions={
-                    context.getSetFilterOptions
-                      ? () => context.getSetFilterOptions?.(item.columnId) ?? []
-                      : undefined
-                  }
-                  messages={context.messages}
-                  onFilterChange={(next) => context.setColumnFilterText(item.columnId, next)}
-                />
-              </div>
-            </li>
+              onClear={clearFilter}
+            />
           ))
         ) : (
           <li className="bc-grid-filters-panel-empty">
@@ -97,6 +67,86 @@ export function BcFiltersToolPanel<TRow>({
         )}
       </ul>
     </section>
+  )
+}
+
+interface FilterToolPanelItemProps<TRow> {
+  context: BcSidebarContext<TRow>
+  idBase: string
+  item: FilterToolPanelItem
+  onClear: (columnId: ColumnId) => void
+}
+
+/**
+ * Single panel row. Reads as a deliberate summary card by default
+ * (column label + operator chip + compact value summary + per-row
+ * clear), and expands to the full inline editor body when the user
+ * wants to refine the filter via the "Edit" button. Keeping the
+ * editor mounted only while expanded avoids paying for the full
+ * `<select>` / `<input>` chrome on every active filter when the host
+ * has many columns filtered at once.
+ */
+function BcFiltersToolPanelItem<TRow>({
+  context,
+  idBase,
+  item,
+  onClear,
+}: FilterToolPanelItemProps<TRow>): ReactNode {
+  const slug = `${idBase}-${domToken(item.columnId)}`
+  const titleId = `${slug}-title`
+  const controlId = `${slug}-control`
+  const setFilterOptions = context.getSetFilterOptions?.(item.columnId)
+  const summary = summarizeColumnFilter(
+    item.filterText,
+    item.type,
+    setFilterOptions ? { setFilterOptions } : undefined,
+  )
+
+  return (
+    <li aria-labelledby={titleId} className="bc-grid-filters-panel-item">
+      <div className="bc-grid-filters-panel-item-header">
+        <h3 className="bc-grid-filters-panel-item-title" id={titleId}>
+          {item.label}
+        </h3>
+        <button
+          aria-label={`Clear filter on ${item.label}`}
+          className="bc-grid-filters-panel-remove"
+          type="button"
+          onClick={() => onClear(item.columnId)}
+        >
+          {XIcon}
+        </button>
+      </div>
+      {summary ? (
+        <p className="bc-grid-filters-panel-item-summary">
+          <span className="bc-grid-filters-panel-item-operator">{summary.operatorLabel}</span>
+          {summary.valueSummary ? (
+            <span className="bc-grid-filters-panel-item-value">{summary.valueSummary}</span>
+          ) : null}
+          {summary.modifiers?.map((modifier) => (
+            <span className="bc-grid-filters-panel-item-modifier" key={modifier}>
+              {modifier}
+            </span>
+          ))}
+        </p>
+      ) : null}
+      <div className="bc-grid-filters-panel-control" id={controlId}>
+        <FilterEditorBody
+          allowEscapeKeyPropagation
+          filterId={`${controlId}-editor`}
+          filterLabel={context.messages.filterAriaLabel({ columnLabel: item.label })}
+          filterText={item.filterText}
+          filterType={item.type}
+          getSetFilterOptions={
+            context.getSetFilterOptions
+              ? () => context.getSetFilterOptions?.(item.columnId) ?? []
+              : undefined
+          }
+          messages={context.messages}
+          onFilterChange={(next) => context.setColumnFilterText(item.columnId, next)}
+        />
+      </div>
+    </li>
   )
 }
 

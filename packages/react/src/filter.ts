@@ -529,6 +529,150 @@ export function filterSetFilterOptions(
 }
 
 /**
+ * Compact summary of an active column filter — the column label,
+ * operator, and a tight value preview that the Filters tool panel
+ * paints in lieu of re-rendering every editor body. Returned shape is
+ * a pure data structure: hosts can compose it however they want
+ * (concatenated sentence, separate chips, etc.). Returns `null` when
+ * the filter draft is inactive (empty value, partial range, blank set
+ * with no `blank` op, etc.) so the panel knows to skip the row.
+ *
+ * Pure helper — no React imports — so it stays unit-testable without
+ * a DOM and so non-React consumers (e.g. server-row-model adapters
+ * that surface a "filter chips" row) can reuse the same wording.
+ */
+export interface FilterSummary {
+  /** Human-readable operator label. e.g. `"contains"`, `"is between"`. */
+  operatorLabel: string
+  /** Compact value display. e.g. `"cash"`, `"100 – 200"`, `"Cash, Cheque +1 more"`. */
+  valueSummary: string
+  /** Modifier flags (text only). e.g. `["case sensitive", "regex"]`. */
+  modifiers?: readonly string[]
+}
+
+export interface FilterSummaryOptions {
+  /**
+   * Optional set-option label provider. When supplied, set-filter
+   * value summaries map raw values to their human-readable labels
+   * (e.g. status code `"AC"` → `"Active"`); without it, the raw
+   * stored values are shown.
+   */
+  setFilterOptions?: readonly SetFilterOption[]
+  /**
+   * Maximum number of set-filter values shown verbatim before the
+   * summary collapses the tail to `"+N more"`. Defaults to 3.
+   */
+  setSummaryLimit?: number
+}
+
+/**
+ * Build a compact human-readable summary for a column's active filter.
+ * `null` when the draft is inactive (empty / partial / unparseable).
+ *
+ * The operator labels are intentionally lowercase short phrases so a
+ * panel row can read as `"<column> <operator> <value>"` without
+ * extra punctuation. Range values use the EN DASH `–` between
+ * bounds (typographic convention for ranges); set summaries cap at
+ * `setSummaryLimit` (default 3) and append `"+N more"` for the tail.
+ */
+export function summarizeColumnFilter(
+  raw: string,
+  filterType: BcColumnFilter["type"],
+  options: FilterSummaryOptions = {},
+): FilterSummary | null {
+  if (raw.trim().length === 0) return null
+
+  if (filterType === "boolean") {
+    if (raw === "true") return { operatorLabel: "is", valueSummary: "Yes" }
+    if (raw === "false") return { operatorLabel: "is", valueSummary: "No" }
+    return null
+  }
+
+  if (filterType === "text") {
+    const input = decodeTextFilterInput(raw)
+    const value = input.value.trim()
+    if (value.length === 0) return null
+    const modifiers: string[] = []
+    if (input.caseSensitive === true) modifiers.push("case sensitive")
+    if (input.regex === true) modifiers.push("regex")
+    return {
+      operatorLabel: TEXT_OP_LABELS[input.op] ?? input.op,
+      valueSummary: value,
+      ...(modifiers.length > 0 ? { modifiers } : {}),
+    }
+  }
+
+  if (filterType === "number" || filterType === "number-range") {
+    const input =
+      filterType === "number-range"
+        ? { op: "between" as NumberFilterOperator, ...decodeNumberRangeFilterInput(raw) }
+        : decodeNumberFilterInput(raw)
+    return scalarOrRangeSummary(input, NUMBER_OP_LABELS[input.op] ?? input.op)
+  }
+
+  if (filterType === "date" || filterType === "date-range") {
+    const input =
+      filterType === "date-range"
+        ? { op: "between" as DateFilterOperator, ...decodeDateRangeFilterInput(raw) }
+        : decodeDateFilterInput(raw)
+    return scalarOrRangeSummary(input, DATE_OP_LABELS[input.op] ?? input.op)
+  }
+
+  if (filterType === "set") {
+    const input = decodeSetFilterInput(raw)
+    if (input.op === "blank") return { operatorLabel: "is blank", valueSummary: "" }
+    if (input.values.length === 0) return null
+    const limit = Math.max(1, options.setSummaryLimit ?? 3)
+    const labelByValue = new Map<string, string>()
+    for (const option of options.setFilterOptions ?? []) {
+      labelByValue.set(option.value, option.label)
+    }
+    const labels = input.values.map((value) => labelByValue.get(value) ?? value)
+    const visible = labels.slice(0, limit)
+    const overflow = labels.length - visible.length
+    return {
+      operatorLabel: input.op === "in" ? "is" : "is not",
+      valueSummary: overflow > 0 ? `${visible.join(", ")} +${overflow} more` : visible.join(", "),
+    }
+  }
+
+  return null
+}
+
+const TEXT_OP_LABELS: Record<string, string> = {
+  "starts-with": "starts with",
+  "ends-with": "ends with",
+}
+
+const NUMBER_OP_LABELS: Record<string, string> = {
+  "!=": "≠",
+  "<=": "≤",
+  ">=": "≥",
+  between: "is between",
+}
+
+const DATE_OP_LABELS: Record<string, string> = {
+  before: "is before",
+  after: "is after",
+  between: "is between",
+}
+
+function scalarOrRangeSummary(
+  input: { op: string; value: string; valueTo?: string },
+  operatorLabel: string,
+): FilterSummary | null {
+  if (input.op === "between") {
+    const lo = input.value.trim()
+    const hi = (input.valueTo ?? "").trim()
+    if (lo.length === 0 || hi.length === 0) return null
+    return { operatorLabel, valueSummary: `${lo} – ${hi}` }
+  }
+  const value = input.value.trim()
+  if (value.length === 0) return null
+  return { operatorLabel, valueSummary: value }
+}
+
+/**
  * Compute the next selection set when the user toggles "select all".
  * "All" here means the currently visible (search-narrowed) options
  * only — selections for options hidden by the active search query are

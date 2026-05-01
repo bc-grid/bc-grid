@@ -318,6 +318,22 @@ state (and column state, density, page size, sidebar panel) is what the
 persistence layer round-trips. Reload the page and the row visibility
 follows the toolbar's default; the active filter survives.
 
+## Filters tool panel
+
+The `filters` sidebar panel (opened via `sidebar={["filters", …]}` or the
+`?toolPanel=filters` URL flag in the examples app) reads as a list of
+"active filter" cards rather than an editor stack. Each card shows the
+column label, an operator chip (`contains`, `is between`, `is`, `is not`,
+…), a compact value summary, and any modifier flags (`case sensitive`,
+`regex`). The card collapses to summary-only by default; an `Edit` toggle
+expands the inline editor body when the host wants to refine the filter.
+A per-card clear button (×) removes that one filter; the header
+`Clear all` removes everything.
+
+Set-filter values cap at 3 entries with a `+N more` suffix; passing
+`getSetFilterOptions` to `<BcGrid>` lets the panel map raw values to
+human-readable labels.
+
 ## Context menu column commands
 
 The `contextMenuItems` prop accepts an array of built-in IDs (or a factory

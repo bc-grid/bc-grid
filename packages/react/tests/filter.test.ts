@@ -21,6 +21,7 @@ import {
   nextSetFilterValuesOnToggleAll,
   removeColumnFromFilter,
   setFilterValueKeys,
+  summarizeColumnFilter,
 } from "../src/filter"
 
 describe("buildGridFilter", () => {
@@ -1632,5 +1633,201 @@ describe("nextSetFilterValuesOnToggleAll", () => {
 
   test("empty visible list is a no-op", () => {
     expect(nextSetFilterValuesOnToggleAll([], ["a", "b"])).toEqual(["a", "b"])
+  })
+})
+
+describe("summarizeColumnFilter", () => {
+  test("returns null for empty / whitespace-only drafts", () => {
+    expect(summarizeColumnFilter("", "text")).toBeNull()
+    expect(summarizeColumnFilter("   ", "text")).toBeNull()
+    expect(summarizeColumnFilter("", "number")).toBeNull()
+    expect(summarizeColumnFilter("", "date")).toBeNull()
+    expect(summarizeColumnFilter("", "set")).toBeNull()
+    expect(summarizeColumnFilter("", "boolean")).toBeNull()
+  })
+
+  test("text filter → operator label + plain value (legacy plain-string contract)", () => {
+    expect(summarizeColumnFilter("cash", "text")).toEqual({
+      operatorLabel: "contains",
+      valueSummary: "cash",
+    })
+  })
+
+  test("text filter with structured persistence renders operator label + modifier chips", () => {
+    const raw = encodeTextFilterInput({
+      op: "starts-with",
+      value: "AC-",
+      caseSensitive: true,
+    })
+    expect(summarizeColumnFilter(raw, "text")).toEqual({
+      operatorLabel: "starts with",
+      valueSummary: "AC-",
+      modifiers: ["case sensitive"],
+    })
+  })
+
+  test("text filter regex modifier surfaces in the chip list", () => {
+    const raw = encodeTextFilterInput({
+      op: "equals",
+      value: "^acme$",
+      regex: true,
+    })
+    expect(summarizeColumnFilter(raw, "text")).toEqual({
+      operatorLabel: "equals",
+      valueSummary: "^acme$",
+      modifiers: ["regex"],
+    })
+  })
+
+  test("number filter scalar operators render typographic glyphs (≠, ≤, ≥)", () => {
+    expect(
+      summarizeColumnFilter(encodeNumberFilterInput({ op: "!=", value: "0" }), "number"),
+    ).toEqual({
+      operatorLabel: "≠",
+      valueSummary: "0",
+    })
+    expect(
+      summarizeColumnFilter(encodeNumberFilterInput({ op: "<=", value: "100" }), "number"),
+    ).toEqual({
+      operatorLabel: "≤",
+      valueSummary: "100",
+    })
+    expect(
+      summarizeColumnFilter(encodeNumberFilterInput({ op: ">=", value: "10" }), "number"),
+    ).toEqual({
+      operatorLabel: "≥",
+      valueSummary: "10",
+    })
+  })
+
+  test("number between renders min – max with EN DASH", () => {
+    const raw = encodeNumberFilterInput({ op: "between", value: "100", valueTo: "500" })
+    expect(summarizeColumnFilter(raw, "number")).toEqual({
+      operatorLabel: "is between",
+      valueSummary: "100 – 500",
+    })
+  })
+
+  test("number between with a missing bound is treated as inactive", () => {
+    expect(
+      summarizeColumnFilter(
+        encodeNumberFilterInput({ op: "between", value: "100", valueTo: "" }),
+        "number",
+      ),
+    ).toBeNull()
+  })
+
+  test("number-range always renders as between", () => {
+    const raw = encodeNumberRangeFilterInput({ value: "1", valueTo: "9" })
+    expect(summarizeColumnFilter(raw, "number-range")).toEqual({
+      operatorLabel: "is between",
+      valueSummary: "1 – 9",
+    })
+  })
+
+  test("number-range with one bound missing is inactive", () => {
+    expect(
+      summarizeColumnFilter(
+        encodeNumberRangeFilterInput({ value: "", valueTo: "9" }),
+        "number-range",
+      ),
+    ).toBeNull()
+  })
+
+  test("date filter scalar operators read as a sentence", () => {
+    expect(
+      summarizeColumnFilter(encodeDateFilterInput({ op: "before", value: "2026-01-01" }), "date"),
+    ).toEqual({ operatorLabel: "is before", valueSummary: "2026-01-01" })
+    expect(
+      summarizeColumnFilter(encodeDateFilterInput({ op: "after", value: "2026-01-01" }), "date"),
+    ).toEqual({ operatorLabel: "is after", valueSummary: "2026-01-01" })
+  })
+
+  test("date between renders min – max", () => {
+    const raw = encodeDateFilterInput({
+      op: "between",
+      value: "2026-01-01",
+      valueTo: "2026-12-31",
+    })
+    expect(summarizeColumnFilter(raw, "date")).toEqual({
+      operatorLabel: "is between",
+      valueSummary: "2026-01-01 – 2026-12-31",
+    })
+  })
+
+  test("date-range always renders as between", () => {
+    const raw = encodeDateRangeFilterInput({ value: "2026-01-01", valueTo: "2026-12-31" })
+    expect(summarizeColumnFilter(raw, "date-range")).toEqual({
+      operatorLabel: "is between",
+      valueSummary: "2026-01-01 – 2026-12-31",
+    })
+  })
+
+  test("set filter falls back to raw values when no labels are provided", () => {
+    const raw = encodeSetFilterInput({ op: "in", values: ["AC", "PND"] })
+    expect(summarizeColumnFilter(raw, "set")).toEqual({
+      operatorLabel: "is",
+      valueSummary: "AC, PND",
+    })
+  })
+
+  test("set filter maps raw values to labels via setFilterOptions", () => {
+    const raw = encodeSetFilterInput({ op: "in", values: ["AC", "PND"] })
+    const summary = summarizeColumnFilter(raw, "set", {
+      setFilterOptions: [
+        { value: "AC", label: "Active" },
+        { value: "PND", label: "Pending" },
+        { value: "VOID", label: "Voided" },
+      ],
+    })
+    expect(summary).toEqual({ operatorLabel: "is", valueSummary: "Active, Pending" })
+  })
+
+  test("set filter caps at setSummaryLimit and appends +N more", () => {
+    const raw = encodeSetFilterInput({
+      op: "in",
+      values: ["a", "b", "c", "d", "e"],
+    })
+    const summary = summarizeColumnFilter(raw, "set", { setSummaryLimit: 2 })
+    expect(summary).toEqual({ operatorLabel: "is", valueSummary: "a, b +3 more" })
+  })
+
+  test("set filter with no values is inactive (empty set should not show as a filter)", () => {
+    const raw = encodeSetFilterInput({ op: "in", values: [] })
+    expect(summarizeColumnFilter(raw, "set")).toBeNull()
+  })
+
+  test('set "blank" op renders as "is blank" with no value', () => {
+    const raw = encodeSetFilterInput({ op: "blank", values: [] })
+    expect(summarizeColumnFilter(raw, "set")).toEqual({
+      operatorLabel: "is blank",
+      valueSummary: "",
+    })
+  })
+
+  test("set 'not-in' renders as 'is not'", () => {
+    const raw = encodeSetFilterInput({ op: "not-in", values: ["X"] })
+    expect(summarizeColumnFilter(raw, "set")).toEqual({
+      operatorLabel: "is not",
+      valueSummary: "X",
+    })
+  })
+
+  test("boolean filter renders friendly Yes / No labels", () => {
+    expect(summarizeColumnFilter("true", "boolean")).toEqual({
+      operatorLabel: "is",
+      valueSummary: "Yes",
+    })
+    expect(summarizeColumnFilter("false", "boolean")).toEqual({
+      operatorLabel: "is",
+      valueSummary: "No",
+    })
+    // Unknown raw boolean values are ignored — only "true" / "false" map.
+    expect(summarizeColumnFilter("maybe", "boolean")).toBeNull()
+  })
+
+  test("text filter trims pure whitespace and reports inactive", () => {
+    const raw = encodeTextFilterInput({ op: "contains", value: "   " })
+    expect(summarizeColumnFilter(raw, "text")).toBeNull()
   })
 })

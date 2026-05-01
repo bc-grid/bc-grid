@@ -1268,6 +1268,41 @@ describe("@bc-grid/theming", () => {
     expect(block).not.toMatch(/var\(--destructive[,)]/)
   })
 
+  test("filters panel item summary chip surfaces operator + value chrome", () => {
+    // Active-summary polish: the summary <p> contains an operator
+    // chip + value span + optional modifier chips. Pin the chip
+    // styling so a future refactor can't silently drop the
+    // shadcn-style `<Badge variant="secondary">` look.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    const summaryIdx = css.indexOf(".bc-grid-filters-panel-item-summary {")
+    expect(summaryIdx).toBeGreaterThan(-1)
+    const summaryRule = css.slice(summaryIdx, css.indexOf("}", summaryIdx))
+    expect(summaryRule).toContain("display: flex")
+    expect(summaryRule).toContain("flex-wrap: wrap")
+    expect(summaryRule).toContain("gap:")
+
+    const operatorIdx = css.indexOf(".bc-grid-filters-panel-item-operator {")
+    expect(operatorIdx).toBeGreaterThan(-1)
+    const operatorRule = css.slice(operatorIdx, css.indexOf("}", operatorIdx))
+    expect(operatorRule).toContain("background: var(--bc-grid-muted)")
+    expect(operatorRule).toContain("color: var(--bc-grid-muted-fg)")
+    expect(operatorRule).toContain("text-transform: uppercase")
+
+    const valueIdx = css.indexOf(".bc-grid-filters-panel-item-value {")
+    expect(valueIdx).toBeGreaterThan(-1)
+    const valueRule = css.slice(valueIdx, css.indexOf("}", valueIdx))
+    expect(valueRule).toContain("text-overflow: ellipsis")
+    expect(valueRule).toContain("white-space: nowrap")
+
+    const modifierIdx = css.indexOf(".bc-grid-filters-panel-item-modifier {")
+    expect(modifierIdx).toBeGreaterThan(-1)
+    const modifierRule = css.slice(modifierIdx, css.indexOf("}", modifierIdx))
+    expect(modifierRule).toContain("background: var(--bc-grid-accent-soft)")
+    expect(modifierRule).toContain("border:")
+    expect(modifierRule).toContain("var(--bc-grid-input-border)")
+  })
+
   test("inline filter row inputs / selects use the input-border token (matches editors + filters panel)", () => {
     // bsncraft flagged the inline filter row as feeling unfinished.
     // Pin the polished surface — the filter input + select consume

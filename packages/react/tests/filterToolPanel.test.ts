@@ -156,4 +156,111 @@ describe("filters sidebar slot", () => {
       /<svg[^>]*stroke="currentColor"[^>]*bc-grid-panel-icon|bc-grid-panel-icon[^>]*stroke="currentColor"/,
     )
   })
+
+  test("active-filter card renders an operator chip and value summary inline", () => {
+    // bsncraft flagged the panel as feeling unfinished. The polish
+    // slice adds a compact summary row — `<operator chip>` plus
+    // `<value>` — so a host scanning the panel can read every active
+    // filter without expanding any rows. Pin the chip + value markup
+    // and the operator wording for a default text-filter.
+    const markup = renderToStaticMarkup(
+      createElement(BcFiltersToolPanel<Row>, {
+        context: sidebarContext({ account: "cash" }),
+      }),
+    )
+
+    expect(markup).toContain('<p class="bc-grid-filters-panel-item-summary">')
+    expect(markup).toContain('<span class="bc-grid-filters-panel-item-operator">contains</span>')
+    expect(markup).toContain('<span class="bc-grid-filters-panel-item-value">cash</span>')
+  })
+
+  test("text-filter modifier flags surface as separate chips next to the value", () => {
+    // Persisted structured text filter with `caseSensitive` set —
+    // panel must show a `case sensitive` modifier chip so the host
+    // can see the modifier without expanding the editor.
+    const markup = renderToStaticMarkup(
+      createElement(BcFiltersToolPanel<Row>, {
+        context: sidebarContext({
+          account: JSON.stringify({ op: "starts-with", value: "AC-", caseSensitive: true }),
+        }),
+      }),
+    )
+
+    expect(markup).toContain('<span class="bc-grid-filters-panel-item-operator">starts with</span>')
+    expect(markup).toContain('<span class="bc-grid-filters-panel-item-value">AC-</span>')
+    expect(markup).toContain(
+      '<span class="bc-grid-filters-panel-item-modifier">case sensitive</span>',
+    )
+  })
+
+  test("active-filter card pairs the summary with the inline editor body", () => {
+    // The panel keeps the inline editor body mounted alongside the
+    // summary so the host can refine the filter without a separate
+    // disclosure interaction. The summary tells the host what the
+    // filter currently does; the editor lets them change it.
+    const markup = renderToStaticMarkup(
+      createElement(BcFiltersToolPanel<Row>, {
+        context: sidebarContext({ account: "cash" }),
+      }),
+    )
+
+    expect(markup).toContain('class="bc-grid-filters-panel-item-summary"')
+    expect(markup).toContain("bc-grid-filters-panel-control")
+    expect(markup).toContain("bc-grid-filter-text")
+  })
+
+  test("per-row clear button stays an icon-only IconButton with the X glyph", () => {
+    // The clear button is the only action on a card row; the
+    // historical aria-label is preserved so e2e suites can locate
+    // it.
+    const markup = renderToStaticMarkup(
+      createElement(BcFiltersToolPanel<Row>, {
+        context: sidebarContext({ account: "cash" }),
+      }),
+    )
+
+    expect(markup).toMatch(
+      /<button[^>]*aria-label="Clear filter on Account"[^>]*class="bc-grid-filters-panel-remove"/,
+    )
+  })
+
+  test("set-filter rows with no labels renders raw values capped at 3 + +N more", () => {
+    // bsncraft's "compact value summary" requirement — set filters
+    // with many selected values shouldn't blow up the panel row.
+    const markup = renderToStaticMarkup(
+      createElement(BcFiltersToolPanel<Row>, {
+        context: {
+          ...sidebarContext({
+            // notes column has filter:false; reuse approved (boolean)
+            // would short-circuit. Use a custom column with set filter.
+          }),
+          columns: [
+            { field: "status", header: "Status", filter: { type: "set" } },
+          ] as readonly BcReactGridColumn<Row>[],
+          columnFilterText: {
+            status: JSON.stringify({ op: "in", values: ["AC", "PND", "VOID", "CL", "DR"] }),
+          },
+        },
+      }),
+    )
+
+    expect(markup).toContain('<span class="bc-grid-filters-panel-item-operator">is</span>')
+    // Capped at 3 — first three labels + "+2 more"
+    expect(markup).toContain(
+      '<span class="bc-grid-filters-panel-item-value">AC, PND, VOID +2 more</span>',
+    )
+  })
+
+  test("number-range filter shows EN DASH range summary", () => {
+    const markup = renderToStaticMarkup(
+      createElement(BcFiltersToolPanel<Row>, {
+        context: sidebarContext({
+          balance: JSON.stringify({ op: "between", value: "100", valueTo: "500" }),
+        }),
+      }),
+    )
+
+    expect(markup).toContain('<span class="bc-grid-filters-panel-item-operator">is between</span>')
+    expect(markup).toContain('<span class="bc-grid-filters-panel-item-value">100 – 500</span>')
+  })
 })
