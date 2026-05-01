@@ -103,6 +103,12 @@ const featureDiscoveryRows = [
     api: "filter.variant = popup",
   },
   {
+    feature: "Global search",
+    status: "Available",
+    entry: "AR Customers toolbar",
+    api: "searchText, defaultSearchText",
+  },
+  {
     feature: "Columns panel",
     status: "Available",
     entry: "Tool panels control or ?toolPanel=columns",
@@ -812,12 +818,13 @@ function CustomerGridDemo({
 
         <div className="demo-controls">
           <label className="search-control">
-            <span>Search</span>
+            <span>Global search</span>
             <input
               type="search"
+              aria-label="Global search"
               value={searchText}
               onChange={(event) => setSearchText(event.currentTarget.value)}
-              placeholder="Customer, account, collector"
+              placeholder="Search all customer rows"
             />
           </label>
           <SegmentedControl

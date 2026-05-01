@@ -72,6 +72,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Sort, resize, pin | Available | AR Customers headers | `sortable`, `resizable`, `pinned` |
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
+| Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
 | Columns and filters panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` | `sidebar={["columns", "filters"]}` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
 | Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
@@ -83,6 +84,36 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Auto height | Available | `?autoHeight=1` | `height="auto"` |
 | Server row model | Available | Package API | `<BcServerGrid>` |
 | Pivot panel and charts | Planned | Not exposed in examples | Pivot UI and charts adapter |
+
+## Global search
+
+bc-grid leaves the global search input to the host application. Keep the input
+next to your app toolbar controls and pass the value through `searchText`:
+
+```tsx
+const [searchText, setSearchText] = useState("")
+
+return (
+  <>
+    <input
+      type="search"
+      aria-label="Global search"
+      value={searchText}
+      onChange={(event) => setSearchText(event.currentTarget.value)}
+    />
+    <BcGrid
+      columns={columns}
+      data={rows}
+      rowId={(row) => row.id}
+      searchText={searchText}
+    />
+  </>
+)
+```
+
+Use `defaultSearchText` for an uncontrolled initial query. For a host-owned
+search input, prefer controlling the query with `searchText` as shown above. Do
+not combine `defaultSearchText` with `searchText` on the same grid.
 
 ## Bundle size
 

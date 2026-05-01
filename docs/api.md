@@ -39,6 +39,7 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Sort, resize, pin | Available | AR Customers headers | `sortable`, `resizable`, `pinned` |
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
+| Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
 | Columns panel | Available | Tool panels control or `?toolPanel=columns` | `sidebar={["columns"]}` |
 | Filters panel | Available | Tool panels control or `?toolPanel=filters` | `sidebar={["filters"]}` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
@@ -657,6 +658,39 @@ The value pipeline runs once per cell render. Stages:
 When `searchText` is set on the grid, every visible row is matched against the search by joining `formattedValue` for each searchable column. A column is searchable when `column.filter !== false`. Matching is case-insensitive substring by default.
 
 The matched substring is exposed to `cellRenderer` via `params.searchText` so the renderer can highlight matches. The default renderer (when `cellRenderer` is omitted) handles highlighting automatically.
+
+bc-grid does not render a built-in global search box. Host apps own the input
+and pass its value into the grid:
+
+```tsx
+function CustomerGrid() {
+  const [searchText, setSearchText] = useState("")
+
+  return (
+    <>
+      <label>
+        <span>Global search</span>
+        <input
+          type="search"
+          value={searchText}
+          onChange={(event) => setSearchText(event.currentTarget.value)}
+        />
+      </label>
+
+      <BcGrid
+        data={rows}
+        columns={columns}
+        rowId={(row) => row.id}
+        searchText={searchText}
+      />
+    </>
+  )
+}
+```
+
+Use `defaultSearchText` only for an uncontrolled initial query. For a host-owned
+search input, prefer controlling the query with `searchText` as shown above. Do
+not pass `searchText` and `defaultSearchText` to the same grid.
 
 ### 4.4 Filter shape (frozen at v0.1)
 
