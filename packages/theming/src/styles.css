@@ -2842,7 +2842,7 @@ table.bc-grid-detail-nested-grid {
   height: 100%;
   pointer-events: none;
   background: linear-gradient(to right, var(--bc-grid-pinned-boundary), transparent);
-  opacity: 0.36;
+  opacity: 0;
   transition: opacity var(--bc-grid-motion-duration-medium) var(--bc-grid-motion-ease-standard);
 }
 
@@ -2855,7 +2855,7 @@ table.bc-grid-detail-nested-grid {
   height: 100%;
   pointer-events: none;
   background: linear-gradient(to left, var(--bc-grid-pinned-boundary), transparent);
-  opacity: 0.36;
+  opacity: 0;
   transition: opacity var(--bc-grid-motion-duration-medium) var(--bc-grid-motion-ease-standard);
 }
 

@@ -30,11 +30,11 @@ jobs:
       - name: Lint
         run: bun run lint
 
-      - name: Test
-        run: bun run test
-
       - name: Build all packages
         run: bun run build:packages
+
+      - name: Test
+        run: bun run test
 
       - name: Bundle-size gate
         run: bun run bundle-size

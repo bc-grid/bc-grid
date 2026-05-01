@@ -281,11 +281,11 @@ describe("@bc-grid/theming", () => {
 
     const leftEdge = ruleFor(".bc-grid-cell-pinned-left-edge::after {")
     expect(leftEdge).toContain("var(--bc-grid-pinned-boundary)")
-    expect(leftEdge).toContain("opacity: 0.36")
+    expect(leftEdge).toContain("opacity: 0")
 
     const rightEdge = ruleFor(".bc-grid-cell-pinned-right-edge::before {")
     expect(rightEdge).toContain("var(--bc-grid-pinned-boundary)")
-    expect(rightEdge).toContain("opacity: 0.36")
+    expect(rightEdge).toContain("opacity: 0")
 
     expect(
       ruleFor('.bc-grid[data-scrolled-left="true"] .bc-grid-cell-pinned-left-edge::after {'),
