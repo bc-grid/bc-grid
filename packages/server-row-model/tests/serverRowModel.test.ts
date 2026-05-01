@@ -1184,6 +1184,360 @@ describe("createServerRowModel", () => {
     expect(result.pending).toBe(false)
     expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([{ id: "a", name: "server" }])
   })
+
+  test("late paged response after abortExcept does not repopulate the cache", async () => {
+    // User navigates from page 0 → page 1; the page-0 fetch resolves
+    // late. The aborted request must NOT mark page 0 as loaded — its
+    // rows would be from a prior view, and a subsequent navigation
+    // back to page 0 would briefly read those rows before triggering
+    // a refetch (the brief: "stale/aborted page or block responses
+    // must not repopulate an old view").
+    const model = createServerRowModel<Row>()
+    let resolvePage0: (value: ServerPagedResult<Row>) => void = () => {}
+    const loadPage = (query: { pageIndex: number }, _ctx: { signal: AbortSignal }) => {
+      if (query.pageIndex === 0) {
+        return new Promise<ServerPagedResult<Row>>((resolve) => {
+          resolvePage0 = resolve
+        })
+      }
+      return Promise.resolve<ServerPagedResult<Row>>({
+        pageIndex: 1,
+        pageSize: 1,
+        rows: [{ id: "b" }],
+        totalRows: 2,
+      })
+    }
+
+    const page0 = model.loadPagedPage({ loadPage, pageIndex: 0, pageSize: 1, view, viewKey: "v1" })
+    page0.promise.catch(() => {})
+    const page1 = model.loadPagedPage({ loadPage, pageIndex: 1, pageSize: 1, view, viewKey: "v1" })
+    model.abortExcept(page1.blockKey)
+    await page1.promise
+
+    // After abortExcept the page-0 cache entry is still in the
+    // "fetching" placeholder state set by markFetching — abortExcept
+    // only fires the controller's signal, it doesn't evict the
+    // placeholder. Crucially, no rows are loaded.
+    expect(model.cache.get(page0.blockKey)?.state).not.toBe("loaded")
+
+    // Resolve the original page-0 request late. The .then handler must
+    // observe the aborted signal and throw, so the cache placeholder
+    // never transitions to "loaded" with the stale rows.
+    resolvePage0({
+      pageIndex: 0,
+      pageSize: 1,
+      rows: [{ id: "stale" }],
+      totalRows: 2,
+    })
+
+    await expect(page0.promise).rejects.toThrow("Aborted")
+    // The block must not have been promoted to "loaded" with the stale
+    // late-arriving rows. (Implementation may keep the placeholder or
+    // evict it; either is acceptable. What matters is no stale data.)
+    const page0Block = model.cache.get(page0.blockKey)
+    if (page0Block) {
+      expect(page0Block.state).not.toBe("loaded")
+      expect(page0Block.rows).not.toContainEqual({ id: "stale" })
+    }
+    // page 1 stayed loaded with its real rows.
+    expect(model.cache.get(page1.blockKey)?.state).toBe("loaded")
+    expect(model.cache.get(page1.blockKey)?.rows).toEqual([{ id: "b" }])
+  })
+
+  test("late infinite block response after invalidate does not repopulate the cache", async () => {
+    // Mirror of the existing paged-late-after-invalidate test for the
+    // infinite path. invalidate({scope:"all"}) aborts the in-flight
+    // request; when its promise resolves late, the cache must stay
+    // empty.
+    const model = createServerRowModel<Row>()
+    let resolveBlock: (value: ServerBlockResult<Row>) => void = () => {}
+    const block = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      loadBlock: () =>
+        new Promise<ServerBlockResult<Row>>((resolve) => {
+          resolveBlock = resolve
+        }),
+      view,
+      viewKey: "v1",
+    })
+    block.promise.catch(() => {})
+
+    expect(model.cache.get(block.blockKey)?.state).toBe("fetching")
+    expect(model.invalidate({ scope: "all" }).affectedBlockKeys).toEqual([block.blockKey])
+    expect(model.cache.get(block.blockKey)).toBeUndefined()
+
+    resolveBlock({
+      blockSize: 2,
+      blockStart: 0,
+      rows: [{ id: "stale" }],
+      totalRows: 1,
+      viewKey: "v1",
+    })
+
+    await expect(block.promise).rejects.toThrow("Aborted")
+    expect(model.cache.get(block.blockKey)).toBeUndefined()
+  })
+
+  test("late infinite block response after abortExcept does not repopulate the cache", async () => {
+    const model = createServerRowModel<Row>()
+    let resolveBlock0: (value: ServerBlockResult<Row>) => void = () => {}
+    const loadBlock = (query: { blockStart: number }, _ctx: { signal: AbortSignal }) => {
+      if (query.blockStart === 0) {
+        return new Promise<ServerBlockResult<Row>>((resolve) => {
+          resolveBlock0 = resolve
+        })
+      }
+      return Promise.resolve<ServerBlockResult<Row>>({
+        blockSize: 2,
+        blockStart: 2,
+        rows: [{ id: "c" }, { id: "d" }],
+        totalRows: 4,
+        viewKey: "v1",
+      })
+    }
+
+    const block0 = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 0,
+      loadBlock,
+      view,
+      viewKey: "v1",
+    })
+    block0.promise.catch(() => {})
+    const block1 = model.loadInfiniteBlock({
+      blockSize: 2,
+      blockStart: 2,
+      loadBlock,
+      view,
+      viewKey: "v1",
+    })
+    model.abortExcept(block1.blockKey)
+    await block1.promise
+
+    resolveBlock0({
+      blockSize: 2,
+      blockStart: 0,
+      rows: [{ id: "stale-0" }, { id: "stale-1" }],
+      totalRows: 4,
+      viewKey: "v1",
+    })
+
+    await expect(block0.promise).rejects.toThrow("Aborted")
+    const block0Entry = model.cache.get(block0.blockKey)
+    if (block0Entry) {
+      expect(block0Entry.state).not.toBe("loaded")
+      expect(block0Entry.rows).not.toContainEqual({ id: "stale-0" })
+      expect(block0Entry.rows).not.toContainEqual({ id: "stale-1" })
+    }
+    expect(model.cache.get(block1.blockKey)?.rows).toEqual([{ id: "c" }, { id: "d" }])
+  })
+
+  test("cache.clear discards every block including stale and errored", () => {
+    // refresh({purge: true}) in serverGrid.tsx calls cache.clear().
+    // Direct-test the cache method so the purge path stays solid.
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:2",
+      rows: [{ id: "a" }, { id: "b" }],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:2:size:2",
+      rows: [{ id: "c" }, { id: "d" }],
+      size: 2,
+      start: 2,
+      viewKey: "v1",
+    })
+    model.cache.markStale("paged:v1:page:0:size:2")
+    expect(model.cache.get("paged:v1:page:0:size:2")?.state).toBe("stale")
+
+    model.cache.clear()
+
+    expect(model.cache.get("paged:v1:page:0:size:2")).toBeUndefined()
+    expect(model.cache.get("infinite:v1:start:2:size:2")).toBeUndefined()
+    expect(model.cache.toMap().size).toBe(0)
+  })
+
+  test("invalidate scope=view drops only blocks for the targeted viewKey", () => {
+    // After a sort/filter change in the host, the consumer typically
+    // calls invalidate({scope:"view", viewKey: previousViewKey}).
+    // Other views (e.g., a tab the user previously switched away from)
+    // must keep their cache so navigating back doesn't refetch.
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:vA:page:0:size:2",
+      rows: [{ id: "a" }],
+      size: 2,
+      start: 0,
+      viewKey: "vA",
+    })
+    model.cache.markLoaded({
+      blockKey: "paged:vB:page:0:size:2",
+      rows: [{ id: "b" }],
+      size: 2,
+      start: 0,
+      viewKey: "vB",
+    })
+
+    const result = model.invalidate({ scope: "view", viewKey: "vA" })
+    expect(result.affectedBlockKeys).toEqual(["paged:vA:page:0:size:2"])
+    expect(model.cache.get("paged:vA:page:0:size:2")).toBeUndefined()
+    expect(model.cache.get("paged:vB:page:0:size:2")?.state).toBe("loaded")
+    expect(model.cache.get("paged:vB:page:0:size:2")?.rows).toEqual([{ id: "b" }])
+  })
+
+  test("invalidate scope=blocks drops only the named keys", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:2",
+      rows: [{ id: "a" }],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:1:size:2",
+      rows: [{ id: "b" }],
+      size: 2,
+      start: 2,
+      viewKey: "v1",
+    })
+
+    const result = model.invalidate({
+      scope: "blocks",
+      blockKeys: ["paged:v1:page:0:size:2"],
+    })
+    expect(result.affectedBlockKeys).toEqual(["paged:v1:page:0:size:2"])
+    expect(model.cache.get("paged:v1:page:0:size:2")).toBeUndefined()
+    expect(model.cache.get("paged:v1:page:1:size:2")?.state).toBe("loaded")
+  })
+
+  test("pending mutations survive cache.clear() and apply to subsequently loaded rows", async () => {
+    // refresh({purge: true}) in serverGrid.tsx clears the cache but
+    // leaves the optimistic mutation queue intact. A page reload
+    // triggered after the purge must still surface the pending patch
+    // — otherwise users would see their optimistic edits flicker back
+    // to canonical mid-network. Bridges the "purge" and "queued
+    // mutation applies to later-loaded rows" buckets in the brief.
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([
+      { id: "a", name: "optimistic" },
+    ])
+
+    // Purge the cache — mimics refresh({purge: true}).
+    model.cache.clear()
+    expect(model.cache.toMap().size).toBe(0)
+
+    // Reload the page. The mutation queue is still active; the freshly
+    // loaded server row must come back with the optimistic patch
+    // overlaid.
+    const page = model.loadPagedPage({
+      loadPage: () =>
+        Promise.resolve({
+          pageIndex: 0,
+          pageSize: 1,
+          rows: [{ id: "a", name: "server-old" }],
+          totalRows: 1,
+        }),
+      pageIndex: 0,
+      pageSize: 1,
+      view,
+      viewKey: "v1",
+    })
+    const result = await page.promise
+
+    expect(result.rows).toEqual([{ id: "a", name: "optimistic" }])
+    expect(model.cache.get(page.blockKey)?.rows).toEqual([{ id: "a", name: "optimistic" }])
+  })
+
+  test("pending mutations survive cache.clear() across an identity remap", async () => {
+    // Identity remap: the server settles an accepted mutation with a
+    // new rowId (e.g., a draft "tmp:1" becomes the real "row:42"). If
+    // a follow-up purge + reload happens after the remap, the queue
+    // is empty (mutation already settled) and the freshly-loaded
+    // canonical row should NOT carry an outdated optimistic overlay.
+    const model = createServerRowModel<Row>()
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "tmp:1" },
+      rowId: (row) => row.id,
+    })
+    model.settleMutation({
+      result: {
+        mutationId: "m1",
+        previousRowId: "tmp:1",
+        row: { id: "row:42", name: "server" },
+        status: "accepted",
+      },
+      rowId: (row) => row.id,
+    })
+
+    model.cache.clear()
+
+    const page = model.loadPagedPage({
+      loadPage: () =>
+        Promise.resolve({
+          pageIndex: 0,
+          pageSize: 1,
+          rows: [{ id: "row:42", name: "server" }],
+          totalRows: 1,
+        }),
+      pageIndex: 0,
+      pageSize: 1,
+      view,
+      viewKey: "v1",
+    })
+    const result = await page.promise
+
+    // No pending mutation is in queue, so the canonical server row
+    // surfaces unchanged.
+    expect(result.rows).toEqual([{ id: "row:42", name: "server" }])
+  })
+
+  test("conflict result without a canonical row leaves cached rows untouched", () => {
+    // The brief: "conflict results apply canonical rows when supplied."
+    // The mirror invariant — conflict WITHOUT a canonical row — must
+    // not delete or rewrite cached rows; it only signals the
+    // application layer that the optimistic edit conflicted.
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "server-canonical" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const settled = model.settleMutation({
+      result: { mutationId: "m1", reason: "stale-revision", status: "conflict" },
+      rowId: (row) => row.id,
+    })
+    expect(settled.pending).toBe(false)
+    // Conflict-no-canonical: rolls back to the row that was cached
+    // before the optimistic patch, exactly the same as a rejected
+    // settle without a row.
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([
+      { id: "a", name: "server-canonical" },
+    ])
+  })
 })
 
 function sleep(ms: number): Promise<void> {
