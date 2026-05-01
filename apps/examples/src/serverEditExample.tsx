@@ -474,13 +474,13 @@ export function ServerEditGridExample() {
         loadPage={loadPage}
         locale="en-US"
         onPaginationChange={handlePaginationChange}
-        onRowClick={(row) => setActiveRowId(row.id)}
+        onRowClick={(row: ServerCustomerRow) => setActiveRowId(row.id)}
         onServerRowMutation={handleMutation}
         onSortChange={handleSortChange}
         page={pagination.page}
         pageSize={pagination.pageSize}
         pagination={false}
-        rowId={(row) => row.id}
+        rowId={(row: ServerCustomerRow) => row.id}
         rowModel="paged"
         searchText={searchText}
         showFilterRow={false}

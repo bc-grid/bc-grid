@@ -198,6 +198,19 @@
   background: var(--bc-grid-header-bg);
 }
 
+.bc-grid-header-group-cell {
+  justify-content: center;
+  border-bottom: 1px solid var(--bc-grid-border);
+  color: var(--bc-grid-header-fg);
+  text-align: center;
+}
+
+.bc-grid-header-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .bc-grid-header-cell::after {
   content: "";
   position: absolute;

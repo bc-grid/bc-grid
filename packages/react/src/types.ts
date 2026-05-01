@@ -171,6 +171,12 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
   "header"
 > & {
   header: string | ReactNode
+  /**
+   * Optional nested child columns for multi-row grouped headers. Group
+   * parents are header-only; sorting, filtering, resizing, reordering,
+   * pinning, editing, and aggregation apply to visible leaf columns.
+   */
+  children?: readonly BcReactGridColumn<TRow>[]
   cellRenderer?: (params: BcCellRendererParams<TRow, TValue>) => ReactNode
   cellClassName?: string | ((params: BcCellRendererParams<TRow, TValue>) => string | undefined)
   cellStyle?:

@@ -1,6 +1,6 @@
 import type { BcColumnFilter, ColumnId } from "@bc-grid/core"
 import { type ReactNode, useCallback, useId, useMemo } from "react"
-import { columnIdFor, domToken } from "./gridInternals"
+import { domToken, flattenColumnDefinitions } from "./gridInternals"
 import { FilterEditorBody } from "./headerCells"
 import type { BcReactGridColumn, BcSidebarContext } from "./types"
 
@@ -100,20 +100,21 @@ export function buildFilterToolPanelItems<TRow>(
   columns: readonly BcReactGridColumn<TRow>[],
   columnFilterText: Readonly<Record<ColumnId, string>>,
 ): readonly FilterToolPanelItem[] {
-  return columns.flatMap((column, index) => {
-    if (column.filter === false) return []
-    const columnId = columnIdFor(column, index)
-    const filterText = columnFilterText[columnId] ?? ""
-    return [
-      {
-        active: isFilterToolPanelDraftActive(filterText),
-        columnId,
-        filterText,
-        label: filterToolPanelLabel(column, columnId),
-        type: column.filter ? column.filter.type : "text",
-      },
-    ]
-  })
+  return flattenColumnDefinitions(columns, { includeHidden: true }).flatMap(
+    ({ column, columnId }) => {
+      if (column.filter === false) return []
+      const filterText = columnFilterText[columnId] ?? ""
+      return [
+        {
+          active: isFilterToolPanelDraftActive(filterText),
+          columnId,
+          filterText,
+          label: filterToolPanelLabel(column, columnId),
+          type: column.filter ? column.filter.type : "text",
+        },
+      ]
+    },
+  )
 }
 
 export function activeFilterToolPanelItems(

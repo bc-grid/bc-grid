@@ -65,11 +65,12 @@ import {
   canvasStyle,
   cellDomId,
   classNames,
-  columnIdFor,
   createEmptySelection,
   defaultMessages,
+  deriveColumnGroupHeaderRows,
   deriveColumnState,
   domToken,
+  flattenColumnDefinitions,
   hasProp,
   headerRowStyle,
   headerViewportStyle,
@@ -98,6 +99,7 @@ import {
   type ColumnMenuAnchor,
   FilterPopup,
   type SortModifiers,
+  renderColumnGroupHeaderCell,
   renderFilterCell,
   renderHeaderCell,
 } from "./headerCells"
@@ -200,7 +202,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   const defaultRowHeight = resolveRowHeight(density, rowHeight)
   const headerHeight = resolveHeaderHeight(density)
-  const fallbackBodyHeight = resolveFallbackBodyHeight(height, defaultRowHeight, headerHeight)
   const pageSizeOptions = useMemo(
     () => normalisePageSizeOptions(props.pageSizeOptions),
     [props.pageSizeOptions],
@@ -378,6 +379,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // below into `resolvedColumns` for layout + render; rowEntries doesn't
   // need to know about it (synthetic column is `sortable: false`,
   // `filter: false`).
+  const consumerLeafColumns = useMemo(
+    () => flattenColumnDefinitions(columns).map((entry) => entry.column),
+    [columns],
+  )
   const consumerResolvedColumns = useMemo(
     () => resolveColumns(columns, columnState),
     [columns, columnState],
@@ -640,8 +645,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // column when `checkboxSelection` is on. The synthetic column is rebuilt
   // on every render so its closure captures the live selectionState +
   // setter; resolveColumns is cheap so the cache miss here is acceptable.
-  const resolvedColumns = useMemo(() => {
-    if (!props.checkboxSelection && !hasDetail) return consumerResolvedColumns
+  const layoutColumnDefinitions = useMemo(() => {
     const syntheticColumns: BcReactGridColumn<TRow>[] = []
     if (hasDetail) {
       syntheticColumns.push(
@@ -660,11 +664,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         }),
       )
     }
-    return resolveColumns([...syntheticColumns, ...columns], columnState)
+    return syntheticColumns.length > 0 ? [...syntheticColumns, ...columns] : columns
   }, [
     columns,
-    columnState,
-    consumerResolvedColumns,
     hasDetail,
     expansionState,
     props.checkboxSelection,
@@ -673,7 +675,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setSelectionState,
     visibleSelectableRowIds,
   ])
-  const aggregationResults = useAggregations(aggregationRows, columns, {
+  const resolvedColumns = useMemo(
+    () =>
+      layoutColumnDefinitions === columns
+        ? consumerResolvedColumns
+        : resolveColumns(layoutColumnDefinitions, columnState),
+    [columnState, columns, consumerResolvedColumns, layoutColumnDefinitions],
+  )
+  const aggregationResults = useAggregations(aggregationRows, consumerLeafColumns, {
     allRows: data,
     locale,
     rowId,
@@ -692,6 +701,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => resolveFilterRowVisibility(showFilterRow, resolvedColumns),
     [showFilterRow, resolvedColumns],
   )
+  const columnGroupHeaderRows = useMemo(
+    () => deriveColumnGroupHeaderRows(layoutColumnDefinitions, resolvedColumns),
+    [layoutColumnDefinitions, resolvedColumns],
+  )
+  const columnHeaderRowCount = columnGroupHeaderRows.length + 1
+  const headerChromeHeight = headerHeight * (columnHeaderRowCount + (hasInlineFilters ? 1 : 0))
+  const fallbackBodyHeight = resolveFallbackBodyHeight(height, defaultRowHeight, headerChromeHeight)
 
   const loadSetFilterOptions = useCallback(
     (columnId: ColumnId): readonly SetFilterOption[] => {
@@ -1681,7 +1697,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       updateColumnFilterText,
     ],
   )
-  const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
+  const bodyAriaRowOffset = columnHeaderRowCount + (hasInlineFilters ? 1 : 0) + 1
   const ContextMenuLayer = BcGridContextMenuLayer as ComponentType<
     BcGridContextMenuLayerProps<TRow>
   >
@@ -1702,13 +1718,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         // Per accessibility-rfc §aria-rowcount: total rows in the
         // underlying dataset. In manual pagination with a known server
         // total, surface that total + the chrome rows (header + filter
-        // row + aggregation footer). In client mode `rowEntries.length`
-        // already equals the post-filter row set on the visible page,
-        // and we add the chrome rows on top.
+        // row + aggregation footer). Grouped column headers add extra
+        // header rows, so use `columnHeaderRowCount` rather than assuming
+        // a single leaf-header row.
         (isManualPagination && paginationTotalRows != null
           ? paginationTotalRows
           : rowEntries.length) +
-        (hasInlineFilters ? 2 : 1) +
+        columnHeaderRowCount +
+        (hasInlineFilters ? 1 : 0) +
         (hasAggregationFooter ? 1 : 0)
       }
       aria-colcount={resolvedColumns.length}
@@ -1728,10 +1745,33 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             role="rowgroup"
             style={isAutoHeight ? autoHeightHeaderViewportStyle : headerViewportStyle}
           >
+            {columnGroupHeaderRows.map((row, rowIndex) => (
+              <div
+                key={row.map((cell) => `${cell.groupId}:${cell.ariaColIndex}`).join("|")}
+                className={classNames("bc-grid-header", "bc-grid-header-group-row")}
+                role="row"
+                aria-rowindex={rowIndex + 1}
+                style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
+              >
+                {row.map((cell) =>
+                  renderColumnGroupHeaderCell({
+                    cell,
+                    domBaseId,
+                    headerHeight,
+                    scrollLeft: scrollOffset.left,
+                    totalWidth: virtualWindow.totalWidth,
+                    viewportWidth: viewport.width,
+                  }),
+                )}
+              </div>
+            ))}
             <div
-              className="bc-grid-header"
+              className={classNames(
+                "bc-grid-header",
+                columnGroupHeaderRows.length > 0 ? "bc-grid-header-leaf-row" : undefined,
+              )}
               role="row"
-              aria-rowindex={1}
+              aria-rowindex={columnGroupHeaderRows.length + 1}
               style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
             >
               {resolvedColumns.map((column, index) =>
@@ -1770,7 +1810,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 aria-hidden="true"
                 className="bc-grid-column-drop-indicator"
                 style={{
-                  height: headerHeight * 2,
+                  height: headerChromeHeight,
                   left: columnReorderPreview.indicatorLeft,
                 }}
               />
@@ -1779,7 +1819,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               <div
                 className="bc-grid-filter-row"
                 role="row"
-                aria-rowindex={2}
+                aria-rowindex={columnHeaderRowCount + 1}
                 style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
               >
                 {resolvedColumns.map((column, index) =>
@@ -2165,15 +2205,16 @@ function buildColumnVisibilityItems<TRow>(
   columnState: readonly BcColumnStateEntry[],
 ): readonly ColumnVisibilityItem[] {
   const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
-  const items = columns.map((column, index) => {
-    const columnId = columnIdFor(column, index)
-    const hidden = stateById.get(columnId)?.hidden ?? column.hidden ?? false
-    return {
-      columnId,
-      hidden,
-      label: columnVisibilityLabel(column, columnId),
-    }
-  })
+  const items = flattenColumnDefinitions(columns, { includeHidden: true }).map(
+    ({ column, columnId }) => {
+      const hidden = stateById.get(columnId)?.hidden ?? column.hidden ?? false
+      return {
+        columnId,
+        hidden,
+        label: columnVisibilityLabel(column, columnId),
+      }
+    },
+  )
   const visibleCount = items.filter((item) => !item.hidden).length
   return items.map((item) => ({
     ...item,
