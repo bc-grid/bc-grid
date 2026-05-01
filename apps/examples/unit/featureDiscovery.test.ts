@@ -29,6 +29,7 @@ describe("feature discovery fixtures", () => {
     expect(rowsByFeature.get("Column persistence")?.shortcutHref).toBe(
       shortcutHref("column-persistence"),
     )
+    expect(rowsByFeature.get("Lookup/select editors")?.shortcutHref).toBe("?edit=1#customer-grid")
     expect(rowsByFeature.get("Server row model")?.shortcutHref).toBe(
       shortcutHref("server-edit-grid"),
     )
