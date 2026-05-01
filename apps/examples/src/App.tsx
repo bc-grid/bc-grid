@@ -118,6 +118,12 @@ const featureDiscoveryRows = [
     api: "searchText, defaultSearchText",
   },
   {
+    feature: "Group by",
+    status: "Available",
+    entry: "?groupBy=region",
+    api: "groupBy, defaultGroupBy, groupableColumns",
+  },
+  {
     feature: "Columns panel",
     status: "Available",
     entry: "Tool panels control or ?toolPanel=columns",
@@ -380,6 +386,20 @@ function columnGroupsEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("columnGroups") === "1"
 }
 
+function initialGroupByColumns(): readonly string[] {
+  if (typeof window === "undefined") return []
+  const groupBy = new URLSearchParams(window.location.search).get("groupBy")
+  if (!groupBy) return []
+  if (groupBy === "1" || groupBy === "true") return ["region"]
+  const groupableColumnIds = new Set<string>(
+    customerGridGroupableColumns.map((column) => column.columnId),
+  )
+  return groupBy
+    .split(",")
+    .map((columnId) => columnId.trim())
+    .filter((columnId) => groupableColumnIds.has(columnId))
+}
+
 /**
  * `?filterPopup=1` URL flag opts every filterable column into the
  * `filter-popup-variant` demo: the inline filter row collapses entirely
@@ -461,6 +481,7 @@ function CustomerGridDemo({
   const paginationDemo = paginationEnabled()
   const aggregationDemo = aggregationsEnabled()
   const masterDetailDemo = masterDetailEnabled()
+  const initialGroupBy = useMemo(() => initialGroupByColumns(), [])
   const gridHeight = autoHeightEnabled() ? "auto" : 560
 
   const ledgerSummary = useMemo(() => summarizeLedger(rows), [rows])
@@ -934,6 +955,7 @@ function CustomerGridDemo({
         ]}
         gridId="accounts-receivable.customers"
         groupableColumns={customerGridGroupableColumns}
+        {...(initialGroupBy.length > 0 ? { defaultGroupBy: initialGroupBy } : {})}
         height={gridHeight}
         linkField="legalName"
         locale="en-US"

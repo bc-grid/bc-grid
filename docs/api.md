@@ -905,6 +905,12 @@ export interface BcFilterEditorProps<TValue = unknown> {
 />
 ```
 
+`groupBy` / `defaultGroupBy` run client grouping over the current client row
+model. For a plain `<BcGrid>` or `<BcEditGrid>`, that means the rows passed in
+`data` after client filtering/search/sort. For server-backed grids, `groupBy`
+is sent in `query.view`; the server endpoint owns any global grouping and must
+return rows that already represent that grouped view.
+
 #### `<BcGrid>` props summary (frozen at v0.1)
 
 ```ts
@@ -1593,14 +1599,15 @@ that distinction: `rowCount` / `lastLoad.rowCount` describe the server total,
 while `cache.loadedRowCount` describes only cached row payloads that bc-grid has
 actually loaded.
 
-Client grouping, client filtering, and client search can still run over the rows
-currently rendered by `<BcGrid>`, but with server data that is only the loaded
-page/window. They do not imply global grouping or global filtering over all
-matching rows. For bsncraft-style customer grids, the expected server-backed
-path is to treat `query.view` as the source of truth, apply search/filter/sort
-and any global grouping on the server, return the current page rows plus
-`totalRows`, and use `apiRef.current?.getServerDiagnostics()` to verify the
-active request while integrating the endpoint.
+Server grouping is query-level. `groupBy` is included in `query.view`, but
+`<BcServerGrid>` only renders the rows returned for the loaded page/window; it
+does not imply global grouping over all matching rows unless the endpoint
+returns grouped rows for that view. For bsncraft-style customer grids, the
+expected server-backed path is to treat `query.view` as the source of truth,
+apply search/filter/sort and any global grouping on the server, return the
+current page rows plus `totalRows`, and use
+`apiRef.current?.getServerDiagnostics()` to verify the active request while
+integrating the endpoint.
 
 When `onServerRowMutation` is used with paged mode, optimistic edit patches are
 tracked by row identity in the server-row-model mutation queue, not by the

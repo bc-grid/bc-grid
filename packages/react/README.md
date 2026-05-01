@@ -73,6 +73,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
 | Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
+| Group by | Available | `?groupBy=region` or `groupBy` / `defaultGroupBy` props | `groupBy`, `defaultGroupBy`, `groupableColumns` |
 | Columns, filters, and pivot panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` / `?toolPanel=pivot` | `sidebar={["columns", "filters", "pivot"]}`, `pivotState` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
 | Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
@@ -86,6 +87,10 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Server row model | Available | Package API | `<BcServerGrid>` |
 | Pivot grid rendering | Planned | Not exposed in examples | Pivot row/column rendering integration |
 | Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
+
+Client group-by groups the current client/loaded row model. Server-backed grids
+send `groupBy` through `query.view`; the endpoint owns global grouping and must
+return rows that already match that grouped view.
 
 ## Global search
 

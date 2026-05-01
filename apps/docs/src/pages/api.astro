@@ -113,8 +113,18 @@ const gridProps = [
     "Reserved Q2 read-only catch-up. No pager UI is currently rendered.",
   ],
   ["pageSizeOptions", "number[]", "reserved", "Reserved with pagination."],
-  ["groupableColumns", "{ columnId; header }[]", "reserved", "Reserved Q2 group-by UI."],
-  ["groupsExpandedByDefault", "boolean", "reserved", "Reserved with expansion/grouping."],
+  [
+    "groupableColumns",
+    "{ columnId; header }[]",
+    "implemented",
+    "Columns exposed to the client group-by controls.",
+  ],
+  [
+    "groupsExpandedByDefault",
+    "boolean",
+    "implemented",
+    "Initial expansion state for client row groups.",
+  ],
   [
     "showInactive",
     "boolean",
@@ -240,7 +250,12 @@ const statePairs = [
     "reserved",
     "Reserved for tree/grouped data.",
   ],
-  ["groupBy/defaultGroupBy", "ColumnId[]", "reserved", "Reserved Q2."],
+  [
+    "groupBy/defaultGroupBy",
+    "ColumnId[]",
+    "implemented",
+    "Client group-by state; server grids pass it through query.view.",
+  ],
   [
     "columnState/defaultColumnState",
     "BcColumnStateEntry[]",
