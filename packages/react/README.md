@@ -117,6 +117,61 @@ Use `defaultSearchText` for an uncontrolled initial query. For a host-owned
 search input, prefer controlling the query with `searchText` as shown above. Do
 not combine `defaultSearchText` with `searchText` on the same grid.
 
+## Filter row toggle
+
+Some host apps want a toolbar "Show filters" button that hides the inline
+filter row without losing the active filter state. The grid splits the two
+concerns: `showFilterRow` controls whether the editor row paints,
+`columnFilterText` (and the controlled `filter` / `defaultFilter` pair)
+holds the actual filter that decides which rows show. Toggling visibility
+never clears state.
+
+```tsx
+const [filtersOpen, setFiltersOpen] = useState(true)
+
+return (
+  <>
+    <button
+      type="button"
+      aria-pressed={filtersOpen}
+      onClick={() => setFiltersOpen((open) => !open)}
+    >
+      {filtersOpen ? "Hide filters" : "Show filters"}
+    </button>
+    <BcGrid
+      columns={columns}
+      data={rows}
+      rowId={(row) => row.id}
+      showFilterRow={filtersOpen}
+    />
+  </>
+)
+```
+
+Resolution rules:
+
+- `showFilterRow={true}` — force the inline row visible, even if every
+  configured column is `filter: { variant: "popup" }`. Popup-variant cells
+  render empty in the row; the per-column funnel button on the header stays
+  reachable in either visibility state.
+- `showFilterRow={false}` — force the row hidden. The grid keeps the active
+  filter applied to the row set; `BcGridApi.clearFilter()` is the only
+  operation that resets filter state.
+- `showFilterRow={undefined}` (default) — column-driven: the row paints when
+  at least one column declares an inline-variant filter, otherwise it stays
+  hidden so popup-only grids don't carry an empty filter row.
+
+`showFilters` is a back-compat alias accepted alongside `showFilterRow`. The
+grid resolves them as `props.showFilterRow ?? props.showFilters`, so a host
+that already passes `showFilters` keeps working; new code should prefer
+`showFilterRow`. If both are supplied, `showFilterRow` wins.
+
+Visibility is **never persisted** through `gridId` localStorage or
+`urlStatePersistence`. A toolbar toggle is per-mount host state, while filter
+state (and column state, density, page size, sidebar panel) is what the
+persistence layer round-trips. Reload the page and the row visibility
+follows the toolbar's default; the active filter survives.
+
 ## Layout persistence
 
 Use `initialLayout` for a one-time saved-view restore and

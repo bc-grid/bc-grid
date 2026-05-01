@@ -1174,6 +1174,57 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
 `showFilters` is a compatibility alias for `showFilterRow`; prefer
 `showFilterRow` in new code. If both are supplied, `showFilterRow` wins.
+The grid resolves the prop pair as `props.showFilterRow ?? props.showFilters`
+on every render — so a host can pass either prop without re-wiring the
+column definitions.
+
+#### Filter-row toggle contract
+
+The filter row is a **visible editor surface**, not the storage for the
+active filter. Toggling it does not change which rows the grid shows:
+
+- Active filter state lives in the controlled `filter` /
+  `defaultFilter` props (or, internally, the `columnFilterText` map
+  for uncontrolled grids). Setting `showFilterRow={false}` hides the
+  editor row but **does not clear** the active filter.
+- Setting `showFilterRow={true}` again restores the editor row with
+  the previously-typed values still populated.
+- `BcGridApi.setFilter(null)` / `clearFilter()` is the **only** path
+  that clears active filter state. The visibility flag never side-
+  effects it.
+
+This separation means a host toolbar "Show filters" button can be a
+pure visibility toggle. Keep the toggle's local boolean in host
+state and thread it into the prop:
+
+```tsx
+const [filtersOpen, setFiltersOpen] = useState(true)
+
+return (
+  <>
+    <button
+      type="button"
+      aria-pressed={filtersOpen}
+      onClick={() => setFiltersOpen((open) => !open)}
+    >
+      {filtersOpen ? "Hide filters" : "Show filters"}
+    </button>
+    <BcGrid
+      columns={columns}
+      data={rows}
+      rowId={(row) => row.id}
+      showFilterRow={filtersOpen}
+      // …
+    />
+  </>
+)
+```
+
+`showFilterRow` is **not** persisted by `gridId` / `urlStatePersistence`
+— a toolbar toggle never accidentally round-trips the visibility
+decision into localStorage or URL state. Visibility is per-mount;
+filter state is what the consumer wires through `gridId` /
+`urlStatePersistence` (see §3.3 below).
 
 `showColumnMenu` controls the built-in header column-menu button and header
 right-click menu. It defaults to `true`; pass `false` when a host app provides
