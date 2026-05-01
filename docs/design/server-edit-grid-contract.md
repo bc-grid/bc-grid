@@ -35,7 +35,7 @@ const apiRef = useRef<BcServerGridApi<Customer> | null>(null)
   rowId={(row) => row.id}
   blockSize={100}
   loadBlock={loadCustomersBlock}
-  onCellEditCommit={commitCustomerCell}
+  onServerRowMutation={commitCustomerCell}
 />
 ```
 
@@ -65,25 +65,38 @@ The grid editing overlay is optimistic and cell-scoped:
 5. Resolving the promise clears pending state. Rejecting rolls back the overlay
    to the previous value and surfaces the error through the edit error channel.
 
-For server grids, consumers convert the event into a `ServerRowPatch`:
+For server grids, `onServerRowMutation` receives a `ServerRowPatch` that
+`<BcServerGrid>` created from the edit commit:
 
 ```ts
-import type { ServerRowPatch } from "@bc-grid/core"
+import type { BcServerEditMutationHandler } from "@bc-grid/react"
 
-const patch: ServerRowPatch = {
-  rowId: event.rowId,
-  mutationId: crypto.randomUUID(),
-  baseRevision: event.row.revision,
-  changes: {
-    [event.columnId]: event.nextValue,
-  },
+const commitCustomerCell: BcServerEditMutationHandler<Customer> = async ({ patch }) => {
+  const response = await fetch(`/customers/${patch.rowId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  })
+  return response.json()
 }
 ```
 
 `changes` is keyed by `ColumnId`. Editable business columns should use the
 convention `columnId === field` so the persistence layer can translate patches
 without column-specific glue. Computed columns and display-only renderers should
-not be editable.
+not be editable. Use `createServerRowPatch` when the application needs to add a
+base revision or provide its own mutation ID:
+
+```tsx
+<BcServerGrid<Customer>
+  // ...
+  createServerRowPatch={(event, patch) => ({
+    ...patch,
+    baseRevision: event.row.revision,
+    mutationId: crypto.randomUUID(),
+  })}
+  onServerRowMutation={commitCustomerCell}
+/>
+```
 
 ## Mutation Queue Semantics
 
@@ -106,10 +119,15 @@ queued server edits:
 - Identity remaps replace cached rows at `previousRowId` with the canonical row
   at `rowId`.
 
-The React `<BcServerGrid>` surface does not yet expose a high-level
-`queueServerMutation` adapter. Until that lands, the consumer owns the
-application mutation queue and uses `onCellEditCommit` plus the server grid API
-to reconcile visible rows.
+The React `<BcServerGrid>` surface exposes two wiring levels:
+
+- `onServerRowMutation` is the high-level edit adapter. It creates or accepts a
+  patch, queues the optimistic server-row-model mutation, awaits persistence,
+  settles the mutation result, and rejects the edit overlay for
+  rejected/conflict results.
+- `apiRef.current.queueServerRowMutation(patch)` and
+  `apiRef.current.settleServerRowMutation(result)` are the low-level API for
+  consumers that still want to drive the queue manually from `onCellEditCommit`.
 
 ## Consumer Responsibilities
 
@@ -122,23 +140,30 @@ A business app wiring a customers grid must provide:
   server-side sort, filter, search, group, and abort signals.
 - `apiRef`: access to `BcServerGridApi` for invalidation, refresh, and streaming
   row updates after mutations settle.
-- `onCellEditCommit`: conversion from cell edit events to server mutations,
-  including mutation IDs, optional base revisions, persistence, rollback, and
-  cache reconciliation.
+- `onServerRowMutation`: persistence callback that returns a
+  `ServerMutationResult`. Use `createServerRowPatch` when mutation IDs or base
+  revisions must come from the application.
 - Error mapping: convert validation, permission, conflict, and transport errors
   into rejected edit promises with user-visible messages.
 
 ## Optimistic, Accepted, Rejected, and Conflict Results
 
 For a normal accepted update where the row still belongs in the current view,
-resolve the edit promise and apply the canonical row:
+return an accepted `ServerMutationResult`. `<BcServerGrid>` settles the queued
+mutation and applies the canonical row to loaded cache blocks:
 
 ```ts
-apiRef.current?.applyServerRowUpdate({
-  type: "rowUpdated",
-  rowId: patch.rowId,
-  row: result.row,
-})
+return {
+  mutationId: patch.mutationId,
+  row: savedCustomer,
+  status: "accepted",
+}
+```
+
+Consumers using the low-level API manually perform the same settle step:
+
+```ts
+apiRef.current?.settleServerRowMutation(result)
 ```
 
 If the changed field participates in the active sort, filter, search, or group
@@ -158,15 +183,17 @@ row to a different page, or the mutation changes grouping membership:
 apiRef.current?.invalidateServerRows({ scope: "view" })
 ```
 
-For rejected results, reject the `onCellEditCommit` promise. The editing overlay
-rolls back the cell. Do not apply the rejected row update. If the server reports
-that the row has changed since the user began editing, invalidate the row or the
-view so the next load displays current data.
+For rejected results, return `status: "rejected"` from `onServerRowMutation` or
+throw from the callback. `<BcServerGrid>` settles the mutation as rejected and
+rejects the edit promise, so the editing overlay rolls back the cell. If the
+server reports that the row has changed since the user began editing, invalidate
+the row or the view so the next load displays current data.
 
 For conflict results, prefer one of two explicit policies:
 
-- Server wins: apply the canonical row, invalidate if sort/filter/group
-  membership may change, and reject the edit promise with a conflict message.
+- Server wins: return a conflict result with the canonical row, invalidate if
+  sort/filter/group membership may change, and let `<BcServerGrid>` reject the
+  edit promise with a conflict message.
 - User retries: reject the edit promise, keep no server row update, and show a
   product-specific conflict action outside the grid.
 

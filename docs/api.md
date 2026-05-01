@@ -1130,6 +1130,8 @@ export interface BcServerPagedProps<TRow> extends Omit<BcGridProps<TRow>, "apiRe
   loadPage: LoadServerPage<TRow>
   /** Optional first page rendered server-side. */
   initialResult?: ServerPagedResult<TRow>
+  onServerRowMutation?: BcServerEditMutationHandler<TRow>
+  createServerRowPatch?: BcServerEditPatchFactory<TRow>
   apiRef?: React.RefObject<BcServerGridApi<TRow> | null>
 }
 
@@ -1140,6 +1142,8 @@ export interface BcServerInfiniteProps<TRow> extends Omit<BcGridProps<TRow>, "ap
   blockLoadDebounceMs?: number
   maxConcurrentRequests?: number
   loadBlock: LoadServerBlock<TRow>
+  onServerRowMutation?: BcServerEditMutationHandler<TRow>
+  createServerRowPatch?: BcServerEditPatchFactory<TRow>
   apiRef?: React.RefObject<BcServerGridApi<TRow> | null>
 }
 
@@ -1148,8 +1152,25 @@ export interface BcServerTreeProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef
   loadChildren: LoadServerTreeChildren<TRow>
   /** Required when the tree's root needs an initial fetch. */
   loadRoots?: LoadServerTreeChildren<TRow>
+  onServerRowMutation?: BcServerEditMutationHandler<TRow>
+  createServerRowPatch?: BcServerEditPatchFactory<TRow>
   apiRef?: React.RefObject<BcServerGridApi<TRow> | null>
 }
+```
+
+```ts
+export interface BcServerEditMutationEvent<TRow> extends BcCellEditCommitEvent<TRow> {
+  patch: ServerRowPatch
+}
+
+export type BcServerEditMutationHandler<TRow> = (
+  event: BcServerEditMutationEvent<TRow>,
+) => ServerMutationResult<TRow> | Promise<ServerMutationResult<TRow>>
+
+export type BcServerEditPatchFactory<TRow> = (
+  event: BcCellEditCommitEvent<TRow>,
+  defaultPatch: ServerRowPatch,
+) => ServerRowPatch
 ```
 
 The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are declared in `@bc-grid/core` with the rest of the server query contract and re-exported through `@bc-grid/react`. Runtime cache/state-machine helpers live in `@bc-grid/server-row-model`.
@@ -1157,8 +1178,12 @@ The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are 
 `ServerPagedQuery.pivotState?: BcPivotState` and `ServerPagedResult.pivotedRows?: BcPivotedDataDTO` are reserved for server-side pivot pushdown. Client-side pivot uses the pure `@bc-grid/aggregations` engine; server-side pivot consumers can return the same JSON-safe DTO shape without exposing the engine's internal lookup maps.
 
 Editable server-backed business grids use the same edit commit event as
-`<BcGrid>` / `<BcEditGrid>` and reconcile through `BcServerGridApi`. The
-contract is documented in
+`<BcGrid>` / `<BcEditGrid>`. `onServerRowMutation` converts the edit into a
+`ServerRowPatch`, queues the optimistic server-row-model mutation, awaits the
+consumer's persistence result, settles the mutation, and rejects the edit
+overlay for rejected/conflict results. Consumers that need manual control can
+call the lower-level `BcServerGridApi` mutation methods directly. The contract
+is documented in
 [`docs/design/server-edit-grid-contract.md`](./design/server-edit-grid-contract.md).
 
 ---
@@ -1209,6 +1234,8 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   invalidateServerRows(invalidation: ServerInvalidation): void
   retryServerBlock(blockKey: ServerBlockKey): void
   applyServerRowUpdate(update: ServerRowUpdate<TRow>): void
+  queueServerRowMutation(patch: ServerRowPatch): void
+  settleServerRowMutation(result: ServerMutationResult<TRow>): void
   getServerRowModelState(): ServerRowModelState<TRow>
 }
 ```
@@ -1278,9 +1305,10 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
 
 `<BcGrid>`, `<BcEditGrid>`, and `<BcServerGrid>` consume this protocol;
 consumers can pass column.cellEditor as either a built-in (`textEditor()`,
-`numberEditor()`) or a custom implementation. Server-backed consumers convert
-the event into a `ServerRowPatch` and settle persistence through their own
-mutation queue plus `BcServerGridApi` invalidation/update calls.
+`numberEditor()`) or a custom implementation. Server-backed consumers can use
+`<BcServerGrid onServerRowMutation>` for the built-in patch/queue/settle path,
+or wire `onCellEditCommit` manually with `BcServerGridApi.queueServerRowMutation`
+and `BcServerGridApi.settleServerRowMutation`.
 
 ---
 
@@ -1304,7 +1332,7 @@ So:
 
 - **`@bc-grid/core` exports**: every type listed in `server-query-rfc §Public Types`.
 - **`@bc-grid/server-row-model` exports**: the state machine factory, the cache, helper utilities. No types — types come from `core`.
-- **`@bc-grid/react` re-exports**: `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowUpdate`, `BcServerGridProps`, `BcServerGridApi`, and `useServerRowUpdates` for consumer convenience.
+- **`@bc-grid/react` re-exports**: `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowPatch`, `ServerMutationResult`, `ServerRowUpdate`, `BcServerGridProps`, `BcServerGridApi`, `BcServerEditMutationEvent`, `BcServerEditMutationHandler`, `BcServerEditMutationProps`, `BcServerEditPatchFactory`, and `useServerRowUpdates` for consumer convenience.
 
 ### 8.2 Resolved review-comments from server-query-rfc
 
@@ -1378,6 +1406,8 @@ export type {
   BcCellRendererParams, BcGridMessages, BcClipboardPayload,
   BcAggregationFormatterParams, BcAggregationScope, UseAggregationsOptions,
   BcCellEditor, BcCellEditorProps, BcCellEditorPrepareParams, BcCellEditCommitEvent,
+  BcServerEditMutationEvent, BcServerEditMutationHandler,
+  BcServerEditMutationProps, BcServerEditPatchFactory,
   BcEditGridAction,
   BcRangeBeforeCopyEvent, BcRangeBeforeCopyHook, BcRangeCopyEvent, BcRangeCopyHook,
   BcServerRowUpdateHandler, BcServerRowUpdateSubscribe, BcServerRowUpdateUnsubscribe,
@@ -1391,6 +1421,7 @@ export type {
   BcGridSort, BcGridFilter,
   BcColumnFilter, BcColumnFormat, BcColumnStateEntry,
   BcValidationResult, ColumnId, RowId,
+  ServerRowPatch, ServerMutationResult,
 
   // Re-exports from @bc-grid/theming
   BcGridDensity,

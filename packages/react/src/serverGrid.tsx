@@ -10,9 +10,11 @@ import type {
   ServerBlockResult,
   ServerGroupKey,
   ServerInvalidation,
+  ServerMutationResult,
   ServerPagedResult,
   ServerRowModelMode,
   ServerRowModelState,
+  ServerRowPatch,
   ServerRowUpdate,
   ServerSelection,
   ServerViewState,
@@ -22,7 +24,12 @@ import { createServerRowModel } from "@bc-grid/server-row-model"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { BcGrid, useBcGridApi } from "./grid"
 import { assignRef, createEmptySelection, hasProp } from "./gridInternals"
-import type { BcGridProps, BcReactGridColumn, BcServerGridProps } from "./types"
+import type {
+  BcCellEditCommitEvent,
+  BcGridProps,
+  BcReactGridColumn,
+  BcServerGridProps,
+} from "./types"
 
 const DEFAULT_SERVER_PAGE_SIZE = 100
 const DEFAULT_SERVER_BLOCK_SIZE = 100
@@ -35,10 +42,12 @@ interface PagedServerState<TRow> {
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   invalidate: (invalidation: ServerInvalidation) => void
   loading: boolean
+  queueMutation: (patch: ServerRowPatch) => void
   refresh: (opts?: { purge?: boolean }) => void
   retryBlock: (blockKey: ServerBlockKey) => void
   rows: readonly TRow[]
   rowCount: number | "unknown"
+  settleMutation: (result: ServerMutationResult<TRow>) => void
   view: ServerViewState
 }
 
@@ -51,10 +60,12 @@ interface InfiniteServerState<TRow> {
   handleVisibleRowRangeChange: (range: { startIndex: number; endIndex: number }) => void
   invalidate: (invalidation: ServerInvalidation) => void
   loading: boolean
+  queueMutation: (patch: ServerRowPatch) => void
   refresh: (opts?: { purge?: boolean }) => void
   retryBlock: (blockKey: ServerBlockKey) => void
   rows: readonly TRow[]
   rowCount: number | "unknown"
+  settleMutation: (result: ServerMutationResult<TRow>) => void
   view: ServerViewState
 }
 
@@ -74,11 +85,13 @@ interface TreeServerState<TRow> {
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   invalidate: (invalidation: ServerInvalidation) => void
   loading: boolean
+  queueMutation: (patch: ServerRowPatch) => void
   refresh: (opts?: { purge?: boolean }) => void
   retryBlock: (blockKey: ServerBlockKey) => void
   rowId: (row: TRow, index: number) => RowId
   rows: readonly TRow[]
   rowCount: number | "unknown"
+  settleMutation: (result: ServerMutationResult<TRow>) => void
   view: ServerViewState
 }
 
@@ -115,6 +128,64 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   const paged = usePagedServerState(props, visibleColumns)
   const infinite = useInfiniteServerState(props, visibleColumns)
   const tree = useTreeServerState(props, visibleColumns)
+  const mutationCounterRef = useRef(0)
+
+  const queueServerRowMutation = useCallback(
+    (patch: ServerRowPatch) => {
+      if (props.rowModel === "paged") paged.queueMutation(patch)
+      else if (props.rowModel === "infinite") infinite.queueMutation(patch)
+      else if (props.rowModel === "tree") tree.queueMutation(patch)
+    },
+    [infinite, paged, props.rowModel, tree],
+  )
+
+  const settleServerRowMutation = useCallback(
+    (result: ServerMutationResult<TRow>) => {
+      if (props.rowModel === "paged") paged.settleMutation(result)
+      else if (props.rowModel === "infinite") infinite.settleMutation(result)
+      else if (props.rowModel === "tree") tree.settleMutation(result)
+    },
+    [infinite, paged, props.rowModel, tree],
+  )
+
+  const handleCellEditCommit = useCallback(
+    async (event: BcCellEditCommitEvent<TRow>) => {
+      if (!props.onServerRowMutation) return props.onCellEditCommit?.(event)
+
+      const defaultPatch = createDefaultServerEditMutationPatch(
+        event,
+        `server-edit:${++mutationCounterRef.current}`,
+      )
+      const patch = props.createServerRowPatch?.(event, defaultPatch) ?? defaultPatch
+      queueServerRowMutation(patch)
+
+      let settled = false
+      try {
+        const result = await props.onServerRowMutation({ ...event, patch })
+        settleServerRowMutation(result)
+        settled = true
+        if (result.status !== "accepted") throw createServerEditMutationError(result)
+      } catch (error) {
+        if (!settled) {
+          settleServerRowMutation({
+            mutationId: patch.mutationId,
+            reason: errorMessage(error),
+            status: "rejected",
+          })
+        }
+        throw error
+      }
+    },
+    [
+      props.createServerRowPatch,
+      props.onCellEditCommit,
+      props.onServerRowMutation,
+      queueServerRowMutation,
+      settleServerRowMutation,
+    ],
+  )
+  const cellEditCommitHandler =
+    props.onServerRowMutation || props.onCellEditCommit ? handleCellEditCommit : undefined
 
   const serverApi = useMemo<BcServerGridApi<TRow>>(() => {
     const mode = props.rowModel
@@ -195,6 +266,8 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         else if (mode === "infinite") infinite.applyRowUpdate(update)
         else if (mode === "tree") tree.applyRowUpdate(update)
       },
+      queueServerRowMutation,
+      settleServerRowMutation,
       getServerRowModelState() {
         if (mode === "paged") {
           const state = paged.getModelState()
@@ -225,7 +298,15 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         })
       },
     }
-  }, [gridApiRef, infinite, paged, props.rowModel, tree])
+  }, [
+    gridApiRef,
+    infinite,
+    paged,
+    props.rowModel,
+    queueServerRowMutation,
+    settleServerRowMutation,
+    tree,
+  ])
 
   useEffect(() => assignRef(externalApiRef, serverApi), [externalApiRef, serverApi])
 
@@ -265,6 +346,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       apiRef={gridApiRef}
       loading={loading}
       loadingOverlay={loadingOverlay}
+      {...(cellEditCommitHandler ? { onCellEditCommit: cellEditCommitHandler } : {})}
       onFilterChange={
         props.rowModel === "tree"
           ? tree.handleFilterChange
@@ -413,6 +495,37 @@ function usePagedServerState<TRow>(
     setRefreshVersion((version) => version + 1)
   }, [])
 
+  const syncCurrentPageFromCache = useCallback(() => {
+    const blockKey = latestBlockKeyRef.current
+    const block = blockKey ? modelRef.current.cache.get(blockKey) : undefined
+    if (!block || (block.state !== "loaded" && block.state !== "stale")) return
+    setResult((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        rows: block.rows,
+        viewKey: block.viewKey,
+        ...(block.revision ? { revision: block.revision } : {}),
+      }
+    })
+  }, [])
+
+  const queueMutation = useCallback(
+    (patch: ServerRowPatch) => {
+      modelRef.current.queueMutation({ patch, rowId: serverRowId })
+      syncCurrentPageFromCache()
+    },
+    [serverRowId, syncCurrentPageFromCache],
+  )
+
+  const settleMutation = useCallback(
+    (mutationResult: ServerMutationResult<TRow>) => {
+      modelRef.current.settleMutation({ result: mutationResult, rowId: serverRowId })
+      syncCurrentPageFromCache()
+    },
+    [serverRowId, syncCurrentPageFromCache],
+  )
+
   const applyRowUpdate = useCallback(
     (update: ServerRowUpdate<TRow>) => {
       const activeViewKey = result?.viewKey ?? viewKey
@@ -505,10 +618,12 @@ function usePagedServerState<TRow>(
     handleSortChange,
     invalidate,
     loading,
+    queueMutation,
     refresh,
     retryBlock,
     rowCount,
     rows,
+    settleMutation,
     view,
   }
 }
@@ -691,6 +806,22 @@ function useInfiniteServerState<TRow>(
     setRefreshVersion((version) => version + 1)
   }, [])
 
+  const queueMutation = useCallback(
+    (patch: ServerRowPatch) => {
+      modelRef.current.queueMutation({ patch, rowId: serverRowId })
+      syncRowsFromCache()
+    },
+    [serverRowId, syncRowsFromCache],
+  )
+
+  const settleMutation = useCallback(
+    (mutationResult: ServerMutationResult<TRow>) => {
+      modelRef.current.settleMutation({ result: mutationResult, rowId: serverRowId })
+      syncRowsFromCache()
+    },
+    [serverRowId, syncRowsFromCache],
+  )
+
   const applyRowUpdate = useCallback(
     (update: ServerRowUpdate<TRow>) => {
       if (update.type === "viewInvalidated") {
@@ -728,10 +859,12 @@ function useInfiniteServerState<TRow>(
     handleVisibleRowRangeChange,
     invalidate,
     loading,
+    queueMutation,
     refresh,
     retryBlock,
     rowCount,
     rows,
+    settleMutation,
     view,
   }
 }
@@ -930,6 +1063,45 @@ function useTreeServerState<TRow>(
     setRefreshVersion((version) => version + 1)
   }, [])
 
+  const syncTreeMutationRow = useCallback(
+    (nodeRowId: RowId, dataRowId: RowId = nodeRowId) => {
+      const row = findCachedServerRow(modelRef.current.cache.toMap(), dataRowId, serverRowId)
+      if (row) setTree((prev) => updateTreeRow(prev, nodeRowId, row))
+    },
+    [serverRowId],
+  )
+
+  const queueMutation = useCallback(
+    (patch: ServerRowPatch) => {
+      modelRef.current.queueMutation({ patch, rowId: serverRowId })
+      syncTreeMutationRow(patch.rowId)
+    },
+    [serverRowId, syncTreeMutationRow],
+  )
+
+  const settleMutation = useCallback(
+    (mutationResult: ServerMutationResult<TRow>) => {
+      const patch = modelRef.current
+        .getState({
+          mode: props.rowModel,
+          rowCount: rows.length,
+          selection: toServerSelection(undefined, view),
+          view,
+          viewKey,
+        })
+        .pendingMutations.get(mutationResult.mutationId)
+      const sourceRowId = mutationResult.previousRowId ?? patch?.rowId ?? mutationResult.rowId
+      const targetRowId = mutationResult.row
+        ? (mutationResult.rowId ?? serverRowId(mutationResult.row))
+        : (mutationResult.rowId ?? sourceRowId)
+
+      modelRef.current.settleMutation({ result: mutationResult, rowId: serverRowId })
+      if (sourceRowId) syncTreeMutationRow(sourceRowId, targetRowId ?? sourceRowId)
+      if (targetRowId && targetRowId !== sourceRowId) syncTreeMutationRow(targetRowId)
+    },
+    [props.rowModel, rows.length, serverRowId, syncTreeMutationRow, view, viewKey],
+  )
+
   const applyRowUpdate = useCallback(
     (update: ServerRowUpdate<TRow>) => {
       if (update.type === "viewInvalidated") {
@@ -975,11 +1147,13 @@ function useTreeServerState<TRow>(
     handleSortChange,
     invalidate,
     loading: props.rowModel === "tree" && rootLoading && rows.length === 0 && !error,
+    queueMutation,
     refresh,
     retryBlock,
     rowCount: props.rowModel === "tree" ? rows.length : "unknown",
     rowId,
     rows,
+    settleMutation,
     view,
   }
 }
@@ -1045,6 +1219,40 @@ function nextKnownServerRowCount(
   updateResult: { insertedRowIds: readonly RowId[]; removedRowIds: readonly RowId[] },
 ): number {
   return nextServerRowCount(rowCount, updateResult) as number
+}
+
+export function createDefaultServerEditMutationPatch<TRow>(
+  event: BcCellEditCommitEvent<TRow>,
+  mutationId: string,
+): ServerRowPatch {
+  return {
+    changes: { [event.columnId]: event.nextValue },
+    mutationId,
+    rowId: event.rowId,
+  }
+}
+
+export function createServerEditMutationError<TRow>(result: ServerMutationResult<TRow>): Error {
+  if (result.reason) return new Error(result.reason)
+  if (result.status === "conflict") return new Error("Server reported an edit conflict.")
+  return new Error("Server rejected the edit.")
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Server rejected the edit."
+}
+
+function findCachedServerRow<TRow>(
+  blocks: ServerRowModelState<TRow>["blocks"],
+  rowId: RowId,
+  rowIdGetter: (row: TRow) => RowId,
+): TRow | undefined {
+  for (const block of blocks.values()) {
+    if (block.state !== "loaded" && block.state !== "stale") continue
+    const row = block.rows.find((candidate) => rowIdGetter(candidate) === rowId)
+    if (row) return row
+  }
+  return undefined
 }
 
 function insertRootTreeRow<TRow>(

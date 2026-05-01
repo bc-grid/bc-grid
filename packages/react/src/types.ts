@@ -25,8 +25,10 @@ import type {
   ServerBlockQuery,
   ServerBlockResult,
   ServerLoadContext,
+  ServerMutationResult,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerRowPatch,
   ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
@@ -450,12 +452,43 @@ export interface BcEditGridAction<TRow> {
   disabled?: boolean | ((row: TRow) => boolean)
 }
 
+export interface BcServerEditMutationEvent<TRow> extends BcCellEditCommitEvent<TRow> {
+  patch: ServerRowPatch
+}
+
+export type BcServerEditMutationHandler<TRow> = (
+  event: BcServerEditMutationEvent<TRow>,
+) => ServerMutationResult<TRow> | Promise<ServerMutationResult<TRow>>
+
+export type BcServerEditPatchFactory<TRow> = (
+  event: BcCellEditCommitEvent<TRow>,
+  defaultPatch: ServerRowPatch,
+) => ServerRowPatch
+
+export interface BcServerEditMutationProps<TRow> {
+  /**
+   * Server-backed edit commit adapter. When present, `<BcServerGrid>`
+   * converts cell edits into `ServerRowPatch` values, queues the optimistic
+   * server-row-model mutation, awaits this callback, settles the mutation, and
+   * rejects the edit overlay for rejected/conflict results.
+   */
+  onServerRowMutation?: BcServerEditMutationHandler<TRow>
+  /**
+   * Optional patch factory for adding base revisions or custom mutation IDs.
+   * The default patch uses `{ [columnId]: nextValue }` and an internal
+   * monotonic mutation ID.
+   */
+  createServerRowPatch?: BcServerEditPatchFactory<TRow>
+}
+
 export type BcServerGridProps<TRow> =
   | BcServerPagedProps<TRow>
   | BcServerInfiniteProps<TRow>
   | BcServerTreeProps<TRow>
 
-export interface BcServerPagedProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef" | "data"> {
+export interface BcServerPagedProps<TRow>
+  extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
+    BcServerEditMutationProps<TRow> {
   rowModel: "paged"
   pageSize?: number
   loadPage: LoadServerPage<TRow>
@@ -463,7 +496,9 @@ export interface BcServerPagedProps<TRow> extends Omit<BcGridProps<TRow>, "apiRe
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
 }
 
-export interface BcServerInfiniteProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef" | "data"> {
+export interface BcServerInfiniteProps<TRow>
+  extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
+    BcServerEditMutationProps<TRow> {
   rowModel: "infinite"
   blockSize?: number
   maxCachedBlocks?: number
@@ -473,7 +508,9 @@ export interface BcServerInfiniteProps<TRow> extends Omit<BcGridProps<TRow>, "ap
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
 }
 
-export interface BcServerTreeProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef" | "data"> {
+export interface BcServerTreeProps<TRow>
+  extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
+    BcServerEditMutationProps<TRow> {
   rowModel: "tree"
   loadChildren: LoadServerTreeChildren<TRow>
   loadRoots?: LoadServerTreeChildren<TRow>
@@ -609,8 +646,10 @@ export type {
   ServerBlockQuery,
   ServerBlockResult,
   ServerLoadContext,
+  ServerMutationResult,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerRowPatch,
   ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,

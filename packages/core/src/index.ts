@@ -289,6 +289,8 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   invalidateServerRows(invalidation: ServerInvalidation): void
   retryServerBlock(blockKey: ServerBlockKey): void
   applyServerRowUpdate(update: ServerRowUpdate<TRow>): void
+  queueServerRowMutation(patch: ServerRowPatch): void
+  settleServerRowMutation(result: ServerMutationResult<TRow>): void
   getServerRowModelState(): ServerRowModelState<TRow>
 }
 
