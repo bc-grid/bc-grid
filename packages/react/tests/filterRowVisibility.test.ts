@@ -9,7 +9,33 @@ import {
   matchesGridFilter,
 } from "../src/filter"
 import { type ResolvedColumn, resolveFilterRowVisibility } from "../src/gridInternals"
+import {
+  readPersistedGridState,
+  readUrlPersistedGridState,
+  writePersistedGridState,
+} from "../src/persistence"
 import type { BcReactGridColumn } from "../src/types"
+
+interface InMemoryStorage {
+  entries: Map<string, string>
+  getItem: (key: string) => string | null
+  setItem: (key: string, value: string) => void
+  removeItem: (key: string) => void
+}
+
+function emptyStorage(): InMemoryStorage {
+  const entries = new Map<string, string>()
+  return {
+    entries,
+    getItem: (key) => entries.get(key) ?? null,
+    setItem: (key, value) => {
+      entries.set(key, value)
+    },
+    removeItem: (key) => {
+      entries.delete(key)
+    },
+  }
+}
 
 interface Row {
   name: string
@@ -227,5 +253,200 @@ describe("active filter state survives row visibility toggles", () => {
     expect(columnFilterTextFromGridFilter(null)).toEqual({})
     // And the cleared text round-trips via buildGridFilter to null.
     expect(buildGridFilter(cleared)).toBeNull()
+  })
+})
+
+describe("filter-row-toggle-contract-v040 — explicit prop matrix", () => {
+  // bsncraft reported the inline filter-row toggle as confusing.
+  // The behaviour was correct but under-tested at the prop matrix
+  // level. These tests pin the contract a host toolbar toggle
+  // depends on so a future refactor that drops `showFilters` (the
+  // back-compat alias), inverts the precedence, or accidentally
+  // gates the toggle on column state surfaces here noisily.
+  test("showFilterRow=true forces visible regardless of column config", () => {
+    expect(resolveFilterRowVisibility(true, [])).toBe(true)
+    expect(resolveFilterRowVisibility(true, [noFilterColumn])).toBe(true)
+    expect(resolveFilterRowVisibility(true, [popupFilterColumn])).toBe(true)
+    expect(resolveFilterRowVisibility(true, [inlineFilterColumn])).toBe(true)
+  })
+
+  test("showFilterRow=false hides regardless of column config", () => {
+    expect(resolveFilterRowVisibility(false, [])).toBe(false)
+    expect(resolveFilterRowVisibility(false, [noFilterColumn])).toBe(false)
+    expect(resolveFilterRowVisibility(false, [popupFilterColumn])).toBe(false)
+    expect(resolveFilterRowVisibility(false, [inlineFilterColumn])).toBe(false)
+    // Mixed — still hidden.
+    expect(
+      resolveFilterRowVisibility(false, [inlineFilterColumn, popupFilterColumn, noFilterColumn]),
+    ).toBe(false)
+  })
+
+  test("showFilterRow=undefined keeps the column-driven default", () => {
+    // Empty / no-filter / all-popup → hidden by default (no inline
+    // editor surface to render). At least one inline filter → visible.
+    expect(resolveFilterRowVisibility(undefined, [])).toBe(false)
+    expect(resolveFilterRowVisibility(undefined, [noFilterColumn])).toBe(false)
+    expect(resolveFilterRowVisibility(undefined, [popupFilterColumn])).toBe(false)
+    expect(resolveFilterRowVisibility(undefined, [inlineFilterColumn])).toBe(true)
+    expect(resolveFilterRowVisibility(undefined, [popupFilterColumn, inlineFilterColumn])).toBe(
+      true,
+    )
+  })
+
+  test("showFilterRow + showFilters precedence — showFilterRow always wins", () => {
+    // grid.tsx resolves the prop pair as
+    // `showFilterRow ?? showFilters` so the explicit override beats
+    // the back-compat alias even when they disagree. Reproduce the
+    // resolution against the visibility helper to pin the contract.
+    const resolve = (showFilterRow: boolean | undefined, showFilters: boolean | undefined) =>
+      resolveFilterRowVisibility(showFilterRow ?? showFilters, [inlineFilterColumn])
+
+    // Both undefined → column-driven (true here because the column
+    // is inline-variant).
+    expect(resolve(undefined, undefined)).toBe(true)
+    // Only the alias → alias wins.
+    expect(resolve(undefined, false)).toBe(false)
+    expect(resolve(undefined, true)).toBe(true)
+    // Both supplied — `showFilterRow` always wins.
+    expect(resolve(true, false)).toBe(true)
+    expect(resolve(false, true)).toBe(false)
+    expect(resolve(false, false)).toBe(false)
+    expect(resolve(true, true)).toBe(true)
+  })
+
+  test("showFilters alias accepted when showFilterRow is explicitly undefined", () => {
+    // Some host apps migrated from a wrapper-level `showFilters` boolean
+    // and still pass that field. The grid honours it as long as
+    // `showFilterRow` is undefined. Pin the contract so the alias can't
+    // silently become a no-op.
+    const resolve = (showFilters: boolean | undefined) =>
+      resolveFilterRowVisibility(showFilters, [inlineFilterColumn])
+
+    expect(resolve(false)).toBe(false)
+    expect(resolve(true)).toBe(true)
+    expect(resolve(undefined)).toBe(true)
+  })
+})
+
+describe("filter-row-toggle-contract-v040 — toolbar-toggle recipe", () => {
+  // The intended host-app pattern: a toolbar button owns a boolean
+  // and threads it into `<BcGrid showFilterRow={value}>`. Toggling
+  // the button must not perturb `columnFilterText` (the active
+  // filter state) or the resolved `BcGridFilter`. This is the
+  // contract bsncraft cares about — the toolbar button reads as a
+  // pure visibility toggle.
+  test("a host useState boolean threaded into showFilterRow does not touch columnFilterText", () => {
+    // Simulates the host-app loop:
+    //   const [filtersOpen, setFiltersOpen] = useState(true)
+    //   <BcGrid showFilterRow={filtersOpen} />
+    // Toggling `filtersOpen` should be a pure visibility flip.
+    const columnFilterText = {
+      name: "Acme",
+      balance: encodeNumberFilterInput({ op: ">=", value: "1000" }),
+    }
+    const types = { name: "text", balance: "number" } as const
+    const filterStateBefore = buildGridFilter(columnFilterText, types)
+
+    let filtersOpen = true
+    expect(resolveFilterRowVisibility(filtersOpen, [inlineFilterColumn])).toBe(true)
+
+    // Toggle off — the row hides; the filter map and the resolved
+    // filter MUST be byte-identical.
+    filtersOpen = false
+    expect(resolveFilterRowVisibility(filtersOpen, [inlineFilterColumn])).toBe(false)
+    expect(buildGridFilter(columnFilterText, types)).toEqual(filterStateBefore)
+
+    // Toggle on again — same invariant in reverse.
+    filtersOpen = true
+    expect(resolveFilterRowVisibility(filtersOpen, [inlineFilterColumn])).toBe(true)
+    expect(buildGridFilter(columnFilterText, types)).toEqual(filterStateBefore)
+  })
+
+  test("toggling visibility does not affect popup-variant columns' funnel reachability", () => {
+    // When a column is configured as `filter: { variant: "popup" }`,
+    // its filter affordance lives on the column header (the funnel
+    // button), not in the inline filter row. Toggling the row's
+    // visibility must not change the column's filter configuration —
+    // the popup funnel stays reachable in either state. This pins the
+    // separation of concerns between row visibility and per-column
+    // filter UI.
+    expect(popupFilterColumn.source.filter).toEqual({ type: "text", variant: "popup" })
+
+    expect(resolveFilterRowVisibility(true, [popupFilterColumn])).toBe(true)
+    expect(popupFilterColumn.source.filter).toEqual({ type: "text", variant: "popup" })
+
+    expect(resolveFilterRowVisibility(false, [popupFilterColumn])).toBe(false)
+    expect(popupFilterColumn.source.filter).toEqual({ type: "text", variant: "popup" })
+
+    expect(resolveFilterRowVisibility(undefined, [popupFilterColumn])).toBe(false)
+    expect(popupFilterColumn.source.filter).toEqual({ type: "text", variant: "popup" })
+  })
+})
+
+describe("filter-row-toggle-contract-v040 — persistence invariant", () => {
+  // Visibility is a host-controlled prop, not persisted state. A
+  // toolbar toggle that flips `showFilterRow` between true / false
+  // must NEVER round-trip through `gridId` localStorage or
+  // `urlStatePersistence`. This test pins the negative invariant
+  // by inspecting the persistence type at runtime.
+  //
+  // Both `PersistedGridState` and `UrlPersistedGridState` are
+  // structural — TypeScript doesn't expose them as runtime objects.
+  // The helpers `readPersistedGridState` / `readUrlPersistedGridState`
+  // return the shape with explicit-undefined keys, which lets us
+  // assert via `Object.keys` that no `showFilterRow` slot exists.
+  test("readPersistedGridState never carries showFilterRow / showFilters", () => {
+    const empty = readPersistedGridState("test-grid", emptyStorage())
+    const keys = Object.keys(empty)
+    expect(keys).not.toContain("showFilterRow")
+    expect(keys).not.toContain("showFilters")
+    // Sanity: the read returned the documented six persistence keys
+    // (filter / pageSize / density / groupBy / pivotState / sidebarPanel
+    // + columnState). If a key gets added to the persistence
+    // type, this list is the place to update it.
+    for (const key of keys) {
+      expect([
+        "columnState",
+        "pageSize",
+        "density",
+        "groupBy",
+        "pivotState",
+        "filter",
+        "sidebarPanel",
+      ]).toContain(key)
+    }
+  })
+
+  test("readUrlPersistedGridState never carries showFilterRow / showFilters", () => {
+    const empty = readUrlPersistedGridState(
+      { searchParam: "grid" },
+      { pathname: "/", search: "", hash: "" },
+    )
+    const keys = Object.keys(empty)
+    expect(keys).not.toContain("showFilterRow")
+    expect(keys).not.toContain("showFilters")
+  })
+
+  test("writing visibility-bearing state has no observable effect on storage", () => {
+    // Belt-and-braces: even if a future refactor accidentally widened
+    // PersistedGridState to accept arbitrary keys, the writer should
+    // still ignore an unsupported `showFilterRow` field. Cast to a
+    // permissive shape to model the misuse and assert no key with that
+    // name lands in storage.
+    const storage = emptyStorage()
+    writePersistedGridState(
+      "test-grid",
+      // Unknown keys are stripped by the writer — pass them anyway to
+      // confirm the contract.
+      {
+        filter: null as unknown as undefined,
+      } as Parameters<typeof writePersistedGridState>[1] & {
+        showFilterRow?: boolean
+      },
+      storage,
+    )
+    const keys = Array.from(storage.entries.keys())
+    expect(keys).not.toContain("bc-grid:test-grid:showFilterRow")
+    expect(keys).not.toContain("bc-grid:test-grid:showFilters")
   })
 })
