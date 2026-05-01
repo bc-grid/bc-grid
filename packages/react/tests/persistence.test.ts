@@ -40,6 +40,9 @@ describe("grid state persistence", () => {
     expect(gridStorageKey("accounts-receivable.customers", "filter")).toBe(
       "bc-grid:accounts-receivable.customers:filter",
     )
+    expect(gridStorageKey("accounts-receivable.customers", "pivotState")).toBe(
+      "bc-grid:accounts-receivable.customers:pivotState",
+    )
   })
 
   test("reads and validates persisted grid state", () => {
@@ -68,6 +71,19 @@ describe("grid state persistence", () => {
     storage.setItem(gridStorageKey(gridId, "pageSize"), JSON.stringify(100))
     storage.setItem(gridStorageKey(gridId, "density"), JSON.stringify("compact"))
     storage.setItem(gridStorageKey(gridId, "groupBy"), JSON.stringify(["tier", "status"]))
+    storage.setItem(
+      gridStorageKey(gridId, "pivotState"),
+      JSON.stringify({
+        colGroups: ["month"],
+        rowGroups: ["tier"],
+        subtotals: { cols: false, rows: true },
+        values: [
+          { aggregation: { type: "sum" }, columnId: "balance", label: "Balance" },
+          { aggregation: { type: "custom", custom: { id: "unsupported" } }, columnId: "risk" },
+          { columnId: "" },
+        ],
+      }),
+    )
     storage.setItem(
       gridStorageKey(gridId, "filter"),
       JSON.stringify({
@@ -103,6 +119,15 @@ describe("grid state persistence", () => {
       },
       groupBy: ["tier", "status"],
       pageSize: 100,
+      pivotState: {
+        colGroups: ["month"],
+        rowGroups: ["tier"],
+        subtotals: { cols: false, rows: true },
+        values: [
+          { aggregation: { type: "sum" }, columnId: "balance", label: "Balance" },
+          { columnId: "risk" },
+        ],
+      },
       sidebarPanel: "columns",
     })
   })
@@ -114,6 +139,7 @@ describe("grid state persistence", () => {
     storage.setItem(gridStorageKey(gridId, "pageSize"), JSON.stringify(0))
     storage.setItem(gridStorageKey(gridId, "density"), JSON.stringify("dense"))
     storage.setItem(gridStorageKey(gridId, "groupBy"), JSON.stringify(["tier", 42]))
+    storage.setItem(gridStorageKey(gridId, "pivotState"), JSON.stringify({ rowGroups: ["tier"] }))
     storage.setItem(
       gridStorageKey(gridId, "filter"),
       JSON.stringify({ kind: "column", columnId: "", type: "text", op: "contains", value: "x" }),
@@ -126,6 +152,7 @@ describe("grid state persistence", () => {
     expect(state.density).toBeUndefined()
     expect(state.filter).toBeUndefined()
     expect(state.groupBy).toBeUndefined()
+    expect(state.pivotState).toBeUndefined()
     expect(state.sidebarPanel).toBeUndefined()
   })
 
@@ -147,6 +174,11 @@ describe("grid state persistence", () => {
         },
         groupBy: ["tier"],
         pageSize: 50,
+        pivotState: {
+          colGroups: ["month"],
+          rowGroups: ["status"],
+          values: [{ aggregation: { type: "count" }, columnId: "id" }],
+        },
         sidebarPanel: "filters",
       },
       storage,
@@ -167,6 +199,13 @@ describe("grid state persistence", () => {
       }),
     )
     expect(storage.getItem(gridStorageKey(gridId, "groupBy"))).toBe(JSON.stringify(["tier"]))
+    expect(storage.getItem(gridStorageKey(gridId, "pivotState"))).toBe(
+      JSON.stringify({
+        colGroups: ["month"],
+        rowGroups: ["status"],
+        values: [{ aggregation: { type: "count" }, columnId: "id" }],
+      }),
+    )
     expect(storage.getItem(gridStorageKey(gridId, "sidebarPanel"))).toBe(JSON.stringify("filters"))
 
     writePersistedGridState(gridId, {}, storage)
@@ -176,6 +215,7 @@ describe("grid state persistence", () => {
     expect(storage.getItem(gridStorageKey(gridId, "density"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "filter"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "groupBy"))).toBeNull()
+    expect(storage.getItem(gridStorageKey(gridId, "pivotState"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "sidebarPanel"))).toBeNull()
   })
 
@@ -332,17 +372,25 @@ describe("filter persistence contract corners", () => {
     expect(readPersistedGridState(gridId, storage).sidebarPanel).toBeNull()
   })
 
-  test("empty-storage read returns six explicit-undefined keys (not {})", () => {
+  test("empty-storage read returns seven explicit-undefined keys (not {})", () => {
     // Documented corner: PersistedGridState makes every field optional
     // (`?:`) so the runtime can return `undefined` per key; the reader
-    // returns the full six-key shape regardless. Object.keys(state)
-    // therefore returns six entries, not zero. Consumers iterating
+    // returns the full seven-key shape regardless. Object.keys(state)
+    // therefore returns seven entries, not zero. Consumers iterating
     // with `Object.keys` should be aware.
     const storage = new MemoryStorage()
     const state = readPersistedGridState("nothing-persisted", storage)
     const keys = Object.keys(state).sort()
     expect(keys).toEqual(
-      ["columnState", "density", "filter", "groupBy", "pageSize", "sidebarPanel"].sort(),
+      [
+        "columnState",
+        "density",
+        "filter",
+        "groupBy",
+        "pageSize",
+        "pivotState",
+        "sidebarPanel",
+      ].sort(),
     )
     for (const key of keys) {
       expect(state[key as keyof typeof state]).toBeUndefined()

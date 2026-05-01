@@ -402,7 +402,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [pivotState, setPivotState] = useControlledState<BcPivotState>(
     hasProp(props, "pivotState"),
     props.pivotState ?? emptyBcPivotState,
-    props.defaultPivotState ?? emptyBcPivotState,
+    props.defaultPivotState ?? persistedGridState.pivotState ?? emptyBcPivotState,
     props.onPivotStateChange,
   )
   const [pageState, setPageState] = useControlledState<number>(
@@ -483,6 +483,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       filter: filterState ?? undefined,
       groupBy: groupByState,
       pageSize: pageSizeState,
+      pivotState,
       sidebarPanel: hasSidebar ? activeSidebarPanel : undefined,
     }),
     [
@@ -493,6 +494,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       hasSidebar,
       pageSizeState,
       persistedColumnState,
+      pivotState,
     ],
   )
   usePersistedGridStateWriter(props.gridId, persistenceState)
