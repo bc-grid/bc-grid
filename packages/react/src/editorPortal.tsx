@@ -383,17 +383,22 @@ function editorStateAttribute({
   return "idle"
 }
 
-function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {
-  if (focusRefCurrent instanceof HTMLInputElement) return focusRefCurrent.value
-  if (focusRefCurrent instanceof HTMLTextAreaElement) return focusRefCurrent.value
-  if (focusRefCurrent instanceof HTMLSelectElement) {
-    const typedValues = (focusRefCurrent as BcGridSelectElement)[bcGridSelectOptionValuesKey]
-    if (focusRefCurrent.multiple) {
+export function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {
+  const tagName = focusRefCurrent?.tagName.toUpperCase()
+  if (tagName === "INPUT") {
+    const input = focusRefCurrent as HTMLInputElement
+    return input.type === "checkbox" ? input.checked : input.value
+  }
+  if (tagName === "TEXTAREA") return (focusRefCurrent as HTMLTextAreaElement).value
+  if (tagName === "SELECT") {
+    const select = focusRefCurrent as HTMLSelectElement
+    const typedValues = (select as BcGridSelectElement)[bcGridSelectOptionValuesKey]
+    if (select.multiple) {
       // Per `editing-rfc §editor-multi-select`: iterate every selected
       // option and map each to the typed value via the option-keyed
       // lookup that the editor populated. Returning a typed array bypasses
       // `column.valueParser` (typed editor) — same contract as `select`.
-      const selectedOptions = Array.from(focusRefCurrent.selectedOptions)
+      const selectedOptions = Array.from(select.selectedOptions)
       if (typedValues) {
         return selectedOptions.map((option) => {
           const idx = option.index
@@ -402,11 +407,11 @@ function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {
       }
       return selectedOptions.map((option) => option.value)
     }
-    const selectedIndex = focusRefCurrent.selectedIndex
+    const selectedIndex = select.selectedIndex
     if (typedValues && selectedIndex >= 0 && selectedIndex < typedValues.length) {
       return typedValues[selectedIndex]
     }
-    return focusRefCurrent.value
+    return select.value
   }
   return undefined
 }

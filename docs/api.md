@@ -1720,9 +1720,9 @@ state snapshot.
 
 ---
 
-## 7. Editor protocol (reserved for Q2)
+## 7. Editor protocol
 
-Cell editors live in `@bc-grid/editors` and are React components implementing `BcCellEditor`. The React protocol lives in `@bc-grid/react`; editor factories live in `@bc-grid/editors`. The protocol is declared at v0.1 so React column types can reference it; no editor factories ship until Q2.
+Cell editors live in `@bc-grid/editors` and are React components implementing `BcCellEditor`. The React protocol lives in `@bc-grid/react`; built-in editor definitions live in `@bc-grid/editors` and can be assigned directly to `column.cellEditor`.
 
 ```ts
 export interface BcCellEditor<TRow, TValue = unknown> {
@@ -1775,8 +1775,14 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
 ```
 
 `<BcGrid>`, `<BcEditGrid>`, and `<BcServerGrid>` consume this protocol;
-consumers can pass column.cellEditor as either a built-in (`textEditor()`,
-`numberEditor()`) or a custom implementation. Server-backed consumers can use
+consumers can pass column.cellEditor as either a built-in (`textEditor`,
+`numberEditor`, `checkboxEditor`, etc.) or a custom implementation.
+`checkboxEditor` is a native `<input type="checkbox">` boolean editor:
+Space toggles while editing through browser-native checkbox semantics, Enter /
+Tab / Shift+Enter / Shift+Tab / Escape remain grid-owned by the editor portal,
+and commit reads `input.checked` so the value emitted to `onCellEditCommit` is
+a boolean. Tri-state checkbox editing is not part of the initial v0.4 slice.
+Server-backed consumers can use
 `<BcServerGrid onServerRowMutation>` for the built-in patch/queue/settle path,
 or wire `onCellEditCommit` manually with `BcServerGridApi.queueServerRowMutation`
 and `BcServerGridApi.settleServerRowMutation`.
@@ -2068,12 +2074,17 @@ export { createServerRowModel, ServerBlockCache, defaultBlockKey }
 ### `@bc-grid/editors`
 
 ```ts
-// No v0.1 runtime exports. Reserved Q2 export shape:
-// export {
-//   textEditor, numberEditor, dateEditor, datetimeEditor,
-//   selectEditor, multiSelectEditor, autocompleteEditor,
-// }
-// Each future export is a `BcCellEditor` factory.
+export {
+  textEditor,
+  numberEditor,
+  dateEditor,
+  datetimeEditor,
+  timeEditor,
+  selectEditor,
+  multiSelectEditor,
+  autocompleteEditor,
+  checkboxEditor,
+}
 ```
 
 ### `@bc-grid/enterprise`

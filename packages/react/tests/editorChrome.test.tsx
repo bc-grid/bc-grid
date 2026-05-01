@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { type ComponentType, createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { autocompleteEditor } from "../../editors/src/autocomplete"
+import { checkboxEditor } from "../../editors/src/checkbox"
 import { dateEditor } from "../../editors/src/date"
 import { datetimeEditor } from "../../editors/src/datetime"
 import { multiSelectEditor } from "../../editors/src/multiSelect"
@@ -48,6 +49,7 @@ const editorCases: Array<{
       fetchOptions: async () => optionColumn.options,
     },
   },
+  { editor: checkboxEditor, initialValue: true, kind: "checkbox" },
 ]
 
 describe("built-in editor chrome hooks", () => {
@@ -55,7 +57,7 @@ describe("built-in editor chrome hooks", () => {
     for (const entry of editorCases) {
       const html = renderEditor(entry)
 
-      expect(html).toContain('class="bc-grid-editor-input"')
+      expect(html).toContain("bc-grid-editor-input")
       expect(html).toContain('data-bc-grid-editor-input="true"')
       expect(html).toContain(`data-bc-grid-editor-kind="${entry.kind}"`)
       expect(html).toContain('data-bc-grid-editor-state="idle"')

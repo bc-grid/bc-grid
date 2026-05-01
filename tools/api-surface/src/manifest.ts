@@ -457,6 +457,7 @@ export const apiSurfaceManifest = [
     mode: "enforced",
     runtimeExports: [
       "autocompleteEditor",
+      "checkboxEditor",
       "dateEditor",
       "datetimeEditor",
       "multiSelectEditor",
@@ -467,6 +468,7 @@ export const apiSurfaceManifest = [
     ],
     declarationExports: [
       "autocompleteEditor",
+      "checkboxEditor",
       "dateEditor",
       "datetimeEditor",
       "multiSelectEditor",
@@ -475,7 +477,7 @@ export const apiSurfaceManifest = [
       "textEditor",
       "timeEditor",
     ],
-    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select + editor-multi-select + editor-autocomplete.",
+    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select + editor-multi-select + editor-autocomplete; v0.4 adds editor-checkbox.",
   },
   {
     packageName: "@bc-grid/enterprise",
