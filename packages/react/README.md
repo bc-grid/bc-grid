@@ -262,6 +262,110 @@ falsy entries are filtered, so `ctx.row && { … }` reads cleanly. See
 `docs/api.md §5.1` for the full ID table and the
 `@bc-grid/react` docs site for an end-to-end recipe.
 
+## Action columns (`BcEditGrid`)
+
+`<BcEditGrid>` is `<BcGrid>` plus a built-in pinned-right actions column.
+Wire `onEdit` / `onDelete` (and optional `extraActions`) and the column
+auto-renders Edit / Delete + custom buttons; per-row guards
+(`canEdit` / `canDelete`) and predicate-form action `disabled` callbacks
+gate each button independently.
+
+```tsx
+import { BcEditGrid } from "@bc-grid/react"
+
+<BcEditGrid
+  columns={columns}
+  data={rows}
+  rowId={(row) => row.id}
+
+  detailPath="/customers"
+  linkField="code"
+
+  onEdit={(row) => openEditDialog(row)}
+  onDelete={(row) => confirmDelete(row)}
+
+  canEdit={(row) => permissions.canEditRow(row)}
+  canDelete={(row) => permissions.canDeleteRow(row)}
+
+  extraActions={(row) => [
+    {
+      label: "View history",
+      onSelect: () => openHistory(row),
+      icon: HistoryIcon,
+      disabled: (r) => r.locked,
+    },
+  ]}
+/>
+```
+
+Pass `hideActions` to suppress the column entirely; pass `editLabel` /
+`deleteLabel` to localise the built-ins.
+
+### Why actions are pinned-right
+
+The actions column is **always pinned right** — not as a default that
+consumers can override, but as a deliberate contract. Three things
+follow from that pin:
+
+- **Visibility** — Edit / Delete remain on screen no matter how far the
+  row scrolls horizontally. Wide grids (50+ columns) still surface the
+  primary row affordances at all times. A consumer who simulates the
+  column with a normal scrolling column instead loses the actions the
+  moment the user scrolls past them.
+- **Predictability** — every `<BcEditGrid>` lays its actions out in the
+  same place, so muscle memory carries between grids. Consumers don't
+  need to scan for "where is Delete on this grid?".
+- **Solid surface over horizontally scrolled content** — the pinned cell
+  paints `var(--bc-grid-pinned-bg)` with `background-clip: padding-box`
+  so body cells underneath are fully obscured during scroll, and the
+  rightward boundary shadow (`.bc-grid-cell-pinned-right-edge::before`)
+  fades in via `data-scrolled-right` so the seam is intentional rather
+  than an artefact. A scrolling column has neither — its bg is
+  transparent over the body, and any text behind it shows through during
+  scroll.
+
+### Why a normal scrolling column doesn't replicate the contract
+
+Consumers occasionally try to "build their own" actions column by
+defining a regular column with a `cellRenderer` of action buttons. That
+breaks four things the bundled column gets right:
+
+1. **Row-state bg inheritance.** Pinned cells consume dedicated tokens
+   (`--bc-grid-pinned-row-hover-bg`, `--bc-grid-pinned-row-focused-bg`,
+   `--bc-grid-pinned-row-selected-bg`, `--bc-grid-pinned-row-selected-hover-bg`,
+   `--bc-grid-pinned-active-cell-bg`) that match the unpinned row chrome
+   *while staying opaque*. A scrolling column inherits the same row-state
+   bg as the rest of the row and reveals scrolled content underneath it.
+2. **Boundary shadow.** `.bc-grid-cell-pinned-right-edge::before` paints a
+   linear-gradient seam that fades in only when the user has scrolled
+   horizontally. A scrolling column has no equivalent — there's no
+   visible "this column is sticky" cue.
+3. **Ghost-button chrome.** The bundled `.bc-grid-action` rule renders
+   buttons as transparent ghost buttons that inherit the cell fg
+   (`color: inherit`), so selected rows automatically pick up
+   `--bc-grid-row-selected-fg` on the action labels. A scrolling column
+   built from raw `<button>` elements ships browser-default chrome unless
+   the consumer reproduces every state rule (default / hover / pressed /
+   focus / disabled / destructive / destructive-hover) by hand.
+4. **Pending-edit gating.** The bundled column reads `params.rowState.pending`
+   and disables destructive actions while a row commit is in flight (per
+   `editing-rfc §Server commit + optimistic UI`). A scrolling column
+   doesn't see `rowState` unless the consumer threads it through, so a
+   delete during a pending commit can silently drop a row's mutation.
+
+If you need an action that doesn't fit the Edit / Delete shape, pass it
+through `extraActions` — that lands inside the same pinned column with
+the same chrome and the same row-state gating.
+
+### Header label
+
+The default header text is `"Actions"` (driven by
+`BcGridMessages.actionColumnLabel`). Consumers who want a quieter
+header can pass an empty string via `messages` to render a blank
+header cell — the pinned-header bg still paints, so the column reads
+as deliberate even without a visible label. AT users keep the column
+context through the per-button `aria-label` attributes.
+
 ## Layout persistence
 
 Use `initialLayout` for a one-time saved-view restore and

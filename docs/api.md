@@ -1478,6 +1478,27 @@ export interface BcEditGridAction<TRow> {
 }
 ```
 
+#### Pinned-actions chrome contract
+
+The actions column is pinned right unconditionally. Three guarantees follow from the pin:
+
+- **Visible at every scroll position.** Edit / Delete remain on screen no matter how far the row scrolls horizontally — even on grids with 50+ columns.
+- **Solid over horizontally scrolled body.** `.bc-grid-cell-pinned-right` paints `var(--bc-grid-pinned-bg)` with `background-clip: padding-box` so body cells beneath are fully obscured during scroll. Row-state variants (`--bc-grid-pinned-row-hover-bg`, `--bc-grid-pinned-row-focused-bg`, `--bc-grid-pinned-row-selected-bg`, `--bc-grid-pinned-row-selected-hover-bg`, `--bc-grid-pinned-active-cell-bg`) keep the cell opaque in every interaction state.
+- **Intentional boundary shadow.** `.bc-grid-cell-pinned-right-edge::before` fades a linear-gradient seam in via the `data-scrolled-right` data-attr on the grid root, so the seam reads as a deliberate "this column is sticky" cue rather than an artefact.
+
+Action buttons render as shadcn-style ghost buttons (`.bc-grid-action`) inside a `.bc-grid-actions` flex wrapper. The buttons are background-transparent with `color: inherit`, so the row-state fg (e.g. `--bc-grid-row-selected-fg`) flows through to every action label automatically. Destructive actions (`destructive: true`) emit `.bc-grid-action-destructive` and pick up `var(--bc-grid-invalid)` for colour + `color-mix(... var(--bc-grid-invalid) 14% / 22%)` for the hover / pressed bg, so the destructive treatment adapts via the shadcn `--destructive` bridge across light / dark / forced-colors.
+
+#### Why a custom non-pinned actions column doesn't work
+
+Consumers occasionally try to simulate the actions column with a regular scrolling column whose `cellRenderer` returns action buttons. That breaks the four contracts above:
+
+1. The column scrolls off-screen, so Edit / Delete disappear on wide grids.
+2. The cell bg follows the unpinned row treatment — it's transparent against horizontally scrolled body content. Text from columns behind it shows through during scroll.
+3. There is no boundary shadow, so consumers can't visually distinguish "this column is sticky" from "this column is just at the right edge of the data".
+4. Custom buttons miss the `params.rowState.pending` gate — destructive actions stay enabled during in-flight commits and a delete during a pending commit can silently drop a row's mutation (per `editing-rfc §Server commit + optimistic UI`).
+
+If you need an action that doesn't fit Edit / Delete, pass it through `extraActions` — it renders inside the same pinned column with the same chrome and the same row-state gating. See [`packages/react/README.md`](../packages/react/README.md#action-columns-bceditgrid) for the wireup recipe.
+
 ### 5.3 `<BcServerGrid>` (frozen at v0.1)
 
 Server-side row model. Three modes (paged, infinite, tree) discriminated by `rowModel`. All three modes share the same `BcGridProps` surface for state + columns; the only difference is how rows are fetched.
