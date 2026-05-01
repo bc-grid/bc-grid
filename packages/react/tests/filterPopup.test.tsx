@@ -81,6 +81,14 @@ describe("FilterPopup chrome", () => {
     const html = renderPopup()
     expect(html).not.toMatch(/role="dialog"[^>]*aria-label="Filter Account"/)
   })
+
+  test("wraps popup-hosted controls in the dedicated body surface", () => {
+    const html = renderPopup()
+
+    expect(html).toContain('data-bc-grid-filter-popup-body="true"')
+    expect(html).toContain('class="bc-grid-filter-popup-body"')
+    expect(html).toMatch(/class="bc-grid-filter-popup-body"[^>]*>.*class="bc-grid-filter-text"/s)
+  })
 })
 
 describe("FilterPopup footer buttons", () => {
@@ -90,6 +98,8 @@ describe("FilterPopup footer buttons", () => {
     expect(html).toContain('aria-label="Apply Filter Account"')
     expect(html).toContain("bc-grid-filter-popup-clear")
     expect(html).toContain("bc-grid-filter-popup-apply")
+    expect(html).toContain('data-variant="ghost"')
+    expect(html).toContain('data-variant="primary"')
   })
 
   test("Clear is disabled when no filter is active; Apply is always enabled", () => {

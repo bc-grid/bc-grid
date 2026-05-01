@@ -750,6 +750,35 @@ describe("@bc-grid/theming", () => {
     // dot reads as "filter applied", not as a focus ring.
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
 
+    const popupRule = css.slice(
+      css.indexOf(".bc-grid-filter-popup {"),
+      css.indexOf("}", css.indexOf(".bc-grid-filter-popup {")),
+    )
+    expect(popupRule).toContain("color: var(--bc-grid-context-menu-fg)")
+    expect(popupRule).toContain("overflow: hidden")
+    expect(popupRule).toContain("padding: 0")
+    expect(popupRule).toContain("box-shadow: 0 18px 40px")
+    expect(popupRule).toContain("color-mix(in srgb, var(--bc-grid-fg)")
+
+    const headerRule = css.slice(
+      css.indexOf(".bc-grid-filter-popup-header {"),
+      css.indexOf("}", css.indexOf(".bc-grid-filter-popup-header {")),
+    )
+    expect(headerRule).toContain("border-bottom: 1px solid var(--bc-grid-context-menu-border)")
+    expect(headerRule).toContain("background: color-mix(in srgb, var(--bc-grid-muted) 24%")
+
+    const titleRule = css.slice(
+      css.indexOf(".bc-grid-filter-popup-title {"),
+      css.indexOf("}", css.indexOf(".bc-grid-filter-popup-title {")),
+    )
+    expect(titleRule).toContain("letter-spacing: 0")
+    expect(titleRule).toContain("text-overflow: ellipsis")
+
+    expect(css).toMatch(/\.bc-grid-filter-popup-body\s*\{[^}]*padding:\s*0\.625rem 0\.75rem/)
+    expect(css).toMatch(
+      /\.bc-grid-filter-popup-footer\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--bc-grid-muted\) 18%/,
+    )
+
     // Apply primary tokens
     expect(css).toMatch(
       /\.bc-grid-filter-popup-apply\s*\{[^}]*background:\s*var\(--bc-grid-accent\)/,
@@ -766,6 +795,38 @@ describe("@bc-grid/theming", () => {
     // reads as "filter applied" rather than "keyboard-focused widget".
     expect(css).toMatch(
       /\.bc-grid-filter-popup-active-dot\s*\{[^}]*background:\s*var\(--bc-grid-accent\)/,
+    )
+  })
+
+  test("filter popup-hosted controls and set menu use shadcn popover control tokens", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toMatch(
+      /\.bc-grid-filter-popup \.bc-grid-filter-input,[^}]*\.bc-grid-filter-popup \.bc-grid-filter-text-toggle\s*\{[^}]*height:\s*2rem/,
+    )
+    expect(css).toMatch(
+      /\.bc-grid-filter-popup \.bc-grid-filter-input,[^}]*\.bc-grid-filter-popup \.bc-grid-filter-text-toggle\s*\{[^}]*border-color:\s*var\(--bc-grid-input-border\)/,
+    )
+    expect(css).toMatch(
+      /\.bc-grid-filter-popup \.bc-grid-filter-input:focus-visible,[^}]*box-shadow:\s*0 0 0 2px color-mix/,
+    )
+
+    const menuRule = css.slice(
+      css.indexOf(".bc-grid-filter-set-menu {"),
+      css.indexOf("}", css.indexOf(".bc-grid-filter-set-menu {")),
+    )
+    expect(menuRule).toContain("color: var(--bc-grid-context-menu-fg)")
+    expect(menuRule).toContain("box-shadow: 0 18px 40px")
+
+    expect(css).toMatch(/\.bc-grid-filter-set-search\s*\{[^}]*height:\s*2rem/)
+    expect(css).toMatch(
+      /\.bc-grid-filter-set-search\s*\{[^}]*border:\s*1px solid var\(--bc-grid-input-border\)/,
+    )
+    expect(css).toMatch(
+      /\.bc-grid-filter-set-option\[data-selected="true"\]\s*\{[^}]*var\(--bc-grid-accent-soft\)/,
+    )
+    expect(css).toMatch(
+      /\.bc-grid-filter-set-option > input\s*\{[^}]*accent-color:\s*var\(--bc-grid-accent\)/,
     )
   })
 

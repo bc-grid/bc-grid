@@ -512,25 +512,35 @@
   border: 1px solid var(--bc-grid-context-menu-border);
   border-radius: var(--bc-grid-radius);
   background: var(--bc-grid-context-menu-bg);
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
-  color: var(--bc-grid-fg);
-  gap: 0.5rem;
-  padding: 0.5rem;
+  box-shadow: 0 18px 40px -24px color-mix(in srgb, var(--bc-grid-fg) 38%, transparent), 0 8px 16px
+    -12px color-mix(in srgb, var(--bc-grid-fg) 28%, transparent);
+  color: var(--bc-grid-context-menu-fg);
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 .bc-grid-filter-popup-header {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.125rem 0.375rem;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  border-bottom: 1px solid var(--bc-grid-context-menu-border);
+  background: color-mix(in srgb, var(--bc-grid-muted) 24%, transparent);
+  padding: 0.5rem 0.75rem;
 }
 
 .bc-grid-filter-popup-title {
-  font-size: 0.6875rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--bc-grid-muted-fg);
-  text-transform: uppercase;
+  letter-spacing: 0;
+  line-height: 1.25;
+  color: var(--bc-grid-context-menu-fg);
 }
 
 /*
@@ -548,18 +558,25 @@
   box-shadow: 0 0 0 2px var(--bc-grid-accent-soft);
 }
 
+.bc-grid-filter-popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem 0.75rem;
+}
+
 .bc-grid-filter-popup-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.375rem;
-  padding-top: 0.5rem;
-  margin-top: 0.125rem;
+  gap: 0.5rem;
   border-top: 1px solid var(--bc-grid-context-menu-border);
+  background: color-mix(in srgb, var(--bc-grid-muted) 18%, transparent);
+  padding: 0.5rem 0.75rem;
 }
 
 .bc-grid-filter-popup-button {
   display: inline-flex;
-  height: 1.75rem;
+  height: 2rem;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--bc-grid-border);
@@ -572,8 +589,11 @@
   font-weight: 500;
   outline: none;
   padding: 0 0.625rem;
-  transition: background var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
-    color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
+  transition: background-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), border-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), box-shadow var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
 }
 
 .bc-grid-filter-popup-button:hover:not(:disabled) {
@@ -592,8 +612,9 @@
 }
 
 .bc-grid-filter-popup-button:disabled {
-  cursor: not-allowed;
+  cursor: default;
   opacity: 0.52;
+  pointer-events: none;
 }
 
 .bc-grid-filter-popup-apply {
@@ -604,6 +625,7 @@
 
 .bc-grid-filter-popup-apply:hover:not(:disabled) {
   background: color-mix(in srgb, var(--bc-grid-accent) 88%, var(--bc-grid-fg));
+  border-color: color-mix(in srgb, var(--bc-grid-accent) 88%, var(--bc-grid-fg));
 }
 
 /*
@@ -943,14 +965,50 @@ select.bc-grid-editor-input {
    (no fixed parent height); pin a 1.75rem control height so the
    text-filter wrapper, operator select, value input, and toggles line
    up cleanly with the popup's other shadcn-aligned chrome. */
+.bc-grid-filter-popup-body > .bc-grid-filter-number,
+.bc-grid-filter-popup-body > .bc-grid-filter-number-range,
+.bc-grid-filter-popup-body > .bc-grid-filter-date,
+.bc-grid-filter-popup-body > .bc-grid-filter-date-range,
+.bc-grid-filter-popup-body > .bc-grid-filter-set,
+.bc-grid-filter-popup-body > .bc-grid-filter-text,
 .bc-grid-filter-popup > .bc-grid-filter-text {
   height: auto;
+  gap: 0.375rem;
 }
 
-.bc-grid-filter-popup > .bc-grid-filter-text > .bc-grid-filter-input,
-.bc-grid-filter-popup > .bc-grid-filter-text > .bc-grid-filter-select,
-.bc-grid-filter-popup > .bc-grid-filter-text > .bc-grid-filter-text-toggle {
-  height: 1.75rem;
+.bc-grid-filter-popup .bc-grid-filter-input,
+.bc-grid-filter-popup .bc-grid-filter-select,
+.bc-grid-filter-popup .bc-grid-filter-set-button,
+.bc-grid-filter-popup .bc-grid-filter-text-toggle {
+  height: 2rem;
+  border-color: var(--bc-grid-input-border);
+  background: var(--bc-grid-bg);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), border-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), box-shadow var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
+}
+
+.bc-grid-filter-popup .bc-grid-filter-input:hover:not(:disabled),
+.bc-grid-filter-popup .bc-grid-filter-select:hover:not(:disabled),
+.bc-grid-filter-popup .bc-grid-filter-set-button:hover:not(:disabled),
+.bc-grid-filter-popup .bc-grid-filter-text-toggle:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--bc-grid-input-border) 60%, var(--bc-grid-focus-ring));
+}
+
+.bc-grid-filter-popup .bc-grid-filter-input:focus-visible,
+.bc-grid-filter-popup .bc-grid-filter-select:focus-visible,
+.bc-grid-filter-popup .bc-grid-filter-set-button:focus-visible,
+.bc-grid-filter-popup .bc-grid-filter-text-toggle:focus-visible {
+  outline: none;
+  border-color: var(--bc-grid-focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bc-grid-focus-ring) 24%, transparent);
+}
+
+.bc-grid-filter-popup .bc-grid-filter-text-toggle[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-grid-accent-fg) 28%, transparent);
 }
 
 .bc-grid-filter-number > .bc-grid-filter-select {
@@ -1040,8 +1098,9 @@ select.bc-grid-editor-input {
   border: 1px solid var(--bc-grid-context-menu-border);
   border-radius: var(--bc-grid-radius);
   background: var(--bc-grid-context-menu-bg);
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
-  color: var(--bc-grid-fg);
+  box-shadow: 0 18px 40px -24px color-mix(in srgb, var(--bc-grid-fg) 38%, transparent), 0 8px 16px
+    -12px color-mix(in srgb, var(--bc-grid-fg) 28%, transparent);
+  color: var(--bc-grid-context-menu-fg);
   padding: 0.25rem;
 }
 
@@ -1049,13 +1108,14 @@ select.bc-grid-editor-input {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  padding: 0.25rem 0.25rem 0.125rem;
+  border-bottom: 1px solid var(--bc-grid-context-menu-border);
+  padding: 0.375rem;
 }
 
 .bc-grid-filter-set-search {
   width: 100%;
-  height: 1.75rem;
-  border: 1px solid var(--bc-grid-border);
+  height: 2rem;
+  border: 1px solid var(--bc-grid-input-border);
   border-radius: calc(var(--bc-grid-radius) - 2px);
   background: var(--bc-grid-bg);
   color: inherit;
@@ -1063,12 +1123,14 @@ select.bc-grid-editor-input {
   font-size: 0.8125rem;
   outline: none;
   padding: 0 0.5rem;
+  transition: border-color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
+    box-shadow var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
 }
 
 .bc-grid-filter-set-search:focus-visible {
   border-color: var(--bc-grid-focus-ring);
-  outline: 2px solid var(--bc-grid-focus-ring);
-  outline-offset: 0;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bc-grid-focus-ring) 24%, transparent);
+  outline: none;
 }
 
 .bc-grid-filter-set-actions {
@@ -1077,8 +1139,9 @@ select.bc-grid-editor-input {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--bc-grid-context-menu-border);
-  margin: 0 0.125rem 0.125rem;
-  padding: 0.125rem 0.125rem 0.25rem;
+  background: color-mix(in srgb, var(--bc-grid-muted) 18%, transparent);
+  margin: 0;
+  padding: 0.25rem 0.375rem;
 }
 
 .bc-grid-filter-set-action {
@@ -1123,20 +1186,22 @@ select.bc-grid-editor-input {
   flex: 1 1 auto;
   overflow: auto;
   max-height: 14rem;
+  padding: 0.25rem;
 }
 
 .bc-grid-filter-set-footer {
   flex: 0 0 auto;
   border-top: 1px solid var(--bc-grid-context-menu-border);
-  margin: 0.125rem 0.125rem 0;
-  padding-top: 0.125rem;
+  background: color-mix(in srgb, var(--bc-grid-muted) 18%, transparent);
+  margin: 0;
+  padding: 0.25rem;
 }
 
 .bc-grid-filter-set-option,
 .bc-grid-filter-set-clear {
   display: flex;
   width: 100%;
-  min-height: 1.75rem;
+  min-height: 2rem;
   align-items: center;
   border: 0;
   border-radius: calc(var(--bc-grid-radius) - 2px);
@@ -1157,7 +1222,12 @@ select.bc-grid-editor-input {
   outline: none;
 }
 
+.bc-grid-filter-set-option[data-selected="true"] {
+  background: color-mix(in srgb, var(--bc-grid-accent-soft) 68%, transparent);
+}
+
 .bc-grid-filter-set-option > input {
+  accent-color: var(--bc-grid-accent);
   margin: 0;
 }
 
@@ -1176,12 +1246,13 @@ select.bc-grid-editor-input {
 .bc-grid-filter-set-clear {
   justify-content: center;
   color: var(--bc-grid-muted-fg);
+  font-weight: 500;
 }
 
 .bc-grid-filter-set-empty {
   color: var(--bc-grid-muted-fg);
   font-size: 0.8125rem;
-  padding: 0.5rem;
+  padding: 0.75rem 0.5rem;
   text-align: center;
 }
 
