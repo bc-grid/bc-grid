@@ -355,8 +355,25 @@ export type BcReactGridColumn<TRow, TValue = unknown> =
      * Cell editor component. Required when `editable` is true and the column
      * is part of a `BcEditGrid`.
      * @reserved Q2
-     */
+    */
     cellEditor?: BcCellEditor<TRow, TValue>
+
+    /**
+     * Static or per-row options for select and multi-select editors.
+     * Labels are display text; values are the typed commit payload.
+     */
+    options?:
+      | readonly { value: TValue; label: string }[]
+      | ((row: TRow) => readonly { value: TValue; label: string }[])
+
+    /**
+     * Async lookup options for autocomplete editors. The signal is aborted
+     * when a later query supersedes this request.
+     */
+    fetchOptions?: (
+      query: string,
+      signal: AbortSignal,
+    ) => Promise<readonly { value: TValue; label: string }[]>
   }
 
 export interface BcCellRendererParams<TRow, TValue = unknown> {
@@ -1792,6 +1809,76 @@ Space toggles while editing through browser-native checkbox semantics, Enter /
 Tab / Shift+Enter / Shift+Tab / Escape remain grid-owned by the editor portal,
 and commit reads `input.checked` so the value emitted to `onCellEditCommit` is
 a boolean. Tri-state checkbox editing is not part of the initial v0.4 slice.
+
+### 7.1 Lookup, select, autocomplete, and checkbox editor guidance
+
+Lookup-style editors are intentionally native-control based: `selectEditor`
+renders `<select>`, `multiSelectEditor` renders `<select multiple>`,
+`autocompleteEditor` renders `<input list>` + `<datalist>`, and
+`checkboxEditor` renders `<input type="checkbox">`. They use the same editor
+portal commit/cancel keys as other editors and expose the shared
+`bc-grid-editor-input`, `data-bc-grid-editor-kind`, and
+`data-bc-grid-editor-state` hooks for pending/error/disabled styling.
+
+`selectEditor` and `multiSelectEditor` read `column.options`, either as a static
+array or a row function:
+
+```ts
+import type { BcCellEditor, BcReactGridColumn } from "@bc-grid/react"
+import { selectEditor } from "@bc-grid/editors"
+
+type CustomerStatus = "prospect" | "active" | "hold"
+
+interface CustomerRow {
+  id: string
+  status: CustomerStatus
+}
+
+const statusOptions: readonly { value: CustomerStatus; label: string }[] = [
+  { value: "prospect", label: "Prospect" },
+  { value: "active", label: "Active" },
+  { value: "hold", label: "On hold" },
+]
+
+export const statusColumn: BcReactGridColumn<CustomerRow, CustomerStatus> = {
+  field: "status",
+  header: "Status",
+  editable: true,
+  cellEditor: selectEditor as unknown as BcCellEditor<CustomerRow, CustomerStatus>,
+  options: statusOptions,
+  validate: (next) =>
+    statusOptions.some((option) => option.value === next)
+      ? { valid: true }
+      : { valid: false, error: "Choose a known status." },
+}
+```
+
+The option `label` is display text. The option `value` is the committed value.
+For `selectEditor` the committed value is a single typed option value; for
+`multiSelectEditor` it is a typed array of selected option values. These editors
+produce typed values directly, so `column.valueParser` is bypassed. Use
+`valueParser` on string-producing editors such as `textEditor`, `numberEditor`,
+the date/time editors, and `autocompleteEditor`.
+
+`autocompleteEditor` calls `column.fetchOptions(query, signal)` after mount and
+as the user types. Implementations should pass `signal` through to `fetch` or
+equivalent request APIs so superseded lookups abort cleanly. A failed lookup is
+not itself a validation error: bc-grid leaves the current suggestions as-is and
+allows free-text editing to continue. Use `valueParser` and `validate` when the
+typed string must resolve to a known domain value.
+
+`checkboxEditor` commits a boolean and only treats the literal boolean `true` as
+checked on mount. String and numeric lookalikes (`"true"`, `1`) stay unchecked,
+so consumers that persist non-boolean values should map them before they reach
+the editor or in `onCellEditCommit`.
+
+Accessible names come from `column.header` when it is a plain string, then
+`field`, then `columnId`. If a column uses a React header node, keep `field` or
+`columnId` human-readable or provide a custom editor with its own label. Pending
+async validation/server commit disables the native control; validation errors
+surface through `aria-invalid`, `aria-describedby`, and the assertive live
+region owned by the React editor protocol.
+
 Server-backed consumers can use
 `<BcServerGrid onServerRowMutation>` for the built-in patch/queue/settle path,
 or wire `onCellEditCommit` manually with `BcServerGridApi.queueServerRowMutation`
