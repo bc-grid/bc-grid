@@ -51,6 +51,7 @@ describe("@bc-grid/theming", () => {
     expect(colors["bc-grid"]?.accent).toBe("var(--bc-grid-accent)")
     expect(colors["bc-grid"]?.["context-menu-fg"]).toBe("var(--bc-grid-context-menu-fg)")
     expect(colors["bc-grid"]?.["search-match"]).toBe("var(--bc-grid-search-match-bg)")
+    expect(colors["bc-grid"]?.["search-match-fg"]).toBe("var(--bc-grid-search-match-fg)")
   })
 
   test("CSS token bridge accepts Tailwind v4/shadcn full color tokens", () => {
@@ -195,6 +196,31 @@ describe("@bc-grid/theming", () => {
     expect(rule).toContain("background: var(--bc-grid-bg)")
     expect(rule).toContain("color: var(--bc-grid-fg)")
     expect(rule).toContain("padding: 0.5rem var(--bc-grid-cell-padding-x)")
+  })
+
+  test("search highlight chrome stays quiet and inline", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain(
+      "--bc-grid-search-match-bg: color-mix(in srgb, var(--bc-grid-muted) 72%, transparent)",
+    )
+    expect(css).toContain("--bc-grid-search-match-fg: var(--bc-grid-fg)")
+
+    const idx = css.indexOf('.bc-grid [data-bc-grid-search-match="true"] {')
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+
+    expect(rule).toContain("display: inline")
+    expect(rule).toContain("box-decoration-break: clone")
+    expect(rule).toContain("-webkit-box-decoration-break: clone")
+    expect(rule).toContain("background: var(--bc-grid-search-match-bg)")
+    expect(rule).toContain("color: var(--bc-grid-search-match-fg)")
+    expect(rule).toContain("line-height: inherit")
+    expect(rule).toContain("padding-block: 0")
+    expect(rule).toContain("padding-inline: 0.0625em")
+    expect(rule).not.toContain("display: inline-block")
+    expect(rule).not.toContain("padding-block: 0.0625")
   })
 
   test("pagination button + select share a transition-colors declaration", () => {
