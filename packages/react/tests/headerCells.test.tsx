@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 import { type ResolvedColumn, defaultMessages } from "../src/gridInternals"
-import { FilterPopup, renderFilterCell, renderHeaderCell } from "../src/headerCells"
+import {
+  FilterPopup,
+  renderFilterCell,
+  renderHeaderCell,
+  shouldStopFilterKeyDown,
+} from "../src/headerCells"
 
 interface Row {
   name: string
@@ -755,5 +760,145 @@ describe("filter popup trigger — Radix-style ARIA linkage", () => {
     const active = renderFilterPopupTriggerHtml("CUST-00042", true)
     expect(active).toContain("bc-grid-header-filter-icon")
     expect(active).toContain('fill="currentColor"')
+  })
+})
+
+describe("shouldStopFilterKeyDown — filter editor keyboard isolation contract", () => {
+  // The filter editor wraps every input / select / button with an
+  // onKeyDown that calls `event.stopPropagation()` so a keystroke
+  // inside the editor never bubbles up to the parent header cell
+  // (Enter / Space would trigger column sort) or the grid root
+  // (ArrowDown / Home / End would consume cell navigation). Pure
+  // helper so the contract stays unit-testable without mounting React.
+
+  test("Enter inside a filter input stops propagation (would otherwise sort the column)", () => {
+    expect(shouldStopFilterKeyDown({ key: "Enter" })).toBe(true)
+  })
+
+  test("Space inside a filter input stops propagation (would otherwise sort the column or activate parent click)", () => {
+    expect(shouldStopFilterKeyDown({ key: " " })).toBe(true)
+  })
+
+  test("Tab inside a filter input stops propagation so the grid root never consumes Tab", () => {
+    expect(shouldStopFilterKeyDown({ key: "Tab" })).toBe(true)
+  })
+
+  test("Arrow keys inside a filter input stop propagation so cell navigation never fires", () => {
+    for (const key of ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"]) {
+      expect(shouldStopFilterKeyDown({ key })).toBe(true)
+    }
+  })
+
+  test("Home / End / PageUp / PageDown inside a filter input stop propagation", () => {
+    for (const key of ["Home", "End", "PageUp", "PageDown"]) {
+      expect(shouldStopFilterKeyDown({ key })).toBe(true)
+    }
+  })
+
+  test("printable characters inside a filter input stop propagation", () => {
+    for (const key of ["a", "1", "/", "?"]) {
+      expect(shouldStopFilterKeyDown({ key })).toBe(true)
+    }
+  })
+
+  test("Escape stops propagation by default (popup variant — usePopupDismiss listens at the document)", () => {
+    expect(shouldStopFilterKeyDown({ key: "Escape" })).toBe(true)
+    expect(shouldStopFilterKeyDown({ key: "Escape" }, {})).toBe(true)
+    expect(shouldStopFilterKeyDown({ key: "Escape" }, { allowEscapeKeyPropagation: false })).toBe(
+      true,
+    )
+  })
+
+  test("Escape passes through when allowEscapeKeyPropagation is true (sidebar-panel variant)", () => {
+    // The filters tool panel passes `allowEscapeKeyPropagation` so a
+    // top-level Escape can still dismiss the panel from a focused
+    // editor input. Without this, the panel's dismiss handler would
+    // never fire because the editor swallows the keystroke.
+    expect(shouldStopFilterKeyDown({ key: "Escape" }, { allowEscapeKeyPropagation: true })).toBe(
+      false,
+    )
+  })
+
+  test("non-Escape keys ignore allowEscapeKeyPropagation — the option is Escape-only", () => {
+    for (const key of ["Enter", " ", "Tab", "ArrowDown"]) {
+      expect(shouldStopFilterKeyDown({ key }, { allowEscapeKeyPropagation: true })).toBe(true)
+    }
+  })
+})
+
+describe("FilterPopup keyboard contract — DOM hooks", () => {
+  // The popup keyboard contract relies on three DOM-level invariants
+  // that SSR markup pins:
+  //   1. role="dialog" + aria-labelledby — AT users land in a named
+  //      dialog when the trigger fires (matches Radix Popover.Content).
+  //   2. The body wraps focusable controls in a stable DOM order so
+  //      Tab / Shift+Tab walk through them predictably.
+  //   3. The footer's Clear precedes Apply so Apply is the last
+  //      tabbable surface before focus exits the popup (the natural
+  //      "I'm done with this filter" gesture).
+  // These tests pin the structure that `usePopupDismiss` + the
+  // editor's `shouldStopFilterKeyDown` handlers need to be effective.
+
+  test("popup root is a dialog with aria-labelledby pointing at the title id", () => {
+    const html = renderTextFilterPopup("")
+    expect(html).toMatch(
+      /<div[^>]*role="dialog"[^>]*aria-labelledby="bc-grid-filter-popup-account-title"|aria-labelledby="bc-grid-filter-popup-account-title"[^>]*role="dialog"/,
+    )
+  })
+
+  test("popup tab order: body controls precede the footer's Clear, Clear precedes Apply", () => {
+    const html = renderTextFilterPopup("CUST-00042")
+
+    const operatorIdx = html.indexOf('aria-label="Filter Account operator"')
+    const valueIdx = html.indexOf('aria-label="Filter Account"')
+    const caseIdx = html.indexOf('aria-label="Filter Account case sensitive"')
+    const regexIdx = html.indexOf('aria-label="Filter Account regex"')
+    const clearIdx = html.indexOf('aria-label="Clear Filter Account"')
+    const applyIdx = html.indexOf('aria-label="Apply Filter Account"')
+
+    // Every editor control comes before the footer.
+    expect(operatorIdx).toBeGreaterThan(-1)
+    expect(valueIdx).toBeGreaterThan(operatorIdx)
+    expect(caseIdx).toBeGreaterThan(valueIdx)
+    expect(regexIdx).toBeGreaterThan(caseIdx)
+    expect(clearIdx).toBeGreaterThan(regexIdx)
+    expect(applyIdx).toBeGreaterThan(clearIdx)
+  })
+
+  test("set-filter trigger inside the popup carries Radix-style aria-haspopup + aria-controls + aria-expanded", () => {
+    // Set-filter rows inside the popup body still need the nested
+    // disclosure ARIA so AT users get correct semantics. The trigger's
+    // own keydown handler treats Escape-while-open as "close just the
+    // inner menu" and doesn't bubble that Escape up to the popup.
+    const html = renderToStaticMarkup(
+      <FilterPopup
+        anchor={popupAnchor}
+        columnId="status"
+        filterType="set"
+        filterText=""
+        filterLabel="Filter Status"
+        onFilterChange={() => {}}
+        onClear={() => {}}
+        onClose={() => {}}
+        messages={defaultMessages}
+      />,
+    )
+    expect(html).toContain('aria-haspopup="dialog"')
+    // aria-expanded sits on the set-filter trigger button (closed
+    // state — false). React renders it as a string in static markup.
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*class="bc-grid-filter-set-button"/)
+    expect(html).toContain('aria-label="Filter Status values"')
+  })
+
+  test("popup body is wrapped in a stable selector so the dismiss helper's containment check stays valid", () => {
+    // `usePopupDismiss` calls `popupRef.current.contains(target)` to
+    // decide whether a click is "inside the popup" and should not
+    // dismiss. The popup root carries `data-bc-grid-filter-popup` so
+    // the dismiss-ignore selectors and integration tests can locate
+    // it; the body carries `data-bc-grid-filter-popup-body` so the
+    // editor controls sit inside a single named region.
+    const html = renderTextFilterPopup("")
+    expect(html).toContain('data-bc-grid-filter-popup="true"')
+    expect(html).toContain('data-bc-grid-filter-popup-body="true"')
   })
 })

@@ -92,6 +92,33 @@ export function ariaSortFor(
   return sortable ? "none" : undefined
 }
 
+/**
+ * Pure decision helper for the filter editor's keyboard contract.
+ * Returns `true` when the editor should call `event.stopPropagation()`
+ * on a keydown — preventing the keystroke from bubbling into the
+ * parent header cell (which would trigger column sort on `Enter` /
+ * `Space`) or the grid root (which would consume `ArrowDown` /
+ * `Home` / `End` for cell navigation).
+ *
+ * The default policy: every keydown stops at the editor boundary so
+ * the editor owns its full keyboard surface. The single exception is
+ * `Escape` when `allowEscapeKeyPropagation` is set — the inline
+ * filter row inside a sidebar panel needs Escape to bubble up to the
+ * panel's dismiss handler. The popup-variant keeps the default so
+ * Escape closes the popup itself via `usePopupDismiss`.
+ *
+ * Pure — exported for unit testing — so the keyboard contract that
+ * isolates filter editors from sort + cell-navigation handlers stays
+ * pinned without mounting React.
+ */
+export function shouldStopFilterKeyDown(
+  event: { key: string },
+  options: { allowEscapeKeyPropagation?: boolean } = {},
+): boolean {
+  if (options.allowEscapeKeyPropagation === true && event.key === "Escape") return false
+  return true
+}
+
 export interface ColumnMenuAnchor {
   x: number
   y: number
@@ -1066,8 +1093,9 @@ export function FilterEditorBody({
 }): ReactNode {
   const focusRef = useRef<FilterFocusElement | null>(null)
   const onFilterKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (allowEscapeKeyPropagation && event.key === "Escape") return
-    event.stopPropagation()
+    if (shouldStopFilterKeyDown(event, { allowEscapeKeyPropagation })) {
+      event.stopPropagation()
+    }
   }
 
   useLayoutEffect(() => {
