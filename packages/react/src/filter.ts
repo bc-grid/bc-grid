@@ -508,6 +508,51 @@ export function decodeSetFilterInput(raw: string): SetFilterInput {
 }
 
 /**
+ * Filter the set-filter option list by a search query, matching against
+ * either the label or the underlying value (case-insensitive). Empty /
+ * whitespace-only queries pass every option through unchanged. Pure so
+ * the menu's narrowing behaviour stays unit-testable without rendering
+ * the full SetFilterControl.
+ */
+export function filterSetFilterOptions(
+  options: readonly SetFilterOption[],
+  searchQuery: string,
+): SetFilterOption[] {
+  const trimmed = searchQuery.trim().toLocaleLowerCase()
+  if (trimmed.length === 0) return [...options]
+  return options.filter((option) => {
+    return (
+      option.label.toLocaleLowerCase().includes(trimmed) ||
+      option.value.toLocaleLowerCase().includes(trimmed)
+    )
+  })
+}
+
+/**
+ * Compute the next selection set when the user toggles "select all".
+ * "All" here means the currently visible (search-narrowed) options
+ * only — selections for options hidden by the active search query are
+ * preserved, so typing in the search box never silently unselects
+ * off-screen choices. If every visible option is already selected the
+ * call clears them; otherwise it adds the missing ones.
+ */
+export function nextSetFilterValuesOnToggleAll(
+  visibleOptions: readonly SetFilterOption[],
+  currentValues: readonly string[],
+): string[] {
+  const selected = new Set(currentValues)
+  const visibleValues = visibleOptions.map((option) => option.value)
+  const allVisibleSelected =
+    visibleValues.length > 0 && visibleValues.every((value) => selected.has(value))
+  if (allVisibleSelected) {
+    const visibleSet = new Set(visibleValues)
+    return currentValues.filter((value) => !visibleSet.has(value))
+  }
+  const additions = visibleValues.filter((value) => !selected.has(value))
+  return [...currentValues, ...additions]
+}
+
+/**
  * Parse a `text` filter draft into the canonical `ServerColumnFilter`
  * shape. Trims the value at the build boundary so a whitespace-only
  * input drops the filter (consistent with the rest of buildGridFilter).
