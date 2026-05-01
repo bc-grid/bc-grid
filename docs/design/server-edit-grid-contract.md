@@ -129,6 +129,19 @@ The React `<BcServerGrid>` surface exposes two wiring levels:
   `apiRef.current.settleServerRowMutation(result)` are the low-level API for
   consumers that still want to drive the queue manually from `onCellEditCommit`.
 
+For 0.4 editing planning, the current boundary is:
+
+- Already wired: `BcServerGrid` forwards bare `onCellEditCommit` exactly like
+  `BcGrid` / `BcEditGrid`; no server mutation is queued unless the consumer
+  chooses the low-level API.
+- Already wired: `onServerRowMutation` owns patch creation, optimistic queue,
+  settle, and rejected/conflict promise rejection for rollback.
+- Consumer-owned: server validation messages, authorization and conflict copy,
+  stale mutation arbitration across multiple saves, and choosing row/view
+  invalidation after an accepted edit.
+- Not implemented here: richer editor UX, batch edit transactions, conflict
+  resolution dialogs, retry UI, or app-specific reload policy.
+
 ## Consumer Responsibilities
 
 A business app wiring a customers grid must provide:

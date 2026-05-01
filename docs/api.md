@@ -1448,12 +1448,18 @@ The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are 
 `ServerPagedQuery.pivotState?: BcPivotState` and `ServerPagedResult.pivotedRows?: BcPivotedDataDTO` are reserved for server-side pivot pushdown. Client-side pivot uses the pure `@bc-grid/aggregations` engine; server-side pivot consumers can return the same JSON-safe DTO shape without exposing the engine's internal lookup maps.
 
 Editable server-backed business grids use the same edit commit event as
-`<BcGrid>` / `<BcEditGrid>`. `onServerRowMutation` converts the edit into a
-`ServerRowPatch`, queues the optimistic server-row-model mutation, awaits the
-consumer's persistence result, settles the mutation, and rejects the edit
-overlay for rejected/conflict results. Consumers that need manual control can
-call the lower-level `BcServerGridApi` mutation methods directly. The contract
-is documented in
+`<BcGrid>` / `<BcEditGrid>`. If a consumer passes only `onCellEditCommit`,
+`<BcServerGrid>` forwards the normal edit commit promise and does not queue a
+server mutation, reload rows, or infer invalidation. That manual path is useful
+when the application wants to call `BcServerGridApi.queueServerRowMutation`,
+`settleServerRowMutation`, `invalidateServerRows`, or `refreshServerRows`
+itself. If a consumer passes `onServerRowMutation`, bc-grid uses the managed
+server edit path: it converts the edit into a `ServerRowPatch`, queues the
+optimistic server-row-model mutation, awaits the consumer's persistence result,
+settles the mutation, and rejects the edit overlay for rejected/conflict
+results. The consumer still owns server validation copy, permission/conflict
+policy, and deciding when an accepted edit should invalidate or reload the
+current server view. The contract is documented in
 [`docs/design/server-edit-grid-contract.md`](./design/server-edit-grid-contract.md).
 The consumer-facing guide is in
 [`apps/docs/src/pages/server-edit-grid.astro`](../apps/docs/src/pages/server-edit-grid.astro),
