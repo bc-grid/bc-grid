@@ -390,6 +390,147 @@ export function deriveColumnState<TRow>(
   }))
 }
 
+export function buildLayoutColumnState<TRow>(
+  columns: readonly BcReactGridColumn<TRow>[],
+  columnState: readonly BcColumnStateEntry[],
+): BcColumnStateEntry[] {
+  const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
+  return flattenColumnDefinitions(columns, { includeHidden: true }).map(
+    ({ column, columnId, originalIndex }) => {
+      const state = stateById.get(columnId)
+      const entry: BcColumnStateEntry = {
+        columnId,
+        hidden: state?.hidden ?? column.hidden ?? false,
+        pinned: hasOwnColumnStateValue(state, "pinned")
+          ? (state.pinned ?? null)
+          : (column.pinned ?? null),
+        position: state?.position ?? originalIndex,
+        width: state?.width ?? column.width ?? DEFAULT_COL_WIDTH,
+      }
+
+      const flex = state?.flex ?? column.flex
+      if (typeof flex === "number" && Number.isFinite(flex) && flex > 0) entry.flex = flex
+      if (hasOwnColumnStateValue(state, "sortDirection")) {
+        entry.sortDirection = state.sortDirection ?? null
+      }
+      if (hasOwnColumnStateValue(state, "sortIndex")) {
+        entry.sortIndex = state.sortIndex ?? null
+      }
+
+      return entry
+    },
+  )
+}
+
+export function mergeLayoutColumnState<TRow>(
+  columns: readonly BcReactGridColumn<TRow>[],
+  currentColumnState: readonly BcColumnStateEntry[],
+  layoutColumnState: readonly BcColumnStateEntry[],
+): BcColumnStateEntry[] {
+  const base = buildLayoutColumnState(columns, currentColumnState)
+  const knownIds = new Set(base.map((entry) => entry.columnId))
+  const layoutById = new Map<ColumnId, BcColumnStateEntry>()
+  for (const entry of layoutColumnState) {
+    if (knownIds.has(entry.columnId)) layoutById.set(entry.columnId, entry)
+  }
+
+  return base.map((baseEntry) => {
+    const layoutEntry = layoutById.get(baseEntry.columnId)
+    if (!layoutEntry) return baseEntry
+
+    const next: BcColumnStateEntry = { columnId: baseEntry.columnId }
+    next.hidden = hasOwnColumnStateValue(layoutEntry, "hidden")
+      ? layoutEntry.hidden === true
+      : (baseEntry.hidden ?? false)
+    next.pinned = hasOwnColumnStateValue(layoutEntry, "pinned")
+      ? normalizePinned(layoutEntry.pinned, baseEntry.pinned ?? null)
+      : (baseEntry.pinned ?? null)
+
+    const position = normalizeStateNumber(layoutEntry.position, baseEntry.position)
+    if (position !== undefined) next.position = position
+    const width = normalizeStateNumber(layoutEntry.width, baseEntry.width)
+    if (width !== undefined) next.width = width
+    const flex = normalizeStateNumber(layoutEntry.flex, baseEntry.flex)
+    if (flex !== undefined && flex > 0) next.flex = flex
+    if (hasOwnColumnStateValue(layoutEntry, "sortDirection")) {
+      next.sortDirection =
+        layoutEntry.sortDirection === "asc" || layoutEntry.sortDirection === "desc"
+          ? layoutEntry.sortDirection
+          : null
+    } else if (hasOwnColumnStateValue(baseEntry, "sortDirection")) {
+      next.sortDirection = baseEntry.sortDirection ?? null
+    }
+    if (hasOwnColumnStateValue(layoutEntry, "sortIndex")) {
+      next.sortIndex =
+        typeof layoutEntry.sortIndex === "number" && Number.isFinite(layoutEntry.sortIndex)
+          ? Math.max(0, Math.floor(layoutEntry.sortIndex))
+          : null
+    } else if (hasOwnColumnStateValue(baseEntry, "sortIndex")) {
+      next.sortIndex = baseEntry.sortIndex ?? null
+    }
+
+    return next
+  })
+}
+
+export function pruneLayoutSortForColumns(
+  sort: readonly BcGridSort[] | undefined,
+  columnIds: ReadonlySet<ColumnId>,
+): readonly BcGridSort[] | undefined {
+  if (sort === undefined) return undefined
+  return sort.filter(
+    (entry) =>
+      columnIds.has(entry.columnId) && (entry.direction === "asc" || entry.direction === "desc"),
+  )
+}
+
+export function pruneLayoutGroupByForColumns(
+  groupBy: readonly ColumnId[] | undefined,
+  columnIds: ReadonlySet<ColumnId>,
+): readonly ColumnId[] | undefined {
+  if (groupBy === undefined) return undefined
+  return groupBy.filter((columnId) => columnIds.has(columnId))
+}
+
+export function pruneLayoutFilterForColumns(
+  filter: BcGridFilter | null | undefined,
+  columnIds: ReadonlySet<ColumnId>,
+): BcGridFilter | null | undefined {
+  if (filter === undefined) return undefined
+  if (filter === null) return null
+  if (filter.kind === "column") return columnIds.has(filter.columnId) ? filter : null
+
+  const filters = filter.filters.flatMap((child) => {
+    const next = pruneLayoutFilterForColumns(child, columnIds)
+    return next ? [next] : []
+  })
+  if (filters.length === 0) return null
+  return { ...filter, filters }
+}
+
+function hasOwnColumnStateValue<K extends keyof BcColumnStateEntry>(
+  entry: BcColumnStateEntry | undefined,
+  key: K,
+): entry is BcColumnStateEntry & Required<Pick<BcColumnStateEntry, K>> {
+  return entry != null && Object.prototype.hasOwnProperty.call(entry, key)
+}
+
+function normalizeStateNumber(
+  value: number | undefined,
+  fallback: number | undefined,
+): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  return typeof fallback === "number" && Number.isFinite(fallback) ? fallback : undefined
+}
+
+function normalizePinned(
+  value: BcColumnStateEntry["pinned"] | undefined,
+  fallback: "left" | "right" | null,
+): "left" | "right" | null {
+  if (value === "left" || value === "right" || value === null) return value
+  return fallback
+}
+
 // ---------------------------------------------------------------------------
 // Style helpers.
 // ---------------------------------------------------------------------------

@@ -33,6 +33,7 @@ export type {
   BcGridColumn,
   BcGridDensity,
   BcGridFilter,
+  BcGridLayoutState,
   BcGridMessages,
   BcGridProps,
   BcGridSort,

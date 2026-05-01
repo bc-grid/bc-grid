@@ -628,6 +628,65 @@ Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelec
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
+### 3.2.1 Consumer-owned layout persistence
+
+For app-level saved views, the React grid exposes a JSON-safe layout DTO. The
+grid applies the DTO through the same state paths listed above; it does not read
+or write browser storage for this API. Consumers own storage, naming, migration,
+and user-profile scoping.
+
+```ts
+export interface BcGridLayoutState {
+  version: 1
+  columnState?: readonly BcColumnStateEntry[]
+  sort?: readonly BcGridSort[]
+  filter?: BcGridFilter | null
+  searchText?: string
+  groupBy?: readonly ColumnId[]
+  density?: BcGridDensity
+  pagination?: BcPaginationState
+  sidebarPanel?: string | null
+}
+
+export interface BcGridProps<TRow> {
+  initialLayout?: BcGridLayoutState
+  layoutState?: BcGridLayoutState
+  onLayoutStateChange?: (next: BcGridLayoutState, prev: BcGridLayoutState) => void
+}
+```
+
+Use `initialLayout` for a one-time restore at mount. Use `layoutState` when a
+host "apply saved view" action needs to push a new snapshot into the grid. The
+grid emits `onLayoutStateChange` after user-driven changes to any included
+layout field. Individual controlled props (`columnState`, `sort`, `filter`,
+`groupBy`, `page` / `pageSize`, `sidebarPanel`, `searchText`) remain the source
+of truth when supplied; applying a layout in that mode invokes the matching
+controlled callbacks.
+
+Unknown columns in a saved layout are ignored. Known columns missing from a
+partial saved layout keep their current/default state, so consumers can restore
+a subset safely after adding or removing columns. Grouping is represented by the
+public `groupBy` state. Pivot layout is intentionally not included until a public
+pivot state contract lands.
+
+Compact example:
+
+```tsx
+const [layout, setLayout] = useState<BcGridLayoutState | undefined>(() =>
+  readSavedCustomerLayout(),
+)
+
+return (
+  <BcGrid
+    columns={columns}
+    data={rows}
+    rowId={(row) => row.id}
+    initialLayout={layout}
+    onLayoutStateChange={(next) => setLayout(next)}
+  />
+)
+```
+
 ### 3.3 Grid identity for persistence (frozen at v0.1)
 
 ```ts
@@ -651,7 +710,7 @@ export interface BcGridUrlStatePersistence {
 
 When `gridId` is set, the React layer persists six state keys to `localStorage` by default — `columnState`, `pageSize`, `density`, `groupBy`, `filter`, and `sidebarPanel`. Each key is stored under `bc-grid:{gridId}:{state}` (e.g., `bc-grid:accounts-receivable.customers:filter`); they round-trip independently so consumers can clear or inspect a single key without touching the others. `sidebarPanel` distinguishes `null` ("explicitly closed", round-trips as JSON `"null"`) from `undefined` ("no preference, fall back to `defaultSidebarPanel`"); the same `null` vs `undefined` distinction applies to `filter`. Per-column sort direction is carried by `columnState[i].sortDirection` / `sortIndex`, so `sort` does not appear as a separate localStorage key. A consumer-provided storage backend via `<BcGridProvider storage={...}>` is reserved for Q2 and is not exported at v0.1.
 
-When `urlStatePersistence` is set, the React layer reads and writes a JSON payload containing `columnState`, `sort`, and `filter` to the configured URL search parameter via `history.replaceState`. This is opt-in because URL state is shareable and user-visible. **On mount, URL state takes precedence over `localStorage`** for every key the URL carries — `columnState`, `sort`, and `filter`. The cascade per state key is `props.default<X> ?? urlPersistedGridState.<x> ?? persistedGridState.<x> ?? <empty>`. The URL writer drops the search param entirely when all three URL keys are `undefined`; an explicit empty array (`[]`) is preserved as "explicit empty" and is distinct from `undefined`.
+When `urlStatePersistence` is set, the React layer reads and writes a JSON payload containing `columnState`, `sort`, and `filter` to the configured URL search parameter via `history.replaceState`. This is opt-in because URL state is shareable and user-visible. **On mount, URL state takes precedence over `localStorage`** for every key the URL carries — `columnState`, `sort`, and `filter`. Without `initialLayout`, the cascade per state key is `props.default<X> ?? urlPersistedGridState.<x> ?? persistedGridState.<x> ?? <empty>`. When `initialLayout` is supplied, explicit `default<X>` props still win; otherwise layout fields apply before URL/localStorage fallbacks. `columnState` restore is merged over the backend fallback so known columns omitted from a partial layout keep their fallback/default state. The URL writer drops the search param entirely when all three URL keys are `undefined`; an explicit empty array (`[]`) is preserved as "explicit empty" and is distinct from `undefined`.
 
 Both backends silently drop malformed or unsupported persisted entries (best-effort restore — a corrupted blob from an older bc-grid version, or hand-edited storage / URL, never breaks the grid). Both writers are debounced by 500ms (`GRID_STATE_WRITE_DEBOUNCE_MS`) so a column drag or filter typing settles into a single trailing write.
 
