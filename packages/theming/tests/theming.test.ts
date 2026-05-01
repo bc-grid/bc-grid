@@ -558,6 +558,74 @@ describe("@bc-grid/theming", () => {
     expect(disabledActions).toContain("opacity: 0.55")
   })
 
+  test("sidebar rail and panel share the sidebar surface (no detached strip, no inner divider)", () => {
+    // Pre-cleanup the rail painted a `color-mix(...)` tint and the
+    // panel had its own `border-left`, producing a heavy seam between
+    // the two and a "detached strip" feel against the table chrome.
+    // The shadcn Sidebar idiom keeps the rail and panel on the same
+    // surface — the active rail tab's accent-soft bg + inset stripe
+    // carries the rail's identity instead of a separate background.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    const rail = ruleFor(".bc-grid-sidebar-rail {")
+    // Rail must not paint a tinted surface — that's what produced the
+    // visible seam against the panel.
+    expect(rail).not.toMatch(/background:\s*color-mix/)
+    expect(rail).toContain("background: transparent")
+
+    const panel = ruleFor(".bc-grid-sidebar-panel {")
+    // Panel must not paint its own `border-left` — the rail/panel
+    // surface is unified; the outer aside `border-left` handles the
+    // table-side divider.
+    expect(panel).not.toMatch(/border-left:/)
+  })
+
+  test("sidebar rail tab states use bg / outline signals only (no colored border tint)", () => {
+    // Pre-cleanup the tab's hover, focus-visible, and active states
+    // each shifted `border-color` on top of bg / outline changes —
+    // three signals stacked for one state. shadcn-style menu items
+    // signal hover via bg only, focus via the outline ring only, and
+    // active via bg + (optional) accent stripe. The transparent
+    // border on the base rule stays for layout stability.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    const base = ruleFor(".bc-grid-sidebar-tab {")
+    // Layout-stability border on the base — preserves geometry across
+    // state transitions even though the colored variants are gone.
+    expect(base).toContain("border: 1px solid transparent")
+
+    const hover = ruleFor(".bc-grid-sidebar-tab:hover {")
+    expect(hover).toContain("background: var(--bc-grid-row-hover)")
+    expect(hover).not.toMatch(/border-color:/)
+
+    const focus = ruleFor(".bc-grid-sidebar-tab:focus-visible {")
+    // Focus relies on the outline ring + offset only — no bg shift,
+    // no border-color shift.
+    expect(focus).toContain("outline: 2px solid var(--bc-grid-focus-ring)")
+    expect(focus).toContain("outline-offset: 2px")
+    expect(focus).not.toMatch(/border-color:/)
+    expect(focus).not.toMatch(/background:/)
+
+    const active = ruleFor('.bc-grid-sidebar-tab[data-state="open"] {')
+    // Active keeps the accent-soft bg + inset stripe; the colored
+    // border tint is gone.
+    expect(active).toContain("background: var(--bc-grid-accent-soft)")
+    expect(active).toContain("box-shadow: inset 2px 0 0 var(--bc-grid-accent)")
+    expect(active).not.toMatch(/border-color:/)
+  })
+
   test("tooltip surface no longer chains shadcn fallbacks (single-source bridge)", () => {
     // Pre-refactor the tooltip carried triple-chained fallbacks like
     // `var(--bc-grid-context-menu-bg, var(--popover, var(--background, ...)))`.
