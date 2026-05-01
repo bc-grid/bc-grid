@@ -65,6 +65,35 @@ describe("layout persistence helpers", () => {
     ])
   })
 
+  test("restores known column layout after schema changes without corrupting new columns", () => {
+    const nextColumns = [
+      { columnId: "account", field: "account", header: "Account", pinned: "left", width: 140 },
+      { columnId: "region", field: "status", header: "Region", width: 150 },
+      { columnId: "amount", field: "amount", header: "Amount", flex: 1 },
+    ] satisfies readonly BcReactGridColumn<Row>[]
+    const savedBeforeSchemaChange = [
+      { columnId: "amount", flex: 2, hidden: false, pinned: "right", position: 0, width: 180 },
+      { columnId: "legacy", hidden: true, pinned: "left", position: 1, width: 999 },
+      { columnId: "account", hidden: true, pinned: null, position: 2, width: 260 },
+      { columnId: "status", hidden: false, pinned: null, position: 3, width: 120 },
+    ] satisfies readonly BcColumnStateEntry[]
+
+    const restored = mergeLayoutColumnState(nextColumns, [], savedBeforeSchemaChange)
+
+    expect(restored).toEqual([
+      { columnId: "account", hidden: true, pinned: null, position: 2, width: 260 },
+      { columnId: "region", hidden: false, pinned: null, position: 1, width: 150 },
+      {
+        columnId: "amount",
+        flex: 2,
+        hidden: false,
+        pinned: "right",
+        position: 0,
+        width: 180,
+      },
+    ])
+  })
+
   test("prunes sort, group, and filter state to current columns", () => {
     const known = new Set(["account", "status"])
     const filter = {

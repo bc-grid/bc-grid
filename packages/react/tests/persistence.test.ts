@@ -4,6 +4,8 @@ import {
   type LocationLike,
   type StorageLike,
   gridStorageKey,
+  prunePersistedGridStateForColumns,
+  pruneUrlPersistedGridStateForColumns,
   readPersistedGridState,
   readUrlPersistedGridState,
   writePersistedGridState,
@@ -30,6 +32,9 @@ describe("grid state persistence", () => {
   test("uses the documented per-state localStorage key convention", () => {
     expect(gridStorageKey("accounts-receivable.customers", "columnState")).toBe(
       "bc-grid:accounts-receivable.customers:columnState",
+    )
+    expect(gridStorageKey("accounts-receivable.customers", "sort")).toBe(
+      "bc-grid:accounts-receivable.customers:sort",
     )
     expect(gridStorageKey("accounts-receivable.customers", "pageSize")).toBe(
       "bc-grid:accounts-receivable.customers:pageSize",
@@ -66,6 +71,13 @@ describe("grid state persistence", () => {
           position: -1,
           width: -20,
         },
+      ]),
+    )
+    storage.setItem(
+      gridStorageKey(gridId, "sort"),
+      JSON.stringify([
+        { columnId: "balance", direction: "desc" },
+        { columnId: "ignored", direction: "sideways" },
       ]),
     )
     storage.setItem(gridStorageKey(gridId, "pageSize"), JSON.stringify(100))
@@ -109,6 +121,7 @@ describe("grid state persistence", () => {
         },
         { columnId: "ignored-invalid-values" },
       ],
+      sort: [{ columnId: "balance", direction: "desc" }],
       density: "compact",
       filter: {
         kind: "column",
@@ -136,6 +149,7 @@ describe("grid state persistence", () => {
     const storage = new MemoryStorage()
     const gridId = "accounts"
     storage.setItem(gridStorageKey(gridId, "columnState"), "not-json")
+    storage.setItem(gridStorageKey(gridId, "sort"), JSON.stringify([{ columnId: "name" }]))
     storage.setItem(gridStorageKey(gridId, "pageSize"), JSON.stringify(0))
     storage.setItem(gridStorageKey(gridId, "density"), JSON.stringify("dense"))
     storage.setItem(gridStorageKey(gridId, "groupBy"), JSON.stringify(["tier", 42]))
@@ -148,6 +162,7 @@ describe("grid state persistence", () => {
 
     const state = readPersistedGridState(gridId, storage)
     expect(state.columnState).toBeUndefined()
+    expect(state.sort).toBeUndefined()
     expect(state.pageSize).toBeUndefined()
     expect(state.density).toBeUndefined()
     expect(state.filter).toBeUndefined()
@@ -172,6 +187,7 @@ describe("grid state persistence", () => {
           op: "contains",
           value: "open",
         },
+        sort: [{ columnId: "customer", direction: "asc" }],
         groupBy: ["tier"],
         pageSize: 50,
         pivotState: {
@@ -186,6 +202,9 @@ describe("grid state persistence", () => {
 
     expect(storage.getItem(gridStorageKey(gridId, "columnState"))).toBe(
       JSON.stringify([{ columnId: "customer", width: 240 }]),
+    )
+    expect(storage.getItem(gridStorageKey(gridId, "sort"))).toBe(
+      JSON.stringify([{ columnId: "customer", direction: "asc" }]),
     )
     expect(storage.getItem(gridStorageKey(gridId, "pageSize"))).toBe(JSON.stringify(50))
     expect(storage.getItem(gridStorageKey(gridId, "density"))).toBe(JSON.stringify("comfortable"))
@@ -211,6 +230,7 @@ describe("grid state persistence", () => {
     writePersistedGridState(gridId, {}, storage)
 
     expect(storage.getItem(gridStorageKey(gridId, "columnState"))).toBeNull()
+    expect(storage.getItem(gridStorageKey(gridId, "sort"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "pageSize"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "density"))).toBeNull()
     expect(storage.getItem(gridStorageKey(gridId, "filter"))).toBeNull()
@@ -236,6 +256,67 @@ describe("grid state persistence", () => {
     expect(() =>
       writePersistedGridState("accounts", { density: "normal" }, throwingStorage),
     ).not.toThrow()
+  })
+
+  test("prunes persisted layout state against current columns after schema changes", () => {
+    const columnIds = new Set(["customer", "status", "balance"])
+    const pruned = prunePersistedGridStateForColumns(
+      {
+        columnState: [
+          { columnId: "customer", hidden: false, pinned: "left", position: 0, width: 240 },
+          { columnId: "legacy", hidden: true, pinned: "right", position: 1, width: 999 },
+          { columnId: "status", hidden: true, pinned: null, position: 2, width: 160 },
+          { columnId: "status", hidden: false, position: 4, width: 320 },
+        ],
+        density: "compact",
+        filter: {
+          kind: "group",
+          op: "and",
+          filters: [
+            { kind: "column", columnId: "status", type: "set", op: "in", values: ["Open"] },
+            { kind: "column", columnId: "legacy", type: "text", op: "contains", value: "old" },
+          ],
+        },
+        groupBy: ["legacy", "status", "customer"],
+        pageSize: 100,
+        pivotState: {
+          colGroups: ["legacy", "status"],
+          rowGroups: ["customer", "removed"],
+          values: [
+            { aggregation: { type: "sum" }, columnId: "balance", label: "Balance" },
+            { aggregation: { type: "count" }, columnId: "legacy" },
+          ],
+        },
+        sidebarPanel: "columns",
+        sort: [
+          { columnId: "legacy", direction: "asc" },
+          { columnId: "balance", direction: "desc" },
+        ],
+      },
+      columnIds,
+    )
+
+    expect(pruned).toEqual({
+      columnState: [
+        { columnId: "customer", hidden: false, pinned: "left", position: 0, width: 240 },
+        { columnId: "status", hidden: true, pinned: null, position: 2, width: 160 },
+      ],
+      density: "compact",
+      filter: {
+        kind: "group",
+        op: "and",
+        filters: [{ kind: "column", columnId: "status", type: "set", op: "in", values: ["Open"] }],
+      },
+      groupBy: ["status", "customer"],
+      pageSize: 100,
+      pivotState: {
+        colGroups: ["status"],
+        rowGroups: ["customer"],
+        values: [{ aggregation: { type: "sum" }, columnId: "balance", label: "Balance" }],
+      },
+      sidebarPanel: "columns",
+      sort: [{ columnId: "balance", direction: "desc" }],
+    })
   })
 })
 
@@ -274,6 +355,42 @@ describe("grid URL state persistence", () => {
         ],
       },
       sort: [{ columnId: "balance", direction: "desc" }],
+    })
+  })
+
+  test("prunes URL persisted layout state against current columns after schema changes", () => {
+    const state = pruneUrlPersistedGridStateForColumns(
+      {
+        columnState: [
+          { columnId: "customer", position: 0, width: 220 },
+          { columnId: "legacy", position: 1, width: 999 },
+        ],
+        filter: {
+          kind: "group",
+          op: "or",
+          filters: [
+            { kind: "column", columnId: "customer", type: "text", op: "contains", value: "acme" },
+            { kind: "column", columnId: "legacy", type: "text", op: "contains", value: "old" },
+          ],
+        },
+        sort: [
+          { columnId: "legacy", direction: "asc" },
+          { columnId: "customer", direction: "desc" },
+        ],
+      },
+      new Set(["customer"]),
+    )
+
+    expect(state).toEqual({
+      columnState: [{ columnId: "customer", position: 0, width: 220 }],
+      filter: {
+        kind: "group",
+        op: "or",
+        filters: [
+          { kind: "column", columnId: "customer", type: "text", op: "contains", value: "acme" },
+        ],
+      },
+      sort: [{ columnId: "customer", direction: "desc" }],
     })
   })
 
@@ -372,11 +489,11 @@ describe("filter persistence contract corners", () => {
     expect(readPersistedGridState(gridId, storage).sidebarPanel).toBeNull()
   })
 
-  test("empty-storage read returns seven explicit-undefined keys (not {})", () => {
+  test("empty-storage read returns eight explicit-undefined keys (not {})", () => {
     // Documented corner: PersistedGridState makes every field optional
     // (`?:`) so the runtime can return `undefined` per key; the reader
-    // returns the full seven-key shape regardless. Object.keys(state)
-    // therefore returns seven entries, not zero. Consumers iterating
+    // returns the full eight-key shape regardless. Object.keys(state)
+    // therefore returns eight entries, not zero. Consumers iterating
     // with `Object.keys` should be aware.
     const storage = new MemoryStorage()
     const state = readPersistedGridState("nothing-persisted", storage)
@@ -390,6 +507,7 @@ describe("filter persistence contract corners", () => {
         "pageSize",
         "pivotState",
         "sidebarPanel",
+        "sort",
       ].sort(),
     )
     for (const key of keys) {
