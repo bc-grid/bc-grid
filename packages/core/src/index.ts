@@ -315,6 +315,19 @@ export interface ServerColumnFilter {
   op: string
   value?: unknown
   values?: unknown[]
+  /**
+   * Modifier flag — when true, `text` filter comparisons are
+   * case-sensitive. Defaults to false (case-insensitive). Other filter
+   * types ignore this field. Per `filter-registry-rfc §text`.
+   */
+  caseSensitive?: boolean
+  /**
+   * Modifier flag — when true, the `text` filter interprets `value`
+   * as a regular expression pattern and tests against the formatted
+   * cell value (`i` flag implied when `caseSensitive` is false).
+   * Other filter types ignore this field. Per `filter-registry-rfc §text`.
+   */
+  regex?: boolean
 }
 
 export interface ServerGroup {
