@@ -442,7 +442,13 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("box-shadow: inset -1px 0 0 var(--bc-grid-column-separator)")
     expect(css).toContain(".bc-grid-header-cell-resizable .bc-grid-header-resize-handle::before")
     expect(css).toContain(".bc-grid-header-cell-resizable .bc-grid-header-resize-handle::after")
+    expect(css).toContain(".bc-grid-header-resize-handle:hover::before")
+    expect(css).toContain(".bc-grid-header-resize-handle:hover::after")
     expect(css).toContain("pointer-events: none")
+    expect(css).not.toContain(".bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle")
+    expect(css).not.toContain(
+      ".bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle",
+    )
     expect(css).not.toContain(".bc-grid-header-cell::after")
     expect(css).not.toContain(".bc-grid-header-cell-resizable::before")
   })
