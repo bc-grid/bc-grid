@@ -72,11 +72,6 @@ export type FilterCellValue =
       rawValue?: unknown
     }
 
-export type GridFilterChangeCallback = (
-  next: BcGridFilter | null,
-  prev: BcGridFilter | null,
-) => void
-
 type DateColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & { type: "date" }
 type DateRangeColumnFilterDraft = Omit<ServerColumnFilter, "columnId"> & {
   type: "date-range"
@@ -145,14 +140,6 @@ export function buildGridFilter(
   return { kind: "group", op: "and", filters }
 }
 
-export function notifyGridFilterChange(
-  onFilterChange: GridFilterChangeCallback | undefined,
-  next: BcGridFilter | null,
-  prev: BcGridFilter | null,
-): void {
-  onFilterChange?.(next, prev)
-}
-
 export function columnFilterTextFromGridFilter(
   filter: BcGridFilter | null | undefined,
 ): ColumnFilterText {
@@ -160,6 +147,12 @@ export function columnFilterTextFromGridFilter(
   const text: Record<ColumnId, string> = {}
   assignColumnFilterText(filter, text)
   return text
+}
+
+export function columnFilterTextEqual(left: ColumnFilterText, right: ColumnFilterText): boolean {
+  const leftKeys = Object.keys(left)
+  if (leftKeys.length !== Object.keys(right).length) return false
+  return leftKeys.every((key) => left[key] === right[key])
 }
 
 function assignColumnFilterText(filter: ServerFilter, text: Record<ColumnId, string>): void {

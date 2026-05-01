@@ -413,6 +413,7 @@ This is exposed to `cellRenderer` via `params.rowState` (Q2 — when editing lan
 ## 3. Controlled / uncontrolled state pairs
 
 For each piece of grid state, there is a controlled (`<state>` + `on<State>Change`) form and an uncontrolled (`default<State>`) form. Mixing the two for the same state on the same grid is a runtime error.
+Filter state uses `null` for "no active filter"; clearing the inline, popup, or sidebar filter controls emits `onFilterChange(null, prevFilter)`.
 
 ### 3.1 The pairs (frozen at v0.1)
 
@@ -759,8 +760,45 @@ export interface BcSidebarContext<TRow = unknown> {
   groupBy: readonly ColumnId[]
   setGroupBy: (state: readonly ColumnId[]) => void
   groupableColumns: readonly { columnId: ColumnId; header: string }[]
+  columnFilterText: Readonly<Record<ColumnId, string>>
+  setColumnFilterText: (columnId: ColumnId, value: string) => void
+  clearColumnFilterText: (columnId?: ColumnId) => void
+  getSetFilterOptions?: (columnId: ColumnId) => readonly { value: string; label: string }[]
+  messages: BcGridMessages
   pivot?: unknown
 }
+
+export type BcContextMenuBuiltinItem =
+  | "copy"
+  | "copy-with-headers"
+  | "clear-selection"
+  | "clear-range"
+  | "separator"
+
+export interface BcContextMenuCustomItem<TRow = unknown> {
+  id: string
+  label: string
+  onSelect: (ctx: BcContextMenuContext<TRow>) => void
+  disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+}
+
+export type BcContextMenuItem<TRow = unknown> =
+  | BcContextMenuBuiltinItem
+  | BcContextMenuCustomItem<TRow>
+
+export interface BcContextMenuContext<TRow = unknown> {
+  cell: BcCellPosition | null
+  row: TRow | null
+  column: BcReactGridColumn<TRow> | null
+  selection: BcSelection
+  api: BcGridApi<TRow>
+}
+
+export type BcContextMenuItems<TRow = unknown> =
+  | readonly (BcContextMenuItem<TRow> | false | null | undefined)[]
+  | ((
+      ctx: BcContextMenuContext<TRow>,
+    ) => readonly (BcContextMenuItem<TRow> | false | null | undefined)[])
 
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   /** Row data (client-side). For server-side, use BcServerGrid. */
@@ -832,6 +870,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   sidebarPanel?: string | null
   onSidebarPanelChange?: (next: string | null, prev: string | null) => void
   sidebarWidth?: number
+  contextMenuItems?: BcContextMenuItems<TRow>
 
   // Master-detail
   renderDetailPanel?: (params: BcDetailPanelParams<TRow>) => React.ReactNode
@@ -861,6 +900,23 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   // Accessibility
   ariaLabel?: string
   ariaLabelledBy?: string
+
+  /**
+   * Override the inline filter row's visibility independent of the
+   * per-column filter configuration. Lets host apps wire a filter
+   * toggle button without touching column definitions.
+   *
+   * - `undefined` (default) — column-driven: row renders iff at least
+   *   one column has an inline-variant filter configured. Same
+   *   behavior consumers see today.
+   * - `true` — force visible. Columns with `filter: false` or
+   *   `variant: "popup"` still render empty filter cells in the row.
+   * - `false` — force hidden. Active filter state (`columnFilterText`
+   *   / `BcGridFilter`) is preserved across the toggle; only the
+   *   editor row is suppressed. Popup-variant filter funnels stay
+   *   reachable from each column header.
+   */
+  showFilterRow?: boolean
 }
 ```
 
@@ -1249,6 +1305,8 @@ export type {
   BcEditGridAction,
   BcRangeBeforeCopyEvent, BcRangeBeforeCopyHook, BcRangeCopyEvent, BcRangeCopyHook,
   BcServerRowUpdateHandler, BcServerRowUpdateSubscribe, BcServerRowUpdateUnsubscribe,
+  BcContextMenuBuiltinItem, BcContextMenuContext, BcContextMenuCustomItem,
+  BcContextMenuItem, BcContextMenuItems,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
   BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarCustomPanel, BcSidebarPanel,
 

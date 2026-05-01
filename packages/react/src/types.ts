@@ -230,6 +230,38 @@ export interface BcCellRendererParams<TRow, TValue = unknown> {
   isDirty: boolean
 }
 
+export type BcContextMenuBuiltinItem =
+  | "copy"
+  | "copy-with-headers"
+  | "clear-selection"
+  | "clear-range"
+  | "separator"
+
+export interface BcContextMenuCustomItem<TRow = unknown> {
+  id: string
+  label: string
+  onSelect: (ctx: BcContextMenuContext<TRow>) => void
+  disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+}
+
+export type BcContextMenuItem<TRow = unknown> =
+  | BcContextMenuBuiltinItem
+  | BcContextMenuCustomItem<TRow>
+
+export interface BcContextMenuContext<TRow = unknown> {
+  cell: BcCellPosition | null
+  row: TRow | null
+  column: BcReactGridColumn<TRow> | null
+  selection: BcSelection
+  api: BcGridApi<TRow>
+}
+
+export type BcContextMenuItems<TRow = unknown> =
+  | readonly (BcContextMenuItem<TRow> | false | null | undefined)[]
+  | ((
+      ctx: BcContextMenuContext<TRow>,
+    ) => readonly (BcContextMenuItem<TRow> | false | null | undefined)[])
+
 export interface BcDetailPanelParams<TRow> {
   row: TRow
   rowId: RowId
@@ -257,6 +289,11 @@ export interface BcSidebarContext<TRow = unknown> {
   groupBy: readonly ColumnId[]
   setGroupBy: (state: readonly ColumnId[]) => void
   groupableColumns: readonly { columnId: ColumnId; header: string }[]
+  columnFilterText: Readonly<Record<ColumnId, string>>
+  setColumnFilterText: (columnId: ColumnId, value: string) => void
+  clearColumnFilterText: (columnId?: ColumnId) => void
+  getSetFilterOptions?: (columnId: ColumnId) => readonly { value: string; label: string }[]
+  messages: BcGridMessages
   pivot?: unknown
 }
 
@@ -296,6 +333,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   sidebarPanel?: string | null
   onSidebarPanelChange?: (next: string | null, prev: string | null) => void
   sidebarWidth?: number
+  contextMenuItems?: BcContextMenuItems<TRow>
 
   /**
    * Master-detail render hook. When supplied, the grid renders a pinned-left
@@ -337,6 +375,23 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * checkbox does not trigger the row-click selection logic.
    */
   checkboxSelection?: boolean
+
+  /**
+   * Override the inline filter row's visibility independent of the
+   * per-column filter configuration. Lets host apps wire a "filter
+   * toggle" button without touching column definitions.
+   *
+   * - `undefined` (default) — column-driven: the row renders when at
+   *   least one column has an inline-variant filter configured. Same
+   *   behavior consumers see today.
+   * - `true` — force the row visible. Columns with `filter: false` or
+   *   `variant: "popup"` still render empty filter cells in the row.
+   * - `false` — force the row hidden. Active filter state is **preserved**
+   *   (the underlying `columnFilterText` map is unaffected); only the
+   *   editor row is suppressed. Popup-variant filter funnels stay
+   *   reachable from each column header.
+   */
+  showFilterRow?: boolean
 
   /**
    * Flash the cell briefly when an edit commits, per

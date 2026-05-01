@@ -10,6 +10,40 @@ for modal lookup grids; lookup grids usually want a fixed numeric height,
 client-side rows already fetched by the dialog, and no server-owned sort/filter
 state.
 
+## Choosing the Grid Model
+
+Use `BcServerGrid` when the server owns the result set: sorting, filtering,
+search, pagination, row count, permissions, and canonical saved rows all come
+from an API. This is the right shape for bsncraft-style customers screens where
+the browser should not load every customer before the user can filter or sort.
+
+Use `BcGrid` or `BcEditGrid` with client rows when the full working set is
+already in memory and client-side sort/filter semantics are acceptable. A modal
+lookup grid usually stays here: it receives a small result set, renders at a
+fixed height, and returns a selected row to the parent flow.
+
+Use `BcEditGrid` when the data is client-owned but still needs the edit action
+column, cell editors, validation, dirty state, and rollback semantics. Use
+`BcServerGrid` for server-owned rows; it composes the same editing callback with
+server row model APIs so the save path can reconcile against canonical server
+rows.
+
+## Consumer Responsibilities
+
+A server-backed editable grid is an adapter between bc-grid and the application
+API. The consumer must provide:
+
+- `rowId(row)` using an immutable database ID.
+- Column definitions where editable business columns use `columnId === field`.
+- `loadPage(query, context)` that forwards `ServerPagedQuery.view.sort`,
+  `view.filter`, `view.search`, `pageIndex`, and `pageSize` to the server.
+- Server-side allow lists mapping `columnId` to SQL/ORM fields for sort and
+  filter.
+- `onCellEditCommit(event)` that persists a patch, returns a promise, and
+  either resolves with a canonical row reconciliation or rejects for rollback.
+- A policy for edits that can change sort/filter membership: invalidate the row,
+  view, or whole cache after the save settles.
+
 ## Component Shape
 
 ```tsx

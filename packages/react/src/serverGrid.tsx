@@ -59,7 +59,7 @@ interface InfiniteServerState<TRow> {
 }
 
 interface ServerSortFilterState {
-  filterState: BcGridFilter | null | undefined
+  filterState: BcGridFilter | null
   handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   sortState: readonly BcGridSort[]
@@ -296,8 +296,8 @@ function useServerSortFilterState<TRow>(
     () => props.defaultSort ?? [],
   )
   const filterControlled = hasProp(props, "filter")
-  const [uncontrolledFilter, setUncontrolledFilter] = useState<BcGridFilter | null | undefined>(
-    () => props.defaultFilter,
+  const [uncontrolledFilter, setUncontrolledFilter] = useState<BcGridFilter | null>(
+    () => props.defaultFilter ?? null,
   )
 
   const handleSortChange = useCallback(
@@ -319,7 +319,7 @@ function useServerSortFilterState<TRow>(
   )
 
   return {
-    filterState: filterControlled ? props.filter : uncontrolledFilter,
+    filterState: filterControlled ? (props.filter ?? null) : uncontrolledFilter,
     handleFilterChange,
     handleSortChange,
     sortState: sortControlled ? (props.sort ?? []) : uncontrolledSort,

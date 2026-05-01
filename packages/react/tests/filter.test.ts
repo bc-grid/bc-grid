@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { ColumnId } from "@bc-grid/core"
 import {
   buildGridFilter,
+  columnFilterTextEqual,
   columnFilterTextFromGridFilter,
   decodeDateRangeFilterInput,
   decodeNumberFilterInput,
@@ -13,7 +14,6 @@ import {
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
   matchesGridFilter,
-  notifyGridFilterChange,
   setFilterValueKeys,
 } from "../src/filter"
 
@@ -343,24 +343,12 @@ describe("buildGridFilter", () => {
   })
 })
 
-describe("notifyGridFilterChange", () => {
-  test("forwards null when a controlled filter is cleared", () => {
-    const previous = {
-      kind: "column",
-      columnId: "name",
-      type: "text",
-      op: "contains",
-      value: "Acme",
-    } as const
-    const calls: Array<[unknown, unknown]> = []
-
-    notifyGridFilterChange((next, prev) => calls.push([next, prev]), null, previous)
-
-    expect(calls).toEqual([[null, previous]])
-  })
-})
-
 describe("columnFilterTextFromGridFilter", () => {
+  test("treats null as a cleared filter state", () => {
+    expect(columnFilterTextFromGridFilter(null)).toEqual({})
+    expect(buildGridFilter(columnFilterTextFromGridFilter(null))).toBeNull()
+  })
+
   test("projects supported filters into inline filter input state", () => {
     const filter = {
       kind: "group",
@@ -459,6 +447,12 @@ describe("columnFilterTextFromGridFilter", () => {
       valueTo: "5000",
     })
     expect(buildGridFilter(text, { balance: "number" })).toEqual(filter)
+  })
+
+  test("compares projected filter text without forcing controlled loops", () => {
+    expect(columnFilterTextEqual({ account: "Acme" }, { account: "Acme" })).toBe(true)
+    expect(columnFilterTextEqual({ account: "Acme" }, { account: "" })).toBe(false)
+    expect(columnFilterTextEqual({ account: "Acme" }, {})).toBe(false)
   })
 
   test("ignores filters whose declared type doesn't match the operator shape", () => {

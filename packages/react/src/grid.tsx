@@ -17,11 +17,14 @@ import type {
 import { Virtualizer } from "@bc-grid/virtualizer"
 import {
   type CSSProperties,
+  type ComponentType,
   type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
+  Suspense,
   type UIEvent,
+  lazy,
   useCallback,
   useEffect,
   useId,
@@ -44,9 +47,9 @@ import {
   type ColumnFilterTypeByColumnId,
   type SetFilterOption,
   buildGridFilter,
+  columnFilterTextEqual,
   columnFilterTextFromGridFilter,
   matchesGridFilter,
-  notifyGridFilterChange,
   setFilterValueKeys,
 } from "./filter"
 import {
@@ -73,6 +76,7 @@ import {
   pinnedEdgeFor,
   resolveColumns,
   resolveFallbackBodyHeight,
+  resolveFilterRowVisibility,
   resolveHeaderHeight,
   resolveRowHeight,
   rootStyle,
@@ -95,6 +99,7 @@ import {
   renderFilterCell,
   renderHeaderCell,
 } from "./headerCells"
+import type { BcGridContextMenuLayerProps } from "./internal/context-menu-layer"
 import { nextKeyboardNav } from "./keyboard"
 import {
   BcGridPagination,
@@ -130,6 +135,7 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
 
 const DEFAULT_DETAIL_HEIGHT = 144
 const editableKeyTargetTags = new Set(["INPUT", "TEXTAREA", "SELECT"])
+const BcGridContextMenuLayer = lazy(() => import("./internal/context-menu-layer"))
 
 export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   assertNoMixedControlledProps(props)
@@ -211,21 +217,56 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
   const defaultFilterState =
     props.defaultFilter ?? urlPersistedGridState.filter ?? persistedGridState.filter ?? null
+  const filterControlled = hasProp(props, "filter")
   const [filterState, setFilterState] = useControlledState<BcGridFilter | null>(
-    hasProp(props, "filter"),
+    filterControlled,
     props.filter ?? null,
     defaultFilterState,
-    props.onFilterChange
-      ? (next, prev) => notifyGridFilterChange(props.onFilterChange, next, prev)
-      : undefined,
+    props.onFilterChange,
   )
 
   // Per-column text-filter inputs. Internal state — projected into the
   // canonical `BcGridFilter` shape via `buildGridFilter` and surfaced
   // through `setFilterState` whenever it changes.
   const [columnFilterText, setColumnFilterText] = useState<ColumnFilterText>(() =>
-    columnFilterTextFromGridFilter(hasProp(props, "filter") ? props.filter : defaultFilterState),
+    columnFilterTextFromGridFilter(filterControlled ? props.filter : defaultFilterState),
   )
+  // External filter writes also project into editor text; avoid echoing that
+  // projection back through `onFilterChange` as a duplicate user edit.
+  const suppressNextInlineFilterCommitRef = useRef(false)
+  const syncColumnFilterTextFromFilter = useCallback((nextFilter: BcGridFilter | null) => {
+    const nextColumnFilterText = columnFilterTextFromGridFilter(nextFilter)
+    setColumnFilterText((prev) => {
+      if (columnFilterTextEqual(prev, nextColumnFilterText)) return prev
+      suppressNextInlineFilterCommitRef.current = true
+      return nextColumnFilterText
+    })
+  }, [])
+  useEffect(() => {
+    if (!filterControlled) return
+    syncColumnFilterTextFromFilter(props.filter ?? null)
+  }, [filterControlled, props.filter, syncColumnFilterTextFromFilter])
+  const applyFilterState = useCallback(
+    (next: BcGridFilter | null) => {
+      syncColumnFilterTextFromFilter(next)
+      setFilterState(next)
+    },
+    [setFilterState, syncColumnFilterTextFromFilter],
+  )
+  const updateColumnFilterText = useCallback((columnId: ColumnId, value: string) => {
+    setColumnFilterText((prev) => {
+      if (value.trim().length > 0) return { ...prev, [columnId]: value }
+      const { [columnId]: _cleared, ...rest } = prev
+      return rest
+    })
+  }, [])
+  const clearColumnFilterText = useCallback((columnId?: ColumnId) => {
+    setColumnFilterText((prev) => {
+      if (!columnId) return {}
+      const { [columnId]: _cleared, ...rest } = prev
+      return rest
+    })
+  }, [])
   // Filter-popup anchor + columnId for `column.filter.variant === "popup"`
   // columns per `filter-popup-variant`. Null when no popup is open.
   const [filterPopupState, setFilterPopupState] = useState<{
@@ -596,19 +637,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   })
   const hasAggregationFooter = aggregationResults.length > 0
 
-  // Whether the inline filter row should render at all. Per
-  // `filter-popup-variant`: when every filterable column is variant="popup"
-  // (or filter:false), the inline row collapses entirely. Any other case —
-  // mixed inline/popup or all inline — keeps the row.
+  // Whether the inline filter row should render. Default is column-driven
+  // (`filter-popup-variant`: row hidden when every filterable column is
+  // variant="popup" or filter:false); `showFilterRow` overrides the
+  // default so host apps can wire a filter-toggle button without touching
+  // column defs. Active filter state (`columnFilterText`) is independent
+  // and preserved across toggle — hiding the row never clears anything.
   const hasInlineFilters = useMemo(
-    () =>
-      resolvedColumns.some(
-        (column) =>
-          column.source.filter !== false &&
-          column.source.filter != null &&
-          (column.source.filter as BcColumnFilter).variant !== "popup",
-      ),
-    [resolvedColumns],
+    () => resolveFilterRowVisibility(props.showFilterRow, resolvedColumns),
+    [props.showFilterRow, resolvedColumns],
   )
 
   const loadSetFilterOptions = useCallback(
@@ -700,6 +737,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   useEffect(() => {
     if (!filterTextHydratedRef.current) {
       filterTextHydratedRef.current = true
+      return
+    }
+    if (suppressNextInlineFilterCommitRef.current) {
+      suppressNextInlineFilterCommitRef.current = false
       return
     }
     setFilterState(inlineFilter)
@@ -1061,7 +1102,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         setSortState(next)
       },
       setFilter(next) {
-        setFilterState(next)
+        applyFilterState(next)
       },
       setRangeSelection(next) {
         setRangeSelectionState(next)
@@ -1102,7 +1143,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     selectionState,
     setColumnState,
     setExpansionState,
-    setFilterState,
+    applyFilterState,
     setRangeSelectionState,
     setSortState,
     virtualizer,
@@ -1167,6 +1208,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         onChange={handlePaginationChange}
       />
     ) : null)
+
+  const clearContextSelection = useCallback(
+    () => setSelectionState(createEmptySelection()),
+    [setSelectionState],
+  )
 
   // While the editor input owns DOM focus, aria-activedescendant is
   // suspended (set to "") so AT doesn't try to point at a cell that's now
@@ -1520,28 +1566,41 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const sidebarContext = useMemo<BcSidebarContext<TRow>>(
     () => ({
       api,
+      clearColumnFilterText,
+      columnFilterText,
       columns,
       columnState,
       filterState: activeFilter,
+      getSetFilterOptions: loadSetFilterOptions,
       groupableColumns: props.groupableColumns ?? [],
       groupBy: groupByState,
+      messages,
       setColumnState,
-      setFilterState,
+      setColumnFilterText: updateColumnFilterText,
+      setFilterState: applyFilterState,
       setGroupBy: setGroupByState,
     }),
     [
       activeFilter,
       api,
+      clearColumnFilterText,
+      columnFilterText,
       columnState,
       columns,
       groupByState,
+      loadSetFilterOptions,
+      messages,
       props.groupableColumns,
+      applyFilterState,
       setColumnState,
-      setFilterState,
       setGroupByState,
+      updateColumnFilterText,
     ],
   )
   const bodyAriaRowOffset = hasInlineFilters ? 3 : 2
+  const ContextMenuLayer = BcGridContextMenuLayer as ComponentType<
+    BcGridContextMenuLayerProps<TRow>
+  >
 
   return (
     <div
@@ -1636,8 +1695,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     headerHeight,
                     index,
                     loadSetFilterOptions,
-                    onFilterChange: (next) =>
-                      setColumnFilterText((prev) => ({ ...prev, [column.columnId]: next })),
+                    onFilterChange: (next) => updateColumnFilterText(column.columnId, next),
                     pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
                     scrollLeft: scrollOffset.left,
                     totalWidth: virtualWindow.totalWidth,
@@ -1890,6 +1948,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         />
       ) : null}
 
+      <Suspense fallback={null}>
+        <ContextMenuLayer
+          args={[
+            activeCell,
+            api,
+            props.contextMenuItems,
+            clearContextSelection,
+            copyRangeToClipboard,
+            editController.editState.mode === "navigation",
+            onCellFocus,
+            resolvedColumns,
+            rowEntries,
+            rowsById,
+            rootRef,
+            selectionState,
+            setActiveCell,
+          ]}
+        />
+      </Suspense>
+
       {renderedFooter ? <div className="bc-grid-footer">{renderedFooter}</div> : null}
 
       {/*
@@ -1938,14 +2016,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 filterText={columnFilterText[popupColumnId] ?? ""}
                 filterLabel={popupLabel}
                 getSetFilterOptions={() => loadSetFilterOptions(popupColumnId)}
-                onFilterChange={(next) =>
-                  setColumnFilterText((prev) => ({ ...prev, [popupColumnId]: next }))
-                }
+                onFilterChange={(next) => updateColumnFilterText(popupColumnId, next)}
                 onClear={() => {
-                  setColumnFilterText((prev) => {
-                    const { [popupColumnId]: _drop, ...rest } = prev
-                    return rest
-                  })
+                  clearColumnFilterText(popupColumnId)
                   setFilterPopupState(null)
                 }}
                 onClose={() => setFilterPopupState(null)}

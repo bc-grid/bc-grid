@@ -85,6 +85,7 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 - `[done: c2 #79]` **selection-checkbox-column** — opt-in pinned-left checkbox column toggled by `<BcGrid checkboxSelection>` prop. Header checkbox toggles all-on-page; row checkboxes toggle single. Lives alongside the existing click-to-select gestures (no conflict). (Originally c1 #58; salvaged onto current main as #79.) **Effort**: S.
 - `[review: x1 #94]` **aria-disabled-rows** — `accessibility-rfc §VirtualRowA11yMeta.disabled` flag plus a `BcGridProps.rowIsDisabled` predicate; disabled rows: `aria-disabled="true"`, `.bc-grid-row-disabled`, ignored by selection gestures, focusable but no edit/sort actions. **Effort**: XS.
 - `[done: x2 #71]` **row-select-keyboard** — Space toggles selection on the focused row (`Space` is unreserved per `accessibility-rfc §Selection Extension Points`; only `Shift+Space` and `Ctrl+Space` are Q3-reserved). Keyboard parity with the mouse gestures from #37. **Branch**: `agent/x2/row-select-keyboard`. **Effort**: S.
+- `[review: worker1 #202]` **resize-affordance-polish** — v0.2 polish: always-visible, theme-token header resize affordance for resizable columns while preserving the existing resize hit area and pointer behavior. **Branch**: `agent/worker1/resize-affordance-polish`. **Effort**: XS.
 - `[review: x1 #109]` **number-filter-ui** — operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `between`. Inline UI per the existing text-filter pattern. Q2-reserved → pulled forward. **Effort**: S.
 - `[done: x1 #116]` **date-filter-ui** — operators: `is`, `before`, `after`, `between`. Use shadcn date picker primitive. Q2-reserved → pulled forward. **Effort**: S.
 - `[ready]` **set-filter-ui** — multi-select dropdown of distinct values from the column. Lazy-loaded (computed on first open from current row model). Q2-reserved → pulled forward. **Effort**: M.
@@ -199,8 +200,8 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 - `[done: worker2 #151]` **status-bar-impl** — `BcGridProps.statusBar` slot + 4 built-in segments (total / filtered / selected / aggregations). `role="status"` with debounced polite announcements. **Effort**: M.
 - `[done: worker5 #150]` **sidebar-impl** — right-edge collapsible icon rail + tablist semantics (no focus trap; standard Tab/Shift+Tab cycles panel controls); Esc closes the panel and returns focus to the icon. **Effort**: M.
 - `[review: worker5 #160]` **tool-panel-columns** — Columns tool panel inside sidebar: search, drag-to-reorder (keyboard accessible), visibility checkbox, pin dropdown, group-by drop zone. **Effort**: M.
-- `[blocked: depends on sidebar-impl + filter-registry-rfc]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
-- `[ready]` **context-menu-impl** — shadcn `ContextMenu` primitive; right-click + long-press (500ms coarse pointer) + Shift+F10. 4 built-in items + custom factory function. **Effort**: M.
+- `[review: worker5 #204]` **tool-panel-filters** — Filters tool panel: list active filters with inline-editable variants (text/number/date/set/boolean from Track 6). Clear-all button. **Effort**: M.
+- `[done: worker3 #157]` **context-menu-impl** — lightweight grid context menu; right-click + long-press (500ms coarse pointer) + Shift+F10. Minimal copy/clear built-ins + custom factory function. **Effort**: M.
 - `[done: worker2 #154]` **footer-aggregations** — wire the `aggregations` status-bar segment to the aggregation-engine output. **Effort**: S.
 
 #### Track 6 — Filters + Export (Q6 pulled forward)
