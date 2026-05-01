@@ -971,6 +971,14 @@ export type BcContextMenuItem<TRow = unknown> =
 
 The default `contextMenuItems` set is `["copy", "copy-row", "copy-with-headers", "separator", "clear-selection", "clear-range"]`. Every other built-in below is **consumer-opt-in** — pass it explicitly via `contextMenuItems` to surface it. See `docs/design/context-menu-command-map.md` for the full v0.3 command map.
 
+The opt-in groups consumers most often layer on top of the defaults are:
+
+- **Filter-clearing** — `clear-column-filter`, `clear-all-filters`. Wired to `BcGridApi.clearFilter`.
+- **Column shape** — `pin-column-left`, `pin-column-right`, `unpin-column`, `hide-column`, `show-all-columns`, `autosize-column`, `autosize-all-columns`. Wired to `BcGridApi.setColumnPinned` / `setColumnHidden` / `setColumnState` / `autoSizeColumn`.
+- **Explicit single-cell copy** — `copy-cell`, for consumers who want a copy item that ignores the active range.
+
+These groups never need extra runtime dependencies or a custom factory — the bundled grid already owns the dispatch path and the icon set. See [`packages/react/README.md`](../packages/react/README.md#context-menu-column-commands) for an end-to-end recipe wiring these alongside the defaults.
+
 | Built-in id | Action | Disabled when |
 |---|---|---|
 | `copy` | Copies the active range, falling back to the right-clicked cell when no range exists. TSV format, no headers. | No cell context AND no range selection |
@@ -986,6 +994,8 @@ The default `contextMenuItems` set is `["copy", "copy-row", "copy-with-headers",
 | `show-all-columns` | Walks the column state and writes every entry's `hidden` flag to `false` in a single `setColumnState` write. | Every column is already visible |
 | `autosize-column` | Calls `BcGridApi.autoSizeColumn(columnId)` | No column context, or the column is hidden (no DOM to measure) |
 | `autosize-all-columns` | Loops `BcGridApi.autoSizeColumn(columnId)` over every visible column. | Every column is hidden (nothing to measure) |
+
+**Disabled-state pattern.** Every built-in disables itself when (1) the trigger context lacks the data the action needs (e.g. `pin-column-left` needs a column; `copy-row` needs a row), or (2) the action would be a no-op against current state (already pinned to the target side, no filter to clear, every column already visible, etc.). The grid re-evaluates each item's `disabled` predicate every time the menu opens, so consumers don't need to gate the IDs manually based on selection or column state — they can list every command they care about and trust the per-trigger evaluation. The full per-id rules are in the **Disabled when** column above; the rule of thumb is "ID is enabled iff dispatching it would change something visible."
 
 The icon set rendered next to these items is shipped by `@bc-grid/react` itself
 — consumers don't need to install lucide / heroicons / radix-icons to get the
