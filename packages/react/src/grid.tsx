@@ -1827,6 +1827,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                       "bc-grid-row",
                       selected ? "bc-grid-row-selected" : undefined,
                       disabled ? "bc-grid-row-disabled" : undefined,
+                      expanded ? "bc-grid-row-expanded" : undefined,
                     )}
                     role="row"
                     aria-rowindex={virtualRow.index + bodyAriaRowOffset}
@@ -1836,6 +1837,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     data-row-id={entry.rowId}
                     data-row-index={virtualRow.index}
                     data-bc-grid-row-kind="data"
+                    data-bc-grid-expanded={expanded || undefined}
                     style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
                     onClick={(event) => {
                       // Selection logic. Shift+click → range from anchor; ctrl/

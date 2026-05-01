@@ -556,28 +556,36 @@ button {
 
 .customer-master-detail {
   display: grid;
-  grid-template-columns: minmax(8rem, 0.8fr) minmax(18rem, 1.8fr) minmax(12rem, 1.2fr) minmax(
-      7rem,
-      0.7fr
-    );
-  gap: 0.75rem;
+  grid-template-columns: minmax(14rem, 0.9fr) minmax(18rem, 1.1fr) minmax(22rem, 1.6fr);
+  gap: 0.625rem;
   height: 100%;
-  align-items: center;
-}
-
-.customer-master-detail > div {
-  display: grid;
+  align-items: stretch;
   min-width: 0;
-  gap: 0.25rem;
 }
 
-.customer-master-detail span {
+.customer-master-detail-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.customer-detail-stat {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.customer-detail-stat span,
+.customer-contact-name small {
   color: hsl(var(--muted-foreground));
   font-size: 0.75rem;
   font-weight: 700;
 }
 
-.customer-master-detail strong,
+.customer-master-detail strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .customer-master-detail p {
   margin: 0;
   overflow: hidden;
@@ -590,6 +598,44 @@ button {
   -webkit-line-clamp: 2;
   color: hsl(var(--foreground));
   line-height: 1.4;
+}
+
+.customer-contact-panel {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.customer-contact-panel-header {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.customer-contact-grid {
+  align-self: stretch;
+  width: 100%;
+}
+
+.customer-contact-grid th:first-child,
+.customer-contact-grid td:first-child {
+  width: 40%;
+}
+
+.customer-contact-grid th:nth-child(2),
+.customer-contact-grid td:nth-child(2) {
+  width: 24%;
+}
+
+.customer-contact-name {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.customer-contact-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .package-panel {
@@ -817,6 +863,10 @@ button {
 
   .package-row strong {
     justify-self: start;
+  }
+
+  .customer-master-detail-summary {
+    grid-template-columns: 1fr;
   }
 
   .feature-map-table {
