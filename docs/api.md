@@ -657,6 +657,17 @@ export interface BcFilterEditorProps<TValue = unknown> {
 
 ## 5. Components
 
+### 5.0 Feature Entry Points
+
+| Capability | Consumer entry point | Example location |
+|---|---|---|
+| Context menu | Built in by default; customize with `contextMenuItems` | AR Customers grid cells |
+| Columns tool panel | `sidebar={["columns"]}` plus optional `defaultSidebarPanel` / `sidebarWidth` | AR Customers right-edge rail |
+| Filters tool panel | `sidebar={["filters"]}` over existing column filter state | AR Customers right-edge rail |
+| Inline filter row | Per-column `filter` config; override visibility with `showFilterRow` | AR Customers column headers |
+| Editing surface | `<BcEditGrid>` plus editor factories from `@bc-grid/editors` | AR Customers ledger |
+| Server row model | `<BcServerGrid>` with `rowModel` set to `paged`, `infinite`, or `tree` | API reference examples below |
+
 ### 5.1 `<BcGrid>` (frozen at v0.1, read-only feature set)
 
 ```tsx
@@ -696,6 +707,15 @@ export interface BcFilterEditorProps<TValue = unknown> {
   // Grouping
   groupableColumns={[{ columnId: "region", header: "Region" }]}
   groupsExpandedByDefault={true}
+
+  // Chrome / feature panels
+  sidebar={["columns", "filters"]}
+  defaultSidebarPanel="columns"
+  sidebarWidth={320}
+  contextMenuItems={["copy", "copy-with-headers", "separator", "clear-selection", "clear-range"]}
+
+  // Filters
+  showFilterRow={true}
 
   // Show / hide inactive (read-only convention)
   showInactive={false} onShowInactiveChange={setShowInactive}
@@ -927,6 +947,46 @@ themselves when their content is irrelevant: `filtered` only appears once a
 filter narrows the row count, `selected` only when a selection is active, and
 `aggregations` only when at least one aggregation result is available. Custom
 segments render unconditionally — visibility is the consumer's responsibility.
+
+The `sidebar` prop registers right-edge tool panel tabs by id. Built-in
+`"columns"` and `"filters"` panels share the grid's existing column and filter
+state APIs:
+
+```tsx
+<BcGrid
+  // ...
+  sidebar={["columns", "filters"]}
+  defaultSidebarPanel="columns"
+  sidebarWidth={320}
+/>
+```
+
+`defaultSidebarPanel` opens any registered panel id on mount; omit it or pass
+`null` to start collapsed. `sidebarWidth` controls the open panel width in
+pixels and falls back to `280`.
+
+The context menu is available from data cells with the default built-ins
+(`copy`, `copy-with-headers`, `clear-selection`, `clear-range`). Use
+`contextMenuItems` to pin an explicit built-in list or return row-aware custom
+items:
+
+```tsx
+<BcGrid
+  // ...
+  contextMenuItems={(ctx) => [
+    "copy",
+    "copy-with-headers",
+    "separator",
+    ctx.row
+      ? {
+          id: "open-customer",
+          label: "Open Customer",
+          onSelect: () => openCustomer(ctx.row),
+        }
+      : null,
+  ]}
+/>
+```
 
 ```ts
 type BcStatusBarSegment<TRow = unknown> =

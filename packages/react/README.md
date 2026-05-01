@@ -63,6 +63,16 @@ export function CustomerGrid() {
 - `<BcServerGrid>` — server-row-model wrapper supporting `rowModel="paged"` and `rowModel="infinite"` (tree mode reserved).
 - `useBcGridApi()` — imperative API hook (scroll-to-row, get-selection, etc.).
 
+## Feature entry points
+
+| Feature | Use this entry point | Where to see it |
+|---|---|---|
+| Context menu | Defaults are on data cells; customize with `contextMenuItems` | `apps/examples` AR Customers grid |
+| Columns and filters panels | `sidebar={["columns", "filters"]}`, `defaultSidebarPanel`, `sidebarWidth` | `apps/examples` right-edge rail |
+| Inline filter row | Column `filter` config and optional `showFilterRow` | `apps/examples` column headers |
+| Editing | `<BcEditGrid>` plus editor factories from `@bc-grid/editors` | `apps/examples` AR Customers grid |
+| Server row model | `<BcServerGrid>` with `rowModel` set to `paged`, `infinite`, or `tree` | `docs/api.md` section 5.3 |
+
 ## Bundle size
 
 Current main baseline for `core+virtualizer+animations+react`: 64.05 KiB gzipped. Enforced under a 100 KiB hard cap with a 10% per-PR drift guard from the latest accepted main baseline by `tools/bundle-size`.

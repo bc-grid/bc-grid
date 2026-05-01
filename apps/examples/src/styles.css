@@ -545,6 +545,41 @@ button {
   font-size: 1rem;
 }
 
+.feature-panel {
+  overflow: hidden;
+}
+
+.feature-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1px solid hsl(var(--border));
+  font-size: 0.875rem;
+}
+
+.feature-table th,
+.feature-table td {
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.feature-table th {
+  color: hsl(var(--foreground));
+  font-weight: 700;
+}
+
+.feature-table td {
+  color: hsl(var(--muted-foreground));
+}
+
+.feature-table code {
+  color: hsl(var(--foreground));
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  white-space: normal;
+  word-break: break-word;
+}
+
 .package-list {
   display: grid;
   border-top: 1px solid hsl(var(--border));
@@ -646,6 +681,30 @@ button {
   .package-row {
     grid-template-columns: 1fr;
     gap: 0.25rem;
+  }
+
+  .feature-table,
+  .feature-table thead,
+  .feature-table tbody,
+  .feature-table tr,
+  .feature-table th,
+  .feature-table td {
+    display: block;
+  }
+
+  .feature-table thead {
+    display: none;
+  }
+
+  .feature-table tr {
+    border-bottom: 1px solid hsl(var(--border));
+    padding: 0.625rem 0;
+  }
+
+  .feature-table th,
+  .feature-table td {
+    border-bottom: 0;
+    padding: 0.2rem 0.75rem;
   }
 
   .package-row strong {

@@ -329,8 +329,9 @@ CSS variables:
   contextMenuItems={[
     "copy",
     "copy-with-headers",
-    "export-csv",
     "separator",
+    "clear-selection",
+    "clear-range",
     {
       id: "view-history",
       label: "View History",
@@ -345,9 +346,8 @@ CSS variables:
 export type BcContextMenuItem =
   | "copy"
   | "copy-with-headers"
-  | "export-csv"
-  | "export-xlsx"
-  | "paste"           // Q3 — wired by range-rfc
+  | "clear-selection"
+  | "clear-range"
   | "separator"
   | BcContextMenuCustomItem
 
@@ -395,6 +395,10 @@ This pattern (factory function) lets the menu adapt to the right-clicked cell.
 - **Shift+F10**: keyboard fallback per WAI-ARIA APG. Opens the menu anchored to the active cell.
 
 ### Built-in items
+
+Implementation note: #157 currently ships `copy`, `copy-with-headers`,
+`clear-selection`, `clear-range`, and `separator`. Export and paste items below
+remain planned extension points owned by their feature tracks.
 
 | Item | Behaviour | Track |
 |---|---|---|
