@@ -30,6 +30,126 @@ const apiRef = useBcGridApi<Customer>()
   apiRef={apiRef}
 />`
 
+const masterDetailAsyncSnippet = `import { BcGrid, type BcGridColumn } from "@bc-grid/react"
+
+const DETAIL_PANEL_HEIGHT = 220
+
+type DetailState = "ready" | "loading" | "empty" | "error"
+
+type Project = {
+  id: string
+  name: string
+  status: string
+  detailState: DetailState
+  childRows: readonly {
+    id: string
+    label: string
+    owner: string
+    updatedAt: string
+  }[]
+  childError?: string
+}
+
+function ProjectDetailPanel({
+  onRetry,
+  row,
+}: {
+  onRetry: (projectId: string) => void
+  row: Project
+}) {
+  if (row.detailState === "loading") {
+    return (
+      <section className="bc-grid-detail-section">
+        <div className="bc-grid-detail-loading" role="status" aria-live="polite">
+          <span className="bc-grid-detail-state-title">Loading child rows</span>
+          <span className="bc-grid-detail-state-description">
+            Fetching child data without changing the detail row height.
+          </span>
+        </div>
+      </section>
+    )
+  }
+
+  if (row.detailState === "error") {
+    return (
+      <section className="bc-grid-detail-section">
+        <div className="bc-grid-detail-error" role="alert">
+          <span className="bc-grid-detail-state-title">Child rows unavailable</span>
+          <span className="bc-grid-detail-state-description">
+            {row.childError ?? "Child rows could not be loaded."}
+          </span>
+          <div className="bc-grid-detail-state-actions">
+            <button type="button" onClick={() => onRetry(row.id)}>
+              Retry
+            </button>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  if (row.detailState === "empty" || row.childRows.length === 0) {
+    return (
+      <section className="bc-grid-detail-section">
+        <div className="bc-grid-detail-empty">
+          <span className="bc-grid-detail-state-title">No child rows</span>
+          <span className="bc-grid-detail-state-description">
+            This record does not have child data yet.
+          </span>
+        </div>
+      </section>
+    )
+  }
+
+  const tableLabelId = \`project-\${row.id}-tasks-heading\`
+
+  return (
+    <section className="bc-grid-detail-section" aria-labelledby={tableLabelId}>
+      <div className="bc-grid-detail-section-header">
+        <p id={tableLabelId} className="bc-grid-detail-kicker">
+          Child records
+        </p>
+        <span>{row.childRows.length} rows</span>
+      </div>
+      <table className="bc-grid-detail-nested-grid" aria-labelledby={tableLabelId}>
+        <thead>
+          <tr>
+            <th scope="col">Record</th>
+            <th scope="col">Owner</th>
+            <th scope="col">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {row.childRows.map((child) => (
+            <tr key={row.id + ":" + child.id}>
+              <td>{child.label}</td>
+              <td>{child.owner}</td>
+              <td>{child.updatedAt}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+const columns: BcGridColumn<Project>[] = [
+  { field: "name", header: "Project", rowHeader: true },
+  { field: "status", header: "Status" },
+]
+
+declare const projects: readonly Project[]
+declare function retryChildRows(projectId: string): void
+
+<BcGrid
+  ariaLabel="Projects"
+  columns={columns}
+  data={projects}
+  rowId={(row) => row.id}
+  detailPanelHeight={DETAIL_PANEL_HEIGHT}
+  renderDetailPanel={({ row }) => <ProjectDetailPanel row={row} onRetry={retryChildRows} />}
+/>`
+
 const themingSnippet = `/* Host app globals.css */
 :root {
   --background: oklch(1 0 0);
@@ -142,6 +262,18 @@ const gridProps = [
   ["loadingOverlay", "ReactNode", "implemented", "Custom loading overlay content."],
   ["ariaLabel", "string", "implemented", "Sets aria-label on the grid root."],
   ["ariaLabelledBy", "string", "implemented", "Sets aria-labelledby on the grid root."],
+  [
+    "renderDetailPanel",
+    "(params: BcDetailPanelParams<TRow>) => ReactNode",
+    "implemented",
+    "Mounts a row detail panel below expanded rows and adds the built-in disclosure column.",
+  ],
+  [
+    "detailPanelHeight",
+    "number | (params) => number",
+    "implemented",
+    "Fixed expanded-detail height. Prefer one stable value for async child content so loading/empty/error/ready states do not shift row layout.",
+  ],
 ]
 
 const events = [
@@ -182,7 +314,6 @@ const events = [
     "Pre-copy hook for replacing or suppressing range clipboard payloads.",
   ],
   ["onCopy", "(event) => void", "implemented", "Post-copy hook after range clipboard handling."],
-  ["onExpansionChange", "(next, prev) => void", "reserved", "Reserved for grouped/tree data."],
   ["onGroupByChange", "(next, prev) => void", "reserved", "Reserved Q2 group-by UI."],
   [
     "onColumnStateChange",
@@ -197,6 +328,12 @@ const events = [
     "Emitted when focus navigation changes the active cell.",
   ],
   ["onPaginationChange", "(next, prev) => void", "reserved", "Reserved with pagination."],
+  [
+    "onExpansionChange",
+    "(next, prev) => void",
+    "implemented",
+    "Controlled-state callback for group and master/detail expansion changes.",
+  ],
   ["onRowClick", "(row, event) => void", "implemented", "Body-row click event."],
   ["onRowDoubleClick", "(row, event) => void", "implemented", "Body-row double-click event."],
   ["onCellFocus", "(position) => void", "implemented", "Cell focus/active-cell notification."],
@@ -237,8 +374,8 @@ const statePairs = [
   [
     "expansion/defaultExpansion",
     "ReadonlySet<RowId>",
-    "reserved",
-    "Reserved for tree/grouped data.",
+    "implemented",
+    "Controls grouped rows and master/detail disclosure state by stable row ID.",
   ],
   ["groupBy/defaultGroupBy", "ColumnId[]", "reserved", "Reserved Q2."],
   [
@@ -836,6 +973,44 @@ function statusClass(status: keyof typeof statusLabels) {
         <span>implemented Q1 surface</span>
       </div>
       <Code code={gridSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Master/Detail Async Children</h2>
+    <p class="section-note">
+      Use <code>renderDetailPanel</code> for row-owned child content and keep
+      <code>detailPanelHeight</code> stable while async data moves through loading, empty, error,
+      and ready states. The grid updates row layout immediately; do not animate row height or scale
+      text inside the detail panel.
+    </p>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>State Contract</h3>
+        <ul>
+          <li>Loading uses <code>role=&quot;status&quot;</code> and <code>aria-live=&quot;polite&quot;</code>.</li>
+          <li>Errors use <code>role=&quot;alert&quot;</code> without moving focus.</li>
+          <li>Empty state is rendered in place at the same panel height.</li>
+          <li>Ready state uses stable child IDs for nested row keys.</li>
+        </ul>
+      </article>
+      <article class="panel">
+        <h3>Detail Content</h3>
+        <ul>
+          <li>Wrap child content in <code>bc-grid-detail-section</code>.</li>
+          <li>Use <code>bc-grid-detail-loading</code>, <code>bc-grid-detail-empty</code>, and <code>bc-grid-detail-error</code> for async affordances.</li>
+          <li>Use <code>bc-grid-detail-state-title</code>, <code>bc-grid-detail-state-description</code>, and <code>bc-grid-detail-state-actions</code> for structured state content.</li>
+          <li>Use <code>bc-grid-detail-nested-grid</code> for nested tables or ARIA grids.</li>
+          <li>Keep headings linked with <code>aria-labelledby</code>.</li>
+        </ul>
+      </article>
+    </div>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>master-detail-async.tsx</span>
+        <span>stable detail panel height</span>
+      </div>
+      <Code code={masterDetailAsyncSnippet} lang="tsx" theme="github-dark" />
     </div>
   </section>
 
