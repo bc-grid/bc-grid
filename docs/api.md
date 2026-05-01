@@ -1576,6 +1576,22 @@ request the intended global server page. If an older load resolves after a newer
 view/page request starts, `<BcServerGrid>` ignores the stale response and
 diagnostics continue to describe the active request view.
 
+The returned `rows` are the **loaded page window**, not the full result set.
+`totalRows` is the count for the full server view after the server has applied
+the query's sort/filter/search/group/visible-column model. Diagnostics preserve
+that distinction: `rowCount` / `lastLoad.rowCount` describe the server total,
+while `cache.loadedRowCount` describes only cached row payloads that bc-grid has
+actually loaded.
+
+Client grouping, client filtering, and client search can still run over the rows
+currently rendered by `<BcGrid>`, but with server data that is only the loaded
+page/window. They do not imply global grouping or global filtering over all
+matching rows. For bsncraft-style customer grids, the expected server-backed
+path is to treat `query.view` as the source of truth, apply search/filter/sort
+and any global grouping on the server, return the current page rows plus
+`totalRows`, and use `apiRef.current?.getServerDiagnostics()` to verify the
+active request while integrating the endpoint.
+
 When `onServerRowMutation` is used with paged mode, optimistic edit patches are
 tracked by row identity in the server-row-model mutation queue, not by the
 current visible page. Changing pages, refetching the current page, or changing

@@ -68,6 +68,29 @@ describe("server paged grid shell", () => {
     })
   })
 
+  test("separates current page rows from the global server total", () => {
+    const sparseLoadedRows = pageRows.slice(0, 7)
+    const shell = resolveServerPagedGridShell({
+      pageIndex: 12,
+      pageSize: 25,
+      pageSizeOptions: [25, 50, 100],
+      pagination: true,
+      rows: sparseLoadedRows,
+      totalRows: 10_000,
+    })
+
+    expect(shell.gridRows).toBe(sparseLoadedRows)
+    expect(shell.gridRows).toHaveLength(7)
+    expect(shell.paginationWindow).toEqual({
+      endIndex: 325,
+      page: 12,
+      pageCount: 400,
+      pageSize: 25,
+      startIndex: 300,
+      totalRows: 10_000,
+    })
+  })
+
   test("auto pagination follows server totalRows rather than loaded page length", () => {
     expect(
       resolveServerPagedGridShell({
@@ -403,6 +426,49 @@ describe("server paged stale response ordering", () => {
 })
 
 describe("server paged diagnostics", () => {
+  test("distinguishes loaded current-page rows from the full server row count", async () => {
+    const model = createServerRowModel<Row>()
+    const view = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const request = model.loadPagedPage({
+      loadPage: async (query) => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: pageRows.slice(0, 7),
+        totalRows: 10_000,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 12,
+      pageSize: 25,
+      view,
+    })
+
+    await request.promise
+
+    const diagnostics = model.getDiagnostics({
+      mode: "paged",
+      rowCount: 10_000,
+      selection: emptySelection,
+      view,
+      viewKey: request.query.viewKey ?? "",
+    })
+
+    expect(diagnostics.rowCount).toBe(10_000)
+    expect(diagnostics.cache.loadedRowCount).toBe(7)
+    expect(diagnostics.lastLoad).toMatchObject({
+      query: {
+        mode: "paged",
+        pageIndex: 12,
+        pageSize: 25,
+      },
+      rowCount: 10_000,
+      status: "success",
+    })
+  })
+
   test("reflects the active view and reset page after a view transition", async () => {
     const model = createServerRowModel<Row>()
     const baseView = model.createViewState({

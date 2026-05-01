@@ -403,15 +403,21 @@ export interface ServerLoadContext {
 
 export interface ServerPagedQuery extends ServerQueryBase {
   mode: "paged"
+  /** Zero-based global page index requested from the server for this view. */
   pageIndex: number
+  /** Requested page size for the current server-backed page window. */
   pageSize: number
   pivotState?: BcPivotState
 }
 
 export interface ServerPagedResult<TRow> {
+  /** Rows for the requested page window only, not the full matching result set. */
   rows: TRow[]
+  /** Total rows in the full server view after applying query.view. */
   totalRows: number
+  /** Zero-based page index represented by rows. */
   pageIndex: number
+  /** Page size used to produce rows. */
   pageSize: number
   pivotedRows?: BcPivotedDataDTO
   viewKey?: string

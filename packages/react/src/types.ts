@@ -588,7 +588,17 @@ export interface BcServerPagedProps<TRow>
   extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
     BcServerEditMutationProps<TRow> {
   rowModel: "paged"
+  /**
+   * Current server page size. The server receives this as
+   * `ServerPagedQuery.pageSize`; the grid renders only the returned page rows
+   * and uses `ServerPagedResult.totalRows` for the footer/page count.
+   */
   pageSize?: number
+  /**
+   * Loads one server-owned page window for the active `ServerViewState`.
+   * The result's `rows` are the current page payload; `totalRows` is the
+   * count for the full matching server view.
+   */
   loadPage: LoadServerPage<TRow>
   initialResult?: ServerPagedResult<TRow>
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
