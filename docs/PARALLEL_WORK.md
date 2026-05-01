@@ -139,7 +139,7 @@ Each agent owns a leaf package or two; PRs land independently; reviewer agent ro
 - **Agent X2**: server-side group expand/collapse
 - **Agent X3**: integration tests + perf testing for server modes (cross-cutting)
 
-### Q5-Q7 (Days 8-13) — Aggregations / Pivots / Filters / Chrome / Export / Charts / Polish — massive parallelism, 5 agents on independent tracks.
+### Q5-Q7 (Days 8-13) — Aggregations / Pivots / Filters / Chrome / Export / Polish — massive parallelism, 5 agents on independent tracks.
 
 Days 8-13 are the breadth phase. Most tasks are isolated; cross-track conflicts rare.
 
@@ -150,7 +150,7 @@ Example day split (days 8-9, aggregations + pivots):
 - **Agent X2**: filter UIs (number-range, text-extend, custom-extension recipe) + `@bc-grid/export` impls (csv/xlsx/pdf)
 - **Agent X3**: status bar + sidebar + context menu (`chrome-rfc`)
 
-Days 11-13: charts adapter + streaming row updates + mobile/touch fallback + WCAG deep-pass + animation polish.
+Days 11-13: streaming row updates + mobile/touch fallback + WCAG deep-pass + animation polish. Charts are post-1.0.
 
 ### Q8 (Days 13-14) — Beta + 1.0 launch.
 

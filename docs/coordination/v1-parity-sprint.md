@@ -29,7 +29,7 @@ On day 0 (~5 hours of focused work), **13 substantive PRs** landed at sustained 
 
 ### Genuinely new
 
-- **Charts integration** (was explicit non-goal in `design.md §2`; revived as Track 7 with a peer-dep architecture — no library bundled)
+- None. Charts remain a post-1.0 peer-dep adapter, not a v1.0 sprint deliverable.
 
 ### Pulled forward from Q5-Q7
 
@@ -73,7 +73,7 @@ On day 0 (~5 hours of focused work), **13 substantive PRs** landed at sustained 
 - Spreadsheet-class formula editing (deferred indefinitely; bc-grid is a data grid, not a spreadsheet)
 - Bug-for-bug AG Grid edge-case parity (we ship feature parity, not test-suite parity)
 - Mobile-first (touch fallback yes, mobile-first interaction redesign no)
-- Charts authoring UI (just rendering — peer-dep integration in Track 7)
+- Charts integration and charts authoring UI (post-1.0)
 - AG Grid Community/Enterprise migration tooling (v1.x deliverable; the migration guide is in this sprint, the codemod is not)
 
 ---
@@ -192,12 +192,10 @@ Each track has one suggested owner; agents are free to swap based on availabilit
 - `export-pdf-impl` (peer-dep on jsPDF or react-pdf — confirm)
 - `export-server-mode` (`ServerExportQuery` → server emits blob/url/job)
 
-### Track 7 — Polish + Charts (NEW) + Mobile (Q7 surface)
+### Track 7 — Polish + Mobile (Q7 surface)
 **Suggested owner:** x1 (after Track 6 export work) or a rotating reviewer
-**Critical path:** charts-rfc → charts-peer-dep-integration; rest fully parallel
+**Critical path:** animation polish + WCAG/code/manual checks + browser/mobile validation; all tasks are mostly parallel.
 **Tasks:**
-- `charts-rfc` (RFC; c2 to author — peer-dep evaluation: recharts vs echarts vs visx)
-- `charts-peer-dep-integration` (no library bundled; consumer brings their own)
 - `streaming-row-updates` (server pushes new rows mid-session; animated insertion via FLIP)
 - `mobile-touch-fallback` (44px hit targets, double-tap-to-edit, long-press context menu)
 - `wcag-deep-pass` (axe-core full audit on every demo; manual NVDA/JAWS/VoiceOver runs)
@@ -212,7 +210,7 @@ Each track has one suggested owner; agents are free to swap based on availabilit
 - **Coordinator / worker split** — Codex in `~/work/bc-grid` coordinates the sprint, reviews PRs, fixes merge-train issues, merges PRs, cuts releases, and runs Playwright / smoke-perf / benchmarks. Worker agents should spend their cycles coding, unit tests, type-checks, builds, and concise PR handoffs. Workers must not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs.
 - **Reviews** — every PR gets a non-author review. The Codex coordinator is default reviewer; agents rotate as backup when explicitly assigned. Self-merge prohibited for worker PRs per `AGENTS.md §3.7`.
 - **Smoke perf on every PR** — once `smoke-perf-ci` lands in Phase A, every PR runs cold-mount/sort-10k/scroll-10k locally + in CI.
-- **Bundle size budget** — `core+virtualizer+animations+react` < 100KB gzipped per `design.md §3.2`, with a 10% per-PR drift guard from the latest release baseline. Drift fails the build.
+- **Bundle size budget** — `core+virtualizer+animations+react` < 100KB gzipped per `design.md §3.2`, with a 10% per-PR drift guard from the latest release baseline. Drift fails the build. Charts are post-1.0 and do not count toward v1.0 scope.
 - **API surface manifest** — every public-export change bumps `tools/api-surface/src/manifest.ts` in the same PR. Already enforced.
 - **Decision log discipline** — every cross-cutting decision gets a `design.md §13` entry in the PR that introduces it, not after the fact.
 - **`docs/queue.md` hygiene** — claim transitions: `[ready]` → `[in-flight: <agent>]` (when branch created) → `[review: <agent> #N]` (when PR opened) → `[done: <agent> #N]` (when merged). Each transition lands in a commit on the branch making the change. The Codex coordinator audits drift in periodic queue-sync PRs.
@@ -270,7 +268,6 @@ Same as `docs/roadmap.md §Definition of Done` plus:
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | `grid.tsx` merge conflicts cascade | High | High | `grid-tsx-file-split` is Phase A's first task; one agent owns it; everyone else waits |
-| Charts library choice locks us in | Medium | Medium | Peer-dep approach decoupled by an adapter layer; consumer brings their own; we ship 2-3 worked examples |
 | Pivot UI complexity blows scope | High | Medium | RFC scoped tightly; v1 ships drag-to-pivot + values+rows+cols; advanced (totals, sub-totals, format) follow-up |
 | Server-row-model perf under load | Medium | High | `server-row-model-perf-tuning` task explicitly scoped; uses `nightly-perf-harness` pattern |
 | WCAG audit reveals systemic issues | Low | High | Foundation already covers single-tab-stop + `aria-activedescendant` + live regions; deep-pass should be polish |

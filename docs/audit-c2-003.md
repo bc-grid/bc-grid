@@ -301,7 +301,7 @@ What to do:
 - Track 4 implements aggregations + pivots (the package becomes real).
 - Track 5 implements chrome (status-bar / sidebar / context menu).
 - Track 6 implements filters (the package becomes real) + export (the package becomes real).
-- Track 7 ships streaming + mobile + WCAG deep-pass + animation polish + charts adapter.
+- Track 7 ships streaming + mobile + WCAG deep-pass + animation polish. Charts are post-1.0.
 - Then — and only then — call this v1.0.
 
 The sprint is already in flight (queue.md Phase 6 has 70+ tasks). The 7 RFCs are filed (PRs #46, #48, #49, #51, #52, #53 — all awaiting review/merge as of this audit). Once those land + the implementer agents pick up the impl tasks, v1.0 is roughly 2-3 weeks of focused parallel work away. **This is the path the project has explicitly chosen** (per the sprint pivot in `design.md §13` 2026-04-29 entry).
@@ -320,7 +320,7 @@ The sprint is already in flight (queue.md Phase 6 has 70+ tasks). The 7 RFCs are
 
 4. **Don't publish the 6 placeholder packages to npm at v0.1-alpha.** Strip them from `bun publish` or whatever the publish mechanism is. They re-appear when their impl tasks complete.
 
-5. **Continue the v1 parity sprint.** The 7 RFCs and ~70 impl tasks are the path to a real v1.0. Each track that lands (editing, range, server-row-model, aggregations, pivots, chrome, filters/export, charts) closes a category of M/H findings here.
+5. **Continue the v1 parity sprint.** The 7 RFCs and ~70 impl tasks are the path to a real v1.0. Each track that lands (editing, range, server-row-model, aggregations, pivots, chrome, filters/export, polish/mobile) closes a category of M/H findings here. Charts are post-1.0.
 
 6. **Do another audit pass per ~10 merged PRs.** The findings here are based on a snapshot. As impl tasks land, F1-F14 get retired and new ones may surface.
 

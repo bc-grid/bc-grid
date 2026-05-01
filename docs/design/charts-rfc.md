@@ -1,15 +1,15 @@
 # RFC: Charts Integration (charts-rfc)
 
-**Status:** Draft for review
+**Status:** Post-1.0 planning draft
 **Owner:** c2 (auditor + coordinator)
 **Reviewer:** fresh agent (target: x1 or c1)
-**Blocks:** `charts-peer-dep-integration`
-**Informed by:** `docs/design.md §2` (charts non-goal — promoted to v1 per sprint pivot), `docs/coordination/v1-parity-sprint.md §Track 7`, `docs/design/aggregation-rfc.md` (chart inputs reuse `AggregationResult`), `docs/design/pivot-rfc.md` (pivot output is a natural chart input)
-**Sprint context:** Track 7 of the v1 parity sprint (NEW track — was a non-goal in the original 2-year plan).
+**Blocks:** Post-1.0 `charts-peer-dep-integration`
+**Informed by:** `docs/design.md §2` (charts non-goal until post-1.0), `docs/coordination/post-v1-backlog.md`, `docs/design/aggregation-rfc.md` (chart inputs reuse `AggregationResult`), `docs/design/pivot-rfc.md` (pivot output is a natural chart input)
+**Release context:** Post-1.0. This is not part of the v1.0 parity sprint.
 
 ---
 
-Charts integration was an explicit non-goal in `design.md §2` ("Chart libraries are better at this; out-of-scope until 1.0+"). The sprint pivot promoted it to a v1 deliverable on the constraint that bc-grid **does not bundle a charting library** — consumers bring their own. This RFC pins the **adapter shape** so charts integrate cleanly without coupling bc-grid to any specific library.
+Charts integration is an explicit post-1.0 item. The v1.0 parity sprint is scoped to the ERP grid itself; bc-grid **does not bundle a charting library** and will not ship chart adapter code in v1.0. This RFC pins a future **adapter shape** so charts can integrate cleanly later without coupling bc-grid to any specific library.
 
 ## Goals
 
@@ -19,7 +19,7 @@ Charts integration was an explicit non-goal in `design.md §2` ("Chart libraries
 - **Pivot-aware**: pivot output (`BcPivotedData`) flows naturally into multi-series charts.
 - **Range-aware**: a chart can render the active range only (Track 2); auto-updates as range changes.
 - **a11y**: charts default to a *labelled image* — `role="img"` + `aria-label="Chart of {description}"` on the chart container. (This is **not** decorative; consumers wanting a truly decorative chart should add `aria-hidden="true"` themselves. Consumers wanting deeper a11y like an exposed data table use the chart library's own primitives.)
-- **Forward-compatible** with chart-as-renderer (drag a chart into the grid as a custom cell renderer or as a sidebar tool panel) — out of v1 but not contradicted by the v1 design.
+- **Forward-compatible** with chart-as-renderer (drag a chart into the grid as a custom cell renderer or as a sidebar tool panel) — out of the first chart-adapter release.
 
 ## Non-Goals
 
@@ -47,13 +47,13 @@ Three candidates evaluated for **default documented integration**:
 | echarts (`echarts-for-react`) | Apache 2.0 | ~250KB | Medium (imperative options object) | Comprehensive (incl. heatmap, funnel, gauge, treemap, sankey) | Documented as alternative for advanced visualisations |
 | visx (`@visx/*`) | MIT | ~30KB modular | Low (low-level primitives) | Build-your-own | Documented as alternative for custom-design needs |
 
-User direction (sprint pivot): **recharts**. The other two are documented as drop-in alternatives in the recipe.
+Documented default: **recharts**. The other two are documented as drop-in alternatives in the recipe.
 
 ## Decision summary
 
 | Topic | Decision |
 |---|---|
-| Adapter location | `@bc-grid/react/charts` (internal module). NOT a separate `@bc-grid/charts` package — the surface is small (one hook + a few helpers); a separate package would be over-engineered for v1. |
+| Adapter location | `@bc-grid/react/charts` (internal module). NOT a separate `@bc-grid/charts` package — the surface is small (one hook + a few helpers); a separate package would be over-engineered for the first post-1.0 adapter. |
 | Surface | `useBcGridChartData<TConfig>(config)` hook returns chart-ready data; consumer feeds into their library of choice. Plus 3 helpers: `aggregateForChart`, `pivotForChart`, `rangeForChart`. |
 | Default library | **recharts** — documented + 3 worked examples in `apps/docs/charts`. |
 | Peer-dep declaration | `@bc-grid/react` does NOT depend on recharts. Examples app declares it as a dev-dep. Consumers install their chosen library. |
@@ -270,9 +270,9 @@ When the grid is a `<BcServerGrid>`, the adapter:
 2. For pivot scope: uses the server's `pivotedRows` if present (per `pivot-rfc`); else falls back to client-side pivot of the loaded subset.
 3. Does NOT trigger a server fetch on chart re-render (otherwise chart interaction would hammer the server).
 
-V1.x extension: `<BcServerGrid>` consumers can compute a separate "chart data fetch" using `loadPage` with a chart-specific query — that's a consumer pattern, not a bc-grid feature.
+Post-1.0 extension: `<BcServerGrid>` consumers can compute a separate "chart data fetch" using `loadPage` with a chart-specific query — that's a consumer pattern, not a bc-grid feature.
 
-## Implementation tasks (Phase 6 Track 7)
+## Implementation tasks (post-1.0)
 
 The single task in the prior draft conflated four distinct dependency sets. Splitting by scope so each piece can land in its track's natural order:
 
@@ -283,7 +283,7 @@ The single task in the prior draft conflated four distinct dependency sets. Spli
 | `charts-range-helper` (`rangeForChart` helper + `scope: "range"` support in `useBcGridChartData` + worked example) | S | `charts-peer-dep-integration` + `range-state-machine` (Track 2) |
 | `charts-pivot-helper` (`pivotForChart` helper + `scope: "pivot"` support in `useBcGridChartData` + worked example) | S | `charts-peer-dep-integration` + `pivot-engine` / `pivot-row-col-groups` (Track 4 second half) |
 
-Splitting unblocks the flat-row chart from waiting on Track 2/4 — the v1 alpha can ship with `charts-peer-dep-integration` and pick up range/pivot scopes as those tracks land.
+Splitting unblocks the flat-row chart from waiting on range/pivot support in a future post-1.0 release.
 
 ## Test plan
 
@@ -318,7 +318,7 @@ Splitting unblocks the flat-row chart from waiting on Track 2/4 — the v1 alpha
 - `@bc-grid/react/charts` ships with `useBcGridChartData` + 3 helpers.
 - 3 worked examples in `apps/docs/charts/` (one each for recharts, echarts, visx).
 - Manifest updated for the new exports.
-- `charts-peer-dep-integration` task in queue.md (Track 7) marked done.
+- post-1.0 `charts-peer-dep-integration` task marked done.
 - AR Customers demo includes one chart embedded above/beside the grid.
 - axe-core clean for the chart container's `role="img"` + label.
 
@@ -341,11 +341,11 @@ Charts are rendered by the consumer's library; their forced-colors handling is o
 
 ## References
 
-- `docs/design.md §2` (charts non-goal — promoted to v1 per sprint pivot)
+- `docs/design.md §2` (charts non-goal until post-1.0)
 - `docs/design/aggregation-rfc.md` (engine reused for chart aggregations)
 - `docs/design/pivot-rfc.md` (pivot output is a natural chart input)
 - `docs/design/range-rfc.md` (range-aware chart scope)
-- `docs/coordination/v1-parity-sprint.md §Track 7`
+- `docs/coordination/post-v1-backlog.md`
 - recharts: https://recharts.org/
 - echarts: https://echarts.apache.org/
 - visx: https://airbnb.io/visx/

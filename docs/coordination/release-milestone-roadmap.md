@@ -95,16 +95,17 @@ Goal: cover analytical and reporting workflows.
 - [ ] Exported values respect value getters, formatters, hidden columns, and selected/range scopes as documented.
 - [ ] Pivot/export interactions have focused tests for the public behavior, not only helper functions.
 
-## v0.8.0 - Chrome, Charts, and Productivity Surface
+## v0.8.0 - Chrome and Productivity Surface
 
 Goal: make the grid feel like a full product surface, not just a table.
 
 - [ ] Status bar, sidebar shell, columns panel, filters panel, pivot panel, and context menu are merged and accessible.
 - [ ] Client pagination UI is merged and composes with filtering/searching.
-- [ ] Charts peer-dep integration is merged, documented, and usable without bundling a chart library.
 - [ ] Examples app demonstrates the main productivity workflows without hidden flags.
 - [ ] Migration guide from AG Grid is current and honest about gaps.
 - [ ] Bundle-size and smoke-perf baselines are refreshed after the major productivity features land.
+
+Charts peer-dep integration is post-1.0 and should not gate v0.x or v1.0 milestones.
 
 ## v0.9.0 - Release Candidate Hardening
 

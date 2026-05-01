@@ -2,7 +2,7 @@
 
 **Goal (revised 2026-04-29, updated for 5 workers on 2026-04-30):** ship a 1.0 release with **functional parity with AG Grid Enterprise for ERP workloads** over a **2-week parallel sprint with 5 worker agents plus a Codex coordinator**, leveraging the agent velocity demonstrated on day 0.
 
-> **Status — 2026-04-30:** original 2-year quarterly cadence below was compressed to a 2-week calendar after the day-0 vertical-slice gate (PR #42) demonstrated ~10-20% of the original 2-year scope shipped in a single day. Q5-Q7 feature scope is pulled forward into the same sprint as Q2-Q4, plus a new charts integration track. Current execution uses 5 clean worker worktrees (`worker1`-`worker5`) plus Codex in `~/work/bc-grid` as coordinator / PR reviewer / merge integrator / Playwright owner. **Active orchestration plan: `docs/coordination/v1-parity-sprint.md`** — read it before claiming Phase 6 work. **Alpha gate plan: `docs/coordination/v0.1-alpha-release-plan.md`**. The scope+timeline pivot is recorded in `design.md §13`.
+> **Status — 2026-05-01:** original 2-year quarterly cadence below was compressed to a 2-week calendar after the day-0 vertical-slice gate (PR #42) demonstrated ~10-20% of the original 2-year scope shipped in a single day. Q5-Q7 ERP grid feature scope is pulled forward into the same sprint as Q2-Q4. Charts are not part of v1.0 and remain post-1.0. Current execution uses 5 clean worker worktrees (`worker1`-`worker5`) plus Codex in `~/work/bc-grid` as coordinator / PR reviewer / merge integrator / Playwright owner. **Active orchestration plan: `docs/coordination/v1-parity-sprint.md`** — read it before claiming Phase 6 work. **Alpha gate plan: `docs/coordination/v0.1-alpha-release-plan.md`**. The scope+timeline pivot is recorded in `design.md §13`.
 
 The Q1-Q8 phase NAMES below are preserved as feature buckets / acceptance-criteria inventory. The **calendar** is rewritten in days. Many quarters now run in parallel (multiple tracks at once) per `coordination/v1-parity-sprint.md`'s 7-track structure.
 
@@ -35,7 +35,7 @@ The Q1-Q8 phase NAMES below are preserved as feature buckets / acceptance-criter
 - Server-side row model implementation (Q4 — RFC done in Q1)
 - Aggregations + pivots (Q5)
 - Filter framework + chrome + export (Q6)
-- Streaming + mobile + WCAG deep-pass + charts (Q7)
+- Streaming + mobile + WCAG deep-pass (Q7)
 
 ### Q1 Milestones (delivered Day 0)
 
@@ -162,7 +162,7 @@ bc-grid v1.0-rc3.
 
 ---
 
-## Q7 — Polish + Charts + Mobile + a11y deep-pass (Days 11-13)
+## Q7 — Polish + Mobile + a11y deep-pass (Days 11-13)
 
 ### Milestones
 
@@ -172,8 +172,7 @@ bc-grid v1.0-rc3.
 - M7.4 — Performance tuning pass (days 12-13)
 - M7.5 — Browser compat: full matrix passes (day 12)
 - M7.6 — Mobile/touch fallback per `accessibility-rfc §Pointer and Touch Fallback` (days 12-13)
-- M7.7 — **NEW** Charts adapter (`@bc-grid/react/charts` peer-dep architecture; recharts as default; 3 worked examples) — RFC done #53 (day 0); impl day 11-12
-- M7.8 — Migration guide from AG Grid Community + Enterprise (day 13)
+- M7.7 — Migration guide from AG Grid Community + Enterprise (day 13)
 
 bc-grid v1.0-rc4 (final).
 
@@ -210,7 +209,6 @@ bc-grid v1.0-rc4 (final).
 | Beta cohort doesn't materialise | Low | Low | Internal dogfood (bc-next-cutover) is primary user; external beta is bonus |
 | Agent coordination breaks down | Low | High | Worktree scheme + queue.md + strict module boundaries; warning signs in `PARALLEL_WORK.md §8` |
 | Multi-account agent infrastructure cost overrun | Low | Low | Track agent-hours per task; sprint compresses cost overall |
-| Charts integration delays Q7 | Low | Low | Peer-dep architecture (no library bundled); only 1 impl task gates on it |
 | Bug-for-bug edge-case parity gap surfaces post-launch | High | Medium | Documented as continuous post-1.0 backlog; not a 1.0 gate |
 
 ---

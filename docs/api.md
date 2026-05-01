@@ -52,7 +52,7 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Auto height | Available | `?autoHeight=1` | `height = "auto"` |
 | Server row model | Available | Package API | `<BcServerGrid>` |
 | Pivot panel | Planned | Not exposed in examples | Pivot sidebar implementation |
-| Charts | Planned | Not exposed in examples | Charts adapter |
+| Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
 
 ---
 

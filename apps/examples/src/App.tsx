@@ -182,13 +182,13 @@ const featureDiscoveryRows = [
   },
   {
     feature: "Charts",
-    status: "Planned",
+    status: "Post-1.0",
     entry: "not exposed in examples",
-    api: "charts adapter",
+    api: "future charts adapter",
   },
 ] as const satisfies readonly {
   feature: string
-  status: "Available" | "Planned"
+  status: "Available" | "Planned" | "Post-1.0"
   entry: string
   api: string
 }[]

@@ -118,7 +118,7 @@ Spec: `docs/design/publish-rfc.md`. Distribution channel pinned: GitHub Packages
 - `[done: c2 #49]` range-rfc (Track 2)
 - `[done: c2 #51]` aggregation-rfc (Track 4 first half)
 - `[done: c2 #52]` pivot-rfc (Track 4 second half)
-- `[done: c2 #53]` charts-rfc (Track 7)
+- `charts-rfc` exists as a post-1.0 planning draft; charts implementation is not part of the v1.0 queue.
 
 Track 3 (server-row-model) reuses `server-query-rfc` (PR #2, merged) and needs no new RFC.
 
@@ -232,12 +232,12 @@ Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 - `[review: x2 #77]` **export-pdf-impl** — peer-dep on **jsPDF** (confirmed in coordination plan; alternative `react-pdf` if jsPDF doesn't fit; first PR picks the winner). `toPdf(rows, columns)`. **Branch**: `agent/x2/export-pdf-impl`. **Effort**: M.
 - `[review: x1 #111]` **export-server-mode** — wire `ServerExportQuery` (already declared in core) to a server-mode export flow: blob / url / job response handling. **Effort**: S.
 
-#### Track 7 — Polish + Charts (NEW) + Mobile (Q7 pulled forward + new)
+#### Track 7 — Polish + Mobile (Q7 pulled forward)
 
-Spec pending: `docs/design/charts-rfc.md` (c2 to author; user confirmed peer-dep approach with **recharts** as default).
+Charts are post-1.0. `docs/design/charts-rfc.md` is retained as a future peer-dep adapter design draft, not a v1.0 blocker.
 
-- `[done: c2 #53]` **charts-rfc** — **NEW track**; peer-dep architecture (consumer brings library); recharts as the documented default; adapter shape; 3 worked examples in apps/docs. **Effort**: 1 day.
-- `[blocked: depends on charts-rfc]` **charts-peer-dep-integration** — adapter package (`@bc-grid/charts` or in-react module — RFC decides); `<BcGridChart>` slot or hook; consumer-supplied chart component. **Effort**: M.
+- `[deferred: post-1.0]` **charts-rfc** — peer-dep architecture (consumer brings library); recharts as a documented default; adapter shape; worked examples in apps/docs. Design draft only until post-1.0.
+- `[deferred: post-1.0]` **charts-peer-dep-integration** — adapter package/module; hook/helper-based chart data; consumer-supplied chart component. Not a v1.0 task.
 - `[review: worker3 #188]` **streaming-row-updates** — server pushes new rows mid-session via `ServerRowUpdate` types (already in core); animated insertion via FLIP. Consumer subscribes via a hook. **Effort**: M.
 - `[ready]` **mobile-touch-fallback** — `accessibility-rfc §Pointer and Touch Fallback`: 44px hit targets in coarse-pointer mode; double-tap to edit; long-press 500ms for context menu; pointer selection handles 44px. **Effort**: M.
 - `[review: worker4 #191]` **wcag-code-pass** — code-only precursor to `wcag-deep-pass`. Walks `accessibility-rfc` + `audit-c2-003` + `audit-c2-004` for low-risk static a11y issues that are verifiable by unit tests or code inspection (no Playwright / no axe browser scan / no manual AT runs). Fixes localized hardcoded a11y strings, extracts pure helpers for ARIA computations, and asserts the theming CSS contract for `prefers-reduced-motion` / `forced-colors` / `pointer: coarse`. Authors `docs/design/a11y-impl-report.md` with a checklist of fixes + remaining browser/manual validation owned by `wcag-deep-pass`. **Effort**: S.

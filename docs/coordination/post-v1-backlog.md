@@ -82,12 +82,12 @@ useEffect(() => {
 
 **Effort:** M (engine impl + per-built-in inverse where possible).
 
-### charts-rfc — range and pivot scopes
+### charts-rfc — peer-dep chart adapter
 **Source:** `charts-rfc.md` task split.
 
-**Why deferred (technically: phased):** v1 ships flat-row + aggregated chart support (`scope: "filtered" | "selected" | "all"`). Range and pivot scopes ship as `charts-range-helper` and `charts-pivot-helper` tasks **during v1**, dependent on Track 2 / Track 4 second half landing first. If those tracks slip past the 2-week sprint, the helpers move post-v1.
+**Why deferred:** charts are not part of the ERP grid v1.0 target. The RFC remains useful as a future peer-dep adapter design, but no chart hook, helpers, examples, or chart data API should gate v1.0.
 
-**Effort:** S each.
+**Effort:** M for the flat-row/aggregated adapter; S each for later range and pivot helpers.
 
 ### filter-registry-rfc — URL-state persistence backend
 **Source:** Track 6 `filter-persistence` task in queue.md is currently `[blocked: depends on filter-registry-rfc]`.
@@ -124,7 +124,7 @@ useEffect(() => {
 ### Mobile / touch
 **Status:** No touch gesture support. Pointer events handle single-tap selection; multi-touch + long-press + edge-scroll are not wired.
 
-**Why deferred:** Mobile is a NEW track explicitly listed in Track 7 (Polish + Charts + Mobile). Likely slips post-v1 unless an agent picks it up; even at v1.1 it's M-L effort.
+**Why deferred:** Mobile is explicitly listed in Track 7 (Polish + Mobile). Likely slips post-v1 unless an agent picks it up; even at v1.1 it's M-L effort.
 
 **Effort:** L.
 

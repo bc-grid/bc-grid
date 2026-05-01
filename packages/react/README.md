@@ -83,7 +83,8 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Master detail | Available | `?masterDetail=1` | `renderDetailPanel` |
 | Auto height | Available | `?autoHeight=1` | `height="auto"` |
 | Server row model | Available | Package API | `<BcServerGrid>` |
-| Pivot panel and charts | Planned | Not exposed in examples | Pivot UI and charts adapter |
+| Pivot panel | Planned | Not exposed in examples | Pivot UI |
+| Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
 
 ## Global search
 
