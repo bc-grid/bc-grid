@@ -1517,9 +1517,7 @@ class ServerRowModelController<TRow> {
       if (rowId == null) return row
       const pendingPatches = this.pendingPatchesForRow(rowId)
       if (pendingPatches.length === 0) return row
-      if (!this.#canonicalMutationRows.has(rowId)) {
-        this.#canonicalMutationRows.set(rowId, row)
-      }
+      this.#canonicalMutationRows.set(rowId, row)
       changed = true
       return pendingPatches.reduce<TRow>(
         (nextRow, patch) => applyPatchChanges(nextRow, patch) ?? nextRow,
@@ -1558,6 +1556,7 @@ class ServerRowModelController<TRow> {
   }): number {
     if (input.sourceRowId !== input.targetRowId) {
       this.#canonicalMutationRows.delete(input.sourceRowId)
+      this.remapPendingMutations(input.sourceRowId, input.targetRowId)
     }
 
     this.#canonicalMutationRows.set(input.targetRowId, input.canonicalRow)
@@ -1576,6 +1575,13 @@ class ServerRowModelController<TRow> {
     }
 
     return updatedRows
+  }
+
+  private remapPendingMutations(sourceRowId: RowId, targetRowId: RowId): void {
+    for (const [mutationId, patch] of this.#pendingMutations) {
+      if (patch.rowId !== sourceRowId) continue
+      this.#pendingMutations.set(mutationId, { ...patch, rowId: targetRowId })
+    }
   }
 
   private insertCachedRowForUpdate(input: {
