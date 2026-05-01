@@ -40,6 +40,15 @@ describe("@bc-grid/animations FLIP helpers", () => {
     expectCompositorOnly(keyframes)
   })
 
+  test("can disable scale for text-bearing FLIP targets", () => {
+    const keyframes = createFlipKeyframes({ x: 0, y: 32, scaleX: 1, scaleY: 2 }, { scale: false })
+
+    expect(keyframes[0]?.transform).toBe("translate3d(0px, 32px, 0)")
+    expect(keyframes[1]?.transform).toBe("translate3d(0, 0, 0)")
+    expect(String(keyframes[0]?.transform)).not.toContain("scale")
+    expectCompositorOnly(keyframes)
+  })
+
   test("skips no-op deltas", () => {
     expect(shouldAnimateDelta({ x: 0, y: 0, scaleX: 1, scaleY: 1 })).toBe(false)
     expect(shouldAnimateDelta({ x: 0, y: 1, scaleX: 1, scaleY: 1 })).toBe(true)

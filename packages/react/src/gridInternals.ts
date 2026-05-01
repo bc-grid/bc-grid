@@ -1257,7 +1257,11 @@ function playRowFlipCandidates(
   )
   let animations: Animation[]
   try {
-    animations = flip(limitedCandidates, { budget, duration: ROW_FLIP_DURATION_MS })
+    animations = flip(limitedCandidates, {
+      budget,
+      duration: ROW_FLIP_DURATION_MS,
+      scale: false,
+    })
   } catch (error) {
     for (const handle of handles) handle.release()
     throw error

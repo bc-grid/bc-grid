@@ -25,6 +25,14 @@ export interface AnimationOptions {
 
 export interface FlipOptions extends AnimationOptions {
   maxAnimations?: number
+  /**
+   * Whether FLIP should animate dimension changes with scale().
+   *
+   * Keep enabled for non-text visual elements. Disable for text-bearing
+   * containers such as virtualized grid rows; scaling live text during expand /
+   * collapse reads as distortion, not motion.
+   */
+  scale?: boolean
 }
 
 export interface FlipTarget {
@@ -120,16 +128,23 @@ export function shouldAnimateDelta(delta: FlipDelta): boolean {
   return delta.x !== 0 || delta.y !== 0 || delta.scaleX !== 1 || delta.scaleY !== 1
 }
 
-export function createFlipKeyframes(delta: FlipDelta): Keyframe[] {
+export function createFlipKeyframes(
+  delta: FlipDelta,
+  options: Pick<FlipOptions, "scale"> = {},
+): Keyframe[] {
+  const useScale = options.scale !== false
   const fromScale =
-    delta.scaleX === 1 && delta.scaleY === 1 ? "" : ` scale(${delta.scaleX}, ${delta.scaleY})`
+    useScale && (delta.scaleX !== 1 || delta.scaleY !== 1)
+      ? ` scale(${delta.scaleX}, ${delta.scaleY})`
+      : ""
+  const toScale = useScale ? " scale(1, 1)" : ""
 
   return [
     {
       transform: `translate3d(${delta.x}px, ${delta.y}px, 0)${fromScale}`,
     },
     {
-      transform: "translate3d(0, 0, 0) scale(1, 1)",
+      transform: `translate3d(0, 0, 0)${toScale}`,
     },
   ]
 }
@@ -170,7 +185,12 @@ export function flip(targets: Iterable<FlipTarget>, options: FlipOptions = {}): 
     const delta = calculateFlipDelta(target.first, last)
     if (!shouldAnimateDelta(delta)) continue
 
-    const animation = animateWithBudget(target.element, createFlipKeyframes(delta), options, budget)
+    const animation = animateWithBudget(
+      target.element,
+      createFlipKeyframes(delta, options),
+      options,
+      budget,
+    )
     if (!animation) break
     animations.push(animation)
   }
