@@ -23,7 +23,13 @@ test("AR customer filters narrow the ledger to a single account", async ({ page 
   const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
   await expect(grid).toBeVisible()
 
-  await grid.getByLabel("Filter Account").fill("CUST-00042")
+  // The text-filter editor renders an operator <select>, the value
+  // <input>, and two aria-pressed toggle buttons (Aa, .*) whose
+  // aria-labels all contain "Filter Account" as a substring. `{ exact: true }`
+  // scopes the match to the value input — same convention used by the
+  // existing number-filter-ui.pw.ts / date-filter-ui.pw.ts specs that
+  // hit the same multi-element-label shape.
+  await grid.getByLabel("Filter Account", { exact: true }).fill("CUST-00042")
   await expect(grid).toHaveAttribute("aria-rowcount", "3")
   await expect(grid.locator(".bc-grid-row").first()).toContainText("CUST-00042")
 })
