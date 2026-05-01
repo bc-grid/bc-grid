@@ -582,13 +582,20 @@
   border: 1px solid var(--bc-grid-border);
   border-radius: calc(var(--bc-grid-radius) - 2px);
   background: var(--bc-grid-bg);
-  color: inherit;
+  color: var(--bc-grid-muted-fg);
   cursor: pointer;
   font: inherit;
   font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  outline: none;
+  font-weight: 600;
   min-width: 28px;
+  outline: none;
+  transition: background var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
+    color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
+}
+
+.bc-grid-filter-text-toggle:hover {
+  background: var(--bc-grid-row-hover);
+  color: var(--bc-grid-fg);
 }
 
 .bc-grid-filter-text-toggle[aria-pressed="true"] {
@@ -600,6 +607,20 @@
 .bc-grid-filter-text-toggle:focus-visible {
   outline: 2px solid var(--bc-grid-focus-ring);
   outline-offset: 1px;
+}
+
+/* In popup context, the inline-row's `height: 70%` collapses to auto
+   (no fixed parent height); pin a 1.75rem control height so the
+   text-filter wrapper, operator select, value input, and toggles line
+   up cleanly with the popup's other shadcn-aligned chrome. */
+.bc-grid-filter-popup > .bc-grid-filter-text {
+  height: auto;
+}
+
+.bc-grid-filter-popup > .bc-grid-filter-text > .bc-grid-filter-input,
+.bc-grid-filter-popup > .bc-grid-filter-text > .bc-grid-filter-select,
+.bc-grid-filter-popup > .bc-grid-filter-text > .bc-grid-filter-text-toggle {
+  height: 1.75rem;
 }
 
 .bc-grid-filter-number > .bc-grid-filter-select {

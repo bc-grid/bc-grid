@@ -1300,6 +1300,88 @@ describe("text filter operators — persistence round-trip", () => {
   })
 })
 
+describe("text filter — legacy state compatibility (pre-operators)", () => {
+  // These tests explicitly pin the contract that pre-`filter-text-impl-extend`
+  // state shapes still work without any host-app migration. A bc-grid v0.2
+  // app that persisted `{ name: "Acme" }` (plain-string `columnFilterText`)
+  // must produce the exact same row-set matches against the
+  // operator-aware v0.3 predicate.
+  const lookup =
+    (values: Record<ColumnId, string>) =>
+    (columnId: ColumnId): string =>
+      values[columnId] ?? ""
+
+  test("plain-string state parses to default contains+no-modifier draft", () => {
+    // The decode path is the bridge. A bare needle decodes to the
+    // canonical default — case-insensitive contains, no regex.
+    expect(decodeTextFilterInput("Acme")).toEqual({ op: "contains", value: "Acme" })
+  })
+
+  test("legacy plain-string filter narrows rows identically to a fresh contains filter", () => {
+    const legacy = buildGridFilter({ name: "Acme" })
+    const fresh = buildGridFilter({
+      name: encodeTextFilterInput({ op: "contains", value: "Acme" }),
+    })
+    if (!legacy || !fresh) throw new Error("expected filters")
+    // Both decode to the same canonical ServerColumnFilter (no modifier
+    // flags). Tested above; assert here too as a sanity check at the
+    // build boundary.
+    expect(legacy).toEqual(fresh)
+
+    // And both predicates narrow the same rows. Case-insensitive by
+    // default; the matcher accepts a row whose formatted Account
+    // column contains "acme corp" because of the case fold.
+    for (const filter of [legacy, fresh]) {
+      expect(matchesGridFilter(filter, lookup({ name: "Acme Corp" }))).toBe(true)
+      expect(matchesGridFilter(filter, lookup({ name: "ACME CORP" }))).toBe(true)
+      expect(matchesGridFilter(filter, lookup({ name: "Beta Co" }))).toBe(false)
+    }
+  })
+
+  test("legacy state co-exists with structured state on a sibling column", () => {
+    // Mixed shape: one column persisted as a plain string (legacy),
+    // another column persisted as a JSON operator payload (post-v0.3).
+    // The combined `BcGridFilter` must apply both predicates with AND.
+    const filter = buildGridFilter(
+      {
+        name: "Acme", // legacy plain-string
+        notes: encodeTextFilterInput({ op: "starts-with", value: "VIP" }),
+      },
+      // Both columns have type "text" but the second uses the
+      // structured shape. columnFilterTypes only affects non-text
+      // disambiguation; text is handled by decodeTextFilterInput.
+      {},
+    )
+    if (!filter) throw new Error("expected filter")
+    expect(filter.kind).toBe("group")
+
+    expect(matchesGridFilter(filter, lookup({ name: "Acme Corp", notes: "VIP customer" }))).toBe(
+      true,
+    )
+    // name matches but notes doesn't start with "VIP"
+    expect(matchesGridFilter(filter, lookup({ name: "Acme Corp", notes: "Standard" }))).toBe(false)
+    // notes starts with "VIP" but name doesn't match
+    expect(matchesGridFilter(filter, lookup({ name: "Beta Co", notes: "VIP customer" }))).toBe(
+      false,
+    )
+  })
+
+  test("a structured payload that round-trips through plain string still matches identically", () => {
+    // If a future migration tool reads structured persistence, drops
+    // modifier flags, and re-serialises as a plain string, the
+    // resulting filter must behave identically to a fresh
+    // contains-no-modifier filter on the same value.
+    const structured = encodeTextFilterInput({ op: "contains", value: "Acme" })
+    const legacy = JSON.parse(structured).value as string
+
+    const fromStructured = buildGridFilter({ name: structured })
+    const fromLegacy = buildGridFilter({ name: legacy })
+    if (!fromStructured || !fromLegacy) throw new Error("expected filters")
+
+    expect(fromStructured).toEqual(fromLegacy)
+  })
+})
+
 describe("removeColumnFromFilter", () => {
   test("returns null when input is null/undefined", () => {
     expect(removeColumnFromFilter(null, "name")).toBeNull()

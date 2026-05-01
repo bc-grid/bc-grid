@@ -485,13 +485,16 @@ function TextFilterControl({
         value={input.value}
         onChange={(event) => update({ value: event.currentTarget.value })}
         onKeyDown={onFilterKeyDown}
-        placeholder={placeholder}
+        placeholder={flat.regex ? "Regex pattern" : placeholder}
+        spellCheck={flat.regex ? false : undefined}
+        autoComplete={flat.regex ? "off" : undefined}
       />
       <button
         type="button"
         aria-label={`${filterLabel} case sensitive`}
         aria-pressed={flat.caseSensitive}
         className="bc-grid-filter-text-toggle"
+        title="Case sensitive"
         onClick={() => update({ caseSensitive: !flat.caseSensitive })}
         onKeyDown={onFilterKeyDown}
       >
@@ -502,6 +505,7 @@ function TextFilterControl({
         aria-label={`${filterLabel} regex`}
         aria-pressed={flat.regex}
         className="bc-grid-filter-text-toggle"
+        title="Regular expression"
         onClick={() => update({ regex: !flat.regex })}
         onKeyDown={onFilterKeyDown}
       >
