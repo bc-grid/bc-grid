@@ -1,6 +1,13 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useEffect, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { useId, useLayoutEffect, useRef } from "react"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  editorOptionToString,
+  resolveEditorOptions,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
 
@@ -28,7 +35,8 @@ type BcGridSelectElement = HTMLSelectElement & {
  *     `option.index` back to the typed value via the same option-keyed
  *     lookup that `editor-select` populates. This is a typed editor —
  *     `column.valueParser` doesn't fire on commit per RFC.
- *   - `seedKey` ignored — multi-select is choose-from-list, not text-seed.
+ *   - `seedKey` keeps native listbox semantics — the editor exposes a
+ *     seeded data hook, but does not auto-toggle multi-select values.
  *   - `pending` disables the entire control while async work is in flight.
  *
  * No library dep. Browser variance: Chrome / Firefox render a list-box
@@ -45,10 +53,16 @@ const DEFAULT_VISIBLE_ROWS = 5
 function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   const { initialValue, error, focusRef, seedKey, pending, column, row } = props
   const selectRef = useRef<HTMLSelectElement | null>(null)
+  const errorId = useId()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (focusRef && selectRef.current) {
       ;(focusRef as { current: HTMLElement | null }).current = selectRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
     }
   }, [focusRef])
 
@@ -56,70 +70,61 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
     selectRef.current?.focus({ preventScroll: true })
   }, [])
 
-  void seedKey
-
   const optionsSource = (column as { options?: unknown }).options
-  const options = resolveOptions(optionsSource, row)
+  const options = resolveEditorOptions(optionsSource, row)
   const initialArray = toReadonlyArray(initialValue)
-  const initialKeys = new Set(initialArray.map(optionToString))
+  const initialKeys = new Set(initialArray.map(editorOptionToString))
   const selectOptionValues = options.map((option) => option.value)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (selectRef.current) {
       ;(selectRef.current as BcGridSelectElement)[bcGridSelectOptionValuesKey] = selectOptionValues
     }
   }, [selectOptionValues])
 
   const visibleRows = Math.max(2, Math.min(DEFAULT_VISIBLE_ROWS, options.length || 2))
+  const accessibleName = editorAccessibleName(column, "Select values")
+  const seedActive = seedKey != null && seedKey !== ""
 
   return (
-    <select
-      ref={selectRef}
-      className={editorInputClassName}
-      multiple
-      size={visibleRows}
-      defaultValue={options
-        .filter((option) => initialKeys.has(optionToString(option.value)))
-        .map((option) => optionToString(option.value))}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="multi-select"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
-    >
-      {options.map((option) => (
-        <option key={optionToString(option.value)} value={optionToString(option.value)}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+    <>
+      <select
+        ref={selectRef}
+        className={editorInputClassName}
+        multiple
+        size={visibleRows}
+        defaultValue={options
+          .filter((option) => initialKeys.has(editorOptionToString(option.value)))
+          .map((option) => editorOptionToString(option.value))}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={error ? errorId : undefined}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="multi-select"
+        data-bc-grid-editor-state={editorControlState({ error, pending })}
+        data-bc-grid-editor-seeded={seedActive ? "true" : undefined}
+        data-bc-grid-editor-option-count={options.length}
+      >
+        {options.map((option) => (
+          <option
+            key={editorOptionToString(option.value)}
+            value={editorOptionToString(option.value)}
+          >
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
   )
-}
-
-function resolveOptions(
-  source: unknown,
-  row: unknown,
-): readonly { value: unknown; label: string }[] {
-  if (Array.isArray(source)) return source as { value: unknown; label: string }[]
-  if (typeof source === "function") {
-    try {
-      const resolved = (source as (row: unknown) => unknown)(row)
-      if (Array.isArray(resolved)) return resolved as { value: unknown; label: string }[]
-    } catch {
-      // Bad option-fn — render no options rather than crashing the cell.
-    }
-  }
-  return []
 }
 
 function toReadonlyArray(value: unknown): readonly unknown[] {
   if (Array.isArray(value)) return value
   return []
-}
-
-function optionToString(value: unknown): string {
-  if (value == null) return ""
-  if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
-  return JSON.stringify(value)
 }
