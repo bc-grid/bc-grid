@@ -34,6 +34,7 @@ import type {
   ServerPagedResult,
   ServerQueryDiagnostics,
   ServerRowModelDiagnostics,
+  ServerRowModelMode,
   ServerRowPatch,
   ServerRowUpdate,
   ServerTreeQuery,
@@ -563,6 +564,39 @@ export type BcServerEditPatchFactory<TRow> = (
   defaultPatch: ServerRowPatch,
 ) => ServerRowPatch
 
+export type BcServerGridStatus = "loading" | "error"
+
+export interface BcServerGridStatusOverlayParams {
+  rowModel: ServerRowModelMode
+  status: BcServerGridStatus
+  /**
+   * Short user-facing status label, for example "Loading server rows" or
+   * "Failed to load rows".
+   */
+  message: string
+  /**
+   * Normalised error copy for display/logging. Present only for
+   * `status: "error"`; the raw `error` remains available for consumers that
+   * need structured details.
+   */
+  errorMessage?: string
+  error: unknown | null
+  diagnostics: ServerRowModelDiagnostics
+  retry: () => void
+}
+
+export type BcServerGridStatusOverlay = (params: BcServerGridStatusOverlayParams) => ReactNode
+
+export interface BcServerGridStatusProps {
+  /**
+   * Custom renderer for the server-row-model loading/error overlay. When not
+   * supplied, `<BcServerGrid>` renders a compact built-in status with a Retry
+   * button for load failures. `loadingOverlay` still wins when supplied for
+   * full backwards compatibility.
+   */
+  serverStatusOverlay?: BcServerGridStatusOverlay
+}
+
 export interface BcServerEditMutationProps<TRow> {
   /**
    * Server-backed edit commit adapter. When present, `<BcServerGrid>`
@@ -586,7 +620,8 @@ export type BcServerGridProps<TRow> =
 
 export interface BcServerPagedProps<TRow>
   extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
-    BcServerEditMutationProps<TRow> {
+    BcServerEditMutationProps<TRow>,
+    BcServerGridStatusProps {
   rowModel: "paged"
   /**
    * Current server page size. The server receives this as
@@ -606,7 +641,8 @@ export interface BcServerPagedProps<TRow>
 
 export interface BcServerInfiniteProps<TRow>
   extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
-    BcServerEditMutationProps<TRow> {
+    BcServerEditMutationProps<TRow>,
+    BcServerGridStatusProps {
   rowModel: "infinite"
   blockSize?: number
   maxCachedBlocks?: number
@@ -618,7 +654,8 @@ export interface BcServerInfiniteProps<TRow>
 
 export interface BcServerTreeProps<TRow>
   extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
-    BcServerEditMutationProps<TRow> {
+    BcServerEditMutationProps<TRow>,
+    BcServerGridStatusProps {
   rowModel: "tree"
   loadChildren: LoadServerTreeChildren<TRow>
   loadRoots?: LoadServerTreeChildren<TRow>
@@ -760,6 +797,7 @@ export type {
   ServerMutationResult,
   ServerPagedQuery,
   ServerPagedResult,
+  ServerRowModelMode,
   ServerQueryDiagnostics,
   ServerRowModelDiagnostics,
   ServerRowPatch,

@@ -1527,6 +1527,7 @@ export interface BcServerPagedProps<TRow> extends Omit<BcGridProps<TRow>, "apiRe
   loadPage: LoadServerPage<TRow>
   /** Optional first page rendered server-side. */
   initialResult?: ServerPagedResult<TRow>
+  serverStatusOverlay?: BcServerGridStatusOverlay
   onServerRowMutation?: BcServerEditMutationHandler<TRow>
   createServerRowPatch?: BcServerEditPatchFactory<TRow>
   apiRef?: React.RefObject<BcServerGridApi<TRow> | null>
@@ -1539,6 +1540,7 @@ export interface BcServerInfiniteProps<TRow> extends Omit<BcGridProps<TRow>, "ap
   blockLoadDebounceMs?: number
   maxConcurrentRequests?: number
   loadBlock: LoadServerBlock<TRow>
+  serverStatusOverlay?: BcServerGridStatusOverlay
   onServerRowMutation?: BcServerEditMutationHandler<TRow>
   createServerRowPatch?: BcServerEditPatchFactory<TRow>
   apiRef?: React.RefObject<BcServerGridApi<TRow> | null>
@@ -1549,6 +1551,7 @@ export interface BcServerTreeProps<TRow> extends Omit<BcGridProps<TRow>, "apiRef
   loadChildren: LoadServerTreeChildren<TRow>
   /** Required when the tree's root needs an initial fetch. */
   loadRoots?: LoadServerTreeChildren<TRow>
+  serverStatusOverlay?: BcServerGridStatusOverlay
   onServerRowMutation?: BcServerEditMutationHandler<TRow>
   createServerRowPatch?: BcServerEditPatchFactory<TRow>
   apiRef?: React.RefObject<BcServerGridApi<TRow> | null>
@@ -1568,6 +1571,22 @@ export type BcServerEditPatchFactory<TRow> = (
   event: BcCellEditCommitEvent<TRow>,
   defaultPatch: ServerRowPatch,
 ) => ServerRowPatch
+
+export type BcServerGridStatus = "loading" | "error"
+
+export interface BcServerGridStatusOverlayParams {
+  rowModel: ServerRowModelMode
+  status: BcServerGridStatus
+  message: string
+  errorMessage?: string
+  error: unknown | null
+  diagnostics: ServerRowModelDiagnostics
+  retry: () => void
+}
+
+export type BcServerGridStatusOverlay = (
+  params: BcServerGridStatusOverlayParams,
+) => React.ReactNode
 ```
 
 Paged mode is a server-owned pagination contract. `loadPage` receives
@@ -1592,6 +1611,17 @@ the query's sort/filter/search/group/visible-column model. Diagnostics preserve
 that distinction: `rowCount` / `lastLoad.rowCount` describe the server total,
 while `cache.loadedRowCount` describes only cached row payloads that bc-grid has
 actually loaded.
+
+All server row-model modes render a built-in compact status overlay while an
+initial/server load is pending. Load failures render the same overlay with
+`message: "Failed to load rows"`, a normalised `errorMessage`, and a Retry
+button that purges the affected server cache and reloads the active view. This
+keeps paged/infinite/tree grids usable without forking the wrapper. Consumers
+that need app-specific copy can pass `serverStatusOverlay={(params) => ...}`;
+`params.diagnostics` includes the active view/query/cache snapshot, and
+`params.retry()` is the supported retry action. Existing `loadingOverlay` still
+wins when supplied, for applications that already fully own grid loading
+chrome.
 
 Client grouping, client filtering, and client search can still run over the rows
 currently rendered by `<BcGrid>`, but with server data that is only the loaded
@@ -1932,7 +1962,7 @@ So:
 
 - **`@bc-grid/core` exports**: every type listed in `server-query-rfc §Public Types`.
 - **`@bc-grid/server-row-model` exports**: the state machine factory, the cache, and pure diagnostics helpers (`summarizeServerViewState`, `summarizeServerQuery`, `summarizeServerCache`, `summarizeServerRowModelState`). Types come from `core`.
-- **`@bc-grid/react` re-exports**: `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowPatch`, `ServerMutationResult`, `ServerRowUpdate`, `ServerRowModelDiagnostics`, `ServerQueryDiagnostics`, `ServerLoadDiagnostics`, `BcServerGridProps`, `BcServerGridApi`, `BcServerEditMutationEvent`, `BcServerEditMutationHandler`, `BcServerEditMutationProps`, `BcServerEditPatchFactory`, and `useServerRowUpdates` for consumer convenience.
+- **`@bc-grid/react` re-exports**: `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowPatch`, `ServerMutationResult`, `ServerRowUpdate`, `ServerRowModelDiagnostics`, `ServerQueryDiagnostics`, `ServerLoadDiagnostics`, `BcServerGridProps`, `BcServerGridApi`, `BcServerGridStatus`, `BcServerGridStatusOverlay`, `BcServerGridStatusOverlayParams`, `BcServerGridStatusProps`, `BcServerEditMutationEvent`, `BcServerEditMutationHandler`, `BcServerEditMutationProps`, `BcServerEditPatchFactory`, and `useServerRowUpdates` for consumer convenience.
 
 ### 8.2 Resolved review-comments from server-query-rfc
 
@@ -2008,6 +2038,8 @@ export type {
   BcCellEditor, BcCellEditorProps, BcCellEditorPrepareParams, BcCellEditCommitEvent,
   BcServerEditMutationEvent, BcServerEditMutationHandler,
   BcServerEditMutationProps, BcServerEditPatchFactory,
+  BcServerGridStatus, BcServerGridStatusOverlay,
+  BcServerGridStatusOverlayParams, BcServerGridStatusProps,
   BcEditGridAction,
   BcRangeBeforeCopyEvent, BcRangeBeforeCopyHook, BcRangeCopyEvent, BcRangeCopyHook,
   BcServerRowUpdateHandler, BcServerRowUpdateSubscribe, BcServerRowUpdateUnsubscribe,
@@ -2032,7 +2064,7 @@ export type {
   ServerPagedQuery, ServerPagedResult,
   ServerBlockQuery, ServerBlockResult,
   ServerTreeQuery, ServerTreeResult,
-  ServerRowUpdate,
+  ServerRowModelMode, ServerRowUpdate,
 }
 
 // Reserved Q2 runtime exports, not shipped at v0.1:

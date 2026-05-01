@@ -40,10 +40,14 @@ import type {
   BcServerEditMutationHandler,
   BcServerEditPatchFactory,
   BcServerGridProps,
+  BcServerGridStatusOverlay,
+  BcServerGridStatusOverlayParams,
 } from "./types"
 
 const DEFAULT_SERVER_PAGE_SIZE = 100
 const DEFAULT_SERVER_BLOCK_SIZE = 100
+const DEFAULT_SERVER_STATUS_LOADING_MESSAGE = "Loading server rows"
+const DEFAULT_SERVER_STATUS_ERROR_MESSAGE = "Failed to load rows"
 
 interface PagedServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
@@ -206,6 +210,95 @@ export function resolveServerVisibleColumns<TRow>(
     const hidden = state?.hidden ?? column.hidden ?? false
     return hidden ? [] : [columnId]
   })
+}
+
+export function formatServerGridStatusError(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message
+  if (typeof error === "string" && error.trim()) return error
+  return DEFAULT_SERVER_STATUS_ERROR_MESSAGE
+}
+
+export function resolveServerGridStatusOverlayParams(input: {
+  diagnostics: ServerRowModelDiagnostics
+  error: unknown
+  loading: boolean
+  retry: () => void
+  rowModel: ServerRowModelMode
+}): BcServerGridStatusOverlayParams | null {
+  if (input.error != null) {
+    return {
+      diagnostics: input.diagnostics,
+      error: input.error,
+      errorMessage: formatServerGridStatusError(input.error),
+      message: DEFAULT_SERVER_STATUS_ERROR_MESSAGE,
+      retry: input.retry,
+      rowModel: input.rowModel,
+      status: "error",
+    }
+  }
+
+  if (input.loading) {
+    return {
+      diagnostics: input.diagnostics,
+      error: null,
+      message: DEFAULT_SERVER_STATUS_LOADING_MESSAGE,
+      retry: input.retry,
+      rowModel: input.rowModel,
+      status: "loading",
+    }
+  }
+
+  return null
+}
+
+export function resolveServerGridLoading(input: {
+  loadingOverride?: boolean | undefined
+  serverError: unknown
+  serverLoading: boolean
+}): boolean {
+  return input.loadingOverride ?? (input.serverLoading || input.serverError != null)
+}
+
+export function renderDefaultServerGridStatusOverlay(
+  params: BcServerGridStatusOverlayParams,
+): ReactNode {
+  const detail =
+    params.status === "error" && params.errorMessage && params.errorMessage !== params.message
+      ? params.errorMessage
+      : null
+
+  return (
+    <div
+      className="bc-grid-server-status"
+      data-state={params.status}
+      role={params.status === "error" ? "alert" : "status"}
+      aria-live={params.status === "error" ? "assertive" : "polite"}
+    >
+      <span className="bc-grid-server-status-copy">
+        <span className="bc-grid-server-status-title">{params.message}</span>
+        {detail ? <span className="bc-grid-server-status-detail">{detail}</span> : null}
+      </span>
+      {params.status === "error" ? (
+        <button
+          type="button"
+          className="bc-grid-server-status-retry"
+          onClick={(event) => {
+            event.stopPropagation()
+            params.retry()
+          }}
+        >
+          Retry
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function renderServerGridStatusOverlay(
+  params: BcServerGridStatusOverlayParams,
+  renderer?: BcServerGridStatusOverlay,
+): ReactNode {
+  return renderer ? renderer(params) : renderDefaultServerGridStatusOverlay(params)
 }
 
 function sameColumnIds(left: readonly ColumnId[], right: readonly ColumnId[]): boolean {
@@ -427,24 +520,50 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   useEffect(() => assignRef(externalApiRef, serverApi), [externalApiRef, serverApi])
 
   const gridProps = props as unknown as BcGridProps<TRow>
-  const loading =
-    props.loading ??
-    (props.rowModel === "paged"
+  const serverLoading =
+    props.rowModel === "paged"
       ? paged.loading
       : props.rowModel === "infinite"
         ? infinite.loading
         : props.rowModel === "tree"
           ? tree.loading
-          : true)
+          : true
+  const serverError =
+    props.rowModel === "paged"
+      ? paged.error
+      : props.rowModel === "infinite"
+        ? infinite.error
+        : props.rowModel === "tree"
+          ? tree.error
+          : null
+  const retryServerRows = useCallback(() => {
+    if (props.rowModel === "paged") paged.refresh({ purge: true })
+    else if (props.rowModel === "infinite") infinite.refresh({ purge: true })
+    else if (props.rowModel === "tree") tree.refresh({ purge: true })
+  }, [infinite.refresh, paged.refresh, props.rowModel, tree.refresh])
+  const diagnostics =
+    props.rowModel === "paged"
+      ? paged.getDiagnostics()
+      : props.rowModel === "infinite"
+        ? infinite.getDiagnostics()
+        : tree.getDiagnostics()
+  const serverStatusOverlayParams = resolveServerGridStatusOverlayParams({
+    diagnostics,
+    error: props.loading === false ? null : serverError,
+    loading: props.loading ?? serverLoading,
+    retry: retryServerRows,
+    rowModel: props.rowModel,
+  })
+  const loading = resolveServerGridLoading({
+    loadingOverride: props.loading,
+    serverError,
+    serverLoading,
+  })
   const loadingOverlay =
     props.loadingOverlay ??
-    (props.rowModel === "paged" && paged.error
-      ? "Failed to load rows"
-      : props.rowModel === "infinite" && infinite.error
-        ? "Failed to load rows"
-        : props.rowModel === "tree" && tree.error
-          ? "Failed to load rows"
-          : undefined)
+    (serverStatusOverlayParams
+      ? renderServerGridStatusOverlay(serverStatusOverlayParams, props.serverStatusOverlay)
+      : undefined)
 
   return (
     <BcGrid

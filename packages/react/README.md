@@ -60,7 +60,7 @@ export function CustomerGrid() {
 
 - `<BcGrid>` — the read-only/click-to-select grid (Q1 vertical-slice features: sort, filter, pinned columns, row selection, search highlighting, tooltips, localStorage persistence).
 - `<BcEditGrid>` — the editing-capable grid (cell-edit lifecycle, validation, dirty tracking, the editor framework from `editing-rfc`).
-- `<BcServerGrid>` — server-row-model wrapper supporting `rowModel="paged"` and `rowModel="infinite"` (tree mode reserved).
+- `<BcServerGrid>` — server-row-model wrapper supporting `rowModel="paged"`, `rowModel="infinite"`, and `rowModel="tree"`.
 - `useBcGridApi()` — imperative API hook (scroll-to-row, get-selection, etc.).
 
 ## Feature discovery map
@@ -86,6 +86,16 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Server row model | Available | Package API | `<BcServerGrid>` |
 | Pivot grid rendering | Planned | Not exposed in examples | Pivot row/column rendering integration |
 | Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
+
+## Server row model status
+
+`<BcServerGrid>` renders a compact built-in overlay while paged, infinite, or
+tree requests are loading. Failed loads show the same overlay with a Retry
+button that refreshes the active server view, so host apps can keep their
+customer-grid wrappers thin. Pass `serverStatusOverlay={(params) => ...}` when
+you need app-specific copy or telemetry; `params.diagnostics` includes the
+active view/cache/load snapshot and `params.retry()` is the supported retry
+action. Existing `loadingOverlay` still wins when supplied.
 
 ## Global search
 

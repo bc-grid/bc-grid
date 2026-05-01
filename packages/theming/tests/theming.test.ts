@@ -793,6 +793,40 @@ describe("@bc-grid/theming", () => {
     )
   })
 
+  test("server status overlay uses restrained tokenized chrome", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    expect(css).toContain("--bc-grid-server-status-bg: var(--bc-grid-card-bg)")
+    expect(css).toContain("--bc-grid-server-status-fg: var(--bc-grid-card-fg)")
+    expect(css).toContain("--bc-grid-server-status-border")
+    expect(css).toContain("--bc-grid-server-status-error-border")
+    expect(css).toContain('.bc-grid-server-status[data-state="error"]')
+    expect(css).toContain(".bc-grid-server-status-retry:focus-visible")
+    expect(css).toContain(".bc-grid-server-status-retry:hover")
+    expect(css).toContain(".bc-grid-server-status-retry:active")
+    expect(css).toContain("--bc-grid-server-status-bg: Canvas")
+
+    const statusRule = ruleFor(".bc-grid-server-status {")
+    expect(statusRule).toContain("pointer-events: auto")
+    expect(statusRule).toContain("background: var(--bc-grid-server-status-bg)")
+    expect(statusRule).toContain("border: 1px solid var(--bc-grid-server-status-border)")
+    expect(statusRule).not.toContain("box-shadow")
+    expect(statusRule).not.toContain("transform")
+    expect(statusRule).not.toContain("animation")
+
+    const retryRule = ruleFor(".bc-grid-server-status-retry {")
+    expect(retryRule).toContain("height: 1.75rem")
+    expect(retryRule).toContain("background: var(--bc-grid-bg)")
+    expect(retryRule).toContain("border: 1px solid var(--bc-grid-input-border)")
+    expect(retryRule).not.toContain("box-shadow")
+  })
+
   test("CSS exposes compact master-detail panel affordances", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
 
