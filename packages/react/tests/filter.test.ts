@@ -16,7 +16,9 @@ import {
   encodeSetFilterInput,
   encodeTextFilterInput,
   filterHasColumn,
+  filterSetFilterOptions,
   matchesGridFilter,
+  nextSetFilterValuesOnToggleAll,
   removeColumnFromFilter,
   setFilterValueKeys,
 } from "../src/filter"
@@ -1531,5 +1533,104 @@ describe("filterHasColumn", () => {
     }
     expect(filterHasColumn(filter, "tier")).toBe(true)
     expect(filterHasColumn(filter, "region")).toBe(false)
+  })
+})
+
+describe("filterSetFilterOptions", () => {
+  // The set-filter menu's search input narrows the option list using
+  // this helper. Both label and value match case-insensitively so a
+  // user can type either the displayed text (e.g. "Past Due") or the
+  // raw underlying value (e.g. "past_due") — useful when the column
+  // formats raw status keys into human-readable labels.
+  const options = [
+    { value: "open", label: "Open" },
+    { value: "past_due", label: "Past Due" },
+    { value: "closed", label: "Closed" },
+    { value: "draft", label: "Draft" },
+  ]
+
+  test("empty / whitespace query returns every option (cloned)", () => {
+    const result = filterSetFilterOptions(options, "")
+    expect(result).toEqual(options)
+    // Clone — caller can mutate the result without affecting the input.
+    expect(result).not.toBe(options)
+
+    expect(filterSetFilterOptions(options, "   ")).toEqual(options)
+  })
+
+  test("matches the label case-insensitively", () => {
+    expect(filterSetFilterOptions(options, "open")).toEqual([{ value: "open", label: "Open" }])
+    expect(filterSetFilterOptions(options, "OPEN")).toEqual([{ value: "open", label: "Open" }])
+    expect(filterSetFilterOptions(options, "past")).toEqual([
+      { value: "past_due", label: "Past Due" },
+    ])
+  })
+
+  test("matches the underlying value too (raw-key search)", () => {
+    expect(filterSetFilterOptions(options, "past_due")).toEqual([
+      { value: "past_due", label: "Past Due" },
+    ])
+  })
+
+  test("empty result for a query that matches nothing", () => {
+    expect(filterSetFilterOptions(options, "void")).toEqual([])
+  })
+
+  test("partial substrings match in either field", () => {
+    // "d" appears in "Past Due", "Draft", and "Closed" labels and
+    // "past_due", "draft", "closed" values. All three returned.
+    const result = filterSetFilterOptions(options, "d")
+    expect(result.map((o) => o.value)).toEqual(["past_due", "closed", "draft"])
+  })
+})
+
+describe("nextSetFilterValuesOnToggleAll", () => {
+  // The set-filter menu's "Select all" / "Clear all" affordance toggles
+  // every visible (search-narrowed) option in or out of the selection,
+  // preserving selections for options hidden by the active search
+  // query. The helper is pure so the menu's bulk-toggle behaviour is
+  // unit-testable without rendering.
+  test("adds every visible option when none are selected", () => {
+    const visible = [
+      { value: "a", label: "A" },
+      { value: "b", label: "B" },
+    ]
+    expect(nextSetFilterValuesOnToggleAll(visible, [])).toEqual(["a", "b"])
+  })
+
+  test("adds only the missing visible options when some are already selected", () => {
+    const visible = [
+      { value: "a", label: "A" },
+      { value: "b", label: "B" },
+      { value: "c", label: "C" },
+    ]
+    expect(nextSetFilterValuesOnToggleAll(visible, ["b"])).toEqual(["b", "a", "c"])
+  })
+
+  test("clears every visible option when all visible are selected", () => {
+    const visible = [
+      { value: "a", label: "A" },
+      { value: "b", label: "B" },
+    ]
+    expect(nextSetFilterValuesOnToggleAll(visible, ["a", "b"])).toEqual([])
+  })
+
+  test("preserves selections for options hidden by the search query", () => {
+    // visible = filtered subset, current = full selection. Toggling
+    // all-visible-on with one already selected adds the missing visible,
+    // and the off-screen "z" stays put.
+    const visible = [
+      { value: "a", label: "A" },
+      { value: "b", label: "B" },
+    ]
+    expect(nextSetFilterValuesOnToggleAll(visible, ["a", "z"])).toEqual(["a", "z", "b"])
+
+    // Toggling all-visible-off when both visible are selected removes
+    // them, but "z" survives.
+    expect(nextSetFilterValuesOnToggleAll(visible, ["a", "b", "z"])).toEqual(["z"])
+  })
+
+  test("empty visible list is a no-op", () => {
+    expect(nextSetFilterValuesOnToggleAll([], ["a", "b"])).toEqual(["a", "b"])
   })
 })
