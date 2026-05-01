@@ -125,9 +125,9 @@ function optionToString(value: unknown): string {
 const multiSelectStyle: CSSProperties = {
   width: "100%",
   height: "100%",
-  border: "2px solid hsl(var(--ring, 217 91% 60%))",
-  borderRadius: "calc(var(--radius, 0.375rem) - 1px)",
-  background: "hsl(var(--background, 0 0% 100%))",
+  border: "2px solid var(--bc-grid-focus-ring)",
+  borderRadius: "calc(var(--bc-grid-radius) - 1px)",
+  background: "var(--bc-grid-bg)",
   color: "inherit",
   font: "inherit",
   paddingInline: "var(--bc-grid-cell-padding-x, 12px)",

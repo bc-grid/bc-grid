@@ -1582,6 +1582,11 @@ export type {
 import "@bc-grid/theming/styles.css"
 ```
 
+The shipped CSS treats host shadcn tokens as complete CSS colors, so Tailwind v4
+/ current shadcn OKLCH values work directly. Override `--bc-grid-*` tokens with
+complete CSS colors (`oklch(...)`, `hsl(...)`, hex, or system colors) when grid
+chrome needs to differ from the host app.
+
 ### `@bc-grid/aggregations`
 
 ```ts
