@@ -853,6 +853,45 @@ describe("createServerRowModel", () => {
     expect(model.cache.get("infinite:v1:start:0:size:1")?.rows).toEqual([{ id: "a", name: "old" }])
   })
 
+  test("rejecting a mutation after a server row update rolls back to the latest canonical row", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "infinite:v1:start:0:size:1",
+      rows: [{ amount: 1, id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    model.invalidate({ scope: "rows", rowIds: ["a"] }, { rowId: (row) => row.id })
+
+    const updated = model.applyRowUpdate({
+      rowId: (row) => row.id,
+      update: { row: { amount: 2, id: "a", name: "server" }, rowId: "a", type: "rowUpdated" },
+      viewKey: "v1",
+    })
+
+    expect(updated.updatedRowIds).toEqual(["a"])
+    expect(model.cache.get("infinite:v1:start:0:size:1")?.state).toBe("stale")
+    expect(model.cache.get("infinite:v1:start:0:size:1")?.rows).toEqual([
+      { amount: 2, id: "a", name: "optimistic" },
+    ])
+
+    const settled = model.settleMutation({
+      result: { mutationId: "m1", reason: "validation", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+
+    expect(settled.pending).toBe(false)
+    expect(model.cache.get("infinite:v1:start:0:size:1")?.state).toBe("stale")
+    expect(model.cache.get("infinite:v1:start:0:size:1")?.rows).toEqual([
+      { amount: 2, id: "a", name: "server" },
+    ])
+  })
+
   test("applies pending mutations to rows loaded after the mutation was queued", async () => {
     const model = createServerRowModel<Row>()
     const queued = model.queueMutation({
@@ -993,6 +1032,45 @@ describe("createServerRowModel", () => {
     ])
   })
 
+  test("settles identity remaps while preserving later pending mutations", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ amount: 1, id: "temp-a", name: "draft" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "optimistic name" }, mutationId: "m1", rowId: "temp-a" },
+      rowId: (row) => row.id,
+    })
+    model.queueMutation({
+      patch: { changes: { amount: 2 }, mutationId: "m2", rowId: "temp-a" },
+      rowId: (row) => row.id,
+    })
+
+    const settled = model.settleMutation({
+      result: {
+        mutationId: "m1",
+        previousRowId: "temp-a",
+        row: { amount: 1, id: "customer-1", name: "server name" },
+        rowId: "customer-1",
+        status: "accepted",
+      },
+      rowId: (row) => row.id,
+    })
+
+    expect(settled.pending).toBe(true)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([
+      { amount: 2, id: "customer-1", name: "server name" },
+    ])
+    expect(
+      model.getState({ mode: "paged", rowCount: 1, selection: emptySelection, view, viewKey: "v1" })
+        .pendingMutations,
+    ).toEqual(new Map([["m2", { changes: { amount: 2 }, mutationId: "m2", rowId: "customer-1" }]]))
+  })
+
   test("rolls back rejected mutations", () => {
     const model = createServerRowModel<Row>()
     model.cache.markLoaded({
@@ -1047,6 +1125,41 @@ describe("createServerRowModel", () => {
       model.getState({ mode: "paged", rowCount: 1, selection: emptySelection, view, viewKey: "v1" })
         .pendingMutations,
     ).toEqual(new Map([["m2", { changes: { amount: 2 }, mutationId: "m2", rowId: "a" }]]))
+  })
+
+  test("settles conflicts on stale blocks without dropping later optimistic overlays", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ amount: 1, id: "a", name: "old" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "first" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    model.queueMutation({
+      patch: { changes: { amount: 2 }, mutationId: "m2", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    model.invalidate({ scope: "rows", rowIds: ["a"] }, { rowId: (row) => row.id })
+
+    const result = model.settleMutation({
+      result: {
+        mutationId: "m1",
+        row: { amount: 10, id: "a", name: "server" },
+        status: "conflict",
+      },
+      rowId: (row) => row.id,
+    })
+
+    expect(result.pending).toBe(true)
+    expect(model.cache.get("paged:v1:page:0:size:1")?.state).toBe("stale")
+    expect(model.cache.get("paged:v1:page:0:size:1")?.rows).toEqual([
+      { amount: 2, id: "a", name: "server" },
+    ])
   })
 
   test("settles conflicts with the server canonical row", () => {
