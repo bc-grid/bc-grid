@@ -39,6 +39,12 @@
   --bc-grid-accent: var(--primary, var(--bc-grid-focus-ring));
   --bc-grid-accent-fg: var(--primary-foreground, hsl(0 0% 98%));
   --bc-grid-accent-soft: color-mix(in srgb, var(--bc-grid-accent) 14%, transparent);
+  --bc-grid-range-overlay-border: color-mix(
+    in srgb,
+    var(--bc-grid-accent) 72%,
+    var(--bc-grid-focus-ring)
+  );
+  --bc-grid-range-overlay-bg: color-mix(in srgb, var(--bc-grid-accent) 10%, transparent);
   --bc-grid-dirty: hsl(37 92% 50%);
   --bc-grid-search-match-bg: hsl(48 96% 89%);
   --bc-grid-search-match-fg: hsl(24 95% 24%);
@@ -544,6 +550,26 @@
 .bc-grid-cell-right {
   justify-content: flex-end;
   text-align: right;
+}
+
+.bc-grid-range-overlay-layer {
+  position: absolute;
+  inset: 0;
+  min-width: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bc-grid-range-overlay-layer-pinned {
+  z-index: 6;
+}
+
+.bc-grid-range-overlay {
+  box-sizing: border-box;
+  border: 2px solid var(--bc-grid-range-overlay-border);
+  background: var(--bc-grid-range-overlay-bg);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .bc-grid-filter-input,
@@ -2221,6 +2247,8 @@ table.bc-grid-detail-nested-grid {
     --bc-grid-accent: Highlight;
     --bc-grid-accent-fg: HighlightText;
     --bc-grid-accent-soft: Highlight;
+    --bc-grid-range-overlay-border: Highlight;
+    --bc-grid-range-overlay-bg: transparent;
     --bc-grid-dirty: ButtonText;
     --bc-grid-search-match-bg: Highlight;
     --bc-grid-search-match-fg: HighlightText;
