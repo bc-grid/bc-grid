@@ -1488,14 +1488,24 @@ Paged mode is a server-owned pagination contract. `loadPage` receives
 return only the rows for that page plus `totalRows` for the full matching server
 view. `<BcServerGrid rowModel="paged">` uses `totalRows` for the built-in pager
 and passes the returned page rows straight to the body; it does not apply
-client-side pagination or slice the page again. In business grids, the server is
-the source of truth for the global page window and the grid renders only the
-returned slice. Sort, filter, search, group, and visible-column changes reset
-the requested server page to `0`. Pagination,
+client-side pagination or slice the page again. This is intentionally different
+from client pagination: in server-paged grids the server is the source of truth
+for the global page window and the grid renders only the returned slice. Sort,
+filter, search, group, and visible-column changes reset the requested server
+page to `0`. Pagination,
 refresh, and active-view invalidation preserve the active query model and
 request the intended global server page. If an older load resolves after a newer
 view/page request starts, `<BcServerGrid>` ignores the stale response and
 diagnostics continue to describe the active request view.
+
+When `onServerRowMutation` is used with paged mode, optimistic edit patches are
+tracked by row identity in the server-row-model mutation queue, not by the
+current visible page. Changing pages or refetching the current page must not
+drop a pending edit; if the edited row is loaded again before the mutation
+settles, the pending patch is overlaid on the freshly returned server row. The
+consumer still owns persistence, rejection/conflict policy, and any explicit
+refresh after commit, while bc-grid owns preserving the pending optimistic row
+state across page transitions.
 
 The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are declared in `@bc-grid/core` with the rest of the server query contract and re-exported through `@bc-grid/react`. Runtime cache/state-machine helpers live in `@bc-grid/server-row-model`.
 
