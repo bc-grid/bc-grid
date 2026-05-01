@@ -287,6 +287,63 @@ describe("@bc-grid/theming", () => {
     expect(block).not.toMatch(/var\(--muted-foreground[,)]/)
   })
 
+  test("sidebar tool-panel controls consume `--bc-grid-input-border`", () => {
+    // Sidebar panels render search inputs, pin/select dropdowns, and
+    // inline filter editors inside a card-like surface. Keep their
+    // control borders on the input token, not the surrounding panel
+    // border token.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    expect(ruleFor(".bc-grid-columns-panel-search-input,\n.bc-grid-columns-panel-pin {")).toContain(
+      "border: 1px solid var(--bc-grid-input-border)",
+    )
+    expect(ruleFor(".bc-grid-pivot-panel-search-input,\n.bc-grid-pivot-panel-select {")).toContain(
+      "border: 1px solid var(--bc-grid-input-border)",
+    )
+    expect(
+      ruleFor(
+        ".bc-grid-filters-panel .bc-grid-filter-input,\n.bc-grid-filters-panel .bc-grid-filter-select,\n.bc-grid-filters-panel .bc-grid-filter-set-button {",
+      ),
+    ).toContain("border-color: var(--bc-grid-input-border)")
+  })
+
+  test("sidebar tool-panel chrome exposes shadcn-style state and surface hooks", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    expect(ruleFor(".bc-grid-sidebar-tab:focus-visible {")).toContain(
+      "outline: 2px solid var(--bc-grid-focus-ring)",
+    )
+    const selectedTab = ruleFor('.bc-grid-sidebar-tab[data-state="open"] {')
+    expect(selectedTab).toContain("background: var(--bc-grid-accent-soft)")
+    expect(selectedTab).toContain("box-shadow: inset 2px 0 0 var(--bc-grid-accent)")
+
+    const header = ruleFor(".bc-grid-sidebar-panel-header {")
+    expect(header).toContain("border-bottom: 1px solid var(--bc-grid-sidebar-border)")
+    expect(header).toContain("min-height: 2rem")
+
+    const emptyState = ruleFor(
+      ".bc-grid-columns-panel-empty,\n.bc-grid-filters-panel-empty,\n.bc-grid-pivot-panel-empty {",
+    )
+    expect(emptyState).toContain("border: 1px dashed var(--bc-grid-border)")
+    expect(emptyState).toContain("background: color-mix(in srgb, var(--bc-grid-muted) 42%")
+
+    const disabledActions = ruleFor(".bc-grid-pivot-panel-button:disabled,")
+    expect(disabledActions).toContain("color: var(--bc-grid-muted-fg)")
+    expect(disabledActions).toContain("opacity: 0.55")
+  })
+
   test("tooltip surface no longer chains shadcn fallbacks (single-source bridge)", () => {
     // Pre-refactor the tooltip carried triple-chained fallbacks like
     // `var(--bc-grid-context-menu-bg, var(--popover, var(--background, ...)))`.

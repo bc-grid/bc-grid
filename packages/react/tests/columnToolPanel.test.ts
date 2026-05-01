@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import type { BcColumnStateEntry } from "@bc-grid/core"
+import { type BcColumnStateEntry, emptyBcPivotState } from "@bc-grid/core"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
 import {
+  BcColumnsToolPanel,
   buildColumnToolPanelItems,
   filterColumnToolPanelItems,
   moveColumnInToolPanel,
@@ -8,7 +11,8 @@ import {
   setColumnHidden,
   setColumnPinned,
 } from "../src/columnToolPanel"
-import type { BcReactGridColumn } from "../src/types"
+import { defaultMessages } from "../src/gridInternals"
+import type { BcReactGridColumn, BcSidebarContext } from "../src/types"
 
 interface Row {
   account: string
@@ -21,6 +25,26 @@ const columns: readonly BcReactGridColumn<Row>[] = [
   { field: "balance", header: "Balance" },
   { field: "status", header: "Status", hidden: true },
 ]
+
+function sidebarContext(): BcSidebarContext<Row> {
+  return {
+    api: {} as BcSidebarContext<Row>["api"],
+    clearColumnFilterText: () => {},
+    columnFilterText: {},
+    columns,
+    columnState: [],
+    filterState: null,
+    groupableColumns: [],
+    groupBy: [],
+    messages: defaultMessages,
+    pivotState: emptyBcPivotState,
+    setColumnFilterText: () => {},
+    setColumnState: () => {},
+    setFilterState: () => {},
+    setGroupBy: () => {},
+    setPivotState: () => {},
+  }
+}
 
 describe("buildColumnToolPanelItems", () => {
   test("builds panel rows from column defaults and column state", () => {
@@ -108,5 +132,18 @@ describe("column tool panel state updates", () => {
       { columnId: "status", position: 2 },
     ])
     expect(moveColumnInToolPanel(items, [], "account", -1)).toEqual([])
+  })
+})
+
+describe("columns sidebar panel markup", () => {
+  test("renders the shared sidebar header and compact empty-state hooks", () => {
+    const markup = renderToStaticMarkup(
+      createElement(BcColumnsToolPanel<Row>, { context: sidebarContext() }),
+    )
+
+    expect(markup).toContain("bc-grid-sidebar-panel-header")
+    expect(markup).toContain("bc-grid-sidebar-panel-title")
+    expect(markup).toContain("bc-grid-columns-panel-group-zone")
+    expect(markup).toContain("bc-grid-columns-panel-empty")
   })
 })

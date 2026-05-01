@@ -52,7 +52,9 @@ export function BcColumnsToolPanel<TRow>({
 
   return (
     <section className="bc-grid-columns-panel">
-      <h2 className="bc-grid-sidebar-panel-title">Columns</h2>
+      <div className="bc-grid-sidebar-panel-header">
+        <h2 className="bc-grid-sidebar-panel-title">Columns</h2>
+      </div>
       <label className="bc-grid-columns-panel-search">
         <span className="bc-grid-columns-panel-label">Search columns</span>
         <input
