@@ -347,6 +347,23 @@ export function summarizeServerQuery(
   }
 }
 
+function serverRequestSequence(requestId: string): number | null {
+  const match = /-(\d+)$/.exec(requestId)
+  if (!match) return null
+  const sequence = Number(match[1])
+  return Number.isSafeInteger(sequence) ? sequence : null
+}
+
+function isOlderServerRequest(
+  next: ServerPagedQuery | ServerBlockQuery | ServerTreeQuery,
+  current?: ServerQueryDiagnostics,
+): boolean {
+  if (!current) return false
+  const nextSequence = serverRequestSequence(next.requestId)
+  const currentSequence = serverRequestSequence(current.requestId)
+  return nextSequence != null && currentSequence != null && nextSequence < currentSequence
+}
+
 export function summarizeServerCache<TRow>(
   blocks: ReadonlyMap<ServerBlockKey, ServerCacheBlock<TRow>>,
 ): ServerCacheDiagnostics {
@@ -1646,6 +1663,7 @@ class ServerRowModelController<TRow> {
     rowCount?: number | "unknown"
     status: ServerLoadDiagnostics["status"]
   }): void {
+    if (isOlderServerRequest(input.query, this.#lastLoad.query)) return
     this.#lastLoad = {
       blockKey: input.blockKey,
       query: summarizeServerQuery(input.query),

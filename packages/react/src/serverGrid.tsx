@@ -186,6 +186,13 @@ export function shouldResetServerPagedPage(input: {
   return input.pageIndex > 0 && input.previousViewKey !== input.viewKey
 }
 
+export function isActiveServerPagedResponse(input: {
+  activeBlockKey: ServerBlockKey | null
+  responseBlockKey: ServerBlockKey
+}): boolean {
+  return input.activeBlockKey === input.responseBlockKey
+}
+
 export function resolveServerVisibleColumns<TRow>(
   columns: readonly BcReactGridColumn<TRow>[],
   columnState: readonly BcColumnStateEntry[],
@@ -770,13 +777,22 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
 
     request.promise
       .then((nextResult) => {
-        if (latestBlockKeyRef.current !== request.blockKey) return
+        if (
+          !isActiveServerPagedResponse({
+            activeBlockKey: latestBlockKeyRef.current,
+            responseBlockKey: request.blockKey,
+          })
+        )
+          return
         setResult(nextResult)
         setLoading(false)
       })
       .catch((nextError: unknown) => {
         if (
-          latestBlockKeyRef.current !== request.blockKey ||
+          !isActiveServerPagedResponse({
+            activeBlockKey: latestBlockKeyRef.current,
+            responseBlockKey: request.blockKey,
+          }) ||
           modelRef.current.isAbortError(nextError)
         )
           return
@@ -804,9 +820,9 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
         rowCount,
         selection: toServerSelection(undefined, view),
         view,
-        viewKey: result?.viewKey ?? viewKey,
+        viewKey,
       }),
-    [props.rowModel, result?.viewKey, rowCount, view, viewKey],
+    [props.rowModel, rowCount, view, viewKey],
   )
   const getDiagnostics = useCallback(
     (selection?: BcSelection) =>
@@ -815,9 +831,9 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
         rowCount,
         selection: toServerSelection(selection, view),
         view,
-        viewKey: result?.viewKey ?? viewKey,
+        viewKey,
       }),
-    [props.rowModel, result?.viewKey, rowCount, view, viewKey],
+    [props.rowModel, rowCount, view, viewKey],
   )
 
   return {
