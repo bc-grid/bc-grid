@@ -860,6 +860,75 @@ describe("server paged visible columns", () => {
     expect(capturedQuery?.view.visibleColumns).toEqual(["id", "status"])
   })
 
+  test("visible-column view changes reset the page and keep server rows unsliced", async () => {
+    const model = createServerRowModel<Row>()
+    const baseView = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const nextVisibleColumns = resolveServerVisibleColumns(columns, [
+      { columnId: "name", hidden: true },
+      { columnId: "status", hidden: false },
+    ])
+    const nextView = model.createViewState({
+      groupBy: [],
+      searchText: "active",
+      sort: [{ columnId: "status", direction: "asc" }],
+      visibleColumns: nextVisibleColumns,
+    })
+    const pageIndex = resolveServerPagedRequestPage({
+      pageIndex: 5,
+      previousViewKey: model.createViewKey(baseView),
+      viewKey: model.createViewKey(nextView),
+    })
+    const serverRows = pageRows.slice(0, 3)
+    let capturedQuery: ServerPagedQuery | undefined
+
+    const result = await model.loadPagedPage({
+      loadPage: async (query) => {
+        capturedQuery = query
+        return {
+          pageIndex: query.pageIndex,
+          pageSize: query.pageSize,
+          rows: serverRows,
+          totalRows: 103,
+          viewKey: query.viewKey,
+        }
+      },
+      pageIndex,
+      pageSize: 25,
+      view: nextView,
+    }).promise
+    const shell = resolveServerPagedGridShell({
+      pageIndex,
+      pageSize: 25,
+      pagination: true,
+      rows: result.rows,
+      totalRows: result.totalRows,
+    })
+
+    expect(pageIndex).toBe(0)
+    expect(capturedQuery?.view.visibleColumns).toEqual(["id", "status"])
+    expect(capturedQuery).toMatchObject({
+      mode: "paged",
+      pageIndex: 0,
+      pageSize: 25,
+      view: {
+        search: "active",
+        sort: [{ columnId: "status", direction: "asc" }],
+      },
+    })
+    expect(shell.gridPagination).toBe(false)
+    expect(shell.gridRows).toBe(result.rows)
+    expect(shell.gridRows).toEqual(serverRows)
+    expect(shell.paginationWindow).toMatchObject({
+      page: 0,
+      pageCount: 5,
+      totalRows: 103,
+    })
+  })
+
   test("ignores non-visibility column state when building the server view", () => {
     expect(
       resolveServerVisibleColumns(columns, [

@@ -1,6 +1,6 @@
 # Server-Backed Edit Grid Contract
 
-**Status:** v0.3 planning contract
+**Status:** v0.4-alpha contract
 **Last updated:** 2026-05-01
 **Audience:** bc-grid consumers wiring business grids such as bsncraft customers
 
@@ -46,6 +46,14 @@ the requested order. Paged results return `totalRows`; infinite results return
 `totalRows` or `hasMore`; tree results return child counts for the requested
 parent. When the backing store has a revision or ETag, include it on the result
 or row so edit commits can send a `baseRevision`.
+
+For `rowModel="paged"`, the returned `rows` are only the current page window.
+`totalRows` is the global count for the active server query after sort, filter,
+search, grouping, and visible-column projection have been applied. bc-grid uses
+that total for the pager and renders the returned page rows directly; it does
+not slice those rows again on the client. A bsncraft customers endpoint should
+therefore return exactly the requested page plus the full matching customer
+count.
 
 Row identity is required. `rowId(row)` must resolve to the stable business row
 ID, not the row index inside a page or block. If a create or merge causes the
@@ -159,6 +167,30 @@ A business app wiring a customers grid must provide:
 - Error mapping: convert validation, permission, conflict, and transport errors
   into rejected edit promises with user-visible messages.
 
+## Page, Refresh, and Stale Response Policy
+
+Sort, filter, search, group-by, and visible-column changes create a new server
+view and reset paged grids to page `0`. User pagination, explicit refresh, and
+active-view invalidation preserve the current view and request the intended
+global page. If a slower older request resolves after a newer view/page request
+has started, `<BcServerGrid>` ignores that stale response; diagnostics and
+rendered rows continue to describe the active request.
+
+Pending optimistic edits are keyed by row identity, not by the loaded page. If a
+customer edit is pending while the user changes sort/filter/search, moves to
+another page, or refreshes the page, the mutation queue remains active. When the
+same row is loaded again, bc-grid overlays the pending patch on top of the
+fresh server row until the mutation settles.
+
+A consumer should choose a reload policy after each accepted mutation:
+
+- If the edited fields cannot change membership in the active query, return the
+  canonical row and let the cache reconcile it.
+- If the edit can affect sort/filter/search/group membership, settle the
+  mutation and invalidate the row or view.
+- If the server cannot cheaply know the affected block, invalidate the active
+  view or expose a user refresh action.
+
 ## Optimistic, Accepted, Rejected, and Conflict Results
 
 For a normal accepted update where the row still belongs in the current view,
@@ -201,6 +233,12 @@ throw from the callback. `<BcServerGrid>` settles the mutation as rejected and
 rejects the edit promise, so the editing overlay rolls back the cell. If the
 server reports that the row has changed since the user began editing, invalidate
 the row or the view so the next load displays current data.
+
+Validation belongs to the consumer endpoint. For bsncraft-style customer grids,
+return field-specific validation copy through `reason` when possible, and keep
+domain actions such as permission prompts, duplicate customer handling, or merge
+conflict flows outside bc-grid. The grid guarantees rollback mechanics; the
+application owns the message and recovery path.
 
 For conflict results, prefer one of two explicit policies:
 

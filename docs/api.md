@@ -1635,6 +1635,16 @@ A grouping change on the client resets the requested server page to
 `query.viewKey` includes the group set so a stale response that
 arrives after a user changes the grouping is dropped.
 
+For editable customer-style grids, keep this distinction in the mutation flow:
+pending optimistic edits are overlaid by row ID across page changes, page
+refreshes, and sort/filter/search/view refetches. A late response from an older
+request is ignored once a newer request is active, so it cannot overwrite the
+newer page or remove pending optimistic state. After an accepted save, return
+the canonical row when the row still belongs in the loaded page; invalidate the
+row or full view when the edit can change sort/filter/search/group membership.
+Rejected and conflict results clear the pending patch and roll back to the last
+canonical server row unless the conflict result supplies a server-winning row.
+
 When `onServerRowMutation` is used with paged mode, optimistic edit patches are
 tracked by row identity in the server-row-model mutation queue, not by the
 current visible page. Changing pages, refetching the current page, or changing
@@ -1663,7 +1673,11 @@ optimistic server-row-model mutation, awaits the consumer's persistence result,
 settles the mutation, and rejects the edit overlay for rejected/conflict
 results. The consumer still owns server validation copy, permission/conflict
 policy, and deciding when an accepted edit should invalidate or reload the
-current server view. The contract is documented in
+current server view. For bsncraft-style customer grids, the consumer endpoint
+should return validation messages through rejected mutation results, use
+`totalRows` as the global server count for the active customer query, and expose
+an explicit refresh or invalidate action for reconciliation after saves that can
+move rows between pages. The contract is documented in
 [`docs/design/server-edit-grid-contract.md`](./design/server-edit-grid-contract.md).
 The consumer-facing guide is in
 [`apps/docs/src/pages/server-edit-grid.astro`](../apps/docs/src/pages/server-edit-grid.astro),

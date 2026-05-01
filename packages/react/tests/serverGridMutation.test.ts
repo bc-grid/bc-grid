@@ -12,6 +12,7 @@ import {
   commitServerEditMutation,
   createDefaultServerEditMutationPatch,
   createServerEditMutationError,
+  resolveServerPagedRequestPage,
 } from "../src/serverGrid"
 
 interface Row {
@@ -503,5 +504,135 @@ describe("server edit mutation helpers", () => {
     expect(model.cache.get(filteredRequest.blockKey)?.rows).toEqual([
       { id: "customer-1", name: "Acme Inc." },
     ])
+  })
+
+  test("keeps pending edits through a reset-page refetch and ignores late stale responses", async () => {
+    const model = createServerRowModel<Row>()
+    const baseView = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name"],
+    })
+    const baseViewKey = model.createViewKey(baseView)
+    const basePage = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "customer-1", name: "Acme Inc." }],
+        totalRows: 75,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 2,
+      pageSize: 25,
+      view: baseView,
+      viewKey: baseViewKey,
+    })
+    await basePage.promise
+
+    const serverSettle = deferred<ServerMutationResult<Row>>()
+    const commit = commitServerEditMutation({
+      event: editEvent,
+      mutationId: "mutation-reset-refetch",
+      onServerRowMutation: () => serverSettle.promise,
+      queueServerRowMutation: (patch) => model.queueMutation({ patch, rowId: (row) => row.id }),
+      settleServerRowMutation: (result) => model.settleMutation({ result, rowId: (row) => row.id }),
+    })
+    expect(model.cache.get(basePage.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+    ])
+
+    const activeView = model.createViewState({
+      filter: activeCustomerFilter,
+      groupBy: [],
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const activeViewKey = model.createViewKey(activeView)
+    const resetPage = resolveServerPagedRequestPage({
+      pageIndex: 2,
+      previousViewKey: baseViewKey,
+      viewKey: activeViewKey,
+    })
+    expect(resetPage).toBe(0)
+
+    const staleLoad = deferred<ServerPagedResult<Row>>()
+    const activeLoad = deferred<ServerPagedResult<Row>>()
+    const staleRequest = model.loadPagedPage({
+      loadPage: () => staleLoad.promise,
+      pageIndex: 2,
+      pageSize: 25,
+      view: baseView,
+      viewKey: baseViewKey,
+    })
+    staleRequest.promise.catch(() => {})
+    const activeRequest = model.loadPagedPage({
+      loadPage: () => activeLoad.promise,
+      pageIndex: resetPage,
+      pageSize: 25,
+      view: activeView,
+      viewKey: activeViewKey,
+    })
+    model.abortExcept(activeRequest.blockKey)
+
+    activeLoad.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "customer-1", name: "Acme Inc." }],
+      totalRows: 1,
+      viewKey: activeViewKey,
+    })
+    expect((await activeRequest.promise).rows).toEqual([{ id: "customer-1", name: "Acme Co." }])
+    expect(model.cache.get(activeRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+    ])
+    expect(
+      model.getState({
+        mode: "paged",
+        rowCount: 1,
+        selection: emptySelection,
+        view: activeView,
+        viewKey: activeViewKey,
+      }).pendingMutations.size,
+    ).toBe(1)
+
+    staleLoad.resolve({
+      pageIndex: 2,
+      pageSize: 25,
+      rows: [{ id: "customer-1", name: "stale server row" }],
+      totalRows: 75,
+      viewKey: baseViewKey,
+    })
+    await expect(staleRequest.promise).rejects.toThrow("Aborted")
+    const staleBlock = model.cache.get(staleRequest.blockKey)
+    if (staleBlock) {
+      expect(staleBlock.state).not.toBe("loaded")
+      expect(staleBlock.rows).not.toContainEqual({
+        id: "customer-1",
+        name: "stale server row",
+      })
+    }
+    expect(model.cache.get(activeRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+    ])
+
+    serverSettle.resolve({
+      mutationId: "mutation-reset-refetch",
+      reason: "Name failed server validation.",
+      status: "rejected",
+    })
+    await expect(commit).rejects.toThrow("Name failed server validation.")
+
+    expect(model.cache.get(activeRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Inc." },
+    ])
+    expect(
+      model.getState({
+        mode: "paged",
+        rowCount: 1,
+        selection: emptySelection,
+        view: activeView,
+        viewKey: activeViewKey,
+      }).pendingMutations.size,
+    ).toBe(0)
   })
 })
