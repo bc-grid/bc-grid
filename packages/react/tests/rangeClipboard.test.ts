@@ -208,16 +208,38 @@ describe("range TSV paste helpers", () => {
     expect(parsed.diagnostics).toEqual([])
   })
 
-  test("parseRangeTsv preserves empty cells, ragged rows, and trailing tabs", () => {
-    expect(parseRangeTsv("A\t\tC\n\tB\t\nD").cells).toEqual([["A", "", "C"], ["", "B", ""], ["D"]])
+  test("parseRangeTsv preserves empty cells and reports ragged rows", () => {
+    const parsed = parseRangeTsv("A\t\tC\n\tB\t\nD")
+
+    expect(parsed.cells).toEqual([["A", "", "C"], ["", "B", ""], ["D"]])
+    expect(parsed.diagnostics).toEqual([
+      {
+        code: "ragged-row",
+        rowIndex: 2,
+        columnIndex: 1,
+        charIndex: 10,
+        actualColumnCount: 1,
+        expectedColumnCount: 3,
+      },
+    ])
   })
 
   test("parseRangeTsv drops only the final row created by a trailing row delimiter", () => {
     expect(parseRangeTsv("A\n\nB\n").cells).toEqual([["A"], [""], ["B"]])
   })
 
-  test("parseRangeTsv treats empty clipboard text as a single empty cell", () => {
-    expect(parseRangeTsv("")).toEqual({ cells: [[""]], diagnostics: [] })
+  test("parseRangeTsv reports empty clipboard text as a single empty cell diagnostic", () => {
+    expect(parseRangeTsv("")).toEqual({
+      cells: [[""]],
+      diagnostics: [
+        {
+          code: "empty-paste",
+          rowIndex: 0,
+          columnIndex: 0,
+          charIndex: 0,
+        },
+      ],
+    })
   })
 
   test("parseRangeTsv reports malformed quotes without throwing", () => {
@@ -261,6 +283,49 @@ describe("range TSV paste helpers", () => {
     expect(parsed.cells).toHaveLength(200)
     expect(parsed.cells[0]).toHaveLength(20)
     expect(parsed.cells[199]?.[19]).toBe("199:19")
+  })
+
+  test("parseRangeTsv reports and truncates payloads over the max cell limit", () => {
+    const parsed = parseRangeTsv("A\tB\nC\tD", { maxCells: 3 })
+
+    expect(parsed.cells).toEqual([["A", "B"], ["C"]])
+    expect(parsed.diagnostics).toEqual([
+      {
+        code: "max-cell-limit-exceeded",
+        rowIndex: 1,
+        columnIndex: 1,
+        charIndex: 7,
+        cellCount: 4,
+        maxCells: 3,
+      },
+      {
+        code: "ragged-row",
+        rowIndex: 1,
+        columnIndex: 1,
+        charIndex: 7,
+        actualColumnCount: 1,
+        expectedColumnCount: 2,
+      },
+    ])
+  })
+
+  test("buildRangeTsvPasteApplyPlan rejects parser diagnostics before producing patches", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "name", "r1", "name"),
+      tsv: "",
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "parse-error",
+        message: "TSV paste is empty.",
+        diagnostic: { code: "empty-paste" },
+      },
+    })
   })
 
   test("buildRangeTsvPastePlan maps parsed cells from the anchor", () => {

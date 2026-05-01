@@ -20,6 +20,9 @@ interface BuildRangeClipboardParams<TRow> {
 }
 
 export type RangeTsvParseDiagnosticCode =
+  | "empty-paste"
+  | "max-cell-limit-exceeded"
+  | "ragged-row"
   | "unexpected-quote"
   | "unexpected-character-after-closing-quote"
   | "unterminated-quoted-cell"
@@ -29,11 +32,19 @@ export interface RangeTsvParseDiagnostic {
   rowIndex: number
   columnIndex: number
   charIndex: number
+  actualColumnCount?: number
+  cellCount?: number
+  expectedColumnCount?: number
+  maxCells?: number
 }
 
 export interface RangeTsvParseResult {
   cells: string[][]
   diagnostics: RangeTsvParseDiagnostic[]
+}
+
+export interface RangeTsvParseOptions {
+  maxCells?: number
 }
 
 export interface BuildRangeTsvPastePlanParams {
@@ -250,7 +261,10 @@ export function cellsToHtmlTable(rows: readonly (readonly string[])[]): string {
  * quote usage is parsed best-effort and returned as diagnostics so future paste
  * code can reject or warn without this helper throwing.
  */
-export function parseRangeTsv(input: string): RangeTsvParseResult {
+export function parseRangeTsv(
+  input: string,
+  options: RangeTsvParseOptions = {},
+): RangeTsvParseResult {
   const cells: string[][] = []
   const diagnostics: RangeTsvParseDiagnostic[] = []
   let row: string[] = []
@@ -258,31 +272,56 @@ export function parseRangeTsv(input: string): RangeTsvParseResult {
   let inQuotes = false
   let afterClosingQuote = false
   let endedWithRowDelimiter = false
+  let cellCount = 0
+  let stoppedForMaxCells = false
 
   const currentColumnIndex = () => row.length
-  const pushDiagnostic = (code: RangeTsvParseDiagnosticCode, charIndex: number) => {
+  const pushDiagnostic = (
+    code: RangeTsvParseDiagnosticCode,
+    charIndex: number,
+    details: Omit<RangeTsvParseDiagnostic, "charIndex" | "code" | "columnIndex" | "rowIndex"> = {},
+  ) => {
     diagnostics.push({
       code,
       rowIndex: cells.length,
       columnIndex: currentColumnIndex(),
       charIndex,
+      ...details,
     })
   }
-  const finishCell = () => {
+  const pushCell = (charIndex: number): boolean => {
+    const maxCells = options.maxCells
+    if (maxCells != null && cellCount >= maxCells) {
+      if (!stoppedForMaxCells) {
+        pushDiagnostic("max-cell-limit-exceeded", charIndex, {
+          cellCount: cellCount + 1,
+          maxCells,
+        })
+      }
+      stoppedForMaxCells = true
+      return false
+    }
     row.push(cell)
+    cellCount += 1
+    return true
+  }
+  const finishCell = (charIndex: number): boolean => {
+    if (!pushCell(charIndex)) return false
     cell = ""
     inQuotes = false
     afterClosingQuote = false
     endedWithRowDelimiter = false
+    return true
   }
-  const finishRow = () => {
-    row.push(cell)
+  const finishRow = (charIndex: number): boolean => {
+    if (!pushCell(charIndex)) return false
     cells.push(row)
     row = []
     cell = ""
     inQuotes = false
     afterClosingQuote = false
     endedWithRowDelimiter = true
+    return true
   }
 
   for (let index = 0; index < input.length; index += 1) {
@@ -303,12 +342,12 @@ export function parseRangeTsv(input: string): RangeTsvParseResult {
     }
 
     if (char === "\t") {
-      finishCell()
+      if (!finishCell(index)) break
       continue
     }
 
     if (char === "\n" || char === "\r") {
-      finishRow()
+      if (!finishRow(index)) break
       if (char === "\r" && next === "\n") index += 1
       continue
     }
@@ -339,9 +378,37 @@ export function parseRangeTsv(input: string): RangeTsvParseResult {
     pushDiagnostic("unterminated-quoted-cell", input.length)
   }
 
-  if (!endedWithRowDelimiter || row.length > 0 || cell.length > 0) {
-    row.push(cell)
-    cells.push(row)
+  if (stoppedForMaxCells) {
+    if (row.length > 0) cells.push(row)
+  } else if (!endedWithRowDelimiter || row.length > 0 || cell.length > 0) {
+    if (pushCell(input.length)) cells.push(row)
+    else if (row.length > 0) cells.push(row)
+  }
+
+  if (cells.length === 0) {
+    cells.push([""])
+  }
+
+  if (cells.every((candidateRow) => candidateRow.every((value) => value.length === 0))) {
+    diagnostics.push({
+      code: "empty-paste",
+      rowIndex: 0,
+      columnIndex: 0,
+      charIndex: 0,
+    })
+  }
+
+  const expectedColumnCount = cells[0]?.length ?? 0
+  for (const [rowIndex, candidateRow] of cells.entries()) {
+    if (candidateRow.length === expectedColumnCount) continue
+    diagnostics.push({
+      code: "ragged-row",
+      rowIndex,
+      columnIndex: candidateRow.length,
+      charIndex: input.length,
+      actualColumnCount: candidateRow.length,
+      expectedColumnCount,
+    })
   }
 
   return { cells, diagnostics }
@@ -705,6 +772,15 @@ async function validateRangePasteValue<TRow>(
 }
 
 function pasteDiagnosticMessage(diagnostic: RangeTsvParseDiagnostic): string {
+  if (diagnostic.code === "empty-paste") {
+    return "TSV paste is empty."
+  }
+  if (diagnostic.code === "max-cell-limit-exceeded") {
+    return "TSV paste exceeds the maximum supported cell count."
+  }
+  if (diagnostic.code === "ragged-row") {
+    return "TSV paste rows have different column counts."
+  }
   if (diagnostic.code === "unterminated-quoted-cell") {
     return "TSV paste contains an unterminated quoted cell."
   }
