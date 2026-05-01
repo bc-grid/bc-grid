@@ -1,7 +1,10 @@
 import type {
+  BcAggregation,
   BcColumnStateEntry,
   BcGridFilter,
   BcGridSort,
+  BcPivotState,
+  BcPivotValue,
   ColumnId,
   ServerColumnFilter,
   ServerFilter,
@@ -22,6 +25,7 @@ export interface PersistedGridState {
   pageSize?: number | undefined
   density?: BcGridDensity | undefined
   groupBy?: readonly ColumnId[] | undefined
+  pivotState?: BcPivotState | undefined
   filter?: BcGridFilter | undefined
   sidebarPanel?: string | null | undefined
 }
@@ -62,6 +66,7 @@ export function readPersistedGridState(
     pageSize: readJson(storage, gridStorageKey(gridId, "pageSize"), parsePageSize),
     density: readJson(storage, gridStorageKey(gridId, "density"), parseDensity),
     groupBy: readJson(storage, gridStorageKey(gridId, "groupBy"), parseGroupBy),
+    pivotState: readJson(storage, gridStorageKey(gridId, "pivotState"), parsePivotState),
     filter: readJson(storage, gridStorageKey(gridId, "filter"), parseFilterState),
     sidebarPanel: readJson(storage, gridStorageKey(gridId, "sidebarPanel"), parseSidebarPanel),
   }
@@ -78,6 +83,7 @@ export function writePersistedGridState(
   writeJson(storage, gridStorageKey(gridId, "pageSize"), state.pageSize)
   writeJson(storage, gridStorageKey(gridId, "density"), state.density)
   writeJson(storage, gridStorageKey(gridId, "groupBy"), state.groupBy)
+  writeJson(storage, gridStorageKey(gridId, "pivotState"), state.pivotState)
   writeJson(storage, gridStorageKey(gridId, "filter"), state.filter)
   writeJson(storage, gridStorageKey(gridId, "sidebarPanel"), state.sidebarPanel)
 }
@@ -328,6 +334,52 @@ function parseGroupBy(value: unknown): ColumnId[] | undefined {
   return value.every((columnId) => typeof columnId === "string") ? value : undefined
 }
 
+function parsePivotState(value: unknown): BcPivotState | undefined {
+  if (!isRecord(value)) return undefined
+  const rowGroups = parseGroupBy(value.rowGroups)
+  const colGroups = parseGroupBy(value.colGroups)
+  const values = parsePivotValues(value.values)
+  if (!rowGroups || !colGroups || !values) return undefined
+
+  const state: BcPivotState = { rowGroups, colGroups, values }
+  const subtotals = parsePivotSubtotals(value.subtotals)
+  if (subtotals) state.subtotals = subtotals
+  return state
+}
+
+function parsePivotValues(value: unknown): BcPivotValue[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.flatMap((entry) => {
+    const parsed = parsePivotValue(entry)
+    return parsed ? [parsed] : []
+  })
+}
+
+function parsePivotValue(value: unknown): BcPivotValue | undefined {
+  if (!isRecord(value) || typeof value.columnId !== "string" || value.columnId.length === 0) {
+    return undefined
+  }
+
+  const entry: BcPivotValue = { columnId: value.columnId }
+  const aggregation = parsePivotAggregation(value.aggregation)
+  if (aggregation) entry.aggregation = aggregation
+  if (typeof value.label === "string" && value.label.trim()) entry.label = value.label
+  return entry
+}
+
+function parsePivotAggregation(value: unknown): BcAggregation | undefined {
+  if (!isRecord(value)) return undefined
+  return isBuiltInAggregationType(value.type) ? { type: value.type } : undefined
+}
+
+function parsePivotSubtotals(value: unknown): BcPivotState["subtotals"] | undefined {
+  if (!isRecord(value)) return undefined
+  const subtotals: NonNullable<BcPivotState["subtotals"]> = {}
+  if (typeof value.rows === "boolean") subtotals.rows = value.rows
+  if (typeof value.cols === "boolean") subtotals.cols = value.cols
+  return "rows" in subtotals || "cols" in subtotals ? subtotals : undefined
+}
+
 function parseSidebarPanel(value: unknown): string | null | undefined {
   if (value === null) return null
   if (typeof value !== "string") return undefined
@@ -345,6 +397,14 @@ function isColumnFilterType(value: unknown): value is ServerColumnFilter["type"]
     value === "set" ||
     value === "boolean" ||
     value === "custom"
+  )
+}
+
+function isBuiltInAggregationType(
+  value: unknown,
+): value is Exclude<BcAggregation["type"], "custom"> {
+  return (
+    value === "sum" || value === "count" || value === "avg" || value === "min" || value === "max"
   )
 }
 

@@ -197,6 +197,7 @@ Specs: `docs/design/aggregation-rfc.md` (PR #51) + `pivot-rfc.md` (PR #52).
 - `[done: c2 #52]` **pivot-rfc** — engine vs React split; drag-to-pivot UI; row/col/values dimensions; treegrid output. **Effort**: 1 day.
 - `[done: x2 #118]` **pivot-engine** — engine layer in `@bc-grid/aggregations` (or a separate `@bc-grid/pivots` if the RFC decides to split). Computes pivot table from rows + dimensions. **Effort**: L.
 - `[review: worker5 #240]` **pivot-ui-drag-zones** — Pivot tool panel in the sidebar (Track 5) with row/col/values drop zones. **Effort**: M.
+- `[in-flight: worker1]` **pivot-state-gridid-persistence-v030** — persist the public `pivotState` in `gridId` localStorage alongside grouping/sidebar state so saved pivot panel choices survive reloads. **Branch**: `agent/worker1/pivot-state-gridid-persistence-v030`. **Effort**: XS.
 - `[ready]` **pivot-row-col-groups** — render the pivoted output: row-group axis, col-group axis, value cells. **Effort**: M.
 
 #### Track 5 — Chrome (Q6 pulled forward)
