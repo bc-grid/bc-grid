@@ -37,8 +37,8 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Feature | Status | Example entry | API entry point |
 | --- | --- | --- | --- |
 | Sort, resize, pin | Available | AR Customers headers | `sortable`, `resizable`, `pinned` |
-| Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
-| Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
+| Inline filters (quick filter row) | Available | AR Customers filter row — single value input per column | `filter`, `showFilterRow` |
+| Popup filters (header funnel) | Available | `?filterPopup=1` — advanced operators, ranges, set pickers | `filter.variant = "popup"` |
 | Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
 | Columns panel | Available | Tool panels control or `?toolPanel=columns` | `sidebar={["columns"]}` |
 | Filters panel | Available | Tool panels control or `?toolPanel=filters` | `sidebar={["filters"]}` |
@@ -807,6 +807,77 @@ not pass `searchText` and `defaultSearchText` to the same grid.
 ### 4.4 Filter shape (frozen at v0.1)
 
 Per-column `filter` declares **what kind of filter UI to show** and what parser to use; the actual filter state is in `BcGridFilter` (which mirrors `ServerFilter` from `server-query-rfc` for parity with server grids).
+
+#### Choosing a filter surface — inline vs popup vs panel
+
+bc-grid ships three filter surfaces. They share one persistence shape (`BcGridFilter`), so a value typed in any surface round-trips cleanly into the others without re-encoding. Pick the surface that fits the column and the host's interaction model — they're not exclusive, and a single grid can mix all three.
+
+| Surface | Lives in | Best for | Configure with |
+| --- | --- | --- | --- |
+| **Inline filter row** | A row beneath the header. | **Quick filters** — type a value and watch the row set narrow. The row is the high-frequency entry point: it's always visible (when `showFilterRow !== false`) and the user can scan and edit several columns at once. | Default for any `filter: { type: … }` without `variant: "popup"`. Combine with `showFilterRow` to add a toolbar toggle. |
+| **Popup filter** | A floating dialog anchored to a per-column funnel button on the header. | **Advanced operators and modifiers** that don't fit a quick-filter row — `>`, `<=`, `between`, regex, case-sensitive, set-of-values pickers, date `between`. Reachable directly from the header, opens in place, returns focus to the trigger on dismiss. | `filter: { type: …, variant: "popup" }`. The header gains a funnel button; the inline cell stays empty for that column. |
+| **Filters tool panel** | A sidebar panel (`sidebar={["filters"]}`). | **Reading the filter set at a glance** plus advanced editing for any column. Each active filter renders an "active filter" card with the operator label and a value summary; the card expands inline to the full editor. | `sidebar={[…, "filters"]}` (or `?toolPanel=filters` in the examples app). |
+
+The three surfaces edit the same underlying state — `BcGridFilter` (controlled) or the internal `columnFilterText` map (uncontrolled). A filter typed in the inline row is immediately visible in the popup and the panel, and clearing in any surface clears across all three.
+
+##### Recommended shadcn-first pattern
+
+Follow this default and only deviate when the column or host workflow forces a deviation:
+
+1. **Default to the inline row for the high-frequency columns.** Free-text search, name lookup, ID match, status `=`, simple date filtering — everything a user types without thinking about the operator.
+2. **Promote columns with advanced operators / set pickers to popup variant.** Numeric ranges with `between`, regex patterns, multi-select status filters, dates with `between`, anything that needs more than one input or a modifier toggle. Setting `variant: "popup"` keeps the column reachable from the header funnel without crowding the inline row.
+3. **Surface the Filters panel for "review what's filtered".** Add `"filters"` to `sidebar` so a user with several active filters can see them in one place, edit any of them, or clear individually. Especially useful on data-heavy grids where the user composes 3+ filters.
+4. **Mix freely per column.** A grid commonly has text columns inline, a status column with `variant: "popup"` for the set picker, and the Filters panel always available in the sidebar. The three surfaces are designed to compose.
+
+```tsx
+import { BcGrid } from "@bc-grid/react"
+
+const columns: BcGridColumn<Customer>[] = [
+  { field: "name", header: "Name", filter: { type: "text" } },              // inline quick filter
+  { field: "code", header: "Code", filter: { type: "text" } },               // inline quick filter
+  { field: "balance", header: "Balance", filter: { type: "number-range" } }, // inline range (compact two inputs)
+  {
+    field: "status",
+    header: "Status",
+    filter: { type: "set", variant: "popup" },                                // header funnel → popup
+  },
+  {
+    field: "lastInvoiceAt",
+    header: "Last invoice",
+    filter: { type: "date", variant: "popup" },                               // header funnel → popup (between, before, after)
+  },
+  { field: "notes", header: "Notes", filter: false },                         // never filterable
+]
+
+<BcGrid
+  columns={columns}
+  data={rows}
+  rowId={(row) => row.id}
+  sidebar={["columns", "filters"]} // open the Filters panel from the rail
+/>
+```
+
+##### When the inline row is empty
+
+A few configurations leave the inline cell intentionally empty so the row stays compact:
+
+- `filter: false` — the column opts out of filtering entirely.
+- `filter: { variant: "popup" }` — the editor lives in the popup; the funnel button on the header is the entry point.
+- `filter: { type: "set" }` (without `variant: "popup"`) — multi-value pickers don't fit the quick-filter row. Add `variant: "popup"` to surface the funnel, or rely on the Filters tool panel.
+- A column with no `field`, no `valueGetter`, and no explicit `filter` config — action / render-only columns where there's no cell value to filter against.
+
+The popup-variant funnel button stays reachable on the header even when `showFilterRow={false}`, so a host can hide the inline row entirely without losing access to popup filters.
+
+##### When to wire the Filters panel
+
+The panel pays for itself whenever the grid carries enough columns (or enough simultaneous filters) that a row scan is the wrong tool for "what's filtered right now?". Common triggers:
+
+- Server grids (`<BcServerGrid>`) where the active filter shape determines the next page request — surfacing the filter set in one card list is faster than scanning the filter row.
+- Workflows where the user composes 3+ filters at once and wants a single "Clear all" button.
+- Hosts with a saved-views toolbar — the panel is where users edit one filter at a time before saving.
+
+The panel is opt-in via `sidebar={[…, "filters"]}` and stays out of the way until the user opens the Filters tab on the sidebar rail.
+
 
 Built-in filter types: `text`, `number`, `number-range`, `date`, `date-range`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. The `text` type emits `op: "contains" | "starts-with" | "ends-with" | "equals"` plus optional modifier flags `caseSensitive?: true` and `regex?: true` on the resulting `ServerColumnFilter`. The default `op: "contains"` with no modifiers is case-insensitive substring matching (the v0.1 / v0.2 behaviour, preserved); `caseSensitive: true` matches the input casing exactly; `regex: true` interprets `value` as a JavaScript regex pattern (the regex flag overrides `op`, and patterns that fail to compile are dropped at both build time and match time so partial typing of an unfinished pattern doesn't blank the row set). Consumers driving controlled `filter` / `onFilterChange` get the canonical `BcGridFilter` shape with `caseSensitive` / `regex` carried directly on each `ServerColumnFilter` leaf — no encode / decode is required at the host-app boundary. The internal `columnFilterText` editor map uses a plain needle string for the default `contains` + no-modifier case (legacy compat) and a JSON payload for non-default operator / modifier state; both shapes round-trip through `BcGridFilter` so persisted state from v0.2 still rehydrates correctly. The `number-range` type is a convenience over `number` `between` that renders two `inputMode="decimal"` fields and always emits `op: "between"`; partial input (only one bound filled, or non-numeric content) is treated as inactive so typing doesn't narrow the row set mid-keystroke. The `date-range` type mirrors `number-range` for ISO 8601 dates: two `<input type="date">` fields separated by an em-dash, no operator dropdown, and `op: "between"` with the bounds normalised so consumers can type either edge first. Set filters are multi-select editors over distinct column values, loaded on first open, and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). The popover surface includes a search input that narrows the option list (matching either the rendered label or the underlying value, case-insensitive), a "Select all / Clear all" affordance scoped to the visible (search-narrowed) options so typing never silently unselects off-screen choices, and a "Clear selection" footer action. Selections for options hidden by the active search query are preserved when toggling all-visible. The trigger button carries `data-active="true"` whenever the filter is active (`op === "blank"` or `values.length > 0`) so themes can style applied-filter state without parsing `filterText`. For array-valued cells, each array item is indexed and matched independently. Custom filters register via `@bc-grid/filters` (Q2 deliverable; the registry shape is below for forward compatibility).
 

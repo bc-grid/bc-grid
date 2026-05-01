@@ -70,8 +70,8 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Capability | Status | Example entry | API entry point |
 | --- | --- | --- | --- |
 | Sort, resize, pin | Available | AR Customers headers | `sortable`, `resizable`, `pinned` |
-| Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
-| Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
+| Inline filters (quick filter row) | Available | AR Customers filter row — single value input per column | `filter`, `showFilterRow` |
+| Popup filters (header funnel) | Available | `?filterPopup=1` — advanced operators, ranges, set pickers | `filter.variant = "popup"` |
 | Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
 | Columns, filters, and pivot panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` / `?toolPanel=pivot` | `sidebar={["columns", "filters", "pivot"]}`, `pivotState` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
@@ -116,6 +116,48 @@ return (
 Use `defaultSearchText` for an uncontrolled initial query. For a host-owned
 search input, prefer controlling the query with `searchText` as shown above. Do
 not combine `defaultSearchText` with `searchText` on the same grid.
+
+## Choosing a filter surface
+
+bc-grid ships three filter surfaces. They share one persistence shape
+(`BcGridFilter`), so a value typed in any surface round-trips into the
+others without re-encoding. Pick per column — they compose freely.
+
+| Surface | Best for | Configure with |
+| --- | --- | --- |
+| **Inline filter row** (under the header) | Quick filters — type a value, watch the row set narrow. The row is the high-frequency entry point: always visible, scannable across columns. | Default for any `filter: { type: … }` without `variant: "popup"`. |
+| **Popup filter** (header funnel button) | Advanced operators / modifiers that don't fit a quick-filter row — `between`, regex, case-sensitive, set-of-values. Reachable from the header, opens in place, returns focus on dismiss. | `filter: { type: …, variant: "popup" }`. |
+| **Filters tool panel** (`sidebar={["filters"]}`) | Reading the active filter set at a glance + advanced editing. Each active filter renders as a card with operator + value summary. | Add `"filters"` to `sidebar`. |
+
+Recommended shadcn-first defaults:
+
+1. **Inline for high-frequency text / id / status columns** — leave them as `filter: { type: "text" }` (or omit `filter` for a default text filter) so users get a one-input quick-filter row.
+2. **Popup variant for advanced operators or set pickers** — anything with a `between` operator, multi-value picker, regex toggle, or case-sensitive flag. `filter: { type: "set", variant: "popup" }` is the typical pattern: the inline row stays compact while the funnel button on the header surfaces the picker.
+3. **Filters panel for "review what's active"** — add `"filters"` to `sidebar` whenever the grid commonly carries 3+ simultaneous filters or whenever the host needs a one-click "clear all" + per-filter editing surface.
+
+```tsx
+const columns: BcGridColumn<Customer>[] = [
+  { field: "name",          header: "Name",     filter: { type: "text" } },                  // inline
+  { field: "balance",       header: "Balance",  filter: { type: "number-range" } },          // inline range
+  { field: "status",        header: "Status",   filter: { type: "set", variant: "popup" } }, // header funnel
+  { field: "lastInvoiceAt", header: "Invoice",  filter: { type: "date", variant: "popup" } },// header funnel
+  { field: "notes",         header: "Notes",    filter: false },                             // never filterable
+]
+
+<BcGrid
+  columns={columns}
+  data={rows}
+  rowId={(row) => row.id}
+  sidebar={["columns", "filters"]} // surface the Filters panel from the rail
+/>
+```
+
+The popup-variant funnel button is reachable on the header even when
+`showFilterRow={false}`, so a host can hide the inline row entirely
+without losing access to popup filters.
+
+See `docs/api.md` §4.4 "Choosing a filter surface — inline vs popup vs
+panel" for the full decision table and persistence interop details.
 
 ## Filter row toggle
 

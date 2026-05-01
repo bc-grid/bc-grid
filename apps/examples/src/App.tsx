@@ -100,16 +100,16 @@ const featureDiscoveryRows = [
     api: "columns[].children",
   },
   {
-    feature: "Inline filters",
+    feature: "Inline filters (quick filter row)",
     status: "Available",
-    entry: "AR Customers filter row",
+    entry: "AR Customers filter row — single value input per column",
     api: "filter, showFilterRow",
   },
   {
-    feature: "Popup filters",
+    feature: "Popup filters (header funnel)",
     status: "Available",
-    entry: "?filterPopup=1",
-    api: "filter.variant = popup",
+    entry: "?filterPopup=1 — advanced operators, ranges, set pickers",
+    api: 'filter.variant = "popup"',
   },
   {
     feature: "Global search",
@@ -124,9 +124,9 @@ const featureDiscoveryRows = [
     api: 'sidebar={["columns"]}',
   },
   {
-    feature: "Filters panel",
+    feature: "Filters panel (sidebar)",
     status: "Available",
-    entry: "Tool panels control or ?toolPanel=filters",
+    entry: "Tool panels control or ?toolPanel=filters — review + edit the active filter set",
     api: 'sidebar={["filters"]}',
   },
   {
@@ -382,9 +382,14 @@ function columnGroupsEnabled(): boolean {
 
 /**
  * `?filterPopup=1` URL flag opts every filterable column into the
- * `filter-popup-variant` demo: the inline filter row collapses entirely
- * and each column header gains a funnel icon → floating filter popover.
- * Demo-critical for the bsncraft funding demo (week 2 sprint).
+ * popup-variant filter surface: each column header gains a funnel icon
+ * that opens a floating editor with the full operator + modifier UI
+ * (case-sensitive, regex, set pickers, ranges) while the inline row
+ * stays compact (or collapses entirely when every column has been
+ * promoted). Demonstrates the shadcn-first contract from
+ * `docs/api.md` §4.4 "Choosing a filter surface": inline = quick
+ * filters, popup = advanced operators. Hosts that want both at once
+ * configure popup variant per column and leave the rest inline.
  */
 function filterPopupEnabled(): boolean {
   if (typeof window === "undefined") return false
