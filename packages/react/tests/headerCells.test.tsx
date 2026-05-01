@@ -239,6 +239,22 @@ describe("renderHeaderCell column menu trigger contract", () => {
     expect(html).toContain('data-bc-grid-column-menu-button="true"')
     expect(html).toContain('data-bc-grid-resize-handle="true"')
   })
+
+  test("menu trigger and resize handle keep separate interaction hooks", () => {
+    const html = renderColumn(baseColumn)
+    const menuButton = html.match(
+      /<button[^>]*data-bc-grid-column-menu-button="true"[^>]*>[\s\S]*?<\/button>/,
+    )?.[0]
+    const resizeHandle = html.match(/<div[^>]*data-bc-grid-resize-handle="true"[^>]*><\/div>/)?.[0]
+
+    expect(menuButton).toBeDefined()
+    expect(resizeHandle).toBeDefined()
+    expect(menuButton).not.toContain("data-bc-grid-resize-handle")
+    expect(resizeHandle).not.toContain("data-bc-grid-column-menu-button")
+    expect(html.indexOf('data-bc-grid-column-menu-button="true"')).toBeLessThan(
+      html.indexOf('data-bc-grid-resize-handle="true"'),
+    )
+  })
 })
 
 function renderTextFilterCellHtml(filterText: string, header = "Account"): string {
