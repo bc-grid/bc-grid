@@ -19,6 +19,69 @@ interface BuildRangeClipboardParams<TRow> {
   includeHeaders?: boolean
 }
 
+export type RangeTsvParseDiagnosticCode =
+  | "unexpected-quote"
+  | "unexpected-character-after-closing-quote"
+  | "unterminated-quoted-cell"
+
+export interface RangeTsvParseDiagnostic {
+  code: RangeTsvParseDiagnosticCode
+  rowIndex: number
+  columnIndex: number
+  charIndex: number
+}
+
+export interface RangeTsvParseResult {
+  cells: string[][]
+  diagnostics: RangeTsvParseDiagnostic[]
+}
+
+export interface BuildRangeTsvPastePlanParams {
+  cells: readonly (readonly string[])[]
+  anchorRowId: RowId
+  anchorColumnId: ColumnId
+  visibleRowIds: readonly RowId[]
+  visibleColumnIds: readonly ColumnId[]
+}
+
+export type RangeTsvPasteSkipReason =
+  | "anchor-row-not-found"
+  | "anchor-column-not-found"
+  | "row-out-of-bounds"
+  | "column-out-of-bounds"
+
+export interface RangeTsvPasteTargetCell {
+  sourceRowIndex: number
+  sourceColumnIndex: number
+  targetRowIndex: number
+  targetColumnIndex: number
+  rowId: RowId
+  columnId: ColumnId
+  value: string
+}
+
+export interface RangeTsvPasteSkippedCell {
+  sourceRowIndex: number
+  sourceColumnIndex: number
+  targetRowIndex?: number
+  targetColumnIndex?: number
+  rowId?: RowId
+  columnId?: ColumnId
+  value: string
+  reasons: RangeTsvPasteSkipReason[]
+}
+
+export interface RangeTsvPastePlan {
+  anchorRowId: RowId
+  anchorColumnId: ColumnId
+  anchorRowIndex: number
+  anchorColumnIndex: number
+  sourceRowCount: number
+  sourceColumnCount: number
+  targetCells: RangeTsvPasteTargetCell[]
+  skippedCells: RangeTsvPasteSkippedCell[]
+}
+
 export function buildRangeClipboard<TRow>({
   range,
   columns,
@@ -87,7 +150,7 @@ export async function writeClipboardPayload(payload: BcClipboardPayload): Promis
 export function normaliseClipboardPayload(payload: BcClipboardPayload): BcClipboardPayload {
   return {
     ...payload,
-    html: payload.html ?? cellsToHtmlTable(parseTsv(payload.tsv)),
+    html: payload.html ?? cellsToHtmlTable(parseRangeTsv(payload.tsv).cells),
   }
 }
 
@@ -100,6 +163,182 @@ export function cellsToHtmlTable(rows: readonly (readonly string[])[]): string {
     .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
     .join("")
   return `<table><tbody>${body}</tbody></table>`
+}
+
+/**
+ * Parse spreadsheet-style TSV clipboard text into a row/column matrix.
+ *
+ * Supported input matches the practical Excel / Google Sheets subset: tabs
+ * split cells, CRLF/LF/CR split rows, quoted cells may contain tabs/newlines,
+ * and doubled quotes inside quoted cells unescape to a single quote. Malformed
+ * quote usage is parsed best-effort and returned as diagnostics so future paste
+ * code can reject or warn without this helper throwing.
+ */
+export function parseRangeTsv(input: string): RangeTsvParseResult {
+  const cells: string[][] = []
+  const diagnostics: RangeTsvParseDiagnostic[] = []
+  let row: string[] = []
+  let cell = ""
+  let inQuotes = false
+  let afterClosingQuote = false
+  let endedWithRowDelimiter = false
+
+  const currentColumnIndex = () => row.length
+  const pushDiagnostic = (code: RangeTsvParseDiagnosticCode, charIndex: number) => {
+    diagnostics.push({
+      code,
+      rowIndex: cells.length,
+      columnIndex: currentColumnIndex(),
+      charIndex,
+    })
+  }
+  const finishCell = () => {
+    row.push(cell)
+    cell = ""
+    inQuotes = false
+    afterClosingQuote = false
+    endedWithRowDelimiter = false
+  }
+  const finishRow = () => {
+    row.push(cell)
+    cells.push(row)
+    row = []
+    cell = ""
+    inQuotes = false
+    afterClosingQuote = false
+    endedWithRowDelimiter = true
+  }
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index]
+    const next = input[index + 1]
+
+    if (inQuotes) {
+      if (char === '"' && next === '"') {
+        cell += '"'
+        index += 1
+      } else if (char === '"') {
+        inQuotes = false
+        afterClosingQuote = true
+      } else {
+        cell += char
+      }
+      continue
+    }
+
+    if (char === "\t") {
+      finishCell()
+      continue
+    }
+
+    if (char === "\n" || char === "\r") {
+      finishRow()
+      if (char === "\r" && next === "\n") index += 1
+      continue
+    }
+
+    if (afterClosingQuote) {
+      pushDiagnostic("unexpected-character-after-closing-quote", index)
+      afterClosingQuote = false
+      cell += char
+      continue
+    }
+
+    if (char === '"') {
+      if (cell.length === 0) {
+        inQuotes = true
+      } else {
+        pushDiagnostic("unexpected-quote", index)
+        cell += char
+      }
+      endedWithRowDelimiter = false
+      continue
+    }
+
+    cell += char
+    endedWithRowDelimiter = false
+  }
+
+  if (inQuotes) {
+    pushDiagnostic("unterminated-quoted-cell", input.length)
+  }
+
+  if (!endedWithRowDelimiter || row.length > 0 || cell.length > 0) {
+    row.push(cell)
+    cells.push(row)
+  }
+
+  return { cells, diagnostics }
+}
+
+export function buildRangeTsvPastePlan({
+  cells,
+  anchorRowId,
+  anchorColumnId,
+  visibleRowIds,
+  visibleColumnIds,
+}: BuildRangeTsvPastePlanParams): RangeTsvPastePlan {
+  const anchorRowIndex = visibleRowIds.indexOf(anchorRowId)
+  const anchorColumnIndex = visibleColumnIds.indexOf(anchorColumnId)
+  const targetCells: RangeTsvPasteTargetCell[] = []
+  const skippedCells: RangeTsvPasteSkippedCell[] = []
+  const sourceColumnCount = cells.reduce((max, row) => Math.max(max, row.length), 0)
+
+  for (const [sourceRowIndex, sourceRow] of cells.entries()) {
+    for (const [sourceColumnIndex, value] of sourceRow.entries()) {
+      const targetRowIndex = anchorRowIndex >= 0 ? anchorRowIndex + sourceRowIndex : undefined
+      const targetColumnIndex =
+        anchorColumnIndex >= 0 ? anchorColumnIndex + sourceColumnIndex : undefined
+      const rowId = targetRowIndex === undefined ? undefined : visibleRowIds[targetRowIndex]
+      const columnId =
+        targetColumnIndex === undefined ? undefined : visibleColumnIds[targetColumnIndex]
+      const reasons: RangeTsvPasteSkipReason[] = []
+
+      if (anchorRowIndex < 0) reasons.push("anchor-row-not-found")
+      else if (rowId === undefined) reasons.push("row-out-of-bounds")
+
+      if (anchorColumnIndex < 0) reasons.push("anchor-column-not-found")
+      else if (columnId === undefined) reasons.push("column-out-of-bounds")
+
+      if (reasons.length > 0) {
+        const skippedCell: RangeTsvPasteSkippedCell = {
+          sourceRowIndex,
+          sourceColumnIndex,
+          value,
+          reasons,
+        }
+        if (targetRowIndex !== undefined) skippedCell.targetRowIndex = targetRowIndex
+        if (targetColumnIndex !== undefined) {
+          skippedCell.targetColumnIndex = targetColumnIndex
+        }
+        if (rowId !== undefined) skippedCell.rowId = rowId
+        if (columnId !== undefined) skippedCell.columnId = columnId
+        skippedCells.push(skippedCell)
+        continue
+      }
+
+      targetCells.push({
+        sourceRowIndex,
+        sourceColumnIndex,
+        targetRowIndex: targetRowIndex as number,
+        targetColumnIndex: targetColumnIndex as number,
+        rowId: rowId as RowId,
+        columnId: columnId as ColumnId,
+        value,
+      })
+    }
+  }
+
+  return {
+    anchorRowId,
+    anchorColumnId,
+    anchorRowIndex,
+    anchorColumnIndex,
+    sourceRowCount: cells.length,
+    sourceColumnCount,
+    targetCells,
+    skippedCells,
+  }
 }
 
 function formatClipboardCell<TRow>(
@@ -158,45 +397,4 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;")
-}
-
-function parseTsv(tsv: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = []
-  let cell = ""
-  let quoted = false
-
-  for (let index = 0; index < tsv.length; index += 1) {
-    const char = tsv[index]
-    const next = tsv[index + 1]
-    if (quoted) {
-      if (char === '"' && next === '"') {
-        cell += '"'
-        index += 1
-      } else if (char === '"') {
-        quoted = false
-      } else {
-        cell += char
-      }
-      continue
-    }
-
-    if (char === '"') {
-      quoted = true
-    } else if (char === "\t") {
-      row.push(cell)
-      cell = ""
-    } else if (char === "\n") {
-      row.push(cell)
-      rows.push(row)
-      row = []
-      cell = ""
-    } else if (char !== "\r") {
-      cell += char
-    }
-  }
-
-  row.push(cell)
-  rows.push(row)
-  return rows
 }
