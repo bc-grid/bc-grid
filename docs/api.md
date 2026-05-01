@@ -986,6 +986,16 @@ export type BcContextMenuItem<TRow = unknown> =
   | BcContextMenuCustomItem<TRow>
 ```
 
+**Built-in IDs at a glance** (full table below):
+
+- **Clipboard** — `copy`, `copy-cell`, `copy-row`, `copy-with-headers`.
+- **Filter** — `clear-column-filter`, `clear-all-filters`.
+- **Column** — `pin-column-left`, `pin-column-right`, `unpin-column`, `hide-column`, `show-all-columns`, `autosize-column`, `autosize-all-columns`.
+- **Range / selection** — `clear-range`, `clear-selection`.
+- **Layout** — `separator` (collapses adjacent separators automatically).
+
+For a worked recipe combining these built-ins with a custom destructive item, see [`apps/docs/src/pages/context-menu-recipe.astro`](https://github.com/bc-grid/bc-grid/blob/main/apps/docs/src/pages/context-menu-recipe.astro) (rendered at `/context-menu-recipe/` in the docs site).
+
 The default `contextMenuItems` set is `["copy", "copy-row", "copy-with-headers", "separator", "clear-selection", "clear-range"]`. Every other built-in below is **consumer-opt-in** — pass it explicitly via `contextMenuItems` to surface it. See `docs/design/context-menu-command-map.md` for the full v0.3 command map.
 
 The opt-in groups consumers most often layer on top of the defaults are:
