@@ -34,11 +34,11 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 
 Read-only audits, one findings doc per author. See `docs/coordination/audit-2026-05/README.md` for the structure, severity legend, and output template. Each worker's handoff doc points to their brief.
 
-- `[ready]` **audit-worker1** — server-row-model + react server bindings + perf posture. Brief: `docs/coordination/audit-2026-05/brief-worker1.md`. Output: `docs/coordination/audit-2026-05/worker1-findings.md`. Branch: `agent/worker1/audit-2026-05`.
-- `[review: worker2 #351]` **audit-worker2** — filters + aggregations + chrome consistency. Brief: `docs/coordination/audit-2026-05/brief-worker2.md`. Output: `docs/coordination/audit-2026-05/worker2-findings.md`. Branch: `agent/worker2/audit-2026-05`.
-- `[ready]` **audit-worker3** — editors + keyboard/a11y + lookup UX. Brief: `docs/coordination/audit-2026-05/brief-worker3.md`. Output: `docs/coordination/audit-2026-05/worker3-findings.md`. Branch: `agent/worker3/audit-2026-05`.
-- `[in-flight: coordinator]` **audit-coordinator** — API ergonomics, package boundaries, type discipline, visual quality, bsncraft integration, ERP comparison, worker2 cross-check. Scope: `docs/coordination/audit-2026-05/coordinator-scope.md`. Output: `docs/coordination/audit-2026-05/coordinator-audit.md`.
-- `[blocked: coordinator - waits on all four findings docs]` **audit-synthesis** — synthesize all four findings into ranked P0/P1/P2 with author tags + sprint plan. Output: `docs/coordination/audit-2026-05/synthesis.md`.
+- `[skipped: worker1 - went straight to v0.4 server-grid work in #353; lane covered by coordinator audit]` **audit-worker1** — server-row-model + react server bindings + perf posture. Coverage in `docs/coordination/audit-2026-05/coordinator-audit.md` (server grid + perf are cross-cutting in the coordinator pass).
+- `[done: worker2 #351]` **audit-worker2** — filters + aggregations + chrome consistency. Findings: `docs/coordination/audit-2026-05/worker2-findings.md`.
+- `[done: worker3 #352]` **audit-worker3** — editors + keyboard/a11y + lookup UX. Findings: `docs/coordination/audit-2026-05/worker3-findings.md`.
+- `[done: coordinator ddd1f7a]` **audit-coordinator** — API ergonomics, package boundaries, type discipline, visual quality, bsncraft integration, ERP comparison. Findings: `docs/coordination/audit-2026-05/coordinator-audit.md`.
+- `[in-flight: coordinator]` **audit-synthesis** — synthesize all four findings into ranked P0/P1/P2 with author tags + sprint plan. Output: `docs/coordination/audit-2026-05/synthesis.md`.
 
 ## v0.5 — Audit-Driven Ergonomics Refactor (DRAFT — pending audit synthesis)
 

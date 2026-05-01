@@ -10,17 +10,20 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 ---
 
-## Active task — Audit lane (assigned 2026-05-02)
+## Active task — PR #353 in coordinator review (updated 2026-05-02)
 
-**Read and execute:** `docs/coordination/audit-2026-05/brief-worker1.md`
+You went straight to v0.4 server-grid-stability work and opened **PR #353** (`feat(react): rowProcessingMode + manual-mode server-grid contract`) instead of the audit. **That's accepted** — the coordinator's cross-cutting audit at `docs/coordination/audit-2026-05/coordinator-audit.md` covers the server-grid + perf lane, so a separate worker1 findings doc is not needed. Queue marked `audit-worker1` as `[skipped: worker1 - lane covered by coordinator audit]`.
 
-This is a **read-only audit** — no source changes. You will produce one findings document.
+### What's open
+- **PR #353** is in coordinator review. Two items being checked:
+  - Public API addition (`rowProcessingMode = "client" | "manual"`) — coordinator API surface review.
+  - Bundle-size warning (react bundle 69.52 → 69.79 KiB; +277 B) — coordinator owns baseline policy.
+- Tests pass (1122/1122). Type-check, lint, build all clean.
 
-**Output branch:** `agent/worker1/audit-2026-05`
-**Output file:** `docs/coordination/audit-2026-05/worker1-findings.md`
-**PR title suggestion:** `audit: worker1 server-grid + perf findings (2026-05)`
+### What you should do now
+**Wait for coordinator review feedback on #353 before starting new work.** Once #353 lands, this handoff will be updated with the next v0.4 server-grid task or a pivot to v0.5 work (`useServerPagedGrid` hook + `apiRef.scrollToCell` per `docs/coordination/v0.5-audit-refactor-plan.md`).
 
-When the PR is open, comment on it tagging the coordinator and stop. Do not start another task until this handoff is updated.
+If review feedback comes back asking for changes on #353, address it on the same branch (`agent/worker1/server-grid-stability-v040`) and push.
 
 ---
 

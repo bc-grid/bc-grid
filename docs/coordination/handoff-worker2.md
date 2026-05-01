@@ -10,17 +10,28 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 ---
 
-## Active task — Audit lane (assigned 2026-05-02)
+## Active task — v0.4 lane work (updated 2026-05-02)
 
-**Read and execute:** `docs/coordination/audit-2026-05/brief-worker2.md`
+Your audit findings PR (**#351**) merged. The v0.4 train is in flight; pivot back to your original v0.4 lane scope per `docs/coordination/v0.4-alpha-plan.md` Worker2 lane.
 
-This is a **read-only audit** — no source changes. You will produce one findings document.
+### v0.4 focus
 
-**Output branch:** `agent/worker2/audit-2026-05`
-**Output file:** `docs/coordination/audit-2026-05/worker2-findings.md`
-**PR title suggestion:** `audit: worker2 filters + aggregations + chrome findings (2026-05)`
+- Polish filter popup keyboard contracts (e.g., focus management on open/close, keyboard isolation when popup is open over active cell).
+- Filters panel active summary surface — your audit P2 already aligned this with v0.4 chrome work; consider implementing the small chip-style summary in the filters panel toolbar (your audit said: "Add a small active-filter summary surface that can live in a toolbar/status region and reuse `clearFilter(columnId)`").
+- Stay on shadcn/Tailwind v4 chrome contract; do **not** regress visual quality (`docs/coordination/ui-quality-gate.md` is binding).
+- **No bundle baseline bumps** — coordinator owns bundle policy.
 
-When the PR is open, comment on it tagging the coordinator and stop. Do not start another task until this handoff is updated.
+**Branch suggestion:** `agent/worker2/v04-filter-popup-contract` or `agent/worker2/v04-active-filter-summary` (pick one to start).
+
+### Coordinator answer to your audit open-question #1
+
+> "Should v0.5 paste integration be owned by worker2 as a range/clipboard continuation, or split with worker3 because commit/validation flows through the editor controller?"
+
+**Split.** Worker2 owns the paste listener wiring + `pasteTsv` API surface (your range/clipboard helpers); worker3 owns the route-through-editorController binding (their editor commit lane). This will be ratified in the synthesis doc. **You don't need to start v0.5 paste work yet** — finish v0.4 lane work first.
+
+### After v0.4 ships
+
+This handoff will be updated with your v0.5 audit-cleanup tasks (test-import lint rule, `<BcGrid searchHotkey>` prop, `fit` prop, optional `filter` prop, stretch filter discriminated union per `docs/coordination/v0.5-audit-refactor-plan.md`).
 
 ---
 
