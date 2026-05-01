@@ -1,6 +1,14 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useEffect, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { useId, useLayoutEffect, useRef } from "react"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  editorOptionToString,
+  resolveEditorOptions,
+  resolveSelectEditorState,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
 
@@ -19,9 +27,9 @@ type BcGridSelectElement = HTMLSelectElement & {
  *     (`[{ value, label }, ...]`) or a row-fn returning the same shape.
  *     Per-row options let one column drive different choices based on
  *     other fields (e.g., status options that depend on customer type).
- *   - F2 / Enter / printable activation: focuses the select. Browsers
- *     vary on whether Space opens the dropdown immediately; the editor
- *     stays out of the way and lets browser-native behaviour drive.
+ *   - F2 / Enter: focuses the select. Printable activation preselects
+ *     the first label/value prefix match, then browser-native typeahead
+ *     continues once focused.
  *   - Existing cell value pre-selects the matching option. If the
  *     current value isn't in the options list, the select renders a
  *     hidden disabled placeholder so Enter/Tab cannot silently commit
@@ -43,10 +51,16 @@ export const selectEditor: BcCellEditor<unknown, unknown> = {
 function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   const { initialValue, error, focusRef, seedKey, pending, column, row } = props
   const selectRef = useRef<HTMLSelectElement | null>(null)
+  const errorId = useId()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (focusRef && selectRef.current) {
       ;(focusRef as { current: HTMLElement | null }).current = selectRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
     }
   }, [focusRef])
 
@@ -55,77 +69,61 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
     selectRef.current?.focus({ preventScroll: true })
   }, [])
 
-  // seedKey is ignored — native select doesn't accept text seeds; users
-  // can press a letter to jump to matching options once focused (browser
-  // native behaviour).
-  void seedKey
-
   // Resolve options: flat array OR row-fn. Falls back to an empty list
   // so the editor still renders (with no choices) if a column forgot to
   // supply options.
   const optionsSource = (column as { options?: unknown }).options
-  const options = resolveOptions(optionsSource, row)
-  const initialString = optionToString(initialValue)
-  const hasInitialOption = options.some((option) => optionToString(option.value) === initialString)
-  const selectOptionValues = hasInitialOption
-    ? options.map((option) => option.value)
-    : [undefined, ...options.map((option) => option.value)]
+  const options = resolveEditorOptions(optionsSource, row)
+  const { defaultValue, hasSelectedOption, seedMatched, selectOptionValues } =
+    resolveSelectEditorState({
+      initialValue,
+      options,
+      seedKey,
+    })
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (selectRef.current) {
       ;(selectRef.current as BcGridSelectElement)[bcGridSelectOptionValuesKey] = selectOptionValues
     }
   }, [selectOptionValues])
 
+  const accessibleName = editorAccessibleName(column, "Select value")
+
   return (
-    <select
-      ref={selectRef}
-      className={editorInputClassName}
-      defaultValue={hasInitialOption ? initialString : ""}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="select"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
-    >
-      {!hasInitialOption ? (
-        <option value="" disabled hidden>
-          Select...
-        </option>
+    <>
+      <select
+        ref={selectRef}
+        className={editorInputClassName}
+        defaultValue={defaultValue}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={error ? errorId : undefined}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="select"
+        data-bc-grid-editor-state={editorControlState({ error, pending })}
+        data-bc-grid-editor-seeded={seedMatched ? "true" : undefined}
+        data-bc-grid-editor-option-count={options.length}
+      >
+        {!hasSelectedOption ? (
+          <option value="" disabled hidden>
+            Select...
+          </option>
+        ) : null}
+        {options.map((option) => (
+          <option
+            key={editorOptionToString(option.value)}
+            value={editorOptionToString(option.value)}
+          >
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
       ) : null}
-      {options.map((option) => (
-        <option key={optionToString(option.value)} value={optionToString(option.value)}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+    </>
   )
-}
-
-function resolveOptions(
-  source: unknown,
-  row: unknown,
-): readonly { value: unknown; label: string }[] {
-  if (Array.isArray(source)) return source as { value: unknown; label: string }[]
-  if (typeof source === "function") {
-    try {
-      const resolved = (source as (row: unknown) => unknown)(row)
-      if (Array.isArray(resolved)) return resolved as { value: unknown; label: string }[]
-    } catch {
-      // Bad option-fn — render no options rather than crashing the cell.
-    }
-  }
-  return []
-}
-
-/**
- * `<option value="...">` requires a string. Coerce the typed value
- * for the DOM attr; the framework's commit path uses the matching
- * option's `.value` (the typed value), not this string.
- */
-function optionToString(value: unknown): string {
-  if (value == null) return ""
-  if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
-  return JSON.stringify(value)
 }

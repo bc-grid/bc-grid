@@ -1,6 +1,12 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { type FormEvent, useId, useLayoutEffect, useRef, useState } from "react"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  editorOptionToString,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 const DEBOUNCE_MS = 200
 
@@ -40,7 +46,10 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
   const { initialValue, error, focusRef, seedKey, pending, column } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
   const datalistId = useId()
+  const errorId = useId()
+  const statusId = useId()
   const [options, setOptions] = useState<readonly { value: unknown; label: string }[]>([])
+  const [loading, setLoading] = useState(false)
 
   const fetchOptions = (
     column as {
@@ -59,8 +68,10 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
     if (abortRef.current) abortRef.current.abort()
     if (!fetchOptions) {
       setOptions([])
+      setLoading(false)
       return
     }
+    setLoading(true)
     const fire = async () => {
       const ac = new AbortController()
       abortRef.current = ac
@@ -70,6 +81,11 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
       } catch {
         // Aborted or fetch errored — leave options as-is. Per the RFC,
         // failing the fetch shouldn't block the user from typing free text.
+      } finally {
+        if (abortRef.current === ac && !ac.signal.aborted) {
+          abortRef.current = null
+          setLoading(false)
+        }
       }
     }
     if (debounce) {
@@ -79,9 +95,14 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
     }
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (focusRef && inputRef.current) {
       ;(focusRef as { current: HTMLElement | null }).current = inputRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
     }
   }, [focusRef])
 
@@ -99,13 +120,15 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
     }
   }, [])
 
-  const handleInput = (event: React.FormEvent<HTMLInputElement>) => {
+  const handleInput = (event: FormEvent<HTMLInputElement>) => {
     queryFor(event.currentTarget.value, true)
   }
 
   // Seed value for the input itself: prefer seedKey, else stringified
   // current value (matches editor-text behaviour).
   const seeded = seedKey != null ? seedKey : initialValue == null ? "" : String(initialValue)
+  const accessibleName = editorAccessibleName(column, "Autocomplete value")
+  const describedBy = error ? `${errorId} ${statusId}` : statusId
 
   return (
     <>
@@ -117,26 +140,37 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
         defaultValue={seeded}
         disabled={pending}
         aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={describedBy}
+        aria-controls={datalistId}
+        aria-busy={pending || loading ? true : undefined}
         autoComplete="off"
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="autocomplete"
         data-bc-grid-editor-state={editorControlState({ error, pending })}
+        data-bc-grid-editor-loading={loading ? "true" : undefined}
+        data-bc-grid-editor-seeded={seedKey != null ? "true" : undefined}
+        data-bc-grid-editor-option-count={options.length}
         onInput={handleInput}
       />
       <datalist id={datalistId} data-bc-grid-editor-datalist="true">
         {options.map((option) => (
-          <option key={optionToString(option.value)} value={optionToString(option.value)}>
+          <option
+            key={editorOptionToString(option.value)}
+            value={editorOptionToString(option.value)}
+          >
             {option.label}
           </option>
         ))}
       </datalist>
+      <span id={statusId} style={visuallyHiddenStyle} aria-live="polite">
+        {loading ? "Loading suggestions" : `${options.length} suggestions available`}
+      </span>
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
     </>
   )
-}
-
-function optionToString(value: unknown): string {
-  if (value == null) return ""
-  if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
-  return JSON.stringify(value)
 }
