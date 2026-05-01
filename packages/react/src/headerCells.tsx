@@ -357,10 +357,11 @@ export function renderHeaderCell<TRow>({
           }}
           onContextMenu={(event) => {
             // Right-clicking the trigger should not open the column
-            // menu via the header's onContextMenu and *also* the
-            // browser default — let the consumer right-click on the
-            // header background instead.
+            // menu via the header's onContextMenu or the browser
+            // default — let the consumer right-click on the header
+            // background instead.
             event.stopPropagation()
+            event.preventDefault()
           }}
           onKeyDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => {
