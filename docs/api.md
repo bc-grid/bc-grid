@@ -1635,6 +1635,46 @@ A grouping change on the client resets the requested server page to
 `query.viewKey` includes the group set so a stale response that
 arrives after a user changes the grouping is dropped.
 
+#### bsncraft customer-grid grouping recipe
+
+For the AR Customers ledger and similar bsncraft business grids, the
+practical defaults for grouping mirror how AR clerks scan the queue:
+
+- **Group roots that map to AR mental models.** *Region* (territory),
+  *Collector* / `owner` (work-queue ownership), *Status* (`Open` /
+  `Past Due` / `Credit Hold` / `Disputed`), *Terms* (payment-term
+  buckets). Two-level nesting like `["region", "status"]` mirrors a
+  collector's "region first, then which buckets are on hold" mental
+  model and tends to dominate the actual usage pattern; deeper
+  stacks make the chrome read like a tree but the rollups become
+  hard to scan.
+- **Aggregation cascade.** For the AR ledger, define
+  `aggregation: { type: "sum" }` on `balance`, `currentBalance`,
+  `daysOver60`, and the aging-bucket columns so the per-group
+  subtotal paints on the group row and the global total paints in
+  the status bar. The cascade is automatic — no per-group hook
+  needed.
+- **Surface grouping in the toolbar.** AR clerks expect a single
+  "Group by" dropdown next to "Show filters". Wire it to
+  `onGroupByChange` and store the active set in host state alongside
+  the saved-view layout (`BcGridLayoutState.groupBy`). The Columns
+  tool panel is the secondary entry point for power users; the
+  primary toolbar dropdown is what AR clerks reach for first.
+- **Avoid current-page grouping in production.** Collectors trust a
+  "Past Due — 84 customers" group label as a workload statement.
+  Current-page grouping (the client engine over a server page slice)
+  shows "Past Due — 12" because the rest of the page hasn't loaded;
+  that misleads the collector into thinking the queue is shorter
+  than it is. **Always delegate `groupBy` to the server endpoint**
+  for bsncraft AR grids — wire `query.view.groupBy` into the SQL /
+  REST call and return rows in global group order, then let the
+  client engine layer in disclosure chrome over the loaded page.
+- **Saved views.** The AR clerks who use grouping daily want named
+  saved views ("My Past Due", "Region South / Disputed", …).
+  `groupBy` round-trips through `BcGridLayoutState.groupBy` and
+  `gridId` localStorage; combine with `urlStatePersistence` to make
+  the active group set part of a shareable URL.
+
 When `onServerRowMutation` is used with paged mode, optimistic edit patches are
 tracked by row identity in the server-row-model mutation queue, not by the
 current visible page. Changing pages, refetching the current page, or changing
