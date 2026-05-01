@@ -1291,6 +1291,9 @@ overlay for rejected/conflict results. Consumers that need manual control can
 call the lower-level `BcServerGridApi` mutation methods directly. The contract
 is documented in
 [`docs/design/server-edit-grid-contract.md`](./design/server-edit-grid-contract.md).
+The consumer-facing guide is in
+[`apps/docs/src/pages/server-edit-grid.astro`](../apps/docs/src/pages/server-edit-grid.astro),
+with a live example in `apps/examples/#server-edit-grid`.
 
 ---
 

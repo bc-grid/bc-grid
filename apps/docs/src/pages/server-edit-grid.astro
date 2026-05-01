@@ -1,0 +1,221 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const gridSnippet = `import {
+  BcServerGrid,
+  type BcServerEditMutationHandler,
+  type BcServerGridApi,
+  type LoadServerPage,
+} from "@bc-grid/react"
+import { useMemo, useRef, useState } from "react"
+
+const apiRef = useRef<BcServerGridApi<Customer> | null>(null)
+const [searchText, setSearchText] = useState("")
+const [sort, setSort] = useState([{ columnId: "legalName", direction: "asc" }] as const)
+const [filter, setFilter] = useState<CustomerFilter | null>(null)
+const [page, setPage] = useState({ page: 0, pageSize: 50 })
+
+const loadPage: LoadServerPage<Customer> = async (query, ctx) => {
+  const response = await fetch("/api/customers/query", {
+    method: "POST",
+    signal: ctx.signal,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(query),
+  })
+  return response.json()
+}
+
+<BcServerGrid<Customer>
+  apiRef={apiRef}
+  rowModel="paged"
+  columns={customerColumns}
+  rowId={(row) => row.id}
+  loadPage={loadPage}
+  page={page.page}
+  pageSize={page.pageSize}
+  sort={sort}
+  filter={filter}
+  searchText={searchText}
+  onSortChange={setSort}
+  onPaginationChange={setPage}
+  onServerRowMutation={commitCustomerEdit}
+/>`
+
+const mutationSnippet = `const commitCustomerEdit: BcServerEditMutationHandler<Customer> = async ({ patch }) => {
+  const response = await fetch(\`/api/customers/\${patch.rowId}\`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      mutationId: patch.mutationId,
+      baseRevision: patch.baseRevision,
+      changes: patch.changes,
+    }),
+  })
+
+  if (response.status === 409) {
+    const conflict = await response.json()
+    return {
+      mutationId: patch.mutationId,
+      status: "conflict",
+      row: conflict.customer,
+      reason: conflict.message,
+    }
+  }
+
+  if (!response.ok) {
+    return {
+      mutationId: patch.mutationId,
+      status: "rejected",
+      reason: await response.text(),
+    }
+  }
+
+  return {
+    mutationId: patch.mutationId,
+    status: "accepted",
+    row: await response.json(),
+  }
+}`
+
+const refreshSnippet = `// After a save that can move the row across the current sort/filter/search view:
+apiRef.current?.invalidateServerRows({ scope: "view" })
+
+// When only one known row is stale:
+apiRef.current?.invalidateServerRows({ scope: "rows", rowIds: [customerId] })
+
+// User-visible reload affordance:
+apiRef.current?.refreshServerRows({ purge: true })`
+---
+
+<DocsLayout
+  title="Server Edit Grid"
+  description="Consumer contract for server-owned customer grids that need inline edits, optimistic saves, rollback, conflict handling, and explicit refresh controls."
+  active="server-edit-grid"
+>
+  <section class="section">
+    <div class="status-strip">
+      <span>BcServerGrid</span>
+      <span>onServerRowMutation</span>
+      <span>customers grid</span>
+      <span>v0.3 pattern</span>
+    </div>
+    <p class="lead">
+      Use this pattern for business grids where the server owns sorting, filtering, search,
+      pagination, row identity, and persistence. Use <code>BcEditGrid</code> for small local
+      arrays and lookup screens; do not turn a server-owned customers table into a lookup grid
+      just to enable editing.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>Grid Wiring</h2>
+    <div class="grid-two">
+      <article class="panel">
+        <h3>Consumer owns controls</h3>
+        <p>
+          Keep search, filter, sort, and page state controlled in the host app. <code>loadPage</code>
+          receives the full server query shape and can post it directly to the customers endpoint.
+        </p>
+      </article>
+      <article class="panel">
+        <h3>Server owns identity</h3>
+        <p>
+          <code>rowId</code> must return the database customer ID. Do not use page indexes or
+          virtual row positions, because optimistic patches and conflict results reconcile by row ID.
+        </p>
+      </article>
+    </div>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>customers-grid.tsx</span>
+        <span>controlled server grid</span>
+      </div>
+      <Code code={gridSnippet} lang="tsx" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Mutation Flow</h2>
+    <div class="api-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Step</th>
+            <th scope="col">Contract</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Commit</td>
+            <td>
+              The editor commits a cell value. <code>BcServerGrid</code> creates a
+              <code>ServerRowPatch</code> keyed by <code>columnId</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>Optimistic</td>
+            <td>
+              The patch enters the server-row-model mutation queue and the visible row updates
+              while the async mutation is pending.
+            </td>
+          </tr>
+          <tr>
+            <td>Accepted</td>
+            <td>
+              Return the canonical customer row and revision. The cache reconciles the optimistic
+              overlay with the server row.
+            </td>
+          </tr>
+          <tr>
+            <td>Rejected</td>
+            <td>
+              Return <code>status: "rejected"</code> or throw. The edit overlay rolls back and
+              exposes the server error on the edited cell.
+            </td>
+          </tr>
+          <tr>
+            <td>Conflict</td>
+            <td>
+              Return <code>status: "conflict"</code> with the canonical row when the server wins,
+              then invalidate the row or view if membership may have changed.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>commit-customer-edit.ts</span>
+        <span>settle results</span>
+      </div>
+      <Code code={mutationSnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Refresh and Invalidation</h2>
+    <p class="section-note">
+      Accepted edits that touch active sort, filter, search, or grouping can move a row out of the
+      current page. Settle the mutation first, then invalidate the row or the full view. A customer
+      grid should expose an explicit refresh action for support and reconciliation workflows.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>refresh-controls.ts</span>
+        <span>BcServerGridApi</span>
+      </div>
+      <Code code={refreshSnippet} lang="ts" theme="github-dark" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Live Example</h2>
+    <p class="section-note">
+      The examples app includes a customer-style server edit grid at
+      <code>apps/examples/#server-edit-grid</code>. It uses controlled search, filter, sort, and
+      paging controls, simulates accepted/rejected/conflict mutation results, shows pending and
+      rollback states, and exposes row/view refresh controls.
+    </p>
+  </section>
+</DocsLayout>

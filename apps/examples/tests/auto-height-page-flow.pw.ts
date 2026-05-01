@@ -34,7 +34,7 @@ test("auto-height mode uses document vertical scroll while preserving horizontal
   )
   expect(metrics?.scrollerScrollWidth).toBeGreaterThan(metrics?.scrollerClientWidth ?? 0)
 
-  await page.locator(".bc-grid-scroller").evaluate((scroller) => {
+  await grid.locator(".bc-grid-scroller").evaluate((scroller) => {
     scroller.scrollLeft = 800
     scroller.dispatchEvent(new Event("scroll", { bubbles: true }))
   })
