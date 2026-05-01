@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useEffect, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { useEffect, useId, useLayoutEffect, useRef } from "react"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 /**
  * Date editor — `kind: "date"`. Default for date columns per
@@ -34,8 +39,9 @@ export const dateEditor: BcCellEditor<unknown, unknown> = {
 }
 
 function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending } = props
+  const { initialValue, error, focusRef, seedKey, pending, column } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const errorId = useId()
 
   useEffect(() => {
     if (focusRef && inputRef.current) {
@@ -58,19 +64,31 @@ function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
   void seedKey
 
   const seeded = normalizeDateValue(initialValue)
+  const accessibleName = editorAccessibleName(column, "Date value")
 
   return (
-    <input
-      ref={inputRef}
-      className={editorInputClassName}
-      type="date"
-      defaultValue={seeded}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="date"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
-    />
+    <>
+      <input
+        ref={inputRef}
+        className={editorInputClassName}
+        type="date"
+        defaultValue={seeded}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={error ? errorId : undefined}
+        aria-busy={pending ? true : undefined}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="date"
+        data-bc-grid-editor-state={editorControlState({ error, pending })}
+        data-bc-grid-editor-disabled={pending ? "true" : undefined}
+      />
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
   )
 }
 

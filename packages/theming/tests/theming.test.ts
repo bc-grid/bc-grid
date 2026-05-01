@@ -403,11 +403,21 @@ describe("@bc-grid/theming", () => {
     expect(focus).toContain("box-shadow: 0 0 0 2px color-mix")
 
     const error = ruleFor('.bc-grid-editor-input[aria-invalid="true"],')
+    expect(error).toContain("background: color-mix(in srgb, var(--bc-grid-invalid) 4%")
     expect(error).toContain("border-color: var(--bc-grid-invalid)")
     expect(error).toContain("var(--bc-grid-invalid) 18%")
+    expect(error).toContain("caret-color: var(--bc-grid-invalid)")
+
+    const disabled = ruleFor(".bc-grid-editor-input:disabled,")
+    expect(disabled).toContain("var(--bc-grid-muted) 54%")
+    expect(disabled).toContain("color: var(--bc-grid-muted-fg)")
+    expect(disabled).toContain("cursor: default")
+    expect(disabled).toContain("opacity: 1")
 
     const pending = ruleFor('.bc-grid-editor-input[data-bc-grid-editor-state="pending"] {')
-    expect(pending).toContain("var(--bc-grid-muted) 72%")
+    expect(pending).toContain("var(--bc-grid-muted) 68%")
+    expect(pending).toContain("var(--bc-grid-focus-ring) 36%")
+    expect(pending).toContain("var(--bc-grid-focus-ring) 14%")
     expect(pending).toContain("color: var(--bc-grid-muted-fg)")
     expect(pending).toContain("cursor: progress")
 

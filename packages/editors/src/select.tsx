@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useEffect, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { useEffect, useId, useLayoutEffect, useRef } from "react"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
 
@@ -43,6 +48,7 @@ export const selectEditor: BcCellEditor<unknown, unknown> = {
 function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   const { initialValue, error, focusRef, seedKey, pending, column, row } = props
   const selectRef = useRef<HTMLSelectElement | null>(null)
+  const errorId = useId()
 
   useEffect(() => {
     if (focusRef && selectRef.current) {
@@ -70,6 +76,7 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   const selectOptionValues = hasInitialOption
     ? options.map((option) => option.value)
     : [undefined, ...options.map((option) => option.value)]
+  const accessibleName = editorAccessibleName(column, "Select value")
 
   useEffect(() => {
     if (selectRef.current) {
@@ -78,27 +85,38 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   }, [selectOptionValues])
 
   return (
-    <select
-      ref={selectRef}
-      className={editorInputClassName}
-      defaultValue={hasInitialOption ? initialString : ""}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="select"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
-    >
-      {!hasInitialOption ? (
-        <option value="" disabled hidden>
-          Select...
-        </option>
+    <>
+      <select
+        ref={selectRef}
+        className={editorInputClassName}
+        defaultValue={hasInitialOption ? initialString : ""}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={error ? errorId : undefined}
+        aria-busy={pending ? true : undefined}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="select"
+        data-bc-grid-editor-state={editorControlState({ error, pending })}
+        data-bc-grid-editor-disabled={pending ? "true" : undefined}
+      >
+        {!hasInitialOption ? (
+          <option value="" disabled hidden>
+            Select...
+          </option>
+        ) : null}
+        {options.map((option) => (
+          <option key={optionToString(option.value)} value={optionToString(option.value)}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
       ) : null}
-      {options.map((option) => (
-        <option key={optionToString(option.value)} value={optionToString(option.value)}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+    </>
   )
 }
 

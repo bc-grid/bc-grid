@@ -16,6 +16,17 @@ export function editorControlState({
   return "idle"
 }
 
+export function editorAccessibleName(
+  column: { header?: unknown; field?: unknown; columnId?: unknown },
+  fallback: string,
+): string | undefined {
+  const header = typeof column.header === "string" ? column.header : undefined
+  const field = typeof column.field === "string" ? column.field : undefined
+  const columnId = typeof column.columnId === "string" ? column.columnId : undefined
+  const name = header || field || columnId || fallback
+  return name || undefined
+}
+
 export const visuallyHiddenStyle: CSSProperties = {
   position: "absolute",
   width: 1,

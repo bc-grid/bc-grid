@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useId, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName, visuallyHiddenStyle } from "./chrome"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 /**
  * Number editor — `kind: "number"`. Default for numeric columns per
@@ -98,8 +103,7 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
   // AT name: column.header when it's a string; else fall back to the
   // column id chain so the announcement at least carries the field
   // name. Per `editing-rfc §ARIA states on the cell`.
-  const accessibleName =
-    typeof column.header === "string" ? column.header : (column.field ?? column.columnId ?? "")
+  const accessibleName = editorAccessibleName(column, "Number value")
 
   return (
     <>
@@ -111,11 +115,13 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
         defaultValue={seeded}
         disabled={pending}
         aria-invalid={error ? true : undefined}
-        aria-label={accessibleName || undefined}
+        aria-label={accessibleName}
         aria-describedby={error ? errorId : undefined}
+        aria-busy={pending ? true : undefined}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="number"
         data-bc-grid-editor-state={editorControlState({ error, pending })}
+        data-bc-grid-editor-disabled={pending ? "true" : undefined}
       />
       {error ? (
         <span id={errorId} style={visuallyHiddenStyle}>

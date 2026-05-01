@@ -59,6 +59,7 @@ describe("built-in editor chrome hooks", () => {
       expect(html).toContain('data-bc-grid-editor-input="true"')
       expect(html).toContain(`data-bc-grid-editor-kind="${entry.kind}"`)
       expect(html).toContain('data-bc-grid-editor-state="idle"')
+      expect(html).toContain("aria-label=")
     }
   })
 
@@ -67,7 +68,9 @@ describe("built-in editor chrome hooks", () => {
       const html = renderEditor(entry, { pending: true })
 
       expect(html).toContain("disabled")
+      expect(html).toContain('aria-busy="true"')
       expect(html).toContain('data-bc-grid-editor-state="pending"')
+      expect(html).toContain('data-bc-grid-editor-disabled="true"')
     }
   })
 
@@ -76,7 +79,9 @@ describe("built-in editor chrome hooks", () => {
       const html = renderEditor(entry, { error: "Required" })
 
       expect(html).toContain('aria-invalid="true"')
+      expect(html).toContain("aria-describedby=")
       expect(html).toContain('data-bc-grid-editor-state="error"')
+      expect(html).toContain("Required")
     }
   })
 })

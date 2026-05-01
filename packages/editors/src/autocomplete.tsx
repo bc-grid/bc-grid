@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 const DEBOUNCE_MS = 200
 
@@ -40,6 +45,7 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
   const { initialValue, error, focusRef, seedKey, pending, column } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
   const datalistId = useId()
+  const errorId = useId()
   const [options, setOptions] = useState<readonly { value: unknown; label: string }[]>([])
 
   const fetchOptions = (
@@ -106,6 +112,7 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
   // Seed value for the input itself: prefer seedKey, else stringified
   // current value (matches editor-text behaviour).
   const seeded = seedKey != null ? seedKey : initialValue == null ? "" : String(initialValue)
+  const accessibleName = editorAccessibleName(column, "Autocomplete value")
 
   return (
     <>
@@ -117,10 +124,14 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
         defaultValue={seeded}
         disabled={pending}
         aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={error ? errorId : undefined}
+        aria-busy={pending ? true : undefined}
         autoComplete="off"
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="autocomplete"
         data-bc-grid-editor-state={editorControlState({ error, pending })}
+        data-bc-grid-editor-disabled={pending ? "true" : undefined}
         onInput={handleInput}
       />
       <datalist id={datalistId} data-bc-grid-editor-datalist="true">
@@ -130,6 +141,11 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
           </option>
         ))}
       </datalist>
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
     </>
   )
 }

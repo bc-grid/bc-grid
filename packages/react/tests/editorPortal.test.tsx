@@ -11,6 +11,7 @@ describe("default editor chrome", () => {
     expect(html).toContain('data-bc-grid-editor-input="true"')
     expect(html).toContain('data-bc-grid-editor-kind="text-default"')
     expect(html).toContain('data-bc-grid-editor-state="idle"')
+    expect(html).toContain('aria-label="Name"')
   })
 
   test("surfaces pending and error states on the default editor input", () => {
@@ -18,9 +19,13 @@ describe("default editor chrome", () => {
     const error = renderDefaultEditor({ error: "Required" })
 
     expect(pending).toContain("disabled")
+    expect(pending).toContain('aria-busy="true"')
     expect(pending).toContain('data-bc-grid-editor-state="pending"')
+    expect(pending).toContain('data-bc-grid-editor-disabled="true"')
     expect(error).toContain('aria-invalid="true"')
+    expect(error).toContain("aria-describedby=")
     expect(error).toContain('data-bc-grid-editor-state="error"')
+    expect(error).toContain("Required")
   })
 })
 
@@ -29,6 +34,7 @@ function renderDefaultEditor(overrides: Record<string, unknown> = {}): string {
   return renderToStaticMarkup(
     createElement(Component, {
       initialValue: "Acme",
+      column: { field: "name", header: "Name" },
       commit: () => {},
       cancel: () => {},
       ...overrides,

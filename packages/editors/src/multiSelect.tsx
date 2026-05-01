@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useEffect, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { useEffect, useId, useLayoutEffect, useRef } from "react"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
 
@@ -45,6 +50,7 @@ const DEFAULT_VISIBLE_ROWS = 5
 function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   const { initialValue, error, focusRef, seedKey, pending, column, row } = props
   const selectRef = useRef<HTMLSelectElement | null>(null)
+  const errorId = useId()
 
   useEffect(() => {
     if (focusRef && selectRef.current) {
@@ -71,28 +77,40 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   }, [selectOptionValues])
 
   const visibleRows = Math.max(2, Math.min(DEFAULT_VISIBLE_ROWS, options.length || 2))
+  const accessibleName = editorAccessibleName(column, "Select values")
 
   return (
-    <select
-      ref={selectRef}
-      className={editorInputClassName}
-      multiple
-      size={visibleRows}
-      defaultValue={options
-        .filter((option) => initialKeys.has(optionToString(option.value)))
-        .map((option) => optionToString(option.value))}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="multi-select"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
-    >
-      {options.map((option) => (
-        <option key={optionToString(option.value)} value={optionToString(option.value)}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+    <>
+      <select
+        ref={selectRef}
+        className={editorInputClassName}
+        multiple
+        size={visibleRows}
+        defaultValue={options
+          .filter((option) => initialKeys.has(optionToString(option.value)))
+          .map((option) => optionToString(option.value))}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={error ? errorId : undefined}
+        aria-busy={pending ? true : undefined}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="multi-select"
+        data-bc-grid-editor-state={editorControlState({ error, pending })}
+        data-bc-grid-editor-disabled={pending ? "true" : undefined}
+      >
+        {options.map((option) => (
+          <option key={optionToString(option.value)} value={optionToString(option.value)}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
   )
 }
 
