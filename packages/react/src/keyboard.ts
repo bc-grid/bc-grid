@@ -5,10 +5,11 @@
  *
  * Implements the WAI-ARIA grid pattern per `docs/design/accessibility-rfc.md
  * §Keyboard Model`. Q1 covers entry/exit + cell navigation plus Space to
- * toggle selection on the active row. Q2-reserved keys (F2, Enter, Escape,
+ * toggle selection on the active row. Q2-reserved keys (F2, Enter,
  * printable chars except Space) return `"noop"` here so the caller can fall
- * through to the editor protocol when it lands. Q3-reserved keys
- * (Shift+Arrow, Ctrl+A, Shift+Space, Ctrl/Cmd+Space) return
+ * through to the editor protocol when it lands. Shift+Arrow returns an
+ * explicit range-extension action; Escape returns an explicit clear action.
+ * Q3-reserved keys (Ctrl+A, Shift+Space, Ctrl/Cmd+Space) return
  * `"preventDefault"` so the browser doesn't trigger text selection or page
  * scrolling inside the grid, without moving the active cell.
  */
@@ -31,9 +32,13 @@ export interface KeyboardNavInput {
 
 export type KeyboardNavOutcome =
   | { type: "move"; row: number; col: number }
+  | { type: "extendRange"; direction: KeyboardRangeDirection; toEdge: boolean }
+  | { type: "clearRange" }
   | { type: "toggleSelection" }
   | { type: "preventDefault" }
   | { type: "noop" }
+
+export type KeyboardRangeDirection = "up" | "down" | "left" | "right"
 
 function clamp(value: number, min: number, max: number): number {
   if (max < min) return min
@@ -46,9 +51,15 @@ export function nextKeyboardNav(input: KeyboardNavInput): KeyboardNavOutcome {
 
   if (lastRow < 0 || lastCol < 0) return { type: "noop" }
 
-  // Q3-reserved: Shift+Arrow and Ctrl/Cmd+A. Swallow to suppress the
-  // browser's text-selection default, but don't move the active cell.
-  if (shiftKey && /^Arrow/.test(key)) return { type: "preventDefault" }
+  if (shiftKey) {
+    const direction = arrowKeyDirection(key)
+    if (direction) return { type: "extendRange", direction, toEdge: ctrlOrMeta }
+  }
+
+  if (key === "Escape") return { type: "clearRange" }
+
+  // Q3-reserved: Ctrl/Cmd+A. Swallow to suppress the browser's text-selection
+  // default, but don't move the active cell.
   if (ctrlOrMeta && (key === "a" || key === "A")) return { type: "preventDefault" }
   if (key === " " || key === "Spacebar") {
     if (shiftKey || ctrlOrMeta) return { type: "preventDefault" }
@@ -97,4 +108,12 @@ export function nextKeyboardNav(input: KeyboardNavInput): KeyboardNavOutcome {
   }
 
   return { type: "move", row, col }
+}
+
+function arrowKeyDirection(key: string): KeyboardRangeDirection | null {
+  if (key === "ArrowUp") return "up"
+  if (key === "ArrowDown") return "down"
+  if (key === "ArrowLeft") return "left"
+  if (key === "ArrowRight") return "right"
+  return null
 }
