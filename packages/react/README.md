@@ -275,6 +275,9 @@ rows/columns, read-only targets, parser failures, and validation failures reject
 the whole paste without partially dirtying cells. Successful cells reuse the
 normal edit commit path, so `onCellEditCommit` fires per cell with
 `source: "paste"` and existing dirty/pending/error rendering stays in sync.
+Rejected pastes announce the first actionable failure message from the planner:
+malformed TSV, overflow, read-only targets, and validation errors use distinct
+messages so hosts can mirror the same semantics in custom feedback.
 
 ## Layout persistence
 

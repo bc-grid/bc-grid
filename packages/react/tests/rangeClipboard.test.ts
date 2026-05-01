@@ -580,4 +580,70 @@ describe("range TSV paste helpers", () => {
       },
     })
   })
+
+  test("buildRangeTsvPasteApplyPlan returns user-facing failure messages for paste feedback", async () => {
+    const overflow = await buildRangeTsvPasteApplyPlan({
+      range: range("r2", "note", "r2", "note"),
+      tsv: "A\tB",
+      columns: editableColumns,
+      rowEntries: rowEntries.slice(0, 2),
+      rowIds: rowIds.slice(0, 2),
+    })
+    expect(overflow).toMatchObject({
+      ok: false,
+      error: {
+        code: "paste-out-of-bounds",
+        message: "Paste range exceeds the visible grid bounds.",
+      },
+    })
+
+    const malformed = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "name", "r1", "name"),
+      tsv: '"A',
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+    })
+    expect(malformed).toMatchObject({
+      ok: false,
+      error: {
+        code: "parse-error",
+        message: "TSV paste contains an unterminated quoted cell.",
+      },
+    })
+
+    const readonlyColumns = [
+      resolvedColumn("name", "Name", { editable: false }),
+      resolvedColumn("amount", "Amount", { editable: true }),
+    ]
+    const readonly = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "name", "r1", "name"),
+      tsv: "Ada",
+      columns: readonlyColumns,
+      rowEntries,
+      rowIds,
+    })
+    expect(readonly).toMatchObject({
+      ok: false,
+      error: {
+        code: "cell-readonly",
+        message: "Paste target cell is read-only.",
+      },
+    })
+
+    const validation = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "amount", "r1", "amount"),
+      tsv: "-1",
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+    })
+    expect(validation).toMatchObject({
+      ok: false,
+      error: {
+        code: "validation-error",
+        message: "Amount must be positive.",
+      },
+    })
+  })
 })
