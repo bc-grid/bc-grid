@@ -73,6 +73,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
 | Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
+| Row grouping | Available | `?groupBy=region,status` — Columns panel "Group by" zone | `groupBy`, `defaultGroupBy`, `groupableColumns`, `groupsExpandedByDefault` |
 | Columns, filters, and pivot panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` / `?toolPanel=pivot` | `sidebar={["columns", "filters", "pivot"]}`, `pivotState` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
 | Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
@@ -116,6 +117,71 @@ return (
 Use `defaultSearchText` for an uncontrolled initial query. For a host-owned
 search input, prefer controlling the query with `searchText` as shown above. Do
 not combine `defaultSearchText` with `searchText` on the same grid.
+
+## Row grouping
+
+bc-grid groups rows by one or more columns through the controlled
+`groupBy` / uncontrolled `defaultGroupBy` prop pair, plus three built-in
+entry points so users can add a group without host code:
+
+```tsx
+<BcGrid
+  columns={columns}
+  data={rows}
+  rowId={(row) => row.id}
+  // Initial grouping (uncontrolled).
+  defaultGroupBy={["region", "status"]}
+  // Auto-expand new group rows so the grid reads as an organisational
+  // view rather than a manual drill-down. Honoured only when the host
+  // does NOT control `expansion`.
+  groupsExpandedByDefault
+  // Restrict the Columns-tool-panel "Group by" dropdown to this list.
+  // Defaults to every column with `groupable: true`.
+  groupableColumns={[
+    { columnId: "region", header: "Region" },
+    { columnId: "status", header: "Status" },
+  ]}
+  // Surface the Columns panel so users can add / remove groups.
+  sidebar={["columns"]}
+/>
+```
+
+Three ways a user can change the active groups:
+
+1. **Columns tool panel** (`sidebar={["columns"]}`) — drag a column into the "Group by" zone, click the per-row "Group" button, or pick from the "Add group" dropdown.
+2. **Column header menu** (the kebab on the right of every header) — "Group by this column" / "Remove from groups" for `groupable` columns.
+3. **Controlled `groupBy`** — a host toolbar applies a saved view by setting the controlled prop directly.
+
+Per-column opt-in: set `groupable: true` on a column to surface it in the panel and the header menu. The flag only controls discoverability — `groupBy` will group by any column id you point it at.
+
+### Client vs server grouping
+
+`<BcGrid data={rows}>` groups every row in `data` after client filter /
+search — groups are stable across pagination. `<BcServerGrid>` defaults
+to the same client engine but only sees the loaded page window, so
+groups reflect a slice of the dataset, not the global view. **For
+production server grids prefer query delegation:** read
+`query.view.groupBy` in your `loadPage` / `loadBlock` callback and
+return rows already grouped server-side. Grouping changes reset the
+requested server page to `0`, the same reset that fires on sort /
+filter / search / visible-column changes.
+
+```ts
+const loadPage: LoadServerPage<Customer> = async (query, { signal }) => {
+  const params = new URLSearchParams({
+    page: String(query.pageIndex),
+    pageSize: String(query.pageSize),
+    groupBy: query.view.groupBy.map((g) => g.columnId).join(","),
+  })
+  const response = await fetch(`/api/customers?${params}`, { signal })
+  const { rows, totalRows } = await response.json()
+  return { rows, totalRows }
+}
+```
+
+See `docs/api.md` §4.5 "Grouping" for the full decision table (client
+full-data vs server page-window vs server query delegation),
+persistence behaviour, and group-row chrome details.
 
 ## Filter row toggle
 

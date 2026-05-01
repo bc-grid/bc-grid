@@ -40,6 +40,7 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
 | Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
+| Row grouping | Available | `?groupBy=region,status` — Columns panel "Group by" zone | `groupBy`, `defaultGroupBy`, `groupableColumns`, `groupsExpandedByDefault` |
 | Columns panel | Available | Tool panels control or `?toolPanel=columns` | `sidebar={["columns"]}` |
 | Filters panel | Available | Tool panels control or `?toolPanel=filters` | `sidebar={["filters"]}` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
@@ -832,6 +833,118 @@ export interface BcFilterEditorProps<TValue = unknown> {
   locale?: string
 }
 ```
+
+### 4.5 Grouping (frozen at v0.1)
+
+Row grouping is a **first-class feature** in `<BcGrid>` and `<BcServerGrid>` — column values fold the row set into expandable group buckets, matching AG Grid's row-grouping semantics. The consumer surface is a single ordered list of column ids (`groupBy`); the grid handles bucket layout, group-row chrome, expansion state, and aggregation cascade automatically.
+
+#### Consumer API
+
+```ts
+export interface BcGridProps<TRow> {
+  // …
+  /** Active group-by columns, in nesting order (controlled). */
+  groupBy?: readonly ColumnId[]
+  /** Initial group-by columns, in nesting order (uncontrolled). */
+  defaultGroupBy?: readonly ColumnId[]
+  /** Fires after the user adds, removes, or reorders a group-by column. */
+  onGroupByChange?: (next: readonly ColumnId[], prev: readonly ColumnId[]) => void
+
+  /**
+   * Optional override that names the columns the Columns tool panel +
+   * column-menu offer as group-by candidates. Default is every column with
+   * `groupable: true`. Use the override to restrict the dropdown to a
+   * curated list (e.g., only the four columns that make sense as group
+   * roots in this view) without flipping `groupable: true` on every
+   * data column.
+   */
+  groupableColumns?: readonly { columnId: ColumnId; header: string }[]
+
+  /**
+   * When `true`, every group row that hasn't been explicitly collapsed
+   * starts expanded. Useful for grids that want grouping as an
+   * organizational view rather than a manual drill-down. Defaults to
+   * `false` (group rows start collapsed).
+   *
+   * Honoured only in uncontrolled-expansion mode. If the host controls
+   * `expansion` / `defaultExpansion`, the grid does not auto-expand —
+   * the consumer's expansion set is the source of truth.
+   */
+  groupsExpandedByDefault?: boolean
+}
+```
+
+Per-column opt-in:
+
+```ts
+export interface BcGridColumn<TRow, TValue = unknown> {
+  // …
+  /** Allow this column in the group-by dropdown (`groupableColumns` UI). */
+  groupable?: boolean
+}
+```
+
+The columns that show up in the Columns tool panel's "Group by" zone are:
+
+1. `groupableColumns` if explicitly supplied — the host curates the list.
+2. Otherwise every column with `groupable: true`.
+
+Setting `groupable: true` is **just** a UI opt-in — it does not enable grouping by itself. The grid still groups whatever `groupBy` (or the user-driven equivalent) names, regardless of `groupable`. The flag only controls discoverability through the built-in panel.
+
+#### How users add a group
+
+There are three built-in entry points; hosts can also drive `groupBy` directly:
+
+1. **Columns tool panel** (`sidebar={["columns"]}` or `?toolPanel=columns` in the examples app). The panel surfaces a "Group by" zone with chips for the active groups, a "Choose column" dropdown sourced from `groupableColumns`, drag-to-add from any panel item flagged `groupable: true`, and a per-row "Group" button that appends the column to `groupBy`. Removing a chip clears that column from the group-by list.
+2. **Column header menu** (the kebab on the right of every header) — the column-menu items include "Group by this column" / "Remove from groups" for `groupable` columns.
+3. **Direct prop** — a host toolbar can call `onGroupByChange` (or update its own `groupBy` state) to apply a saved view. `BcGridApi` does not yet expose a typed `setGroupBy` method (Q2).
+
+#### Client grouping vs server grouping
+
+bc-grid has three grouping modes that share the same `groupBy` shape but differ in what the engine groups over:
+
+| Mode | What groups | Configure with |
+| --- | --- | --- |
+| **Client full-data grouping** | Every row in `data` (after client filter / search), regardless of pagination. The groups are stable across page navigation; pagination indexes the post-grouping row entries. | `<BcGrid data={rows} groupBy={…} />` — the default. |
+| **Server page-window grouping** (client over the loaded page only) | Just the rows currently rendered, i.e. the loaded page or block from the server. Group buckets reflect a slice of the dataset, not the global view. Useful when the host has not yet pushed the `groupBy` to the server but still wants visual grouping in the loaded window. | `<BcServerGrid groupBy={…} />` without applying it server-side. |
+| **Server query delegation** | The server is the source of truth — bc-grid forwards `groupBy` to your `loadPage` / `loadBlock` callback as part of `query.view.groupBy: ServerGroup[]`, and your server returns rows already grouped (or the flattened slice of the active page). | `<BcServerGrid>` reads `query.view.groupBy` in the consumer-supplied loader; bc-grid does not apply client grouping on top. |
+
+The first two modes use the same `buildGroupedRowModel` engine internally and produce the same expand / collapse chrome; the difference is only the row set the engine sees. Because client grouping over a loaded server page covers a slice and not the global dataset, **prefer server delegation for any production server grid**: surface `query.view.groupBy` to the back end and return rows in the global group order.
+
+```tsx
+// Client full-data grouping (the default for <BcGrid>).
+<BcGrid
+  columns={columns}
+  data={rows}
+  rowId={(row) => row.id}
+  defaultGroupBy={["region", "status"]}
+  groupsExpandedByDefault
+/>
+```
+
+```ts
+// Server query delegation: forward `query.view.groupBy` to the back end.
+const loadPage: LoadServerPage<Customer> = async (query, { signal }) => {
+  const params = new URLSearchParams({
+    page: String(query.pageIndex),
+    pageSize: String(query.pageSize),
+    groupBy: query.view.groupBy.map((g) => g.columnId).join(","),
+  })
+  const response = await fetch(`/api/customers?${params}`, { signal })
+  const { rows, totalRows } = await response.json()
+  return { rows, totalRows }
+}
+```
+
+`ServerViewState.groupBy` is `readonly ServerGroup[]` (`{ columnId, direction? }`). Order is significant — the first entry is the outermost bucket, matching `BcGridProps.groupBy`. A grouping change on the client resets the requested server page to `0` (same reset rule as sort / filter / search / visible columns). `query.viewKey` includes the group set so a stale response that arrives after a user changes the grouping is dropped.
+
+#### Group-row chrome and aggregation
+
+Group rows render with `role="row" aria-level={depth}` and a built-in disclosure chevron. When the grid is grouped, the root carries `data-bc-grid-grouped="true"` and `role="treegrid"`; the disclosure motion + chrome contract is documented in §5.5. Group expansion state is the same `expansion: ReadonlySet<RowId>` pair used for master / detail rows (group row ids are stable for a given group path), and `groupsExpandedByDefault` is ignored when the host controls `expansion` / `defaultExpansion`.
+
+Aggregations cascade through groups: a column with `aggregation: { type: "sum" }` reports both the global total in the status bar and a per-group subtotal painted on each group row's value cell. Empty groups are pruned automatically; a group with zero matching rows after a filter does not render.
+
+`groupBy` round-trips through `BcGridLayoutState.groupBy` (saved-view layout) and through `gridId` localStorage as `bc-grid:{gridId}:groupBy`. URL persistence (via `urlStatePersistence`) carries `groupBy` alongside `columnState` and `sort`.
 
 ---
 
