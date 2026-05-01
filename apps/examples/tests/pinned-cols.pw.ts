@@ -76,6 +76,53 @@ test("pinned-right actions column stays anchored to viewport-right", async ({ pa
   }
 })
 
+test("header columns stay horizontally synced with body cells during the scroll event", async ({
+  page,
+}) => {
+  await page.goto("/")
+  const grid = page.locator(".bc-grid").first()
+  await expect(grid).toBeVisible()
+
+  const positions = await grid.evaluate((gridElement) => {
+    const scroller = gridElement.querySelector<HTMLElement>(".bc-grid-scroller")
+    if (!scroller) return null
+    const cellLeft = (selector: string): number | null => {
+      const element = gridElement.querySelector<HTMLElement>(selector)
+      return element?.getBoundingClientRect().left ?? null
+    }
+
+    scroller.scrollLeft = 240
+    scroller.dispatchEvent(new Event("scroll", { bubbles: true }))
+
+    return {
+      bodyCustomer: cellLeft(
+        '.bc-grid-row[data-row-index="0"] .bc-grid-cell[data-column-id="legalName"]',
+      ),
+      headerCustomer: cellLeft('.bc-grid-header-cell[data-column-id="legalName"]'),
+      bodyPinned: cellLeft(
+        '.bc-grid-row[data-row-index="0"] .bc-grid-cell[data-column-id="account"]',
+      ),
+      headerPinned: cellLeft('.bc-grid-header-cell[data-column-id="account"]'),
+    }
+  })
+
+  expect(positions).not.toBeNull()
+  if (!positions) return
+  expect(positions.headerCustomer).not.toBeNull()
+  expect(positions.bodyCustomer).not.toBeNull()
+  expect(positions.headerPinned).not.toBeNull()
+  expect(positions.bodyPinned).not.toBeNull()
+  if (
+    positions.headerCustomer != null &&
+    positions.bodyCustomer != null &&
+    positions.headerPinned != null &&
+    positions.bodyPinned != null
+  ) {
+    expect(Math.abs(positions.headerCustomer - positions.bodyCustomer)).toBeLessThan(1)
+    expect(Math.abs(positions.headerPinned - positions.bodyPinned)).toBeLessThan(1)
+  }
+})
+
 test("pinned scroll-shadow data attrs toggle with scroll position", async ({ page }) => {
   await page.goto("/")
   const grid = page.locator(".bc-grid").first()

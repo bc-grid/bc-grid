@@ -41,7 +41,12 @@ export function createDetailToggleColumn<TRow>({
 }: CreateDetailToggleColumnArgs): BcReactGridColumn<TRow> {
   return {
     columnId: DETAIL_TOGGLE_COLUMN_ID,
-    header: <span className="bc-grid-detail-header">Details</span>,
+    header: (
+      <span className="bc-grid-detail-header">
+        <DisclosureChevron className="bc-grid-detail-header-icon" />
+        <span className="bc-grid-detail-header-label">Details</span>
+      </span>
+    ),
     pinned: "left",
     width: 44,
     sortable: false,

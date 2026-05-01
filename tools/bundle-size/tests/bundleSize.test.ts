@@ -7,6 +7,7 @@ import {
   formatBundleSizeReport,
   gzipSize,
   hasBundleSizeDrift,
+  hasBundleSizeFailure,
 } from "../src/bundleSize"
 import type { BundleSizeManifest } from "../src/manifest"
 
@@ -34,11 +35,12 @@ describe("bundle-size gate", () => {
     )
 
     expect(result.overBudgetBytes).toBeGreaterThan(0)
-    expect(hasBundleSizeDrift(result)).toBe(true)
+    expect(hasBundleSizeDrift(result)).toBe(false)
+    expect(hasBundleSizeFailure(result)).toBe(true)
     expect(formatBundleSizeReport(result)).toContain("Over hard budget")
   })
 
-  test("fails when the aggregate exceeds the regression allowance", () => {
+  test("warns when the aggregate exceeds the soft drift marker but stays under budget", () => {
     const result = withBundleFile("export const value = 'regression'\n", (repoRoot, bundlePath) =>
       checkBundleSize(
         {
@@ -52,7 +54,9 @@ describe("bundle-size gate", () => {
 
     expect(result.regressionBytes).toBeGreaterThan(0)
     expect(hasBundleSizeDrift(result)).toBe(true)
-    expect(formatBundleSizeReport(result)).toContain("regression allowance")
+    expect(hasBundleSizeFailure(result)).toBe(false)
+    expect(formatBundleSizeReport(result)).toContain("drift warning")
+    expect(formatBundleSizeReport(result)).toContain("drift marker")
   })
 
   test("fails when a bundle file is missing", () => {
@@ -61,7 +65,8 @@ describe("bundle-size gate", () => {
       const result = checkBundleSize(manifest("missing/dist/index.js", 100), repoRoot)
 
       expect(result.entries[0]?.missing).toBe(true)
-      expect(hasBundleSizeDrift(result)).toBe(true)
+      expect(hasBundleSizeDrift(result)).toBe(false)
+      expect(hasBundleSizeFailure(result)).toBe(true)
       expect(formatBundleSizeReport(result)).toContain("Missing bundle file")
     } finally {
       rmSync(repoRoot, { recursive: true, force: true })

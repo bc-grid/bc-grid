@@ -578,6 +578,32 @@ export function cellStyle({
   }
 }
 
+export function pinnedLaneStyle(
+  side: "left" | "right",
+  height: number,
+  width: number,
+  viewportWidth: number,
+): CSSProperties {
+  const base: CSSProperties = {
+    height,
+    position: "sticky",
+    width,
+    zIndex: 3,
+  }
+
+  if (side === "left") {
+    return {
+      ...base,
+      left: 0,
+    }
+  }
+
+  return {
+    ...base,
+    left: Math.max(0, viewportWidth - width),
+  }
+}
+
 export function rootStyle(height: number | "auto" | undefined): CSSProperties {
   if (height === "auto") {
     // Page-flow mode: the grid grows to fit its rendered content and
@@ -615,13 +641,40 @@ export const autoHeightHeaderViewportStyle: CSSProperties = {
   zIndex: 4,
 }
 
+export function headerScrollTransform(scrollLeft: number): string {
+  return `translate3d(${-scrollLeft}px, 0, 0)`
+}
+
 export function headerRowStyle(width: number, height: number, scrollLeft: number): CSSProperties {
   return {
     height,
     minWidth: "100%",
     position: "relative",
-    transform: `translate3d(${-scrollLeft}px, 0, 0)`,
+    transform: headerScrollTransform(scrollLeft),
     width: Math.max(width, 1),
+  }
+}
+
+export function syncHeaderRowsScroll(
+  root: HTMLElement | null,
+  scrollLeft: number,
+  totalWidth: number,
+  viewportWidth: number,
+): void {
+  if (!root) return
+  for (const row of root.querySelectorAll<HTMLElement>("[data-bc-grid-scroll-sync='x']")) {
+    row.style.transform = headerScrollTransform(scrollLeft)
+  }
+  for (const cell of root.querySelectorAll<HTMLElement>(
+    ".bc-grid-header-viewport .bc-grid-cell-pinned-left",
+  )) {
+    cell.style.transform = pinnedTransformValue("left", scrollLeft, totalWidth, viewportWidth) ?? ""
+  }
+  for (const cell of root.querySelectorAll<HTMLElement>(
+    ".bc-grid-header-viewport .bc-grid-cell-pinned-right",
+  )) {
+    cell.style.transform =
+      pinnedTransformValue("right", scrollLeft, totalWidth, viewportWidth) ?? ""
   }
 }
 

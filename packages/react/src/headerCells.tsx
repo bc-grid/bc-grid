@@ -216,7 +216,14 @@ export function renderHeaderCell<TRow>({
   // so users can see the priority order they composed via Shift+click.
   const showSortOrder = sort != null && sortState.length > 1
   const headerLabel =
-    typeof column.source.header === "string" ? column.source.header : column.columnId
+    typeof column.source.header === "string"
+      ? column.source.header
+      : // Synthetic master/detail column renders icon-only chrome; keep its
+        // columnheader accessible name human-readable instead of exposing the
+        // reserved internal column id.
+        column.columnId === "__bc_detail"
+        ? "Details"
+        : column.columnId
   const columnMenuEnabled = showColumnMenu && column.source.columnMenu !== false
 
   const handleClick = sortable
@@ -468,12 +475,10 @@ export function renderFilterCell<TRow>({
   viewportWidth,
   messages,
 }: RenderFilterCellParams<TRow>): ReactNode {
-  const filterDisabled = column.source.filter === false
-  const filterType = column.source.filter ? column.source.filter.type : "text"
-  const isPopupVariant =
-    Boolean(column.source.filter) &&
-    column.source.filter !== false &&
-    (column.source.filter as BcColumnFilter).variant === "popup"
+  const filterConfig = column.source.filter === false ? undefined : column.source.filter
+  const filterDisabled = filterConfig == null
+  const filterType = filterConfig?.type ?? "text"
+  const isPopupVariant = filterConfig?.variant === "popup"
   const columnLabel =
     typeof column.source.header === "string" ? column.source.header : column.columnId
   const filterLabel = messages.filterAriaLabel({ columnLabel })
@@ -518,6 +523,7 @@ export function renderFilterCell<TRow>({
             loadSetFilterOptions ? () => loadSetFilterOptions(column.columnId) : undefined
           }
           onFilterChange={onFilterChange}
+          surface="inline"
           messages={messages}
         />
       )}
@@ -536,6 +542,7 @@ function TextFilterControl({
   onFilterKeyDown,
   primaryRef,
   placeholder,
+  surface = "advanced",
 }: {
   filterId: string
   filterLabel: string
@@ -544,8 +551,29 @@ function TextFilterControl({
   onFilterKeyDown: FilterKeyDownHandler
   primaryRef?: { current: FilterFocusElement | null }
   placeholder?: string
+  surface?: "advanced" | "inline"
 }): ReactNode {
   const input = decodeTextFilterInput(filterText)
+  if (surface === "inline") {
+    return (
+      <div className="bc-grid-filter-text bc-grid-filter-text-compact">
+        <input
+          ref={(el) => {
+            if (primaryRef) primaryRef.current = el
+          }}
+          aria-label={filterLabel}
+          className="bc-grid-filter-input"
+          id={filterId}
+          type="text"
+          value={input.value}
+          onChange={(event) => onFilterChange(event.currentTarget.value)}
+          onKeyDown={onFilterKeyDown}
+          placeholder={placeholder}
+        />
+      </div>
+    )
+  }
+
   const emit = (next: {
     op: TextFilterOperator
     value: string
@@ -1052,6 +1080,7 @@ export function FilterEditorBody({
   onFilterChange,
   allowEscapeKeyPropagation = false,
   autoFocus,
+  surface = "advanced",
   messages,
 }: {
   filterType: BcColumnFilter["type"]
@@ -1062,6 +1091,7 @@ export function FilterEditorBody({
   onFilterChange: (next: string) => void
   allowEscapeKeyPropagation?: boolean
   autoFocus?: boolean
+  surface?: "advanced" | "inline"
   messages: BcGridMessages
 }): ReactNode {
   const focusRef = useRef<FilterFocusElement | null>(null)
@@ -1168,6 +1198,7 @@ export function FilterEditorBody({
         onFilterKeyDown={onFilterKeyDown}
         primaryRef={focusRef}
         placeholder={messages.filterPlaceholder}
+        surface={surface}
       />
     )
   }

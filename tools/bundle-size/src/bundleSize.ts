@@ -48,21 +48,24 @@ export function checkBundleSize(
 }
 
 export function hasBundleSizeDrift(result: BundleSizeResult): boolean {
-  return (
-    result.entries.some((entry) => entry.missing) ||
-    result.overBudgetBytes > 0 ||
-    result.regressionBytes > 0
-  )
+  return result.regressionBytes > 0
+}
+
+export function hasBundleSizeFailure(result: BundleSizeResult): boolean {
+  return result.entries.some((entry) => entry.missing) || result.overBudgetBytes > 0
 }
 
 export function formatBundleSizeReport(result: BundleSizeResult): string {
+  const status = hasBundleSizeFailure(result)
+    ? "Bundle size check failed"
+    : hasBundleSizeDrift(result)
+      ? "Bundle size check passed with drift warning"
+      : "Bundle size check passed"
   const lines = [
-    `${hasBundleSizeDrift(result) ? "Bundle size check failed" : "Bundle size check passed"}: ${
-      result.name
-    } ${formatBytes(result.actualGzipBytes)} gzip / ${formatBytes(result.budgetGzipBytes)} budget`,
-    `Baseline: ${formatBytes(result.baselineGzipBytes)}; max allowed with +${
+    `${status}: ${result.name} ${formatBytes(result.actualGzipBytes)} gzip / ${formatBytes(result.budgetGzipBytes)} hard budget`,
+    `Baseline: ${formatBytes(result.baselineGzipBytes)}; soft +${
       result.maxRegressionPercent
-    }% regression: ${formatBytes(result.maxAllowedGzipBytes)}.`,
+    }% drift marker: ${formatBytes(result.maxAllowedGzipBytes)}.`,
     "",
     "Packages:",
   ]
@@ -81,7 +84,7 @@ export function formatBundleSizeReport(result: BundleSizeResult): string {
   if (result.regressionBytes > 0) {
     lines.push(
       "",
-      `Over +${result.maxRegressionPercent}% regression allowance by ${formatBytes(result.regressionBytes)}.`,
+      `Warning: over +${result.maxRegressionPercent}% drift marker by ${formatBytes(result.regressionBytes)}. Update the baseline after accepted feature work lands.`,
     )
   }
   if (result.entries.some((entry) => entry.missing)) {

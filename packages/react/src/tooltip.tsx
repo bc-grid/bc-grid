@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   Children,
   type FocusEvent,
   type HTMLAttributes,
@@ -38,11 +39,13 @@ export function BcGridTooltip({ children, content, id }: BcGridTooltipProps): Re
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [position, setPosition] = useState<TooltipPosition>({ left: 0, top: 0 })
+  const [themeVars, setThemeVars] = useState<CSSProperties>({})
   const tooltip = typeof content === "string" ? content.trim() : undefined
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current
     if (!trigger) return
+    setThemeVars(readTooltipThemeVars(trigger))
     const rect = trigger.getBoundingClientRect()
     setPosition({
       left: clamp(rect.left, 8, window.innerWidth - 8),
@@ -115,7 +118,7 @@ export function BcGridTooltip({ children, content, id }: BcGridTooltipProps): Re
               data-state="open"
               id={tooltipId}
               role="tooltip"
-              style={position}
+              style={{ ...themeVars, ...position }}
             >
               {tooltip}
             </div>,
@@ -128,4 +131,25 @@ export function BcGridTooltip({ children, content, id }: BcGridTooltipProps): Re
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
+}
+
+function readTooltipThemeVars(trigger: HTMLElement): CSSProperties {
+  const grid = trigger.closest<HTMLElement>(".bc-grid")
+  if (!grid) return {}
+
+  const styles = getComputedStyle(grid)
+  return {
+    "--bc-grid-context-menu-bg": styles.getPropertyValue("--bc-grid-context-menu-bg").trim(),
+    "--bc-grid-context-menu-fg": styles.getPropertyValue("--bc-grid-context-menu-fg").trim(),
+    "--bc-grid-context-menu-border": styles
+      .getPropertyValue("--bc-grid-context-menu-border")
+      .trim(),
+    "--bc-grid-radius": styles.getPropertyValue("--bc-grid-radius").trim(),
+    "--bc-grid-motion-duration-fast": styles
+      .getPropertyValue("--bc-grid-motion-duration-fast")
+      .trim(),
+    "--bc-grid-motion-ease-standard": styles
+      .getPropertyValue("--bc-grid-motion-ease-standard")
+      .trim(),
+  } as CSSProperties
 }
