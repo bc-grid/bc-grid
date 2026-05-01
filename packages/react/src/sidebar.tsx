@@ -9,6 +9,7 @@ import {
   useRef,
 } from "react"
 import { BcColumnsToolPanel } from "./columnToolPanel"
+import { BcFiltersToolPanel } from "./filterToolPanel"
 import { domToken } from "./gridInternals"
 import type { BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarPanel } from "./types"
 
@@ -224,12 +225,11 @@ function resolveBuiltInPanel<TRow>(panelId: BcSidebarBuiltInPanel): ResolvedSide
     id: panelId,
     label: config.label,
     Icon: config.Icon,
-    render: (context) =>
-      panelId === "columns" ? (
-        <BcColumnsToolPanel context={context} />
-      ) : (
-        <BuiltInPanelSlot panelId={panelId} label={config.label} />
-      ),
+    render: (context) => {
+      if (panelId === "columns") return <BcColumnsToolPanel context={context} />
+      if (panelId === "filters") return <BcFiltersToolPanel context={context} />
+      return <BuiltInPanelSlot panelId={panelId} label={config.label} />
+    },
   }
 }
 

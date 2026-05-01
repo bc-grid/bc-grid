@@ -211,9 +211,9 @@ export interface BcGridStateProps {
   defaultSearchText?: string
   onSearchTextChange?: (next: string, prev: string) => void
 
-  filter?: BcGridFilter
-  defaultFilter?: BcGridFilter
-  onFilterChange?: (next: BcGridFilter, prev: BcGridFilter) => void
+  filter?: BcGridFilter | null
+  defaultFilter?: BcGridFilter | null
+  onFilterChange?: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
 
   selection?: BcSelection
   defaultSelection?: BcSelection
@@ -273,7 +273,7 @@ export interface BcGridApi<TRow = unknown> {
 
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
-  setFilter(filter: BcGridFilter): void
+  setFilter(filter: BcGridFilter | null): void
   setRangeSelection(selection: BcRangeSelection): void
   copyRange(range?: BcRange): Promise<void>
   clearRangeSelection(): void
