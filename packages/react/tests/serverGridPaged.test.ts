@@ -297,6 +297,87 @@ describe("server paged query reset semantics", () => {
 })
 
 describe("server paged stale response ordering", () => {
+  test("keeps accepted page rows stable while server-owned sort/filter/search request is pending", async () => {
+    const model = createServerRowModel<Row>()
+    const baseView = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const acceptedRows: Row[] = [
+      { id: "b", name: "Bravo", status: "inactive" },
+      { id: "a", name: "Acme", status: "active" },
+    ]
+    const acceptedRequest = model.loadPagedPage({
+      loadPage: async (query) => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: acceptedRows,
+        totalRows: acceptedRows.length,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view: baseView,
+    })
+    const acceptedResult = await acceptedRequest.promise
+    const acceptedGridRows = acceptedResult.rows
+
+    const nextFilter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["active"],
+    }
+    const nextView = model.createViewState({
+      filter: nextFilter,
+      groupBy: [],
+      searchText: "ac",
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const nextViewKey = model.createViewKey(nextView)
+    const nextLoad = deferred<ServerPagedResult<Row>>()
+    let capturedQuery: ServerPagedQuery | undefined
+    const nextRequest = model.loadPagedPage({
+      loadPage: (query) => {
+        capturedQuery = query
+        return nextLoad.promise
+      },
+      pageIndex: 0,
+      pageSize: 25,
+      view: nextView,
+      viewKey: nextViewKey,
+    })
+
+    const loadingShell = resolveServerPagedGridShell({
+      pageIndex: 0,
+      pageSize: 25,
+      pagination: true,
+      rows: acceptedGridRows,
+      totalRows: acceptedResult.totalRows,
+    })
+    expect(loadingShell.gridRows).toBe(acceptedGridRows)
+    expect(loadingShell.gridRows.map((row) => row.id)).toEqual(["b", "a"])
+    expect(capturedQuery?.view).toEqual(nextView)
+    expect(capturedQuery?.view).toMatchObject({
+      filter: nextFilter,
+      search: "ac",
+      sort: [{ columnId: "name", direction: "asc" }],
+    })
+
+    nextLoad.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "a", name: "Acme", status: "active" }],
+      totalRows: 1,
+      viewKey: nextViewKey,
+    })
+    const nextResult = await nextRequest.promise
+    expect(nextResult.rows.map((row) => row.id)).toEqual(["a"])
+  })
+
   test("accepts only the response for the latest active block key", async () => {
     const model = createServerRowModel<Row>()
     const firstView = model.createViewState({
