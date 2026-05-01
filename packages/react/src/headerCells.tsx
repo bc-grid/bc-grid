@@ -898,6 +898,9 @@ function SetFilterControl({
           id={menuId}
           className="bc-grid-filter-set-menu"
           data-bc-grid-set-menu="true"
+          data-state="open"
+          data-side="bottom"
+          data-align="start"
           role="group"
           aria-label={`${filterLabel} values`}
           onKeyDown={handleMenuKeyDown}
@@ -1303,22 +1306,25 @@ export function FilterPopup({
         </span>
         {isActive ? <span className="bc-grid-filter-popup-active-dot" aria-hidden="true" /> : null}
       </div>
-      <FilterEditorBody
-        filterType={filterType}
-        filterText={filterText}
-        filterId={filterId}
-        filterLabel={filterLabel}
-        getSetFilterOptions={getSetFilterOptions}
-        onFilterChange={onFilterChange}
-        autoFocus
-        messages={messages}
-      />
+      <div className="bc-grid-filter-popup-body" data-bc-grid-filter-popup-body="true">
+        <FilterEditorBody
+          filterType={filterType}
+          filterText={filterText}
+          filterId={filterId}
+          filterLabel={filterLabel}
+          getSetFilterOptions={getSetFilterOptions}
+          onFilterChange={onFilterChange}
+          autoFocus
+          messages={messages}
+        />
+      </div>
       <div className="bc-grid-filter-popup-footer">
         <button
           type="button"
           aria-label={`Clear ${filterLabel}`}
           className="bc-grid-filter-popup-button bc-grid-filter-popup-clear"
           data-bc-grid-filter-clear="true"
+          data-variant="ghost"
           onClick={(event) => {
             event.preventDefault()
             onClear()
@@ -1332,6 +1338,7 @@ export function FilterPopup({
           type="button"
           aria-label={`Apply ${filterLabel}`}
           className="bc-grid-filter-popup-button bc-grid-filter-popup-apply"
+          data-variant="primary"
           onClick={(event) => {
             event.preventDefault()
             onClose()
