@@ -60,6 +60,10 @@ export type RangeTsvPasteSkipReason =
   | "anchor-column-not-found"
   | "row-out-of-bounds"
   | "column-out-of-bounds"
+  | "row-not-editable"
+  | "row-disabled"
+  | "column-hidden"
+  | "cell-readonly"
 
 export interface RangeTsvPasteTargetCell {
   sourceRowIndex: number
@@ -101,6 +105,8 @@ export interface BuildRangeTsvPasteApplyPlanParams<TRow> {
   columns: readonly ResolvedColumn<TRow>[]
   rowEntries: readonly RowEntry<TRow>[]
   rowIds: readonly RowId[]
+  hiddenColumnIds?: readonly ColumnId[]
+  isRowDisabled?: (row: TRow) => boolean
   /**
    * `reject` keeps the operation strictly rectangular and atomic. `clip`
    * builds a plan for in-bounds cells while preserving skipped metadata for
@@ -116,7 +122,9 @@ export type RangeTsvPasteApplyFailureCode =
   | "paste-out-of-bounds"
   | "row-not-found"
   | "row-not-editable"
+  | "row-disabled"
   | "column-not-found"
+  | "column-hidden"
   | "cell-readonly"
   | "value-parser-error"
   | "validation-error"
@@ -490,6 +498,8 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
   columns,
   rowEntries,
   rowIds,
+  hiddenColumnIds = [],
+  isRowDisabled,
   overflow = "reject",
   signal,
 }: BuildRangeTsvPasteApplyPlanParams<TRow>): Promise<RangeTsvPasteApplyResult<TRow>> {
@@ -549,8 +559,10 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
 
   const rowEntryById = new Map(rowEntries.map((entry) => [entry.rowId, entry]))
   const columnById = new Map(columns.map((column) => [column.columnId, column]))
+  const hiddenColumnIdSet = new Set(hiddenColumnIds)
   const commits: RangeTsvPasteCommit<TRow>[] = []
   const patchEntries = new Map<RowId, RangeTsvPasteRowPatch<TRow>>()
+  const skippedCells = [...pastePlan.skippedCells]
 
   for (const target of pastePlan.targetCells) {
     if (signal?.aborted) {
@@ -576,14 +588,12 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
       }
     }
     if (!isDataRowEntry(rowEntry)) {
-      return {
-        ok: false,
-        error: {
-          code: "row-not-editable",
-          message: "Paste target row is not editable.",
-          ...failureTargetFields(target),
-        },
-      }
+      skippedCells.push(skippedCellFromTarget(target, "row-not-editable"))
+      continue
+    }
+    if (isRowDisabled?.(rowEntry.row)) {
+      skippedCells.push(skippedCellFromTarget(target, "row-disabled"))
+      continue
     }
 
     const column = columnById.get(target.columnId)
@@ -597,16 +607,14 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
         },
       }
     }
+    if (column.source.hidden === true || hiddenColumnIdSet.has(target.columnId)) {
+      skippedCells.push(skippedCellFromTarget(target, "column-hidden"))
+      continue
+    }
 
     if (!isRangePasteCellEditable(column, rowEntry.row)) {
-      return {
-        ok: false,
-        error: {
-          code: "cell-readonly",
-          message: "Paste target cell is read-only.",
-          ...failureTargetFields(target),
-        },
-      }
+      skippedCells.push(skippedCellFromTarget(target, "cell-readonly"))
+      continue
     }
 
     const parsedValueResult = parseRangePasteValue(target.value, rowEntry.row, column)
@@ -666,7 +674,7 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
       pastePlan,
       commits,
       rowPatches: Array.from(patchEntries.values()),
-      skippedCells: pastePlan.skippedCells,
+      skippedCells,
     },
   }
 }
@@ -812,5 +820,21 @@ function failureTargetFields(
     ...(target.rowId !== undefined ? { rowId: target.rowId } : {}),
     ...(target.columnId !== undefined ? { columnId: target.columnId } : {}),
     rawValue: target.value,
+  }
+}
+
+function skippedCellFromTarget(
+  target: RangeTsvPasteTargetCell,
+  reason: RangeTsvPasteSkipReason,
+): RangeTsvPasteSkippedCell {
+  return {
+    sourceRowIndex: target.sourceRowIndex,
+    sourceColumnIndex: target.sourceColumnIndex,
+    targetRowIndex: target.targetRowIndex,
+    targetColumnIndex: target.targetColumnIndex,
+    rowId: target.rowId,
+    columnId: target.columnId,
+    value: target.value,
+    reasons: [reason],
   }
 }

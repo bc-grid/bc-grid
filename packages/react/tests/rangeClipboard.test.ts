@@ -563,28 +563,99 @@ describe("range TSV paste helpers", () => {
     ])
   })
 
-  test("buildRangeTsvPasteApplyPlan rejects read-only target columns", async () => {
+  test("buildRangeTsvPasteApplyPlan skips read-only target cells", async () => {
     const readonlyColumns = [
       resolvedColumn("name", "Name", { editable: true }),
       resolvedColumn("amount", "Amount", { editable: false }),
+      resolvedColumn("note", "Note", { editable: true }),
     ]
     const result = await buildRangeTsvPasteApplyPlan({
-      range: range("r1", "amount", "r1", "amount"),
-      tsv: "12",
+      range: range("r1", "name", "r1", "name"),
+      tsv: "Linus\t12\tok",
       columns: readonlyColumns,
       rowEntries,
       rowIds,
     })
 
-    expect(result).toMatchObject({
-      ok: false,
-      error: {
-        code: "cell-readonly",
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.plan.commits.map((commit) => [commit.columnId, commit.nextValue])).toEqual([
+      ["name", "Linus"],
+      ["note", "ok"],
+    ])
+    expect(result.plan.rowPatches).toEqual([
+      {
+        rowId: "r1",
+        row: rowEntries[0]?.kind === "data" ? rowEntries[0].row : undefined,
+        values: { name: "Linus", note: "ok" },
+      },
+    ])
+    expect(result.plan.skippedCells).toEqual([
+      {
+        sourceRowIndex: 0,
+        sourceColumnIndex: 1,
+        targetRowIndex: 0,
+        targetColumnIndex: 1,
         rowId: "r1",
         columnId: "amount",
-        rawValue: "12",
+        value: "12",
+        reasons: ["cell-readonly"],
       },
+    ])
+  })
+
+  test("buildRangeTsvPasteApplyPlan skips hidden columns while preserving typed values", async () => {
+    const hiddenColumns = [
+      resolvedColumn("name", "Name", { editable: true }),
+      resolvedColumn("note", "Note", { editable: true, hidden: true }),
+      resolvedColumn("amount", "Amount", {
+        editable: true,
+        valueParser: (input) => Number(input),
+      }),
+    ]
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "name", "r1", "name"),
+      tsv: "Ada\thidden\t99",
+      columns: hiddenColumns,
+      rowEntries,
+      rowIds,
     })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.plan.commits.map((commit) => [commit.columnId, commit.nextValue])).toEqual([
+      ["name", "Ada"],
+      ["amount", 99],
+    ])
+    expect(result.plan.skippedCells).toMatchObject([
+      {
+        rowId: "r1",
+        columnId: "note",
+        value: "hidden",
+        reasons: ["column-hidden"],
+      },
+    ])
+  })
+
+  test("buildRangeTsvPasteApplyPlan skips disabled and non-data rows", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "name", "r1", "name"),
+      tsv: "Linus\nGrace\nGroup",
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+      isRowDisabled: (row) => row.id === "r2",
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.plan.commits.map((commit) => [commit.rowId, commit.nextValue])).toEqual([
+      ["r1", "Linus"],
+    ])
+    expect(result.plan.skippedCells.map((cell) => [cell.rowId, cell.value, cell.reasons])).toEqual([
+      ["r2", "Grace", ["row-disabled"]],
+      ["group-region", "Group", ["row-not-editable"]],
+    ])
   })
 
   test("buildRangeTsvPasteApplyPlan rejects malformed parser diagnostics", async () => {

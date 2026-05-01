@@ -338,6 +338,8 @@ When the user presses Ctrl/Cmd+V with at least one cell focused:
    - If `column.validate`: run; collect failures.
 5. **Atomic apply**: if any per-cell `validate` returns `valid: false`, abort all changes; surface via assertive live-region + collected validation errors in the post-event. If all valid: apply all overlays simultaneously (single React state update); fire `onCellEditCommit` for each cell (consistent with single-cell editing); after all per-cell events, fire `onRangePasteCommit` once.
 
+v0.4-alpha implementation boundary: the React package exposes internal pure helpers for TSV parsing and paste planning only. These helpers can parse spreadsheet TSV, map parsed cells from an anchor into visible row/column order, produce typed commit/patch plans through `valueParser`, and report skipped targets for out-of-bounds cells, read-only cells, hidden columns, disabled rows, and non-data rows. Browser clipboard key wiring and fill-handle paste/fill UI remain deferred until the v0.5 user-facing clipboard slice unless explicitly approved by the coordinator.
+
 Hooks (additive on `BcGridProps`):
 
 ```ts
