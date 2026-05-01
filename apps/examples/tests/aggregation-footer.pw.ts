@@ -15,7 +15,7 @@ test("aggregation footer renders totals and follows search filtering", async ({ 
   await expect(footer).toContainText("$243,756,850")
   await expect(footer).toContainText("$264,425")
 
-  await page.getByLabel("Search").fill("CUST-00001")
+  await page.getByRole("searchbox", { name: "Global search" }).fill("CUST-00001")
 
   await expect(footer).toContainText("$50,525")
   await expect(footer).toContainText("$149,700")

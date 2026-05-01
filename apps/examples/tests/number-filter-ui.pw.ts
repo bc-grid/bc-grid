@@ -30,7 +30,8 @@ test("AR customer number filter supports inclusive between ranges", async ({ pag
 })
 
 async function revealOutstandingFilter(page: Page) {
-  await page.locator(".bc-grid-scroller").evaluate((scroller) => {
+  const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
+  await grid.locator(".bc-grid-scroller").evaluate((scroller) => {
     scroller.scrollLeft = 900
     scroller.dispatchEvent(new Event("scroll", { bubbles: true }))
   })

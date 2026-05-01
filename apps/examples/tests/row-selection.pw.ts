@@ -9,17 +9,21 @@ import { type Page, expect, test } from "@playwright/test"
  * `.bc-grid-row-selected` class.
  */
 
+function mainGrid(page: Page) {
+  return page.getByRole("grid", { name: "Accounts receivable customer ledger" })
+}
+
 async function clickRow(
   page: Page,
   rowIndex: number,
   modifiers: Array<"Control" | "ControlOrMeta" | "Meta" | "Shift"> = [],
 ): Promise<void> {
-  const row = page.locator(`.bc-grid-row[data-row-index="${rowIndex}"]`).first()
+  const row = mainGrid(page).locator(`.bc-grid-row[data-row-index="${rowIndex}"]`).first()
   await row.click({ modifiers })
 }
 
 async function selectedRowIndexes(page: Page): Promise<number[]> {
-  return await page
+  return await mainGrid(page)
     .locator('.bc-grid-row[aria-selected="true"]')
     .evaluateAll((rows) =>
       rows
@@ -54,7 +58,7 @@ test("Ctrl/Cmd-click toggles a row in the current selection", async ({ page }) =
 
 test("Space toggles selection on the focused row", async ({ page }) => {
   await page.goto("/")
-  await page.locator(".bc-grid").focus()
+  await mainGrid(page).focus()
   await page.keyboard.press("ArrowDown")
   await page.keyboard.press("ArrowDown")
 
@@ -69,7 +73,7 @@ test("Shift+Space and Ctrl/Cmd+Space are reserved and do not toggle selection", 
   page,
 }) => {
   await page.goto("/")
-  await page.locator(".bc-grid").focus()
+  await mainGrid(page).focus()
   await page.keyboard.press("ArrowDown")
 
   await page.keyboard.down("Shift")

@@ -6,7 +6,7 @@ test("global search filters rows and highlights default-rendered matches", async
   const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
   await expect(grid).toBeVisible()
 
-  await page.getByLabel("Search").fill("CUST-00042")
+  await page.getByRole("searchbox", { name: "Global search" }).fill("CUST-00042")
 
   await expect(grid).toHaveAttribute("aria-rowcount", "3")
   await expect(grid.locator(".bc-grid-row").first()).toContainText("CUST-00042")
@@ -19,6 +19,6 @@ test("global search matches formatted currency values", async ({ page }) => {
   const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
   await expect(grid).toBeVisible()
 
-  await page.getByLabel("Search").fill("$50,525")
+  await page.getByRole("searchbox", { name: "Global search" }).fill("$50,525")
   await expect(grid.locator(".bc-grid-row").first()).toContainText("CUST-00001")
 })
