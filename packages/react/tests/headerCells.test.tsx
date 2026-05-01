@@ -102,7 +102,9 @@ describe("renderHeaderCell resize affordance", () => {
     const html = renderColumn(baseColumn)
 
     expect(html).toContain("bc-grid-header-cell-resizable")
+    expect(html).toContain('data-bc-grid-resizable="true"')
     expect(html).toContain("bc-grid-header-resize-handle")
+    expect(html).toContain('data-bc-grid-resize-handle="true"')
   })
 
   test("omits resize affordance markup for fixed-width headers", () => {
@@ -112,7 +114,9 @@ describe("renderHeaderCell resize affordance", () => {
     })
 
     expect(html).not.toContain("bc-grid-header-cell-resizable")
+    expect(html).not.toContain('data-bc-grid-resizable="true"')
     expect(html).not.toContain("bc-grid-header-resize-handle")
+    expect(html).not.toContain('data-bc-grid-resize-handle="true"')
   })
 })
 

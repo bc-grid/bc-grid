@@ -1104,6 +1104,7 @@ export function useColumnResize<TRow>({ columnState, setColumnState }: UseColumn
       event.stopPropagation()
       const handle = event.currentTarget
       handle.setPointerCapture(event.pointerId)
+      handle.dataset.bcGridResizing = "true"
       resizeSessionRef.current = {
         columnId: column.columnId,
         startClientX: event.clientX,
@@ -1130,6 +1131,7 @@ export function useColumnResize<TRow>({ columnState, setColumnState }: UseColumn
     if (handle.hasPointerCapture(event.pointerId)) {
       handle.releasePointerCapture(event.pointerId)
     }
+    delete handle.dataset.bcGridResizing
     resizeSessionRef.current = null
   }, [])
 
