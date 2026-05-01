@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type {
+  BcGridFilter,
   ServerBlockResult,
   ServerPagedResult,
   ServerRowModelEvent,
@@ -19,6 +20,20 @@ const view: ServerViewState = {
   visibleColumns: ["name", "balance"],
 }
 const emptySelection = { mode: "explicit", rowIds: new Set<string>() } as const
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
+}
 
 describe("defaultBlockKey", () => {
   test("formats paged, infinite, and tree block keys", () => {
@@ -93,6 +108,232 @@ describe("ServerBlockCache", () => {
 })
 
 describe("createServerRowModel", () => {
+  test("paged queries keep server totals separate from loaded current-page rows", async () => {
+    const model = createServerRowModel<Row>()
+    const filter: BcGridFilter = {
+      columnId: "name",
+      kind: "column",
+      op: "contains",
+      type: "text",
+      value: "acme",
+    }
+    const serverView = model.createViewState({
+      filter,
+      groupBy: ["status"],
+      searchText: "priority",
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const viewKey = model.createViewKey(serverView)
+    const currentPageRows = [
+      { id: "customer-76", name: "Acme 76" },
+      { id: "customer-77", name: "Acme 77" },
+    ]
+    let capturedQuery: unknown
+
+    const request = model.loadPagedPage({
+      loadPage: async (query) => {
+        capturedQuery = query
+        return {
+          pageIndex: query.pageIndex,
+          pageSize: query.pageSize,
+          rows: currentPageRows,
+          totalRows: 10_000,
+          viewKey: query.viewKey,
+        }
+      },
+      pageIndex: 3,
+      pageSize: 25,
+      view: serverView,
+      viewKey,
+    })
+    const result = await request.promise
+
+    expect(capturedQuery).toMatchObject({
+      mode: "paged",
+      pageIndex: 3,
+      pageSize: 25,
+      view: {
+        filter,
+        groupBy: [{ columnId: "status" }],
+        search: "priority",
+        sort: [{ columnId: "name", direction: "asc" }],
+        visibleColumns: ["id", "name", "status"],
+      },
+      viewKey,
+    })
+    expect(result.rows).toEqual(currentPageRows)
+    expect(model.cache.get(request.blockKey)?.rows).toEqual(currentPageRows)
+
+    const diagnostics = model.getDiagnostics({
+      mode: "paged",
+      rowCount: result.totalRows,
+      selection: emptySelection,
+      view: serverView,
+      viewKey,
+    })
+    expect(diagnostics.rowCount).toBe(10_000)
+    expect(diagnostics.cache.loadedRowCount).toBe(2)
+    expect(diagnostics.lastLoad).toMatchObject({
+      rowCount: 10_000,
+      status: "success",
+    })
+  })
+
+  test("paged view changes use distinct query keys while same-view refresh retains page", async () => {
+    const model = createServerRowModel<Row>()
+    const baseView = model.createViewState({
+      groupBy: [],
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const groupedView = model.createViewState({
+      filter: {
+        columnId: "name",
+        kind: "column",
+        op: "contains",
+        type: "text",
+        value: "acme",
+      },
+      groupBy: ["status"],
+      searchText: "west",
+      sort: [{ columnId: "status", direction: "desc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const baseViewKey = model.createViewKey(baseView)
+    const groupedViewKey = model.createViewKey(groupedView)
+    const loadPage = (rows: Row[]) => async (query: { pageIndex: number; pageSize: number }) => ({
+      pageIndex: query.pageIndex,
+      pageSize: query.pageSize,
+      rows,
+      totalRows: 125,
+    })
+
+    const sameViewRefresh = model.loadPagedPage({
+      loadPage: loadPage([{ id: "same-page", name: "Same" }]),
+      pageIndex: 4,
+      pageSize: 25,
+      view: baseView,
+      viewKey: baseViewKey,
+    })
+    const changedViewReset = model.loadPagedPage({
+      loadPage: loadPage([{ id: "reset-page", name: "Reset" }]),
+      pageIndex: 0,
+      pageSize: 25,
+      view: groupedView,
+      viewKey: groupedViewKey,
+    })
+
+    expect(sameViewRefresh.query.pageIndex).toBe(4)
+    expect(sameViewRefresh.blockKey).toBe(
+      defaultBlockKey({ mode: "paged", pageIndex: 4, pageSize: 25, viewKey: baseViewKey }),
+    )
+    expect(changedViewReset.query.pageIndex).toBe(0)
+    expect(changedViewReset.blockKey).toBe(
+      defaultBlockKey({ mode: "paged", pageIndex: 0, pageSize: 25, viewKey: groupedViewKey }),
+    )
+    expect(changedViewReset.blockKey).not.toBe(sameViewRefresh.blockKey)
+    expect(changedViewReset.query.view).toMatchObject({
+      groupBy: [{ columnId: "status" }],
+      search: "west",
+      sort: [{ columnId: "status", direction: "desc" }],
+      visibleColumns: ["id", "name"],
+    })
+
+    await Promise.all([sameViewRefresh.promise, changedViewReset.promise])
+  })
+
+  test("late paged responses from older query views do not overwrite newer diagnostics or rows", async () => {
+    const model = createServerRowModel<Row>()
+    const oldView = model.createViewState({
+      groupBy: [],
+      searchText: "old",
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const nextView = model.createViewState({
+      filter: {
+        columnId: "name",
+        kind: "column",
+        op: "contains",
+        type: "text",
+        value: "new",
+      },
+      groupBy: ["status"],
+      searchText: "new",
+      sort: [{ columnId: "status", direction: "desc" }],
+      visibleColumns: ["id", "status"],
+    })
+    const oldViewKey = model.createViewKey(oldView)
+    const nextViewKey = model.createViewKey(nextView)
+    const oldLoad = deferred<ServerPagedResult<Row>>()
+    const nextLoad = deferred<ServerPagedResult<Row>>()
+
+    const oldRequest = model.loadPagedPage({
+      loadPage: () => oldLoad.promise,
+      pageIndex: 5,
+      pageSize: 25,
+      view: oldView,
+      viewKey: oldViewKey,
+    })
+    oldRequest.promise.catch(() => {})
+    const nextRequest = model.loadPagedPage({
+      loadPage: () => nextLoad.promise,
+      pageIndex: 0,
+      pageSize: 25,
+      view: nextView,
+      viewKey: nextViewKey,
+    })
+    model.abortExcept(nextRequest.blockKey)
+
+    nextLoad.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "new", name: "New" }],
+      totalRows: 1,
+      viewKey: nextViewKey,
+    })
+    await nextRequest.promise
+
+    oldLoad.resolve({
+      pageIndex: 5,
+      pageSize: 25,
+      rows: [{ id: "stale", name: "Stale" }],
+      totalRows: 126,
+      viewKey: oldViewKey,
+    })
+    await expect(oldRequest.promise).rejects.toThrow("Aborted")
+
+    expect(model.cache.get(nextRequest.blockKey)?.rows).toEqual([{ id: "new", name: "New" }])
+    const oldBlock = model.cache.get(oldRequest.blockKey)
+    if (oldBlock) {
+      expect(oldBlock.state).not.toBe("loaded")
+      expect(oldBlock.rows).not.toContainEqual({ id: "stale", name: "Stale" })
+    }
+    const diagnostics = model.getDiagnostics({
+      mode: "paged",
+      rowCount: 1,
+      selection: emptySelection,
+      view: nextView,
+      viewKey: nextViewKey,
+    })
+    expect(diagnostics.lastLoad).toMatchObject({
+      query: {
+        pageIndex: 0,
+        view: {
+          filterActive: true,
+          groupByCount: 1,
+          searchActive: true,
+          sortCount: 1,
+          visibleColumnCount: 2,
+        },
+        viewKey: nextViewKey,
+      },
+      rowCount: 1,
+      status: "success",
+    })
+  })
+
   test("dedupes concurrent paged requests for the same block key", async () => {
     const model = createServerRowModel<Row>()
     let calls = 0
@@ -924,6 +1165,106 @@ describe("createServerRowModel", () => {
       rowId: (row) => row.id,
     })
     expect(model.cache.get(page.blockKey)?.rows).toEqual([{ id: "a", name: "old" }])
+  })
+
+  test("keeps optimistic paged edits across page changes and rolls back after refetch rejection", async () => {
+    const model = createServerRowModel<Row>()
+    const viewKey = "customers:view"
+    const page0 = model.loadPagedPage({
+      loadPage: () =>
+        Promise.resolve({
+          pageIndex: 0,
+          pageSize: 2,
+          rows: [
+            { id: "a", name: "old" },
+            { id: "b", name: "stable" },
+          ],
+          totalRows: 3,
+          viewKey,
+        }),
+      pageIndex: 0,
+      pageSize: 2,
+      view,
+      viewKey,
+    })
+    await page0.promise
+
+    model.queueMutation({
+      patch: { changes: { name: "optimistic" }, mutationId: "m1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    expect(model.cache.get(page0.blockKey)?.rows).toEqual([
+      { id: "a", name: "optimistic" },
+      { id: "b", name: "stable" },
+    ])
+
+    const page1 = model.loadPagedPage({
+      loadPage: () =>
+        Promise.resolve({
+          pageIndex: 1,
+          pageSize: 2,
+          rows: [{ id: "c", name: "other page" }],
+          totalRows: 3,
+          viewKey,
+        }),
+      pageIndex: 1,
+      pageSize: 2,
+      view,
+      viewKey,
+    })
+    await page1.promise
+    expect(model.cache.get(page1.blockKey)?.rows).toEqual([{ id: "c", name: "other page" }])
+    expect(
+      model.getState({
+        mode: "paged",
+        rowCount: 3,
+        selection: emptySelection,
+        view,
+        viewKey,
+      }).pendingMutations.size,
+    ).toBe(1)
+
+    const refetchedPage0 = model.loadPagedPage({
+      loadPage: () =>
+        Promise.resolve({
+          pageIndex: 0,
+          pageSize: 2,
+          rows: [
+            { id: "a", name: "server still old" },
+            { id: "b", name: "stable" },
+          ],
+          totalRows: 3,
+          viewKey,
+        }),
+      pageIndex: 0,
+      pageSize: 2,
+      view,
+      viewKey,
+    })
+    expect((await refetchedPage0.promise).rows).toEqual([
+      { id: "a", name: "optimistic" },
+      { id: "b", name: "stable" },
+    ])
+
+    model.settleMutation({
+      result: { mutationId: "m1", reason: "Name failed validation", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+
+    expect(model.cache.get(refetchedPage0.blockKey)?.rows).toEqual([
+      { id: "a", name: "server still old" },
+      { id: "b", name: "stable" },
+    ])
+    expect(model.cache.get(page1.blockKey)?.rows).toEqual([{ id: "c", name: "other page" }])
+    expect(
+      model.getState({
+        mode: "paged",
+        rowCount: 3,
+        selection: emptySelection,
+        view,
+        viewKey,
+      }).pendingMutations.size,
+    ).toBe(0)
   })
 
   test("settles accepted mutations with the server canonical row", () => {
