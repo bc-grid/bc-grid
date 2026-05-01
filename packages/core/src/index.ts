@@ -232,6 +232,10 @@ export interface BcGridStateProps {
   defaultGroupBy?: readonly ColumnId[]
   onGroupByChange?: (next: readonly ColumnId[], prev: readonly ColumnId[]) => void
 
+  pivotState?: BcPivotState
+  defaultPivotState?: BcPivotState
+  onPivotStateChange?: (next: BcPivotState, prev: BcPivotState) => void
+
   columnState?: readonly BcColumnStateEntry[]
   defaultColumnState?: readonly BcColumnStateEntry[]
   onColumnStateChange?: (

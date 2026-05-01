@@ -73,7 +73,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
 | Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
-| Columns and filters panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` | `sidebar={["columns", "filters"]}` |
+| Columns, filters, and pivot panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` / `?toolPanel=pivot` | `sidebar={["columns", "filters", "pivot"]}`, `pivotState` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
 | Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
 | Checkbox selection | Available | `?checkbox=1` | `checkboxSelection` |
@@ -83,7 +83,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Master detail | Available | `?masterDetail=1` | `renderDetailPanel` |
 | Auto height | Available | `?autoHeight=1` | `height="auto"` |
 | Server row model | Available | Package API | `<BcServerGrid>` |
-| Pivot panel | Planned | Not exposed in examples | Pivot UI |
+| Pivot grid rendering | Planned | Not exposed in examples | Pivot row/column rendering integration |
 | Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
 
 ## Global search

@@ -11,6 +11,7 @@ import type {
   BcGridSort,
   BcGridStateProps,
   BcPaginationState,
+  BcPivotState,
   BcRowId,
   BcRowState,
   BcSelection,
@@ -314,12 +315,18 @@ export interface BcSidebarContext<TRow = unknown> {
   setFilterState: (state: BcGridFilter | null) => void
   groupBy: readonly ColumnId[]
   setGroupBy: (state: readonly ColumnId[]) => void
+  pivotState: BcPivotState
+  setPivotState: (state: BcPivotState) => void
   groupableColumns: readonly { columnId: ColumnId; header: string }[]
   columnFilterText: Readonly<Record<ColumnId, string>>
   setColumnFilterText: (columnId: ColumnId, value: string) => void
   clearColumnFilterText: (columnId?: ColumnId) => void
   getSetFilterOptions?: (columnId: ColumnId) => readonly { value: string; label: string }[]
   messages: BcGridMessages
+  /**
+   * Legacy placeholder retained for custom panels created before the pivot
+   * state API. New code should use `pivotState` / `setPivotState`.
+   */
   pivot?: unknown
 }
 
