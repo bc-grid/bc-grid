@@ -43,6 +43,7 @@ import {
   pinnedClassName,
   pinnedEdgeClassName,
 } from "./gridInternals"
+import { usePopupDismiss } from "./internal/popup-dismiss"
 import { computePopupPosition } from "./internal/popup-position"
 import type { BcGridMessages } from "./types"
 
@@ -1153,6 +1154,14 @@ interface FilterPopupProps {
 const FILTER_POPUP_ESTIMATED_SIZE = { width: 320, height: 200 }
 const FILTER_POPUP_VIEWPORT_MARGIN = 8
 
+/**
+ * Selectors the dismiss helper should NOT treat as outside-pointer
+ * dismissals. The popup itself is excluded by `popupRef.contains`;
+ * the trigger funnel button is excluded here so its own click toggles
+ * cleanly instead of fighting an open-then-close race.
+ */
+const FILTER_POPUP_IGNORE_SELECTORS = ['[data-bc-grid-filter-button="true"]'] as const
+
 function computeFilterPopupPosition(anchor: DOMRect, popup: { width: number; height: number }) {
   // SSR fallback: when `window` isn't present, render at the anchor
   // origin without clamping. The component remounts on the client and
@@ -1193,33 +1202,20 @@ export function FilterPopup({
   onClose,
   messages,
 }: FilterPopupProps): ReactNode {
-  // Close on Escape or pointer-down outside.
-  useEffect(() => {
-    const handleKey = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation()
-        onClose()
-      }
-    }
-    const handlePointer = (event: globalThis.PointerEvent) => {
-      const target = event.target as Element | null
-      if (!target) return
-      if (target.closest('[data-bc-grid-filter-popup="true"]')) return
-      if (target.closest('[data-bc-grid-filter-button="true"]')) return
-      onClose()
-    }
-    document.addEventListener("keydown", handleKey, true)
-    document.addEventListener("pointerdown", handlePointer, true)
-    return () => {
-      document.removeEventListener("keydown", handleKey, true)
-      document.removeEventListener("pointerdown", handlePointer, true)
-    }
-  }, [onClose])
-
   const filterId = `bc-grid-filter-popup-${domToken(columnId)}`
   const titleId = `${filterId}-title`
   const isActive = filterText.length > 0
   const popupRef = useRef<HTMLDivElement | null>(null)
+  // Shared dismiss-and-focus-return contract — Escape closes, outside
+  // pointer-down closes (skipping the trigger button so its own click
+  // toggles cleanly), focus returns to the trigger button when the
+  // popup unmounts.
+  usePopupDismiss({
+    open: true,
+    onClose,
+    popupRef,
+    ignoreSelectors: FILTER_POPUP_IGNORE_SELECTORS,
+  })
   // Initial position estimate, refined to the actual popup size after
   // mount. The estimate uses the .bc-grid-filter-popup CSS contract
   // (`width: min(20rem, ...)` so ~320px) and a generic editor height.
@@ -1243,6 +1239,12 @@ export function FilterPopup({
       data-bc-grid-filter-popup="true"
       data-column-id={columnId}
       data-active={isActive ? "true" : undefined}
+      // Radix popper conventions: `data-state="open"` lets consumer
+      // CSS animate enter/exit and condition styles. The popup is
+      // unmount-on-close, so the value is constant — but the
+      // attribute is set explicitly so apps can target the popup
+      // exactly the same way they would a Radix Popover.Content.
+      data-state="open"
       data-side={position.side}
       data-align={position.align}
       role="dialog"
