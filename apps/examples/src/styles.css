@@ -175,6 +175,11 @@ button {
   color: hsl(var(--accent-foreground));
 }
 
+.nav-item:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
 .nav-item small {
   color: hsl(var(--muted-foreground));
 }
@@ -340,21 +345,25 @@ button {
 }
 
 .segmented button {
+  height: 2.25rem;
   min-width: 5.75rem;
   border: 0;
   background: transparent;
   color: hsl(var(--muted-foreground));
   padding: 0.45rem 0.7rem;
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .tool-panel-buttons button {
+  height: 2.25rem;
   min-width: 5.75rem;
   border: 0;
   background: transparent;
   color: hsl(var(--muted-foreground));
   padding: 0.45rem 0.7rem;
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .segmented button + button {
@@ -365,16 +374,25 @@ button {
   border-left: 1px solid hsl(var(--input));
 }
 
+.segmented button:hover:not(.selected),
+.tool-panel-buttons button:hover:not([aria-pressed="true"]) {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
 .segmented .selected {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  box-shadow: inset 0 0 0 1px hsl(var(--border));
 }
 
 .tool-panel-buttons button[aria-pressed="true"] {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  box-shadow: inset 0 0 0 1px hsl(var(--border));
 }
 
+.segmented button:focus-visible,
 .tool-panel-buttons button:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: -2px;
@@ -398,6 +416,12 @@ button {
 .bc-grid-action:hover {
   background: hsl(var(--accent));
   color: hsl(var(--accent-foreground));
+}
+
+.primary-action:focus-visible,
+.bc-grid-action:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 .demo-panel .bc-grid {

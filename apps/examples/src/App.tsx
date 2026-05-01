@@ -102,13 +102,13 @@ const featureDiscoveryRows = [
   {
     feature: "Inline filters",
     status: "Available",
-    entry: "AR Customers filter row",
+    entry: "AR Customers: Customer column",
     api: "filter, showFilterRow",
   },
   {
     feature: "Popup filters",
     status: "Available",
-    entry: "?filterPopup=1",
+    entry: "category/date/amount columns or ?filterPopup=1",
     api: "filter.variant = popup",
   },
   {
@@ -305,7 +305,7 @@ export function App() {
             <h2 id="example-title">Accounts Receivable Customers</h2>
             <p>{customerRows.length.toLocaleString()} customer ledger rows</p>
           </div>
-          <span className="status-pill">Q1 gate</span>
+          <span className="status-pill">Feature demo</span>
         </header>
 
         <CustomerGridDemo
@@ -483,7 +483,7 @@ function CustomerGridDemo({
         width: 132,
         format: "code",
         cellClassName: "customer-code-cell",
-        filter: { type: "text" },
+        filter: { type: "text", variant: "popup" },
       },
       {
         columnId: "legalName",
@@ -500,7 +500,7 @@ function CustomerGridDemo({
         field: "tradingName",
         header: "Trading Name",
         width: 220,
-        filter: { type: "text" },
+        filter: { type: "text", variant: "popup" },
         // ?edit=1: editable + validate (rejects empty). Uses the proper
         // editor-text factory (kind: "text") from @bc-grid/editors with
         // mount-time select-all + theme-aware styling.
@@ -527,14 +527,14 @@ function CustomerGridDemo({
         field: "region",
         header: "Region",
         width: 150,
-        filter: { type: "text" },
+        filter: { type: "set", variant: "popup" },
       },
       {
         columnId: "owner",
         field: "owner",
         header: "Collector",
         width: 170,
-        filter: { type: "text" },
+        filter: { type: "set", variant: "popup" },
         tooltip: (row) => `Collector: ${row.owner}`,
         // ?edit=1: editable free-form name with autocomplete suggestions
         // sourced from a 30-name roster via async fetchOptions. AbortSignal
@@ -558,7 +558,7 @@ function CustomerGridDemo({
         field: "terms",
         header: "Terms",
         width: 118,
-        filter: { type: "text" },
+        filter: { type: "set", variant: "popup" },
       },
       {
         columnId: "creditHold",
@@ -566,7 +566,7 @@ function CustomerGridDemo({
         align: "center",
         width: 128,
         format: "boolean",
-        filter: { type: "boolean" },
+        filter: { type: "boolean", variant: "popup" },
         valueGetter(row) {
           return row.status === "Credit Hold"
         },
@@ -578,7 +578,7 @@ function CustomerGridDemo({
         align: "right",
         width: 140,
         format: { type: "currency", currency: "USD", precision: 0 },
-        filter: { type: "number" },
+        filter: { type: "number", variant: "popup" },
         ...(aggregationDemo ? { aggregation: { type: "max" as const } } : {}),
         // ?edit=1: editable numeric column. valueParser strips locale
         // thousands separators (commas, spaces) and runs parseFloat.
@@ -607,7 +607,7 @@ function CustomerGridDemo({
         align: "right",
         width: 144,
         format: { type: "currency", currency: "USD", precision: 0 },
-        filter: { type: "number" },
+        filter: { type: "number", variant: "popup" },
         ...(aggregationDemo ? { aggregation: { type: "sum" as const } } : {}),
       },
       {
@@ -667,7 +667,7 @@ function CustomerGridDemo({
         field: "status",
         header: "Status",
         width: 136,
-        filter: { type: "text" },
+        filter: { type: "set", variant: "popup" },
         cellRenderer(params) {
           return <StatusBadge status={params.row.status} />
         },
@@ -685,7 +685,7 @@ function CustomerGridDemo({
         header: "Last Invoice",
         width: 260,
         format: "date",
-        filter: { type: "date" },
+        filter: { type: "date", variant: "popup" },
         // ?edit=1: editable date field. Native <input type="date"> emits
         // YYYY-MM-DD; valueParser keeps that as-is. validate enforces the
         // realistic ERP constraint that an invoice can't be dated in the future.
@@ -714,7 +714,7 @@ function CustomerGridDemo({
         header: "Last Payment",
         width: 260,
         format: "date",
-        filter: { type: "date" },
+        filter: { type: "date", variant: "popup" },
       },
       {
         columnId: "cutoffTime",
@@ -775,6 +775,7 @@ function CustomerGridDemo({
         field: "flags",
         header: "Flags",
         width: 220,
+        filter: { type: "set", variant: "popup" },
         // Render reads `params.value` (overlayed when committed) — not
         // `params.row.flags` — so a committed edit reflects in the cell
         // immediately. Empty rows render an em-dash so the cell isn't
