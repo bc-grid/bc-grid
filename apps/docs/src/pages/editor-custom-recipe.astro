@@ -187,9 +187,14 @@ const commitSnippet = `<BcEditGrid<Item>
 const checklist = [
   "Factory exports a BcCellEditor with Component + optional prepare + optional kind discriminator.",
   "Component attaches focusRef in useLayoutEffect (not useEffect) so the framework's mount-focus call lands.",
+  "Component cleans up focusRef.current = null in the layout-effect's return so a stale element reference doesn't leak after unmount.",
   "Component sets aria-label from column.header so AT announces the column context.",
-  "Component sets aria-describedby pointing at a hidden span when error is present.",
-  "Component calls commit(value) exactly once on user confirmation, or cancel() to abort.",
+  'Component sets aria-describedby pointing at a hidden span when error is present and aria-invalid="true" on the focusable input.',
+  "Component disables its commit affordance while props.pending is true so Enter / Tab can't double-commit during async settle.",
+  "Component renders props.error visibly so async validation rejection isn't silent.",
+  "Component calls commit(value) exactly once on user confirmation, or cancel() to abort — never both, never twice.",
+  "Component does NOT swallow Escape — forward it to props.cancel() or let the wrapper's onKeyDown handle it.",
+  "Component does NOT bind activation or commit logic to Ctrl / Alt / Meta chords — those belong to the host shortcuts.",
   "Typed-value editors call event.stopPropagation() in their own onKeyDown and pass { moveOnSettle } to commit so the wrapper doesn't fire a duplicate string commit.",
   "Component uses prepareResult when the editor needs async setup (palettes, options, etc.).",
   "Popovered editors mark portaled content with data-bc-grid-editor-portal so click-outside doesn't fire inside the popover.",
@@ -364,6 +369,173 @@ const checklist = [
       </div>
       <Code code={commitSnippet} lang="tsx" theme="github-dark" />
     </div>
+  </section>
+
+  <section class="section">
+    <h2>7. Accessibility contract — what custom editors must mirror</h2>
+    <p>
+      Built-in editors (<code>text</code>, <code>number</code>, <code>date</code>,
+      <code>select</code>, <code>multiSelect</code>, <code>autocomplete</code>,
+      <code>checkbox</code>) all share a single accessibility contract. Custom
+      editors must mirror it so AT users get the same announcements regardless
+      of which editor is mounted.
+    </p>
+
+    <h3>Focus handoff</h3>
+    <ul>
+      <li>
+        Assign <code>focusRef</code> from a <code>useLayoutEffect</code>, not a
+        <code>useEffect</code>. React fires child layout effects before parent
+        layout effects in the commit phase; the framework's parent layout effect
+        calls <code>focusRef.current?.focus()</code> after mount, so the
+        assignment must already be in place. <code>useEffect</code> runs after
+        paint — too late; the framework reads <code>null</code> and gives up,
+        leaving keyboard focus on the cell instead of the input. The default
+        text editor uses this idiom (regression-pinned by an SSR test); custom
+        editors MUST too.
+      </li>
+      <li>
+        The cleanup of the same layout effect MUST null out <code>focusRef.current</code>.
+        On unmount the framework's parent cleanup dispatches the
+        <code>unmounted</code> event before the editor element is detached;
+        a stale ref pointing at the about-to-disappear element can leak into
+        consumer code that read it (e.g. logging). Mirror the built-in
+        <code>text</code> / <code>number</code> editors here.
+      </li>
+      <li>
+        The element you hand to <code>focusRef</code> SHOULD be the focusable
+        affordance the user actually edits — the <code>&lt;input&gt;</code>,
+        <code>&lt;select&gt;</code>, or trigger button. Composite editors
+        (button + popover) hand the trigger so Tab / Shift+Tab on the wrapper
+        cycle correctly when the popover is closed.
+      </li>
+    </ul>
+
+    <h3>ARIA labelling and error linkage</h3>
+    <ul>
+      <li>
+        <strong><code>aria-label</code></strong> — set from
+        <code>column.header</code> (string headers) or
+        <code>column.field</code> / <code>column.columnId</code> as a fallback.
+        AT users tabbing into edit mode hear "Status, edit text" rather than
+        the bare "edit text".
+      </li>
+      <li>
+        <strong><code>aria-invalid</code></strong> — <code>true</code> when
+        <code>props.error</code> is set, <code>undefined</code> otherwise.
+        AT users hear "invalid" when the validator rejected the candidate
+        value.
+      </li>
+      <li>
+        <strong><code>aria-describedby</code></strong> — when
+        <code>props.error</code> is set, point at a hidden
+        <code>&lt;span id=&#123;errorId&#125;&gt;&#123;props.error&#125;&lt;/span&gt;</code>
+        rendered inside the editor's DOM scope. Use <code>useId()</code> for
+        the id so SSR / client renders agree. AT users hear the error text
+        as the input's description after "invalid". Without
+        <code>aria-describedby</code> the error is silent for AT.
+      </li>
+      <li>
+        <strong>Don't rely on <code>role="alert"</code> for the error.</strong>
+        The grid's polite + assertive live regions already announce validation
+        rejections via <code>BcGridMessages</code>; layering a per-input
+        alert role causes AT users to hear the error twice.
+      </li>
+    </ul>
+
+    <h3>Pending and disabled treatment</h3>
+    <ul>
+      <li>
+        When <code>props.pending</code> is <code>true</code>, set
+        <code>disabled</code> on the focusable input. The framework's commit
+        path serialises one pending validation at a time per cell, but a
+        consumer's <code>onCellEditCommit</code> Promise can sit in flight
+        for seconds; the disabled treatment prevents the user from re-firing
+        the commit pipeline mid-flight (Enter / Tab stop working until it
+        settles).
+      </li>
+      <li>
+        On <code>data-bc-grid-editor-state="pending"</code> the bundled
+        chrome paints a subtle disabled treatment via
+        <code>--bc-grid-muted-fg</code> + 0.55 opacity. Custom editors
+        get this for free if they set the same data attribute on the
+        focusable element.
+      </li>
+      <li>
+        Pending wins over error in the data-state precedence — the spinner
+        chrome stays consistent when async commit is mid-flight after a
+        prior validation rejection. <code>aria-invalid</code> still reflects
+        the error so AT users hear the message during pending.
+      </li>
+    </ul>
+
+    <h3>Portal click-outside</h3>
+    <ul>
+      <li>
+        The framework attaches a document-level <code>pointerdown</code>
+        listener and walks <code>event.target.closest("[data-bc-grid-editor-root],
+        [data-bc-grid-editor-portal]")</code> to decide whether the click
+        committed-on-outside or stayed inside the editor's logical scope.
+      </li>
+      <li>
+        <code>data-bc-grid-editor-root="true"</code> is set on the editor
+        wrapper by the framework — custom editors don't have to add it.
+      </li>
+      <li>
+        <code>data-bc-grid-editor-portal="true"</code> is the consumer's opt-in
+        for popovered content rendered outside the editor's DOM tree (date
+        pickers, autocomplete dropdowns, custom shadcn / Radix popovers
+        attached to <code>document.body</code>). Without it, clicks inside the
+        popover commit the editor and dismiss the popover at the same time —
+        the user can't pick from the popover.
+      </li>
+    </ul>
+
+    <h3>What NOT to do</h3>
+    <ul>
+      <li>
+        <strong>Don't hide the focusable input behind a custom focus
+        manager.</strong> The framework's <code>focusRef</code> handoff
+        assumes the input is keyboard-focusable as soon as it's in the DOM.
+        A wrapper that puts the input in a hidden subtree and proxies clicks
+        through breaks Tab / Shift+Tab, the assistive-tech focus walk, and
+        the framework's <code>focus({ preventScroll: true })</code> call.
+      </li>
+      <li>
+        <strong>Don't attach <code>onBlur</code> handlers that call
+        <code>commit()</code>.</strong> Blur fires when the user tabs to the
+        next cell, when the user clicks outside (already handled by the
+        framework's pointerdown listener), and when an in-editor popover
+        steals focus (bad). The framework's keyboard + click-outside paths
+        cover the legitimate commit moments; an <code>onBlur</code> commit
+        races with them and double-commits.
+      </li>
+      <li>
+        <strong>Don't reach into the parent grid's DOM</strong> — the row
+        containing your cell can disappear from the DOM at any time
+        (virtualisation). The framework's in-flight retention keeps your
+        cell alive while the editor is mounted, but neighbouring rows / cells
+        are not stable. Read row data from <code>props.row</code>; column
+        data from <code>props.column</code>.
+      </li>
+      <li>
+        <strong>Don't render multiple focusable controls inside the
+        editor.</strong> Tab / Shift+Tab inside the editor walks them, but
+        the framework's wrapper-level Tab handler then commits with
+        <code>moveOnSettle: "right"</code> — the user lands on the next
+        grid cell, not the next editor control. If you genuinely need
+        multiple inputs (e.g. a date-range editor with two dates), put the
+        secondary input behind a popover marked
+        <code>data-bc-grid-editor-portal</code> so Tab inside the popover
+        doesn't trigger the wrapper's commit handler.
+      </li>
+      <li>
+        <strong>Don't <code>setState</code> after <code>props.cancel()</code>.</strong>
+        The framework unmounts the editor on the next render; the state
+        update warns about updates on an unmounted component. If you need
+        cleanup, do it in a <code>useLayoutEffect</code> cleanup.
+      </li>
+    </ul>
   </section>
 
   <section class="section">

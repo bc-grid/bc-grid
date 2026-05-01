@@ -1836,6 +1836,23 @@ Tab / Shift+Enter / Shift+Tab / Escape remain grid-owned by the editor portal,
 and commit reads `input.checked` so the value emitted to `onCellEditCommit` is
 a boolean. Tri-state checkbox editing is not part of the initial v0.4 slice.
 
+#### Accessibility contract
+
+Custom editors share a single accessibility contract with the bundled set, summarised below. The full per-piece detail (and a "what NOT to do" list — don't swallow Escape, don't `onBlur` → commit, don't render multiple focusable controls without a portal marker) lives in the [Custom editor recipe](https://github.com/bc-grid/bc-grid/blob/main/apps/docs/src/pages/editor-custom-recipe.astro) §7.
+
+| Surface | Required | Reason |
+|---|---|---|
+| `focusRef` assigned in `useLayoutEffect` (not `useEffect`) | Yes | The framework's parent layout effect calls `focusRef.current?.focus()` after mount; `useEffect` runs after paint, so the ref reads `null` and focus stays on the cell. The bundled default text editor uses this idiom (regression-pinned by an SSR test in `editorPortal.test.tsx`). |
+| `focusRef.current = null` in the layout-effect cleanup | Yes | A stale ref pointing at an about-to-detach element leaks into consumer code that read it. |
+| `aria-label` set from `column.header` | Yes | AT users hear "Status, edit text" rather than the bare "edit text". |
+| `aria-invalid="true"` when `props.error` is set | Yes | AT users hear "invalid" when the validator rejected the candidate value. |
+| `aria-describedby` pointing at a hidden span when `props.error` is set | Yes | Without it the validator's error text is silent for AT. The grid's polite live region announces it once via `BcGridMessages`; the per-input `aria-describedby` carries the message into subsequent `Tab` reads. |
+| `disabled` on the focusable input when `props.pending` is `true` | Yes | Async commit pending — disabling the input prevents Enter / Tab from re-firing the commit pipeline mid-flight. |
+| `data-bc-grid-editor-portal="true"` on portaled popovers | Conditional | Required when the editor mounts content outside its own DOM tree (date pickers, autocomplete dropdowns, custom shadcn / Radix popovers attached to `document.body`). Without it the framework's click-outside listener treats clicks inside the popover as commit-on-outside and dismisses the editor. |
+| Visible rendering of `props.error` | Yes | Sighted users need to see why the validator rejected the value. |
+
+The "pending wins over error" data-state precedence is enforced by the bundled chrome (`data-bc-grid-editor-state="pending"` paints disabled treatment regardless of `error`); custom editors get this for free if they set `data-bc-grid-editor-state` from `props.pending` and `props.error`.
+
 ### 7.1 Lookup, select, autocomplete, and checkbox editor guidance
 
 Lookup-style editors are intentionally native-control based: `selectEditor`
