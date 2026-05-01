@@ -345,7 +345,7 @@
 }
 
 .bc-grid-header-filter-button-active {
-  color: hsl(var(--accent-foreground, var(--foreground, 222 47% 11%)));
+  color: var(--bc-grid-focus-ring);
 }
 
 .bc-grid-header-filter-button-active:hover {
@@ -440,13 +440,13 @@
 }
 
 .bc-grid-filter-popup-apply {
-  background: hsl(var(--primary, 221 83% 53%));
-  border-color: hsl(var(--primary, 221 83% 53%));
-  color: hsl(var(--primary-foreground, 0 0% 100%));
+  background: var(--bc-grid-row-selected);
+  border-color: var(--bc-grid-focus-ring);
+  color: var(--bc-grid-row-selected-fg);
 }
 
 .bc-grid-filter-popup-apply:hover:not(:disabled) {
-  background: hsl(var(--primary, 221 83% 53%) / 0.9);
+  background: color-mix(in srgb, var(--bc-grid-row-selected) 82%, var(--bc-grid-focus-ring));
 }
 
 .bc-grid-filter-popup-clear {
