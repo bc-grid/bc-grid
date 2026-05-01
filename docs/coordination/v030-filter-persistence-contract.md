@@ -5,7 +5,7 @@
 **Doc type:** **planning / coordination — not an implementation task.**
 **Audience:** coordinator triage when v0.3 planning starts; consumer-facing doc when the API page picks this up.
 
-This audit pins what `packages/react/src/persistence.ts` actually persists, what it clears, what is intentionally asymmetric between the two backends (localStorage / URL), and what should NOT be overclaimed in `api.md` or the migration guide. It is the read-side companion to `2026-05-01-filtering.md` (PR #196 / worker2) and the v0.3 filtering gap map (PR #213 / worker4).
+This audit pins what `packages/react/src/persistence.ts` actually persists, what it clears, what is intentionally asymmetric between the two backends (localStorage / URL), and what should NOT be overclaimed in `api.md` or the migration guide. It is the read-side companion to `2026-05-01-filtering.md` (PR #196 / worker2) and the v0.3 filtering / search / persistence planning stream.
 
 The audit found no clearly isolated bugs. Findings ship as a documented contract + corner-case tests.
 
@@ -20,7 +20,7 @@ The two persistence backends in `@bc-grid/react`:
 
 Out of scope:
 - Server-row-model state-snapshots (`BcServerGridApi.getServerRowModelState()`); separate persistence layer.
-- Search-text persistence — covered as a gap in the v0.3 filtering gap map (§5 `search-persistence`); not implemented today.
+- Search-text persistence — a v0.3 follow-up candidate; not implemented today.
 - Edit-overlay persistence — overlay is by design ephemeral; the consumer's `data` prop is canonical.
 
 ## 2. What persists where (the contract)
@@ -36,7 +36,7 @@ Out of scope:
 | `groupBy` | ✓ | — | Currently per-machine; could expand to URL later. |
 | `filter` | ✓ | ✓ | Filter is the most user-visible state; both backends carry it. URL takes precedence over localStorage on mount per the existing wiring in `grid.tsx`. |
 | `sidebarPanel` | ✓ | — | Per-machine preference; not shareable. |
-| `searchText` | — | — | **Not persisted by either backend today.** Tracked as a v0.3 follow-up in the filtering gap map. |
+| `searchText` | — | — | **Not persisted by either backend today.** Tracked as a v0.3 follow-up candidate. |
 | Edit overlay | — | — | Ephemeral by design; consumer's `data` prop is canonical (per editing-rfc §Row-model ownership). |
 
 ### 2.2 Storage-key convention
@@ -90,7 +90,7 @@ The following items have come up in conversations / docs as "should persist" but
 
 | Item | Status | Reason / pointer |
 |---|---|---|
-| `searchText` | Not persisted (gap) | Tracked as `search-persistence` in the v0.3 filtering gap map (§5). Not implemented today. |
+| `searchText` | Not persisted (gap) | Recommended as a `search-persistence` follow-up. Not implemented today. |
 | Selection state (`BcSelection`) | Not persisted (deliberate) | Selection is ephemeral by intent; reloads start with the consumer's `defaultSelection` or empty. |
 | Range selection (`BcRangeSelection`) | Not persisted (deliberate) | Same as above; range state is session-scoped. |
 | Active cell | Not persisted (deliberate) | Focus / cursor position is per-tab. |
@@ -150,7 +150,7 @@ If a future audit surfaces a real bug, file it as a focused queue task; the pers
 
 ## 7. v0.3 follow-ups (not this PR)
 
-These are tracked in `docs/coordination/v030-filtering-gap-map.md` §5 and are not closed by this audit:
+These are recommended follow-ups and are not closed by this audit:
 
 - **`search-persistence`** (P1) — extend both backends to include `searchText`. Same precedence rules as filter.
 - **`persistence-schema-version`** (P1) — version-stamp the persisted JSON; add a migration helper that reads the legacy unstamped shape and returns a stamped one. Pre-v0.4 hardening.
@@ -162,7 +162,7 @@ These are tracked in `docs/coordination/v030-filtering-gap-map.md` §5 and are n
 - `packages/react/tests/persistence.test.ts` — test fixture + corner cases.
 - `packages/react/src/grid.tsx` — read-side wiring and the `defaultX ?? URL ?? localStorage ?? null` cascade.
 - `docs/api.md §3.3` — declared persistence contract (currently out of date for `filter` / `sidebarPanel`; flagged in §3 for a docs follow-up).
-- `docs/coordination/v030-filtering-gap-map.md` §5 — `search-persistence` + `persistence-schema-version` follow-up tasks.
+- `docs/coordination/release-milestone-roadmap.md` — v0.3 milestone context for filtering / search / persistence follow-up tasks.
 - `docs/audits/ag-grid-comparison/2026-05-01-filtering.md` (PR #196) — the AG Grid filter-side audit.
 
 ## 9. What this PR is NOT
@@ -170,4 +170,4 @@ These are tracked in `docs/coordination/v030-filtering-gap-map.md` §5 and are n
 - Not an implementation PR. Docs + tests only.
 - Not an `api.md` update. The §3 doc-claim audit recommends extending `§3.3` to include `filter` and `sidebarPanel`, but doing it lives in a separate (XS) follow-up task per the brief's "do not touch release docs" boundary.
 - Not a bug fix. The audit found three behaviours that looked bug-shaped but are intentional; tests in §5 pin the contract.
-- Not a release call. v0.2.0 has shipped; v0.3 readiness is tracked in the filtering gap map (§6). This audit is one input among several.
+- Not a release call. v0.2.0 has shipped; v0.3 readiness is tracked through the roadmap and coordinator queue. This audit is one input among several.
