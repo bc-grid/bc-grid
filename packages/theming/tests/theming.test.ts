@@ -653,6 +653,13 @@ describe("@bc-grid/theming", () => {
   test("CSS exposes a token-based header resize affordance", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
 
+    const ruleFor = (selector: string) => {
+      const start = css.indexOf(selector)
+      if (start < 0) return ""
+      const end = css.indexOf("}", start)
+      return css.slice(start, end + 1)
+    }
+
     expect(css).toContain("--bc-grid-column-resize-affordance")
     expect(css).toContain("--bc-grid-column-resize-affordance-hover")
     expect(css).toContain("--bc-grid-column-resize-affordance-active")
@@ -660,15 +667,29 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("box-shadow: inset -1px 0 0 var(--bc-grid-column-separator)")
     expect(css).toContain(".bc-grid-header-cell-resizable .bc-grid-header-resize-handle::before")
     expect(css).toContain(".bc-grid-header-cell-resizable .bc-grid-header-resize-handle::after")
-    expect(css).toContain(".bc-grid-header-resize-handle:hover::before")
-    expect(css).toContain(".bc-grid-header-resize-handle:hover::after")
+    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::before")
+    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::after")
     expect(css).toContain("pointer-events: none")
     expect(css).not.toContain(".bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle")
     expect(css).not.toContain(
       ".bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle",
     )
+    expect(css).not.toMatch(
+      /\.bc-grid-header-cell(?:-resizable)?(?::hover|:focus-within)[^{,]*\.bc-grid-header-resize-handle/,
+    )
+    expect(css).not.toContain(".bc-grid-header-resize-handle:hover::before")
+    expect(css).not.toContain(".bc-grid-header-resize-handle:hover::after")
     expect(css).not.toContain(".bc-grid-header-cell::after")
     expect(css).not.toContain(".bc-grid-header-cell-resizable::before")
+
+    const hoverAfterRule = ruleFor(
+      ".bc-grid-header-resize-handle:is(:hover, :focus-visible)::after",
+    )
+    const activeAfterRule = ruleFor(
+      '.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after',
+    )
+    expect(hoverAfterRule).not.toMatch(/\bheight:/)
+    expect(activeAfterRule).not.toMatch(/\bheight:/)
   })
 
   test("header resize affordance avoids pinned-edge pseudo-element collisions", () => {
@@ -677,13 +698,31 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain(".bc-grid-cell-pinned-left-edge::after")
     expect(css).toContain(".bc-grid-cell-pinned-right-edge::before")
     expect(css).toContain(".bc-grid-header-cell {")
-    expect(css).toContain(".bc-grid-header-resize-handle:hover::before")
+    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::before")
     expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::before')
     expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after')
     expect(css).toContain("--bc-grid-column-resize-affordance-active: Highlight")
     expect(css).toContain("border-inline-end: 1px solid var(--bc-grid-column-separator)")
     expect(css).toContain("background: none")
     expect(css).toContain("z-index: 5")
+  })
+
+  test("header menu trigger states do not drive resize separator states", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    const resizeSelectorPattern =
+      /\.bc-grid-header-(?:cell|menu-button|filter-button)(?::hover|:active|:focus-visible|\[data-state="open"\])[^{}]*\.bc-grid-header-resize-handle/
+    expect(css).not.toMatch(resizeSelectorPattern)
+
+    expect(css).toMatch(
+      /\.bc-grid-header-menu-button:hover\s*\{[^}]*background:\s*var\(--bc-grid-row-hover\)/,
+    )
+    expect(css).toMatch(
+      /\.bc-grid-header-menu-button:active\s*\{[^}]*background:\s*var\(--bc-grid-accent-soft\)/,
+    )
+    expect(css).toMatch(
+      /\.bc-grid-header-menu-button:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--bc-grid-focus-ring\)/,
+    )
   })
 
   test("CSS exposes compact master-detail panel affordances", () => {
