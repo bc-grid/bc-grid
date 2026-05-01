@@ -25,6 +25,7 @@ import {
   customerRows,
   packageRows,
 } from "./examples"
+import { featureDiscoveryRows, featureShortcuts } from "./featureDiscovery"
 import { type CustomerContactPanelState, customerContactPanelState } from "./masterDetailExample"
 import { ServerEditGridExample } from "./serverEditExample"
 
@@ -85,122 +86,6 @@ const FLAG_LABELS: Record<CustomerFlag, string> = {
   "manual-review": "Manual Review",
   vip: "VIP",
 }
-
-const featureDiscoveryRows = [
-  {
-    feature: "Sort, resize, pin",
-    status: "Available",
-    entry: "AR Customers headers",
-    api: "sortable, resizable, pinned",
-  },
-  {
-    feature: "Column groups",
-    status: "Available",
-    entry: "?columnGroups=1",
-    api: "columns[].children",
-  },
-  {
-    feature: "Inline filters",
-    status: "Available",
-    entry: "AR Customers filter row",
-    api: "filter, showFilterRow",
-  },
-  {
-    feature: "Popup filters",
-    status: "Available",
-    entry: "?filterPopup=1",
-    api: "filter.variant = popup",
-  },
-  {
-    feature: "Global search",
-    status: "Available",
-    entry: "AR Customers toolbar",
-    api: "searchText, defaultSearchText",
-  },
-  {
-    feature: "Columns panel",
-    status: "Available",
-    entry: "Tool panels control or ?toolPanel=columns",
-    api: 'sidebar={["columns"]}',
-  },
-  {
-    feature: "Filters panel",
-    status: "Available",
-    entry: "Tool panels control or ?toolPanel=filters",
-    api: 'sidebar={["filters"]}',
-  },
-  {
-    feature: "Context menu",
-    status: "Available",
-    entry: "right-click grid cells",
-    api: "contextMenuItems, showColumnMenu",
-  },
-  {
-    feature: "Cell editing",
-    status: "Available",
-    entry: "?edit=1",
-    api: "BcEditGrid, cellEditor",
-  },
-  {
-    feature: "Checkbox selection",
-    status: "Available",
-    entry: "?checkbox=1",
-    api: "checkboxSelection",
-  },
-  {
-    feature: "URL state",
-    status: "Available",
-    entry: "?urlstate=1",
-    api: "gridId, urlStatePersistence",
-  },
-  {
-    feature: "Pagination",
-    status: "Available",
-    entry: "?pagination=1",
-    api: "pagination, pageSizeOptions",
-  },
-  {
-    feature: "Aggregations",
-    status: "Available",
-    entry: "?aggregations=1",
-    api: "aggregation, statusBar",
-  },
-  {
-    feature: "Master detail",
-    status: "Available",
-    entry: "?masterDetail=1 customer contacts child grid",
-    api: "renderDetailPanel",
-  },
-  {
-    feature: "Auto height",
-    status: "Available",
-    entry: "?autoHeight=1",
-    api: "height = auto",
-  },
-  {
-    feature: "Server row model",
-    status: "Available",
-    entry: "Server Edit Grid",
-    api: "BcServerGrid, onServerRowMutation",
-  },
-  {
-    feature: "Pivot panel",
-    status: "Available",
-    entry: "Tool panels control or ?toolPanel=pivot",
-    api: 'sidebar={["pivot"]}, pivotState',
-  },
-  {
-    feature: "Charts",
-    status: "Post-1.0",
-    entry: "not exposed in examples",
-    api: "future charts adapter",
-  },
-] as const satisfies readonly {
-  feature: string
-  status: "Available" | "Planned" | "Post-1.0"
-  entry: string
-  api: string
-}[]
 
 /**
  * Master collector roster for the editor-autocomplete demo. The seeded
@@ -296,6 +181,16 @@ export function App() {
             <span>Package Matrix</span>
             <small>Q1 packages</small>
           </a>
+        </nav>
+
+        <nav className="feature-shortcuts" aria-label="Feature shortcuts">
+          <span>Try features</span>
+          {featureShortcuts.map((shortcut) => (
+            <a key={shortcut.id} className="shortcut-link" href={shortcut.href}>
+              <strong>{shortcut.label}</strong>
+              <small>{shortcut.description}</small>
+            </a>
+          ))}
         </nav>
       </aside>
 
@@ -1249,7 +1144,7 @@ function FeatureDiscoveryMap() {
                   </span>
                 </td>
                 <td>
-                  <DiscoveryValue value={row.entry} />
+                  <DiscoveryValue href={row.shortcutHref} value={row.entry} />
                 </td>
                 <td>
                   <DiscoveryValue value={row.api} />
@@ -1263,11 +1158,20 @@ function FeatureDiscoveryMap() {
   )
 }
 
-function DiscoveryValue({ value }: { value: string }) {
-  if (value.includes("?") || value.includes("=") || value.includes("{")) {
-    return <code>{value}</code>
-  }
-  return <span>{value}</span>
+function DiscoveryValue({ href, value }: { href?: string | undefined; value: string }) {
+  const content =
+    value.includes("?") || value.includes("=") || value.includes("{") ? (
+      <code>{value}</code>
+    ) : (
+      <span>{value}</span>
+    )
+  return href ? (
+    <a className="feature-entry-link" href={href}>
+      {content}
+    </a>
+  ) : (
+    content
+  )
 }
 
 function formatDateTime(value: string): string {
