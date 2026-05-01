@@ -1036,6 +1036,48 @@ row, using the existing `expansion` state pair. Detail panels are fixed-height
 by default (`144px`) or per-row via `detailPanelHeight`; auto-measured detail
 height is deferred so virtualization remains deterministic.
 
+The built-in panel surface is intentionally plain and compact so host apps can
+compose their own content. `@bc-grid/theming` ships optional utility classes for
+common child-panel states: `bc-grid-detail-section`,
+`bc-grid-detail-nested-grid`, `bc-grid-detail-empty`,
+`bc-grid-detail-loading`, and `bc-grid-detail-error`.
+
+```tsx
+<BcGrid<Customer>
+  // ...
+  detailPanelHeight={188}
+  renderDetailPanel={({ row }) => (
+    <div className="customer-detail-panel">
+      <section className="bc-grid-detail-section">
+        <p className="bc-grid-detail-kicker">Collector Notes</p>
+        <p>{row.collectorNotes}</p>
+      </section>
+      <section className="bc-grid-detail-section">
+        <p className="bc-grid-detail-kicker">Customer Contacts</p>
+        {row.contacts.length > 0 ? (
+          <div className="bc-grid-detail-nested-grid" role="grid">
+            <div role="row">
+              <span role="columnheader">Name</span>
+              <span role="columnheader">Role</span>
+              <span role="columnheader">Email</span>
+            </div>
+            {row.contacts.map((contact) => (
+              <div role="row" key={contact.id}>
+                <span role="cell">{contact.name}</span>
+                <span role="cell">{contact.role}</span>
+                <span role="cell">{contact.email}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="bc-grid-detail-empty">No customer contacts are on file.</p>
+        )}
+      </section>
+    </div>
+  )}
+/>
+```
+
 The `statusBar` slot accepts an array of segment descriptors. Built-in IDs hide
 themselves when their content is irrelevant: `filtered` only appears once a
 filter narrows the row count, `selected` only when a selection is active, and

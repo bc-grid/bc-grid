@@ -47,9 +47,7 @@ export function createDetailToggleColumn<TRow>({
           }}
           onKeyDown={stopGridKeyboardNav}
         >
-          <span aria-hidden="true" className="bc-grid-detail-toggle-icon">
-            &gt;
-          </span>
+          <span aria-hidden="true" className="bc-grid-detail-toggle-icon" />
         </button>
       )
     },

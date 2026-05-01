@@ -28,6 +28,13 @@ import {
 
 type ThemeMode = "light" | "dark"
 
+interface CustomerContact {
+  name: string
+  role: string
+  channel: string
+  note: string
+}
+
 const densityModes = [
   { id: "compact", label: "Compact" },
   { id: "normal", label: "Normal" },
@@ -883,7 +890,7 @@ function CustomerGridDemo({
         locale="en-US"
         {...(masterDetailDemo
           ? {
-              detailPanelHeight: 132,
+              detailPanelHeight: 188,
               renderDetailPanel: ({ row }: { row: CustomerRow }) => (
                 <CustomerMasterDetail row={row} />
               ),
@@ -1020,32 +1027,95 @@ function CustomerDetail({ row }: { row: CustomerRow }) {
 }
 
 function CustomerMasterDetail({ row }: { row: CustomerRow }) {
+  const contacts = customerContacts(row)
+  const contactsHeadingId = `customer-contacts-${row.id}`
+
   return (
     <div className="customer-master-detail">
-      <div>
-        <span>Follow-up</span>
-        <strong>{formatDateTime(row.nextScheduledCall)}</strong>
-      </div>
-      <div>
-        <span>Collector Notes</span>
+      <section className="bc-grid-detail-section customer-master-detail-summary">
+        <div className="customer-detail-stat">
+          <span>Follow-up</span>
+          <strong>{formatDateTime(row.nextScheduledCall)}</strong>
+        </div>
+        <div className="customer-detail-stat">
+          <span>Aging Mix</span>
+          <strong>
+            {currency.format(row.current)} current / {currency.format(row.daysOver60)} 60+
+          </strong>
+        </div>
+        <div className="customer-detail-stat">
+          <span>Invoice Cutoff</span>
+          <strong>{row.cutoffTime}</strong>
+        </div>
+        <div className="customer-detail-stat">
+          <span>Terms</span>
+          <strong>{row.terms}</strong>
+        </div>
+      </section>
+      <section className="bc-grid-detail-section customer-master-detail-notes">
+        <span className="bc-grid-detail-kicker">Collector Notes</span>
         <p>
           {row.owner} owns {row.region.toLowerCase()} collections for {row.terms.toLowerCase()}.
           Current exposure is {currency.format(row.balance)} across {row.openInvoices} open
           invoices.
         </p>
-      </div>
-      <div>
-        <span>Aging Mix</span>
-        <strong>
-          {currency.format(row.current)} current / {currency.format(row.daysOver60)} 60+
-        </strong>
-      </div>
-      <div>
-        <span>Invoice Cutoff</span>
-        <strong>{row.cutoffTime}</strong>
-      </div>
+      </section>
+      <section
+        className="bc-grid-detail-section customer-contact-panel"
+        aria-labelledby={contactsHeadingId}
+      >
+        <div className="customer-contact-panel-header">
+          <span id={contactsHeadingId} className="bc-grid-detail-kicker">
+            Customer Contacts
+          </span>
+          <strong>{contacts.length} contacts</strong>
+        </div>
+        {contacts.length > 0 ? (
+          <table className="bc-grid-detail-nested-grid customer-contact-grid">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Role</th>
+                <th scope="col">Channel</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contacts.map((contact) => (
+                <tr key={`${contact.name}-${contact.role}`}>
+                  <td className="customer-contact-name">
+                    <strong>{contact.name}</strong>
+                    <small>{contact.note}</small>
+                  </td>
+                  <td>{contact.role}</td>
+                  <td>{contact.channel}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="bc-grid-detail-empty">No customer contacts are on file.</p>
+        )}
+      </section>
     </div>
   )
+}
+
+function customerContacts(row: CustomerRow): readonly CustomerContact[] {
+  const accountToken = row.account.toLowerCase()
+  return [
+    {
+      name: `${row.tradingName} AP`,
+      role: "Accounts payable",
+      channel: `ap+${accountToken}@example.test`,
+      note: row.terms,
+    },
+    {
+      name: row.owner,
+      role: "Collector",
+      channel: "Internal owner",
+      note: row.region,
+    },
+  ]
 }
 
 function PackageMatrix() {

@@ -106,6 +106,20 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain(".bc-grid-header-resize-handle::before")
   })
 
+  test("CSS exposes compact master-detail panel affordances", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain("--bc-grid-detail-panel-bg")
+    expect(css).toContain("--bc-grid-detail-surface-bg")
+    expect(css).toContain(".bc-grid-row-expanded")
+    expect(css).toContain(".bc-grid-detail-section")
+    expect(css).toContain(".bc-grid-detail-empty")
+    expect(css).toContain(".bc-grid-detail-loading")
+    expect(css).toContain(".bc-grid-detail-error")
+    expect(css).toContain(".bc-grid-detail-nested-grid")
+    expect(css).not.toContain("transition: height")
+  })
+
   test("prefers-reduced-motion block zeroes out motion per accessibility-rfc §Reduced Motion", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     // Locate the last reduced-motion block (the catch-all override) and
