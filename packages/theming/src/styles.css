@@ -1787,6 +1787,10 @@
   min-width: 0;
 }
 
+.bc-grid-detail-panel-region {
+  min-width: 0;
+}
+
 .bc-grid-detail-section {
   box-sizing: border-box;
   display: grid;
