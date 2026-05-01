@@ -16,6 +16,32 @@ The v0.3 milestone goal: **complete the day-to-day data finding workflow.** Six 
 5. Custom filter extension recipe is published in docs.
 6. `bsncraft` can exercise the common customer/vendor/invoice filter flows without local patches.
 
+## Per-bucket status (TL;DR)
+
+Each row uses one of: **Done** (merged on main + tested), **In PR** (open PR exists, status noted), **Blocked** (depends on something else), **Missing** (no current PR / queue ownership).
+
+| Bucket | Status | Detail |
+|---|---|---|
+| **Text-filter operators** | **In PR** | Live op is only `contains`; #208 adds `starts-with` / `ends-with` / `equals` / `caseSensitive` / `regex` toggles. CI UNSTABLE (rebase needed). |
+| **Set / multi-value filter** | **Done (set)** + **Missing (multi)** | Set filter merged (`0da721f` + `6612ade` for array values, `op: in` / `not-in` / `blank`). **Multi-value (array column) filter** missing — queue lists `filter-multi-impl` #175 but verification needed. |
+| **Number / number-range filter** | **Done** | #109 number ops + `f6a5c52` range. |
+| **Date / date-range filter** | **Done** | #116 date ops + `62606a0` range; locale-safe (#125). |
+| **Boolean filter** | **Done** | #91 three-state any / yes / no. |
+| **Inline filter row** | **Done** + **In PR (toggle)** | Inline row works; #203 added `BcGridProps.showFilterRow?: boolean`; #211 adds discoverability docs (UNSTABLE). |
+| **Filters tool panel** | **Done (panel)** + **In PR (examples integration)** | Rescued via #204; sidebar tablist listing. Examples-app integration in #184 / #206 (DIRTY — coordinator triage). |
+| **Popup filter variant** | **Done** | #145 — header funnel + floating popover, reuses inline editor body. |
+| **URL persistence** | **Done** | Filter state via #193 rescue (URL takes precedence over localStorage on mount). |
+| **localStorage persistence** | **Done** | `gridId` triggers `localStorage` persistence for filter (#193) + columnState / pageSize / density / groupBy / sidebarPanel (#73). |
+| **Schema-version stamp on persisted JSON** | **Missing** | No version field; legacy reads silently drop malformed entries. Recommended pre-v0.4. |
+| **Search row-model filtering** | **Done** | #98 `searchText` filters rows; case-insensitive substring across `valueFormatter` per `api.md §4.3`. |
+| **Search-match highlighting** | **Done** | #64 default cell renderer wraps matches in `<mark data-bc-grid-search-match>`. |
+| **Search-text persistence (URL/localStorage)** | **Missing** | Filter / sort / column-state persist; `searchText` does not. Not strictly a v0.3 gate. |
+| **Global / quick search UI widget** | **Missing** | `searchText` is a controlled prop today; consumers wire their own input. No bc-grid-shipped global-search affordance. See §3b. |
+| **Custom filter extension recipe** | **In PR** | #177 (`filter-custom-extension-example`); verification needed. |
+| **Discoverability via context menu** | **Missing** | #157 merged a generic context-menu layer but ships **no built-in "filter by this value" / "clear filter for this column" / "show filter row" items.** See §3a. |
+| **Discoverability via tool panels** | **In PR** | Filters tool panel ships (#204); examples-app integration + onboarding docs in flight (#184 / #206 / #211). |
+| **bsncraft validation** | **Blocked** | Coordinator-driven; can't run until v0.3 candidate is built. |
+
 ## 1. Already done on `main`
 
 Filter / search / persistence work that has merged into `main` and is covered by tests where the package coverage gate applies.
@@ -89,6 +115,29 @@ Surface that's neither merged nor open as a PR. Each item maps to a v0.3 gate.
 - **Searchable-column scoping prop** (gate 4) — `api.md §4.3` says "across `valueFormatter` results for searchable columns". `column.filter !== false` is the current proxy for "searchable"; consumers can't yet pick a different scope without setting `filter: false` (which also hides the filter input). A dedicated `column.searchable?: boolean` would close this. **Documented gap; not yet a queue task.**
 - **Search debounce / async-aware search** (gate 4) — `searchText` is consumer-controlled; bc-grid filters synchronously on each prop change. For server-mode grids that want "debounce 250ms then refetch with the search text", the consumer wires their own debounce today. Acceptable for v0.3; document.
 
+### 3a. Context-menu discoverability
+
+#157 (`context-menu-impl`) merged a generic `BcGridContextMenuLayer` (lazy-loaded, consumer-supplied items, right-click + Shift+F10 + 500ms long-press on coarse pointers per `chrome-rfc`). The layer is generic — **it ships no built-in filter / search / clear items.** That means a user right-clicking a cell today does not see "filter by this value" or "clear filter for this column" unless the consumer wires it themselves.
+
+Concrete missing items (each closes a piece of the v0.3 discoverability story):
+
+- **`Filter by this value`** — quick-filter the column by the cell's formatted value. Maps to the existing inline / popup filter shape (`type === "text"` → `op: "contains"`; `type === "set"` → add to the in-list; etc.). Not blocked on anything else.
+- **`Clear filter for this column`** — visible only when the column has an active filter. Mirrors the popup variant's `×` clear and the tool panel's per-row clear.
+- **`Clear all filters`** — mirrors the tool panel's clear-all button.
+- **`Show / hide filter row`** — toggles `showFilterRow` (#203). Useful when popup-variant columns dominate and the inline row is collapsed by default.
+
+The simplest shape is a built-in `BcGridProps.contextMenuItems?: "filter-defaults" | (...) | BcContextMenuItem[]` opt-in (or a documented default-items helper consumers can spread into their own list). `BcGridContextMenuLayer` already supports a factory function shape per the chrome-rfc.
+
+### 3b. Global / quick search
+
+bc-grid today has the **search row-model filtering** (`searchText` controlled prop, applied via `matchesSearchText` over `valueFormatter` results — #98) and the **search-match highlighting** in the default cell renderer (#64). What it does NOT have:
+
+- **No bc-grid-shipped global search input widget.** Consumers wire their own `<input>` and pass the value via `searchText` / `defaultSearchText`. The status bar's "filtered" segment shows `{visible} of {total}` but doesn't include a search box.
+- **No quick-filter affordance per column.** AG Grid's `quickFilter` and `quickFilterMatcher` are the public-doc reference here; bc-grid's `searchText` covers the "match across all visible columns" case but a per-column quick-filter UI doesn't exist yet (the inline filter row is the closest substitute).
+- **No `searchText` persistence** — see §3 Persistence above. Filter / sort / column-state persist; search doesn't.
+
+Whether v0.3 needs a **bc-grid-shipped search box** is a coordinator call. The roadmap milestone reads "Search applies to the row model and highlights matches"; bc-grid does both. A shipped widget is convenient but not a milestone-gate requirement.
+
 ### Persistence
 
 - **URL + localStorage `searchText`** (gate 3 / 4 intersection) — `searchText` is a controlled prop today; bc-grid does not persist it. Filter / sort / column-state persist; search doesn't. ERPs commonly bookmark "this customer search". **Recommend a `search-persistence` queue task.**
@@ -153,6 +202,16 @@ Suggested queue.md entries, sized + suggested-owner per the existing convention.
 - **`tool-panel-examples-integration`** (P0, **S**) — coordinator decision between #184 and #206; merge whichever is alive. **Owner:** worker5 (tool-panel rescue history). **Closes gate 6's "examples mount the panel" bullet.**
 - **`tool-panel-discoverability-docs`** (P1, **S**) — verify **#211** still applies after the rescue stack landed; rebase if needed. **Owner:** worker3 or worker5.
 
+### Context-menu discoverability
+
+- **`context-menu-filter-defaults`** (P1, **S**) — built-in factory yielding the four discoverability items from §3a (`Filter by this value`, `Clear filter for this column`, `Clear all filters`, `Show / hide filter row`). Consumers opt in via `BcGridProps.contextMenuItems` (or a `defaultFilterContextItems` helper they spread). Items respect column.filter shape (text → contains; set → toggle in-list; etc.). **Owner:** worker3 (chrome track) or worker5. **Closes gate 2's "discoverability" intent.**
+- **`context-menu-clear-all-filters-event`** (P2, **XS**) — small `BcGridApi.clearAllFilters()` imperative for the context-menu items above to call (or for a consumer's own toolbar button). Today consumers re-emit a null filter via the controlled `onFilterChange`, which works but is awkward. **Owner:** worker3.
+
+### Global / quick search
+
+- **`global-search-widget`** (P2, **S**) — bc-grid-shipped opt-in `<BcGridSearchInput>` (or similar) wired to `searchText` / `defaultSearchText`. Optional: maintainers may prefer to leave search-input UI to consumers and document the recommended pattern instead. **Owner:** worker2 (filter-adjacent) or worker3 (chrome). **Decision needed before scheduling.**
+- **`quickfilter-matcher-prop`** (P3, **S**) — `BcReactGridColumn.quickFilterValue?: (row) => string` for consumers who want a per-column projection different from `valueFormatter`. Niche; document and defer to v0.4 if no consumer surfaces a need. **Owner:** worker2.
+
 ### bsncraft validation
 
 - **`bsncraft-v030-filter-smoke`** (P0, coordinator-driven) — once v0.3 candidate is built, install in `~/work/bsncraft`, exercise the customer/vendor/invoice filter flows that the v0.3 milestone names. Document any patches required; if any are still required, cycle back. **Owner:** coordinator (cross-repo work; not a worker task).
@@ -167,6 +226,8 @@ Suggested queue.md entries, sized + suggested-owner per the existing convention.
 - #211 needs rebase (UNSTABLE CI).
 - `filter-multi-impl` (#175 per queue) needs verification.
 - bsncraft smoke can't run until the candidate is built.
+
+Discoverability items from §3a (context-menu filter defaults) and §3b (global search widget) are tracked in §5 but **not** included in §4's blocker cut. The roadmap milestone names "popup filter variant and filters tool panel are merged, accessible, and documented" — both are met. Adding context-menu filter items + a shipped search widget would meaningfully improve discoverability but neither is a strict v0.3 milestone-gate requirement. **Coordinator decision** on whether to pull `context-menu-filter-defaults` into the v0.3 cut.
 
 When the recommended blocker set in §4 lands and bsncraft validation passes, the v0.3 milestone is closeable. Until then this is documentation, not a release recommendation.
 
