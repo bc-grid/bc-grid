@@ -1836,6 +1836,27 @@ Tab / Shift+Enter / Shift+Tab / Escape remain grid-owned by the editor portal,
 and commit reads `input.checked` so the value emitted to `onCellEditCommit` is
 a boolean. Tri-state checkbox editing is not part of the initial v0.4 slice.
 
+#### Keyboard contract — what the framework owns
+
+| Mode | Key | Result |
+|---|---|---|
+| Navigation | `F2` | Activate edit; no `seedKey`. |
+| Navigation | `Enter` | Activate edit; no `seedKey`. |
+| Navigation | Printable (length-1, no Ctrl/Alt/Meta) | Activate edit; `seedKey = event.key` (the user's first keystroke). |
+| Navigation | Double-click | Activate edit; `pointerHint = { x, y }` in client coordinates. |
+| Edit | `Enter` | Commit with `moveOnSettle: "down"`. |
+| Edit | `Shift+Enter` | Commit with `moveOnSettle: "up"`. |
+| Edit | `Tab` | Commit with `moveOnSettle: "right"` (wraps row at last column). |
+| Edit | `Shift+Tab` | Commit with `moveOnSettle: "left"` (wraps row at first column). |
+| Edit | `Escape` | Cancel; active cell stays put; previous value unchanged. |
+| Edit | Click outside (excluding `[data-bc-grid-editor-root]` / `[data-bc-grid-editor-portal]`) | Commit with `moveOnSettle: "stay"`, `source: "pointer"`. |
+| Either | Ctrl / Alt / Meta on any of the above | **Ignored** — host shortcut wins. Custom editors must not consume these chords. |
+| Edit | Anything else (arrow keys, Home/End, printable, Backspace) | Passes through to the editor input. The framework does not intercept. |
+
+Activation also fires from `BcGridApi.startEdit({ rowId, columnId })` with `activation: "api"`. The lifecycle is identical; the editor receives no `seedKey` and no `pointerHint`.
+
+Consumers writing a custom `BcCellEditor` should read the [Custom editor recipe](https://github.com/bc-grid/bc-grid/blob/main/apps/docs/src/pages/editor-custom-recipe.astro) (rendered at `/editor-custom-recipe/` in the docs site) §7 for the keyboard contract from the editor's perspective, the async-pending / validation-rejection rendering expectations (`props.pending` / `props.error`), and the "what NOT to do" list. The custom editor is the most common place where consumers accidentally swallow Escape, double-commit on Tab, or bind `focusRef` from a `useEffect` that lands too late for the framework's mount-focus call.
+
 ### 7.1 Lookup, select, autocomplete, and checkbox editor guidance
 
 Lookup-style editors are intentionally native-control based: `selectEditor`

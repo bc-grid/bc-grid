@@ -194,6 +194,10 @@ const checklist = [
   "Component uses prepareResult when the editor needs async setup (palettes, options, etc.).",
   "Popovered editors mark portaled content with data-bc-grid-editor-portal so click-outside doesn't fire inside the popover.",
   "Column wires the editor via column.cellEditor; validate runs at commit before the overlay updates.",
+  "Component does NOT bind activation or commit logic to Ctrl / Alt / Meta chords — those belong to the host shortcuts; the framework already ignores them.",
+  "Component disables its commit affordance while props.pending is true so Enter / Tab can't double-commit during async settle.",
+  "Component renders props.error visibly so async validation rejection isn't silent.",
+  "Component does NOT swallow Escape — forward it to props.cancel() or let the wrapper's onKeyDown handle it.",
 ]
 ---
 
@@ -364,6 +368,181 @@ const checklist = [
       </div>
       <Code code={commitSnippet} lang="tsx" theme="github-dark" />
     </div>
+  </section>
+
+  <section class="section">
+    <h2>7. Keyboard contract — what the framework owns vs. what the editor owns</h2>
+    <p>
+      The framework intercepts a small fixed set of keys at the editor wrapper and
+      drives them through the state machine. Custom editors should stay out of these
+      paths unless they have a specific reason to take over (typed-value editors with
+      typed-commit, see §3). Everything else flows to the editor's input as a normal
+      key event.
+    </p>
+
+    <h3>Activation keys (the cell is in navigation)</h3>
+    <ul>
+      <li>
+        <strong>F2</strong> — opens the editor with no <code>seedKey</code>. The
+        editor renders the cell's current value as the initial input.
+      </li>
+      <li>
+        <strong>Enter</strong> — same as F2. <code>seedKey</code> is undefined.
+      </li>
+      <li>
+        <strong>Any printable character</strong> (length-1 <code>event.key</code>,
+        no <code>Ctrl</code> / <code>Alt</code> / <code>Meta</code>) — opens the
+        editor with that character as <code>seedKey</code>. The editor SHOULD
+        replace the cell's prior value with the seed (the user has started typing).
+      </li>
+      <li>
+        <strong>Double-click</strong> — opens the editor with a
+        <code>pointerHint: &#123; x, y &#125;</code> in client coordinates. Editors
+        that own a caret (text inputs) MAY pass that hint to
+        <code>document.caretPositionFromPoint</code> so the caret lands where the
+        user clicked.
+      </li>
+      <li>
+        <strong>Ctrl / Alt / Meta on F2 or Enter</strong> — the framework ignores
+        them so the host shortcut (Ctrl+Enter = "send", Alt+F4 = close, etc.) wins.
+        Custom editors should not bind activation logic to these chords.
+      </li>
+    </ul>
+
+    <h3>Edit-mode keys (the editor is mounted)</h3>
+    <ul>
+      <li>
+        <strong>Enter</strong> — commits with <code>moveOnSettle: "down"</code>.
+      </li>
+      <li>
+        <strong>Shift+Enter</strong> — commits with <code>moveOnSettle: "up"</code>.
+      </li>
+      <li>
+        <strong>Tab</strong> — commits with <code>moveOnSettle: "right"</code>.
+        Wraps to the next row's first column at the last column.
+      </li>
+      <li>
+        <strong>Shift+Tab</strong> — commits with <code>moveOnSettle: "left"</code>.
+        Wraps to the previous row's last column at the first column.
+      </li>
+      <li>
+        <strong>Escape</strong> — cancels. The editor unmounts; the active cell
+        stays put (<code>moveOnSettle: "stay"</code>); the previous value is
+        unchanged.
+      </li>
+      <li>
+        <strong>Click outside the editor</strong> — commits with
+        <code>moveOnSettle: "stay"</code> and <code>source: "pointer"</code>. The
+        framework walks <code>event.target.closest("[data-bc-grid-editor-root],
+        [data-bc-grid-editor-portal]")</code> to decide; mark popovered content
+        with <code>data-bc-grid-editor-portal</code> so the user can interact with
+        a date-picker / autocomplete dropdown without committing.
+      </li>
+      <li>
+        <strong>Ctrl / Alt / Meta on Enter, Tab, or Escape</strong> — the
+        framework ignores them. <code>Ctrl+Enter</code> is "send" in many form
+        apps; <code>Alt+Tab</code> / <code>Cmd+Tab</code> is the OS task switcher;
+        <code>Cmd+Escape</code> is a system shortcut on macOS. Custom editors
+        should not bind their own logic to these chords.
+      </li>
+      <li>
+        <strong>Everything else</strong> — passes through to the editor's input.
+        Arrow keys, Home / End, Backspace / Delete, printable characters all
+        belong to the input. The framework does not intercept them.
+      </li>
+    </ul>
+
+    <h3>Async pending and validation rejection</h3>
+    <p>
+      <code>commit()</code> can take time. The lifecycle handles three async
+      points; the editor MUST surface them so the user understands what's
+      happening:
+    </p>
+    <ol>
+      <li>
+        <strong>Async validation</strong> — when <code>column.validate</code>
+        returns a Promise, the machine sits in <code>validating</code> until it
+        resolves. The editor stays mounted; <code>props.pending</code> is
+        <code>true</code>; the editor SHOULD disable its commit affordance and
+        render a spinner. On <code>{ valid: false, error }</code> the machine
+        returns to <code>editing</code> with <code>props.error</code> set; the
+        editor SHOULD render the error and let the user fix the value. On
+        <code>{ valid: true }</code> the overlay updates and the editor unmounts.
+      </li>
+      <li>
+        <strong>Async consumer commit</strong> — when
+        <code>onCellEditCommit</code> returns a Promise, the cell stays
+        <code>pending: true</code> in the row's edit-state aggregate; the
+        action column gates destructive actions on it. The editor itself has
+        usually unmounted by then (the validator already settled). If the
+        Promise rejects, the framework rolls back the overlay value and surfaces
+        an assertive announcement; consumers re-edit the same cell to retry.
+      </li>
+      <li>
+        <strong>Stale-mutation guard</strong> — re-editing a cell mid-async
+        settles with the newer value as authoritative. The older Promise's
+        settle (success or failure) is silently dropped. Editors do not need
+        to handle this themselves; the controller does.
+      </li>
+    </ol>
+
+    <h3>What NOT to do</h3>
+    <ul>
+      <li>
+        <strong>Don't intercept Escape and call <code>preventDefault</code>
+        without forwarding to <code>cancel()</code>.</strong> The wrapper relies
+        on the cancel intent reaching the controller; swallowing Escape leaves
+        the user trapped in edit mode.
+      </li>
+      <li>
+        <strong>Don't call <code>commit()</code> from a
+        <code>useEffect</code> tied to the user's typing.</strong> Every
+        keystroke would commit. <code>commit()</code> belongs to a user-driven
+        confirmation gesture (Enter / Tab / a typed-editor's own keypress
+        handler / click-outside which the framework already wires).
+      </li>
+      <li>
+        <strong>Don't <code>setState</code> after <code>cancel()</code>
+        resolves.</strong> The framework unmounts the editor on the next render;
+        any pending state update will warn about updates on an unmounted
+        component. If you need cleanup, do it in a
+        <code>useLayoutEffect</code> cleanup.
+      </li>
+      <li>
+        <strong>Don't reach into the parent grid's DOM.</strong> The grid root
+        is virtualised; the row containing your cell can disappear from the DOM
+        while you're editing (the framework's in-flight retention keeps your
+        cell alive, but neighbours go). If you need row data, read it from
+        <code>props.row</code>; if you need column data, read from
+        <code>props.column</code>.
+      </li>
+      <li>
+        <strong>Don't bind <code>focusRef</code> from a
+        <code>useEffect</code>.</strong> Use <code>useLayoutEffect</code>. React
+        runs child layout effects before parent layout effects in the commit
+        phase; <code>useEffect</code> runs after paint, by which point the
+        framework's mount-focus call has already read
+        <code>focusRef.current</code> as <code>null</code> and given up.
+      </li>
+      <li>
+        <strong>Don't render a Cancel button that calls
+        <code>cancel()</code> twice.</strong> The cancel path is idempotent at
+        the state machine level (subsequent <code>cancel</code> events in
+        <code>cancelling</code> are absorbed), but a double-fire from a
+        debouncing-friendly handler can race with the unmount and produce a
+        warning. Wire Cancel through a single onClick that calls
+        <code>cancel()</code> once.
+      </li>
+      <li>
+        <strong>Don't intercept Tab in a typed editor without passing
+        <code>{ moveOnSettle }</code> to <code>commit()</code>.</strong> The
+        wrapper's Tab handler will fire after yours and commit again with
+        <code>moveOnSettle: "right"</code>, double-committing. Either let the
+        wrapper own Tab (don't bind it), or fully take it over (capture the
+        event, call <code>commit(value, &#123; moveOnSettle: "right" &#125;)</code>,
+        and call <code>event.preventDefault()</code> + <code>stopPropagation()</code>).
+      </li>
+    </ul>
   </section>
 
   <section class="section">

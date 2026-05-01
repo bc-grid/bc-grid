@@ -154,6 +154,83 @@ describe("reduceEditState — invalid transitions are absorbed", () => {
     })
     expect(next).toBe(before)
   })
+
+  test("double-commit is absorbed — second commit while validating doesn't replace pendingValue", () => {
+    // Per editing-rfc §Concurrency: a commit while we're already in
+    // validating means the user pressed Enter twice fast. The first
+    // pendingValue is still load-bearing (its async validator is in
+    // flight); the second event is dropped at the machine level. The
+    // controller's AbortSignal handles the underlying validator
+    // cancellation if the user changes the value first; here we just
+    // pin the machine-level absorption.
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "first", moveOnSettle: "down" })
+    expect(s.mode).toBe("validating")
+
+    const before = s
+    const next = reduceEditState(s, { type: "commit", value: "second", moveOnSettle: "right" })
+    expect(next).toBe(before)
+    if (next.mode === "validating") {
+      expect(next.pendingValue).toBe("first")
+      expect(next.moveOnSettle).toBe("down")
+    }
+  })
+
+  test("commit during committing is absorbed (the consumer hook is already in flight)", () => {
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "v", moveOnSettle: "down" })
+    s = reduceEditState(s, { type: "validateResolved", result: { valid: true } })
+    expect(s.mode).toBe("committing")
+    const before = s
+
+    const next = reduceEditState(s, { type: "commit", value: "newer", moveOnSettle: "right" })
+    expect(next).toBe(before)
+  })
+
+  test("cancel during committing is absorbed (commit must run to settle for the overlay invariant)", () => {
+    // Per editing-rfc §Server commit + optimistic UI: once the
+    // overlay has been written and the consumer hook fired, the
+    // user can no longer "cancel" — the rollback would race with the
+    // consumer hook's own settle handler. The state machine absorbs
+    // the cancel; the controller's AbortSignal is the only safe path
+    // out of an in-flight async settle.
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "v", moveOnSettle: "down" })
+    s = reduceEditState(s, { type: "validateResolved", result: { valid: true } })
+    expect(s.mode).toBe("committing")
+    const before = s
+
+    const next = reduceEditState(s, { type: "cancel" })
+    expect(next).toBe(before)
+  })
+
+  test("validateResolved during cancelling is absorbed (cancel wins over a late validator)", () => {
+    // Esc during async validation: the controller dispatches `cancel`,
+    // moving the machine to `cancelling`. If the original validator
+    // resolves a tick later (its AbortSignal hadn't propagated yet),
+    // the late resolution must NOT push the machine back to validating
+    // → committing. Pin the absorption.
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "v", moveOnSettle: "down" })
+    s = reduceEditState(s, { type: "cancel" })
+    expect(s.mode).toBe("cancelling")
+    const before = s
+
+    const next = reduceEditState(s, { type: "validateResolved", result: { valid: true } })
+    expect(next).toBe(before)
+  })
 })
 
 describe("reduceEditState — moveOnSettle preserved across async boundary", () => {

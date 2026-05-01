@@ -22,6 +22,55 @@ describe("default editor chrome", () => {
     expect(error).toContain('aria-invalid="true"')
     expect(error).toContain('data-bc-grid-editor-state="error"')
   })
+
+  test("pending wins over error on the data-state attribute (async commit in flight, prior validation error stale)", () => {
+    // Per editing-rfc: async commit pending implies the consumer hook
+    // is in flight, so the visible state should read as pending until
+    // it settles — even if a prior validation error is still attached
+    // to the entry. Theming layer keys the spinner / disabled chrome
+    // off the data-state attribute, so the precedence has to be pinned
+    // here.
+    const html = renderDefaultEditor({ pending: true, error: "Required" })
+
+    expect(html).toContain('data-bc-grid-editor-state="pending"')
+    expect(html).not.toContain('data-bc-grid-editor-state="error"')
+    // disabled while pending — keeps Enter / Tab from re-firing the
+    // commit pipeline before the consumer hook resolves.
+    expect(html).toContain("disabled")
+    // aria-invalid still reflects the error so AT users hear the
+    // validation message even mid-pending.
+    expect(html).toContain('aria-invalid="true"')
+  })
+
+  test("idle state has no disabled attribute and no aria-invalid", () => {
+    // Negative pin so a regression that keeps the input disabled after
+    // the commit settles gets caught.
+    const html = renderDefaultEditor()
+
+    expect(html).not.toContain("disabled")
+    expect(html).not.toContain("aria-invalid")
+  })
+
+  test("seedKey replaces the initial value (printable activation seeds the user's first keystroke)", () => {
+    // Per editing-rfc §Activation: when the editor is opened by typing
+    // a printable character, that character replaces the cell's prior
+    // value. The default editor reads `defaultValue={seedKey ?? initialValue}`
+    // so this is observable in SSR markup.
+    const html = renderDefaultEditor({ initialValue: "Acme", seedKey: "x" })
+
+    expect(html).toContain('value="x"')
+    expect(html).not.toContain('value="Acme"')
+  })
+
+  test("missing initialValue + missing seedKey renders an empty input (no `null` / `undefined` strings)", () => {
+    // Defensive — a regression where `String(initialValue)` coerces
+    // null to "null" would land here.
+    const html = renderDefaultEditor({ initialValue: undefined })
+
+    expect(html).toContain('value=""')
+    expect(html).not.toContain('value="undefined"')
+    expect(html).not.toContain('value="null"')
+  })
 })
 
 describe("readEditorInputValue", () => {
