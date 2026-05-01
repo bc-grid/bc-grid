@@ -2103,6 +2103,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 }
                 const disabled = isRowDisabled(entry.row)
                 const selected = !disabled && isRowSelected(selectionState, entry.rowId)
+                const focused = activeCell?.rowId === entry.rowId
                 const expanded = hasDetail && expansionState.has(entry.rowId)
                 const detailHeight = expanded ? getDetailHeight(entry) : 0
                 const cellVirtualRow = expanded
@@ -2114,6 +2115,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     className={classNames(
                       "bc-grid-row",
                       selected ? "bc-grid-row-selected" : undefined,
+                      focused ? "bc-grid-row-focused" : undefined,
                       disabled ? "bc-grid-row-disabled" : undefined,
                       expanded ? "bc-grid-row-expanded" : undefined,
                     )}
@@ -2124,6 +2126,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     aria-disabled={disabled || undefined}
                     data-row-id={entry.rowId}
                     data-row-index={virtualRow.index}
+                    data-bc-grid-focused-row={focused || undefined}
                     data-bc-grid-row-kind="data"
                     data-bc-grid-expanded={expanded || undefined}
                     style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}

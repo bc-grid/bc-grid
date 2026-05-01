@@ -134,6 +134,92 @@ describe("@bc-grid/theming", () => {
     }
   })
 
+  test("row focus / selection chrome keeps active and edit indicators distinct", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    const focusedRow = ruleFor('.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell {')
+    expect(focusedRow).toContain("var(--bc-grid-focus-ring) 7%")
+    expect(focusedRow).toContain("var(--bc-grid-bg)")
+
+    const selectedFocusedRow = ruleFor(
+      '.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell {',
+    )
+    expect(selectedFocusedRow).toContain("var(--bc-grid-row-selected) 84%")
+    expect(selectedFocusedRow).toContain("var(--bc-grid-focus-ring)")
+    expect(selectedFocusedRow).toContain("color: var(--bc-grid-row-selected-fg)")
+
+    const activeCell = ruleFor(
+      '.bc-grid-cell:focus-visible,\n.bc-grid-cell[data-bc-grid-active-cell="true"],\n.bc-grid [data-bc-grid-active-cell="true"] {',
+    )
+    expect(activeCell).toContain("background: color-mix")
+    expect(activeCell).toContain("var(--bc-grid-focus-ring) 8%")
+    expect(activeCell).toContain("outline: 2px solid var(--bc-grid-focus-ring)")
+    expect(activeCell).not.toContain("box-shadow")
+
+    const selectedActiveCell = ruleFor(
+      '.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-bc-grid-active-cell="true"],',
+    )
+    expect(selectedActiveCell).toContain("var(--bc-grid-focus-ring) 12%")
+    expect(selectedActiveCell).toContain("var(--bc-grid-row-selected)")
+    expect(selectedActiveCell).toContain("color: var(--bc-grid-row-selected-fg)")
+  })
+
+  test("row state selector order preserves active focus and cell edit markers", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = (selector: string) => {
+      const value = css.indexOf(selector)
+      expect(value).toBeGreaterThan(-1)
+      return value
+    }
+
+    const base = idx(".bc-grid-row .bc-grid-cell {")
+    const focused = idx('.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell {')
+    const hover = idx(".bc-grid-row:hover .bc-grid-cell {")
+    const selected = idx('.bc-grid-row[aria-selected="true"] .bc-grid-cell,')
+    const selectedHover = idx('.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell {')
+    const selectedFocused = idx(
+      '.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell {',
+    )
+    const active = idx(".bc-grid-cell:focus-visible,")
+    const selectedActive = idx(
+      '.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-bc-grid-active-cell="true"],',
+    )
+    const error = idx('.bc-grid-cell[aria-invalid="true"],')
+    const dirty = idx('.bc-grid-cell[data-bc-grid-dirty="true"],')
+
+    expect(base).toBeLessThan(focused)
+    expect(focused).toBeLessThan(hover)
+    expect(hover).toBeLessThan(selected)
+    expect(selected).toBeLessThan(selectedHover)
+    expect(selectedHover).toBeLessThan(selectedFocused)
+    expect(selectedFocused).toBeLessThan(active)
+    expect(active).toBeLessThan(selectedActive)
+    expect(selectedActive).toBeLessThan(error)
+    expect(error).toBeLessThan(dirty)
+  })
+
+  test("forced-colors mode preserves focused row and selected active-cell contrast", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const forcedStart = css.indexOf("@media (forced-colors: active)")
+    expect(forcedStart).toBeGreaterThan(-1)
+    const forced = css.slice(forcedStart)
+
+    expect(forced).toContain('.bc-grid-row[data-bc-grid-focused-row="true"]')
+    expect(forced).toContain("background: Canvas")
+    expect(forced).toContain(
+      '.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-bc-grid-active-cell="true"]',
+    )
+    expect(forced).toContain("color: CanvasText")
+    expect(forced).toContain("background: Highlight")
+    expect(forced).toContain("color: HighlightText")
+  })
+
   test("filter popup `Apply` button uses the primary token, not the row-selected accent", () => {
     // Restraint — Apply is a primary action, not a row-selected
     // surface. The two were the same colour pre-refactor (both bridged
