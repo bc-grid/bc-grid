@@ -480,7 +480,15 @@
   outline: none;
   padding: 0;
   pointer-events: auto;
-  transition: opacity var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
+  /*
+   * Smooth open / hover / active state transitions so the trigger feels
+   * closer to a Radix Popover trigger. `background-color` + `color` join
+   * the existing `opacity` transition; the `*` reduced-motion rule
+   * zeroes them automatically when the user prefers reduced motion.
+   */
+  transition: opacity var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
+    background-color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard), color
+    var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
 }
 
 /* Always visible when a filter is applied OR while keyboard-focused / hovered. */
@@ -494,6 +502,19 @@
 .bc-grid-header-filter-button:hover {
   background: var(--bc-grid-row-hover);
   color: var(--bc-grid-fg);
+}
+
+/*
+ * Pressed state. Mirrors the Radix Popover / shadcn DropdownMenu
+ * trigger pressed feel — tap-down flashes the accent-soft surface so
+ * the click registers visually before the popup opens. Also covers
+ * the keyboard `Space` / `Enter` press cycle (browsers fire `:active`
+ * on the focused element while the activation key is held).
+ */
+.bc-grid-header-filter-button:active {
+  background: var(--bc-grid-accent-soft);
+  color: var(--bc-grid-fg);
+  opacity: 1;
 }
 
 .bc-grid-header-filter-button:focus-visible {

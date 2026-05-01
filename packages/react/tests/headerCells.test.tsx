@@ -727,4 +727,33 @@ describe("filter popup trigger — Radix-style ARIA linkage", () => {
       /data-bc-grid-filter-button="true"[^>]*data-state="open"|data-state="open"[^>]*data-bc-grid-filter-button="true"/,
     )
   })
+
+  test("active-filter and open-state are independent — both fire when a filter is set and the popup is open", () => {
+    // `bc-grid-header-filter-button-active` is the "filter has a value"
+    // marker (drives the focus-ring colour); `data-state="open"` is the
+    // popup-open marker (drives the accent-soft pressed surface). They
+    // are independent layers — a popup can be open with no value yet,
+    // and a value can be set while the popup is closed. Pin that both
+    // attributes coexist when both are true.
+    const html = renderFilterPopupTriggerHtml("CUST-00042", true)
+    expect(html).toContain("bc-grid-header-filter-button-active")
+    expect(html).toContain('data-state="open"')
+    expect(html).toContain('data-active="true"')
+  })
+
+  test("trigger renders the funnel icon with currentColor — open-state highlight reads from `color`", () => {
+    // The Radix-style open-state highlight changes `color` on the
+    // button; the funnel SVG must adapt via `currentColor` so the icon
+    // re-tints automatically across hover / open / active. Pin both
+    // glyph variants — empty (outlined: stroke=currentColor) and
+    // active (filled: fill=currentColor) — so a future refactor cannot
+    // regress the icon to a hard-coded colour.
+    const empty = renderFilterPopupTriggerHtml("", true)
+    expect(empty).toContain("bc-grid-header-filter-icon")
+    expect(empty).toContain('stroke="currentColor"')
+
+    const active = renderFilterPopupTriggerHtml("CUST-00042", true)
+    expect(active).toContain("bc-grid-header-filter-icon")
+    expect(active).toContain('fill="currentColor"')
+  })
 })
