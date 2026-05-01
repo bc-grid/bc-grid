@@ -369,6 +369,63 @@ describe("server paged query reset semantics", () => {
       expect(capturedQuery?.view.visibleColumns).toEqual(["id", "name", "status"])
     }
   })
+
+  test("same-view refresh preserves the requested page and full query payload", async () => {
+    const filter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["active"],
+    }
+    const activeView = model.createViewState({
+      filter,
+      groupBy: ["status"],
+      searchText: "acme",
+      sort: [{ columnId: "name", direction: "desc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const activeViewKey = viewKeyFor(activeView)
+    const pageIndex = resolveServerPagedRequestPage({
+      pageIndex: 4,
+      previousViewKey: activeViewKey,
+      viewKey: activeViewKey,
+    })
+    let capturedQuery: ServerPagedQuery | undefined
+
+    await model.loadPagedPage({
+      loadPage: async (query) => {
+        capturedQuery = query
+        return {
+          pageIndex: query.pageIndex,
+          pageSize: query.pageSize,
+          rows: pageRows.slice(0, 5),
+          totalRows: 137,
+          viewKey: query.viewKey,
+        }
+      },
+      pageIndex,
+      pageSize: 25,
+      view: activeView,
+      viewKey: activeViewKey,
+    }).promise
+
+    expect(pageIndex).toBe(4)
+    expect(capturedQuery).toMatchObject({
+      mode: "paged",
+      pageIndex: 4,
+      pageSize: 25,
+      viewKey: activeViewKey,
+    })
+    expect(capturedQuery?.view).toEqual(activeView)
+    expect(capturedQuery?.view).toMatchObject({
+      filter,
+      groupBy: [{ columnId: "status" }],
+      search: "acme",
+      sort: [{ columnId: "name", direction: "desc" }],
+      visibleColumns: ["id", "name"],
+    })
+  })
 })
 
 describe("server paged stale response ordering", () => {

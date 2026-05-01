@@ -635,4 +635,89 @@ describe("server edit mutation helpers", () => {
       }).pendingMutations.size,
     ).toBe(0)
   })
+
+  test("applies conflict canonical rows after a refetch while rejecting the edit", async () => {
+    const model = createServerRowModel<Row>()
+    const baseView = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name"],
+    })
+    const baseViewKey = model.createViewKey(baseView)
+    const baseRequest = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "customer-1", name: "Acme Inc." }],
+        totalRows: 1,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view: baseView,
+      viewKey: baseViewKey,
+    })
+    await baseRequest.promise
+
+    const serverSettle = deferred<ServerMutationResult<Row>>()
+    const commit = commitServerEditMutation({
+      event: editEvent,
+      mutationId: "mutation-conflict-refetch",
+      onServerRowMutation: () => serverSettle.promise,
+      queueServerRowMutation: (patch) => model.queueMutation({ patch, rowId: (row) => row.id }),
+      settleServerRowMutation: (result) => model.settleMutation({ result, rowId: (row) => row.id }),
+    })
+    expect(model.cache.get(baseRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+    ])
+
+    const filteredView = model.createViewState({
+      filter: activeCustomerFilter,
+      groupBy: [],
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const filteredViewKey = model.createViewKey(filteredView)
+    const filteredLoad = deferred<ServerPagedResult<Row>>()
+    const filteredRequest = model.loadPagedPage({
+      loadPage: () => filteredLoad.promise,
+      pageIndex: 0,
+      pageSize: 25,
+      view: filteredView,
+      viewKey: filteredViewKey,
+    })
+
+    filteredLoad.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "customer-1", name: "Acme Inc." }],
+      totalRows: 1,
+      viewKey: filteredViewKey,
+    })
+    expect((await filteredRequest.promise).rows).toEqual([{ id: "customer-1", name: "Acme Co." }])
+
+    serverSettle.resolve({
+      mutationId: "mutation-conflict-refetch",
+      reason: "Customer was changed by another user.",
+      row: { id: "customer-1", name: "Acme Server" },
+      status: "conflict",
+    })
+    await expect(commit).rejects.toThrow("Customer was changed by another user.")
+
+    expect(model.cache.get(baseRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Server" },
+    ])
+    expect(model.cache.get(filteredRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Server" },
+    ])
+    expect(
+      model.getState({
+        mode: "paged",
+        rowCount: 1,
+        selection: emptySelection,
+        view: filteredView,
+        viewKey: filteredViewKey,
+      }).pendingMutations.size,
+    ).toBe(0)
+  })
 })

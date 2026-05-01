@@ -244,7 +244,8 @@ For conflict results, prefer one of two explicit policies:
 
 - Server wins: return a conflict result with the canonical row, invalidate if
   sort/filter/group membership may change, and let `<BcServerGrid>` reject the
-  edit promise with a conflict message.
+  edit promise with a conflict message. Any loaded or freshly refetched cached
+  copy of that row is reconciled to the canonical server row by row ID.
 - User retries: reject the edit promise, keep no server row update, and show a
   product-specific conflict action outside the grid.
 
