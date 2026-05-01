@@ -239,9 +239,24 @@ describe("@bc-grid/theming", () => {
 
     expect(css).toContain("--bc-grid-column-resize-affordance")
     expect(css).toContain("--bc-grid-column-resize-affordance-hover")
-    expect(css).toContain(".bc-grid-header-cell-resizable::before")
+    expect(css).toContain("box-sizing: border-box")
+    expect(css).toContain("box-shadow: inset -1px 0 0 var(--bc-grid-column-separator)")
+    expect(css).toContain(".bc-grid-header-cell-resizable .bc-grid-header-resize-handle::before")
     expect(css).toContain("pointer-events: none")
-    expect(css).not.toContain(".bc-grid-header-resize-handle::before")
+    expect(css).not.toContain(".bc-grid-header-cell::after")
+    expect(css).not.toContain(".bc-grid-header-cell-resizable::before")
+  })
+
+  test("header resize affordance avoids pinned-edge pseudo-element collisions", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain(".bc-grid-cell-pinned-left-edge::after")
+    expect(css).toContain(".bc-grid-cell-pinned-right-edge::before")
+    expect(css).toContain(".bc-grid-header-cell {")
+    expect(css).toContain(".bc-grid-header-resize-handle:hover::before")
+    expect(css).toContain("border-inline-end: 1px solid var(--bc-grid-column-separator)")
+    expect(css).toContain("background: none")
+    expect(css).toContain("z-index: 5")
   })
 
   test("CSS exposes compact master-detail panel affordances", () => {
