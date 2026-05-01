@@ -22,6 +22,7 @@ export interface StorageLike {
 
 export interface PersistedGridState {
   columnState?: readonly BcColumnStateEntry[] | undefined
+  sort?: readonly BcGridSort[] | undefined
   pageSize?: number | undefined
   density?: BcGridDensity | undefined
   groupBy?: readonly ColumnId[] | undefined
@@ -63,6 +64,7 @@ export function readPersistedGridState(
 
   return {
     columnState: readJson(storage, gridStorageKey(gridId, "columnState"), parseColumnState),
+    sort: readJson(storage, gridStorageKey(gridId, "sort"), parseSortState),
     pageSize: readJson(storage, gridStorageKey(gridId, "pageSize"), parsePageSize),
     density: readJson(storage, gridStorageKey(gridId, "density"), parseDensity),
     groupBy: readJson(storage, gridStorageKey(gridId, "groupBy"), parseGroupBy),
@@ -80,6 +82,7 @@ export function writePersistedGridState(
   if (!gridId || !storage) return
 
   writeJson(storage, gridStorageKey(gridId, "columnState"), state.columnState)
+  writeJson(storage, gridStorageKey(gridId, "sort"), state.sort)
   writeJson(storage, gridStorageKey(gridId, "pageSize"), state.pageSize)
   writeJson(storage, gridStorageKey(gridId, "density"), state.density)
   writeJson(storage, gridStorageKey(gridId, "groupBy"), state.groupBy)
@@ -129,6 +132,33 @@ export function writeUrlPersistedGridState(
   }
 }
 
+export function prunePersistedGridStateForColumns(
+  state: PersistedGridState,
+  columnIds: ReadonlySet<ColumnId>,
+): PersistedGridState {
+  const next: PersistedGridState = {
+    ...state,
+    columnState: pruneColumnStateForColumns(state.columnState, columnIds),
+    filter: pruneFilterForColumns(state.filter, columnIds),
+    groupBy: pruneGroupByForColumns(state.groupBy, columnIds),
+    pivotState: prunePivotStateForColumns(state.pivotState, columnIds),
+    sort: pruneSortForColumns(state.sort, columnIds),
+  }
+  return next
+}
+
+export function pruneUrlPersistedGridStateForColumns(
+  state: UrlPersistedGridState,
+  columnIds: ReadonlySet<ColumnId>,
+): UrlPersistedGridState {
+  return {
+    ...state,
+    columnState: pruneColumnStateForColumns(state.columnState, columnIds),
+    filter: pruneFilterForColumns(state.filter, columnIds),
+    sort: pruneSortForColumns(state.sort, columnIds),
+  }
+}
+
 export function usePersistedGridStateWriter(gridId: string | undefined, state: PersistedGridState) {
   useEffect(() => {
     if (!gridId) return
@@ -156,6 +186,65 @@ export function useUrlPersistedGridStateWriter(
 
     return () => clearTimeout(handle)
   }, [searchParam, state])
+}
+
+function pruneColumnStateForColumns(
+  columnState: readonly BcColumnStateEntry[] | undefined,
+  columnIds: ReadonlySet<ColumnId>,
+): BcColumnStateEntry[] | undefined {
+  if (columnState === undefined) return undefined
+  const seen = new Set<ColumnId>()
+  return columnState.flatMap((entry) => {
+    if (!columnIds.has(entry.columnId) || seen.has(entry.columnId)) return []
+    seen.add(entry.columnId)
+    return [{ ...entry }]
+  })
+}
+
+function pruneSortForColumns(
+  sort: readonly BcGridSort[] | undefined,
+  columnIds: ReadonlySet<ColumnId>,
+): BcGridSort[] | undefined {
+  if (sort === undefined) return undefined
+  return sort.flatMap((entry) => {
+    if (!columnIds.has(entry.columnId)) return []
+    return entry.direction === "asc" || entry.direction === "desc" ? [{ ...entry }] : []
+  })
+}
+
+function pruneGroupByForColumns(
+  groupBy: readonly ColumnId[] | undefined,
+  columnIds: ReadonlySet<ColumnId>,
+): ColumnId[] | undefined {
+  if (groupBy === undefined) return undefined
+  return groupBy.filter((columnId) => columnIds.has(columnId))
+}
+
+function prunePivotStateForColumns(
+  pivotState: BcPivotState | undefined,
+  columnIds: ReadonlySet<ColumnId>,
+): BcPivotState | undefined {
+  if (pivotState === undefined) return undefined
+  return {
+    ...pivotState,
+    colGroups: pivotState.colGroups.filter((columnId) => columnIds.has(columnId)),
+    rowGroups: pivotState.rowGroups.filter((columnId) => columnIds.has(columnId)),
+    values: pivotState.values.filter((value) => columnIds.has(value.columnId)),
+  }
+}
+
+function pruneFilterForColumns(
+  filter: BcGridFilter | undefined,
+  columnIds: ReadonlySet<ColumnId>,
+): BcGridFilter | undefined {
+  if (filter === undefined) return undefined
+  if (filter.kind === "column") return columnIds.has(filter.columnId) ? { ...filter } : undefined
+
+  const filters = filter.filters.flatMap((child) => {
+    const next = pruneFilterForColumns(child, columnIds)
+    return next ? [next] : []
+  })
+  return filters.length > 0 ? { ...filter, filters } : undefined
 }
 
 function getDefaultStorage(): StorageLike | undefined {
@@ -263,10 +352,11 @@ function parseUrlPersistedGridState(value: unknown): UrlPersistedGridState | und
 
 function parseSortState(value: unknown): BcGridSort[] | undefined {
   if (!Array.isArray(value)) return undefined
-  return value.flatMap((entry) => {
+  const parsed = value.flatMap((entry) => {
     const parsed = parseSortEntry(entry)
     return parsed ? [parsed] : []
   })
+  return parsed.length > 0 || value.length === 0 ? parsed : undefined
 }
 
 function parseSortEntry(value: unknown): BcGridSort | undefined {

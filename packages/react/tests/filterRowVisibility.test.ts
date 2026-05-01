@@ -400,9 +400,9 @@ describe("filter-row-toggle-contract-v040 — persistence invariant", () => {
     const keys = Object.keys(empty)
     expect(keys).not.toContain("showFilterRow")
     expect(keys).not.toContain("showFilters")
-    // Sanity: the read returned the documented six persistence keys
+    // Sanity: the read returned the documented eight persistence keys
     // (filter / pageSize / density / groupBy / pivotState / sidebarPanel
-    // + columnState). If a key gets added to the persistence
+    // / sort + columnState). If a key gets added to the persistence
     // type, this list is the place to update it.
     for (const key of keys) {
       expect([
@@ -413,6 +413,7 @@ describe("filter-row-toggle-contract-v040 — persistence invariant", () => {
         "pivotState",
         "filter",
         "sidebarPanel",
+        "sort",
       ]).toContain(key)
     }
   })
