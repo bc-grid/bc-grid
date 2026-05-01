@@ -302,6 +302,161 @@
   color: var(--bc-grid-fg);
 }
 
+/* ---- header funnel button (filter-popup-variant trigger) ---- */
+
+.bc-grid-header-filter-button {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: var(--bc-grid-header-fg);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  margin-left: 0.125rem;
+  opacity: 0;
+  outline: none;
+  padding: 0;
+  pointer-events: none;
+  transition: opacity var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
+}
+
+/* Always visible when a filter is applied OR while keyboard-focused / hovered. */
+.bc-grid-header-cell:hover .bc-grid-header-filter-button,
+.bc-grid-header-cell:focus-within .bc-grid-header-filter-button,
+.bc-grid-header-filter-button:focus-visible,
+.bc-grid-header-filter-button-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bc-grid-header-filter-button:hover {
+  background: var(--bc-grid-row-hover);
+  color: var(--bc-grid-fg);
+}
+
+.bc-grid-header-filter-button:focus-visible {
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: 1px;
+}
+
+.bc-grid-header-filter-button-active {
+  color: hsl(var(--accent-foreground, var(--foreground, 222 47% 11%)));
+}
+
+.bc-grid-header-filter-button-active:hover {
+  background: var(--bc-grid-row-selected);
+  color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-header-filter-icon {
+  display: block;
+}
+
+/* ---- filter popup (FilterPopup container) ---- */
+
+.bc-grid-filter-popup {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  width: min(20rem, calc(100vw - 16px));
+  min-width: 14rem;
+  flex-direction: column;
+  border: 1px solid var(--bc-grid-context-menu-border);
+  border-radius: var(--bc-grid-radius);
+  background: var(--bc-grid-context-menu-bg);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+  color: var(--bc-grid-fg);
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.bc-grid-filter-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.25rem 0;
+}
+
+.bc-grid-filter-popup-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--bc-grid-muted-fg);
+  text-transform: uppercase;
+}
+
+.bc-grid-filter-popup-active-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bc-grid-focus-ring);
+}
+
+.bc-grid-filter-popup-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.375rem;
+  padding-top: 0.375rem;
+  border-top: 1px solid var(--bc-grid-context-menu-border);
+}
+
+.bc-grid-filter-popup-button {
+  display: inline-flex;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bc-grid-border);
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  outline: none;
+  padding: 0 0.625rem;
+  transition: background var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
+    color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
+}
+
+.bc-grid-filter-popup-button:hover:not(:disabled) {
+  background: var(--bc-grid-row-hover);
+}
+
+.bc-grid-filter-popup-button:focus-visible {
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: 1px;
+}
+
+.bc-grid-filter-popup-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.bc-grid-filter-popup-apply {
+  background: hsl(var(--primary, 221 83% 53%));
+  border-color: hsl(var(--primary, 221 83% 53%));
+  color: hsl(var(--primary-foreground, 0 0% 100%));
+}
+
+.bc-grid-filter-popup-apply:hover:not(:disabled) {
+  background: hsl(var(--primary, 221 83% 53%) / 0.9);
+}
+
+.bc-grid-filter-popup-clear {
+  color: var(--bc-grid-muted-fg);
+}
+
+.bc-grid-filter-popup-clear:hover:not(:disabled) {
+  color: var(--bc-grid-fg);
+}
+
 .bc-grid-row .bc-grid-cell {
   background: var(--bc-grid-bg);
 }
