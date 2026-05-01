@@ -1,6 +1,6 @@
 # Server-Backed Edit Grid Contract
 
-**Status:** v0.3 planning contract
+**Status:** v0.4-alpha contract
 **Last updated:** 2026-05-01
 **Audience:** bc-grid consumers wiring business grids such as bsncraft customers
 
@@ -46,6 +46,20 @@ the requested order. Paged results return `totalRows`; infinite results return
 `totalRows` or `hasMore`; tree results return child counts for the requested
 parent. When the backing store has a revision or ETag, include it on the result
 or row so edit commits can send a `baseRevision`.
+
+For `rowModel="paged"`, `rows` is the current loaded page window only.
+`totalRows` is the full matching dataset count after the server applies the
+query's sort, filter, search, grouping, and visible-column model. bc-grid uses
+that total for pager math and diagnostics; it does not treat the current page
+rows as the whole dataset and does not slice them again. Sort/filter/search,
+grouping, and visible-column changes are new query views and should request page
+`0`; pagination, refresh, and active-view invalidation retain the intended page
+for the same query view.
+
+If an older query response resolves after a newer query/page request is active,
+the stale response must not replace newer rows or diagnostics. The server row
+model enforces this when the superseded request has been aborted or invalidated;
+consumers should pass through the provided `AbortSignal` to their fetch layer.
 
 Row identity is required. `rowId(row)` must resolve to the stable business row
 ID, not the row index inside a page or block. If a create or merge causes the
@@ -202,6 +216,11 @@ rejects the edit promise, so the editing overlay rolls back the cell. If the
 server reports that the row has changed since the user began editing, invalidate
 the row or the view so the next load displays current data.
 
+Validation copy is consumer-owned. For bsncraft-style customer grids, map server
+validation failures to rejected mutation results with a practical `reason`, let
+bc-grid roll back the optimistic patch to the latest canonical server row, and
+then choose whether to invalidate the row/view for a fresh load.
+
 For conflict results, prefer one of two explicit policies:
 
 - Server wins: return a conflict result with the canonical row, invalidate if
@@ -223,6 +242,8 @@ A bsncraft-style customers grid should be wired as a server-owned business grid:
   for page-number workflows.
 - `loadBlock` or `loadPage` posts `ServerViewState` to the customers query
   endpoint and receives customer DTOs plus total count or continuation metadata.
+  In paged mode this means current page rows plus `totalRows`, not all matching
+  customers.
 - `rowId={(customer) => customer.id}` uses the customer ID from the database.
 - Edits call a mutation endpoint such as `PATCH /customers/:id` with
   `{ mutationId, baseRevision, changes }`.
