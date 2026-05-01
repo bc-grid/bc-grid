@@ -139,6 +139,7 @@ import {
   shouldClearRangeSelectionForModelChange,
 } from "./rangeInteraction"
 import { applyKeyboardRangeExtension } from "./rangeNavigation"
+import { BcRangeOverlay } from "./rangeOverlay"
 import { matchesSearchText } from "./search"
 import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
@@ -2213,6 +2214,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   </div>
                 )
               })}
+              <BcRangeOverlay
+                columns={resolvedColumns}
+                rangeSelection={rangeSelectionState}
+                rowIds={rangeRowIds}
+                scrollLeft={scrollOffset.left}
+                totalWidth={virtualWindow.totalWidth}
+                viewportWidth={viewport.width}
+                virtualizer={virtualizer}
+              />
             </div>
 
             <EditorPortal
