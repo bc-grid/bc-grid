@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import type { BcGridFilter, ServerSelection, ServerViewState } from "@bc-grid/core"
+import type {
+  BcGridFilter,
+  ServerPagedQuery,
+  ServerPagedResult,
+  ServerSelection,
+  ServerViewState,
+} from "@bc-grid/core"
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import {
   isActiveServerPagedResponse,
@@ -23,6 +29,20 @@ const pageRows: readonly Row[] = Array.from({ length: 25 }, (_, index) => ({
 }))
 
 const emptySelection: ServerSelection = { mode: "explicit", rowIds: new Set() }
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
+}
 
 describe("server paged grid shell", () => {
   test("uses server totalRows for page count and keeps current page rows intact", () => {
@@ -68,6 +88,27 @@ describe("server paged grid shell", () => {
         totalRows: 26,
       }).paginationEnabled,
     ).toBe(true)
+  })
+
+  test("passes a short last page through without client double-slicing", () => {
+    const lastPageRows = pageRows.slice(0, 2)
+    const shell = resolveServerPagedGridShell({
+      pageIndex: 2,
+      pageSize: 25,
+      pagination: true,
+      rows: lastPageRows,
+      totalRows: 52,
+    })
+
+    expect(shell.gridPagination).toBe(false)
+    expect(shell.gridRows).toBe(lastPageRows)
+    expect(shell.paginationWindow).toMatchObject({
+      endIndex: 52,
+      page: 2,
+      pageCount: 3,
+      startIndex: 50,
+      totalRows: 52,
+    })
   })
 })
 
@@ -174,6 +215,62 @@ describe("server paged query reset semantics", () => {
       }),
     ).toBe(false)
   })
+
+  test("loadPage receives reset page plus complete active query model after view changes", async () => {
+    const filter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["active"],
+    }
+    const activeView = model.createViewState({
+      filter,
+      groupBy: ["status"],
+      searchText: "acme",
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const activeViewKey = viewKeyFor(activeView)
+    const pageIndex = resolveServerPagedRequestPage({
+      pageIndex: 7,
+      previousViewKey: baseViewKey,
+      viewKey: activeViewKey,
+    })
+    let capturedQuery: ServerPagedQuery | undefined
+
+    await model.loadPagedPage({
+      loadPage: async (query) => {
+        capturedQuery = query
+        return {
+          pageIndex: query.pageIndex,
+          pageSize: query.pageSize,
+          rows: pageRows.slice(0, query.pageSize),
+          totalRows: 137,
+          viewKey: query.viewKey,
+        }
+      },
+      pageIndex,
+      pageSize: 50,
+      view: activeView,
+      viewKey: activeViewKey,
+    }).promise
+
+    expect(capturedQuery).toMatchObject({
+      mode: "paged",
+      pageIndex: 0,
+      pageSize: 50,
+      viewKey: activeViewKey,
+    })
+    expect(capturedQuery?.view).toEqual(activeView)
+    expect(capturedQuery?.view).toMatchObject({
+      filter,
+      groupBy: [{ columnId: "status" }],
+      search: "acme",
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name"],
+    })
+  })
 })
 
 describe("server paged stale response ordering", () => {
@@ -229,6 +326,79 @@ describe("server paged stale response ordering", () => {
       }),
     ).toBe(true)
     await Promise.all([firstRequest.promise, nextRequest.promise])
+  })
+
+  test("ignores a slow old response after a newer view request becomes active", async () => {
+    const model = createServerRowModel<Row>()
+    const firstView = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const nextView = model.createViewState({
+      groupBy: [],
+      searchText: "acme",
+      sort: [],
+      visibleColumns: ["id", "name"],
+    })
+    const firstLoad = deferred<ServerPagedResult<Row>>()
+    const nextLoad = deferred<ServerPagedResult<Row>>()
+    const acceptedRows: string[] = []
+    let activeBlockKey: string | null = null
+
+    const firstRequest = model.loadPagedPage({
+      loadPage: () => firstLoad.promise,
+      pageIndex: 3,
+      pageSize: 25,
+      view: firstView,
+    })
+    activeBlockKey = firstRequest.blockKey
+    const firstObserver = firstRequest.promise.then((result) => {
+      if (
+        isActiveServerPagedResponse({
+          activeBlockKey,
+          responseBlockKey: firstRequest.blockKey,
+        })
+      ) {
+        acceptedRows.push(...result.rows.map((row) => row.id))
+      }
+    })
+
+    const nextRequest = model.loadPagedPage({
+      loadPage: () => nextLoad.promise,
+      pageIndex: 0,
+      pageSize: 25,
+      view: nextView,
+    })
+    activeBlockKey = nextRequest.blockKey
+    const nextObserver = nextRequest.promise.then((result) => {
+      if (
+        isActiveServerPagedResponse({
+          activeBlockKey,
+          responseBlockKey: nextRequest.blockKey,
+        })
+      ) {
+        acceptedRows.push(...result.rows.map((row) => row.id))
+      }
+    })
+
+    nextLoad.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "new", name: "New", status: "active" }],
+      totalRows: 1,
+    })
+    await nextObserver
+    expect(acceptedRows).toEqual(["new"])
+
+    firstLoad.resolve({
+      pageIndex: 3,
+      pageSize: 25,
+      rows: [{ id: "old", name: "Old", status: "inactive" }],
+      totalRows: 76,
+    })
+    await firstObserver
+    expect(acceptedRows).toEqual(["new"])
   })
 })
 
@@ -328,6 +498,37 @@ describe("server paged visible columns", () => {
         { columnId: "status", hidden: false },
       ]),
     ).toEqual(["id", "status"])
+  })
+
+  test("passes resolved visible columns into the paged request view", async () => {
+    const model = createServerRowModel<Row>()
+    const visibleColumns = resolveServerVisibleColumns(columns, [
+      { columnId: "name", hidden: true },
+      { columnId: "status", hidden: false },
+    ])
+    const view = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns,
+    })
+    let capturedQuery: ServerPagedQuery | undefined
+
+    await model.loadPagedPage({
+      loadPage: async (query) => {
+        capturedQuery = query
+        return {
+          pageIndex: query.pageIndex,
+          pageSize: query.pageSize,
+          rows: [],
+          totalRows: 0,
+        }
+      },
+      pageIndex: 0,
+      pageSize: 25,
+      view,
+    }).promise
+
+    expect(capturedQuery?.view.visibleColumns).toEqual(["id", "status"])
   })
 
   test("ignores non-visibility column state when building the server view", () => {
