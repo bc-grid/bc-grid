@@ -64,3 +64,56 @@ describe("ColumnVisibilityMenu — SSR markup contract", () => {
     expect(html).toMatch(/data-column-id="name"[^>]*disabled|disabled[^>]*data-column-id="name"/)
   })
 })
+
+describe("ColumnVisibilityMenu — roving tabindex contract", () => {
+  test("only the active item is in the Tab sequence; the rest are tabIndex=-1", () => {
+    // Default: the first enabled item is the initial active index. The
+    // roving-focus contract says only that item carries tabIndex=0;
+    // every other menuitemcheckbox carries tabIndex=-1 so Tab from the
+    // menu lands once and exits.
+    const html = renderMenu()
+    // First item ("name") starts active → tabIndex=0.
+    expect(html).toMatch(
+      /data-column-id="name"[^>]*tabindex="0"|tabindex="0"[^>]*data-column-id="name"/,
+    )
+    // Every other item carries tabIndex=-1.
+    expect(html).toMatch(
+      /data-column-id="email"[^>]*tabindex="-1"|tabindex="-1"[^>]*data-column-id="email"/,
+    )
+    expect(html).toMatch(
+      /data-column-id="balance"[^>]*tabindex="-1"|tabindex="-1"[^>]*data-column-id="balance"/,
+    )
+  })
+
+  test("the initial active index lands on the first ENABLED item, skipping disabled leaders", () => {
+    // First two items are forbidden-to-hide (disabled for keyboard
+    // nav); the third is enabled and should be the initial roving
+    // target.
+    const html = renderMenu({
+      items: [
+        { columnId: "name", hidden: false, hideDisabled: true, label: "Name" },
+        { columnId: "email", hidden: false, hideDisabled: true, label: "Email" },
+        { columnId: "balance", hidden: false, hideDisabled: false, label: "Balance" },
+      ],
+    })
+    expect(html).toMatch(
+      /data-column-id="balance"[^>]*tabindex="0"|tabindex="0"[^>]*data-column-id="balance"/,
+    )
+    // The leading disabled items are NOT in the Tab sequence.
+    expect(html).toMatch(/data-column-id="name"[^>]*tabindex="-1"/)
+    expect(html).toMatch(/data-column-id="email"[^>]*tabindex="-1"/)
+  })
+
+  test("when every item is disabled, no item carries tabIndex=0 (no roving target)", () => {
+    // Pathological case — `useRovingFocus` returns activeIndex=-1
+    // when every item is disabled, so no item should claim the Tab
+    // sequence (Tab from the trigger skips the menu list entirely).
+    const html = renderMenu({
+      items: [
+        { columnId: "name", hidden: false, hideDisabled: true, label: "Name" },
+        { columnId: "email", hidden: false, hideDisabled: true, label: "Email" },
+      ],
+    })
+    expect(html).not.toMatch(/tabindex="0"/)
+  })
+})

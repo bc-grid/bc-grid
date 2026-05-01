@@ -1,8 +1,9 @@
 import type { ColumnId } from "@bc-grid/core"
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react"
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { BcGridMenuCheckItem } from "./internal/menu-item"
 import { usePopupDismiss } from "./internal/popup-dismiss"
 import { computePopupPosition } from "./internal/popup-position"
+import { useRovingFocus } from "./internal/use-roving-focus"
 
 export interface ColumnVisibilityItem {
   columnId: ColumnId
@@ -42,6 +43,40 @@ export function ColumnVisibilityMenu({
   onToggle,
 }: ColumnVisibilityMenuProps): ReactNode {
   const menuRef = useRef<HTMLDivElement | null>(null)
+  // Roving-focus contract per WAI-ARIA Authoring Practices for menus
+  // and the Radix DropdownMenu default. ArrowDown / ArrowUp cycle
+  // enabled items, Home / End jump, disabled (`hideDisabled`) items
+  // are skipped, type-ahead matches the next item whose label starts
+  // with the typed character. Escape stays owned by `usePopupDismiss`.
+  // No focus trap — Tab / Shift-Tab pass through.
+  const {
+    activeIndex,
+    setActiveIndex,
+    onKeyDown: onRovingKeyDown,
+  } = useRovingFocus({
+    itemCount: items.length,
+    isItemEnabled: (index) => items[index]?.hideDisabled !== true,
+    getItemLabel: (index) => items[index]?.label ?? "",
+  })
+  // Refs to each item button so we can move DOM focus to the active
+  // item when the user presses an arrow / Home / End. `useRef` array
+  // patterned after Radix — the ref callback writes the slot and
+  // unmounts clear it.
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+  useEffect(() => {
+    itemRefs.current = itemRefs.current.slice(0, items.length)
+  }, [items.length])
+  // Track whether the user moved active via keyboard, so we don't
+  // steal DOM focus on the initial render (the trigger click sets
+  // active to the first item but focus should stay on the trigger
+  // until the user actually navigates with the keyboard).
+  const movedByKeyboardRef = useRef(false)
+  useEffect(() => {
+    if (!movedByKeyboardRef.current) return
+    movedByKeyboardRef.current = false
+    if (activeIndex < 0) return
+    itemRefs.current[activeIndex]?.focus({ preventScroll: true })
+  }, [activeIndex])
   // Place the menu using the shared Radix-Popper-style positioner. The
   // anchor is a point (the trigger button's bottom-left in viewport
   // coordinates); the menu is point-anchored just like the right-click
@@ -91,10 +126,27 @@ export function ColumnVisibilityMenu({
       onContextMenu={(event) => event.preventDefault()}
     >
       <div className="bc-grid-column-menu-title">Columns</div>
-      <div className="bc-grid-column-menu-list">
-        {items.map((item) => {
+      <div
+        className="bc-grid-column-menu-list"
+        onKeyDown={(event) => {
+          if (onRovingKeyDown(event)) {
+            // Move-actions need the focus follow-up (the effect above
+            // shifts DOM focus). Mark that the user is keyboard-driving
+            // so the next active-index change focuses the button.
+            movedByKeyboardRef.current = true
+            // Activation maps to a click on the active item's button —
+            // cleaner than duplicating the toggle logic here.
+            if (event.key === "Enter" || event.key === " ") {
+              const button = itemRefs.current[activeIndex]
+              button?.click()
+            }
+          }
+        }}
+      >
+        {items.map((item, index) => {
           const checked = !item.hidden
           const label = `${checked ? "Hide" : "Show"} ${item.label}`
+          const isActive = index === activeIndex
           return (
             <BcGridMenuCheckItem
               aria-label={label}
@@ -105,8 +157,18 @@ export function ColumnVisibilityMenu({
               label={item.label}
               onClick={(event) => {
                 event.stopPropagation()
+                setActiveIndex(index)
                 onToggle(item.columnId, checked)
               }}
+              onFocus={() => setActiveIndex(index)}
+              ref={(node) => {
+                itemRefs.current[index] = node
+              }}
+              // Roving tabindex: only the active item is in the Tab
+              // sequence. Tab from the trigger lands on the active
+              // item; Tab again leaves the menu. Mirrors Radix
+              // DropdownMenu / WAI-ARIA Authoring Practices for menus.
+              tabIndex={isActive ? 0 : -1}
             />
           )
         })}
