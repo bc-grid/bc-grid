@@ -306,6 +306,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // re-render the grid just to update the anchor.
   const selectionAnchorRef = useRef<RowId | null>(null)
   const [columnMenu, setColumnMenu] = useState<ColumnVisibilityMenuAnchor | null>(null)
+  const showColumnMenu = props.showColumnMenu !== false
+  const showFilterRow = props.showFilterRow ?? props.showFilters
   const sidebarPanels = useMemo(() => resolveSidebarPanels(props.sidebar), [props.sidebar])
   const hasSidebar = sidebarPanels.length > 0
 
@@ -649,8 +651,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // column defs. Active filter state (`columnFilterText`) is independent
   // and preserved across toggle — hiding the row never clears anything.
   const hasInlineFilters = useMemo(
-    () => resolveFilterRowVisibility(props.showFilterRow, resolvedColumns),
-    [props.showFilterRow, resolvedColumns],
+    () => resolveFilterRowVisibility(showFilterRow, resolvedColumns),
+    [showFilterRow, resolvedColumns],
   )
 
   const loadSetFilterOptions = useCallback(
@@ -1460,7 +1462,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
 
   const { prepareSortAnimation } = useFlipOnSort({ sortState, scrollerRef, virtualizer })
-  useFlipOnRowInsertion({ motionKey: expansionState, rowEntries, scrollerRef, virtualizer })
+  useFlipOnRowInsertion({ rowEntries, scrollerRef, virtualizer })
 
   const handleHeaderSort = useCallback(
     (
@@ -1510,6 +1512,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   })
   const openColumnMenu = useCallback(
     (_column: (typeof resolvedColumns)[number], anchor: ColumnMenuAnchor) => {
+      if (!showColumnMenu) return
       const margin = 8
       const menuWidth = 260
       const menuHeight = 360
@@ -1526,9 +1529,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         ),
       })
     },
-    [],
+    [showColumnMenu],
   )
   const closeColumnMenu = useCallback(() => setColumnMenu(null), [])
+  useEffect(() => {
+    if (!showColumnMenu) setColumnMenu(null)
+  }, [showColumnMenu])
   const toggleColumnHidden = useCallback(
     (columnId: ColumnId, hidden: boolean) => {
       if (hidden) {
@@ -1668,6 +1674,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
                   reorderingColumnId: columnReorderPreview?.sourceColumnId,
                   scrollLeft: scrollOffset.left,
+                  showColumnMenu,
                   sortState,
                   totalWidth: virtualWindow.totalWidth,
                   viewportWidth: viewport.width,

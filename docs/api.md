@@ -913,8 +913,19 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    *   reachable from each column header.
    */
   showFilterRow?: boolean
+  showFilters?: boolean
+  showColumnMenu?: boolean
 }
 ```
+
+`showFilters` is a compatibility alias for `showFilterRow`; prefer
+`showFilterRow` in new code. If both are supplied, `showFilterRow` wins.
+
+`showColumnMenu` controls the built-in header column-menu button and header
+right-click menu. It defaults to `true`; pass `false` when a host app provides
+its own column/settings surface. Individual columns can opt out with
+`columnMenu: false`, which is how built-in selection, detail, and action
+columns avoid rendering a column menu.
 
 When `renderDetailPanel` is supplied, `<BcGrid>` renders a small pinned-left
 disclosure column. Expanding a row mounts the returned React node below that

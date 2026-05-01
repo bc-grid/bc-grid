@@ -21,7 +21,7 @@ const baseColumn: ResolvedColumn<Row> = {
   width: 120,
 }
 
-function renderColumn(column: ResolvedColumn<Row>): string {
+function renderColumn(column: ResolvedColumn<Row>, showColumnMenu = true): string {
   return renderToStaticMarkup(
     renderHeaderCell({
       column,
@@ -40,6 +40,7 @@ function renderColumn(column: ResolvedColumn<Row>): string {
       pinnedEdge: null,
       reorderingColumnId: undefined,
       scrollLeft: 0,
+      showColumnMenu,
       sortState: [],
       totalWidth: 120,
       viewportWidth: 120,
@@ -63,5 +64,32 @@ describe("renderHeaderCell resize affordance", () => {
 
     expect(html).not.toContain("bc-grid-header-cell-resizable")
     expect(html).not.toContain("bc-grid-header-resize-handle")
+  })
+})
+
+describe("renderHeaderCell column menu visibility", () => {
+  test("omits the column menu button when disabled", () => {
+    const html = renderColumn(baseColumn, false)
+
+    expect(html).not.toContain("bc-grid-header-menu-button")
+    expect(html).not.toContain("data-bc-grid-column-menu-button")
+  })
+
+  test("omits the column menu button for opted-out columns", () => {
+    const html = renderColumn({
+      ...baseColumn,
+      source: { ...baseColumn.source, columnMenu: false },
+    })
+
+    expect(html).not.toContain("bc-grid-header-menu-button")
+    expect(html).not.toContain("data-bc-grid-column-menu-button")
+  })
+
+  test("renders the menu icon without visible ellipsis text", () => {
+    const html = renderColumn(baseColumn)
+
+    expect(html).toContain("bc-grid-header-menu-button")
+    expect(html).not.toContain("&gt;...&lt;")
+    expect(html).not.toContain(">...</button>")
   })
 })

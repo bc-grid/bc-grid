@@ -82,6 +82,7 @@ function createActionsColumn<TRow>(options: {
     width: 180,
     sortable: false,
     resizable: false,
+    columnMenu: false,
     cellRenderer(params) {
       const actions: BcEditGridAction<TRow>[] = []
       if (options.onEdit) {

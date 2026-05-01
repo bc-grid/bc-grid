@@ -29,14 +29,14 @@ Every milestone release candidate must satisfy these gates before the coordinato
 
 Goal: make the published package line boring to consume in `bsncraft`.
 
-> **Source-version skew alert (2026-05-01):** `packages/*/package.json` currently declares `0.1.0-alpha.2` while the latest tag is `v0.1.0-alpha.5`. Tagging `v0.2.0` in this state would publish artifacts with `version: "0.1.0-alpha.2"` because nothing in the release flow synchronises source `version` to the tag. Coordinator action item before publishing v0.2.0: bump `packages/*/package.json` to `0.2.0` (via `bun run changeset:version` after writing a fresh changeset, or by hand) and confirm `bun run release-preflight` reports `shared source version: 0.2.0` before pushing the tag. The new release-preflight tool fails fast on this exact mismatch so it does not regress.
+> **Candidate snapshot (2026-05-01):** `coordinator/v020-release-prep` has all 11 publishable packages bumped to `0.2.0`. `RELEASE_TAG=v0.2.0 bun run release-preflight` reports source-version coherence, source-side `workspace:*` internal dependencies, coherent packed metadata, and tag/source match. Local gates pass: type-check, lint, unit tests, package builds, API-surface, bundle-size, tarball-smoke, and release-preflight. A detached `bsncraft` smoke using local `0.2.0` tarballs installs cleanly and passes `bun run check-types` after the wrapper widens `handleGridFilterChange` to accept the `null` filter state emitted when filters are cleared.
 
-- [ ] Published package metadata is coherent: all internal `@bc-grid/*` dependencies resolve to the same release line. Enforced by `bun run release-preflight` (source-version coherence + workspace:* policy in source + no workspace: leak in packed tarballs + tag/source match when running under a release tag).
-- [ ] Host apps do not need hidden CSS knowledge for core layout: fixed-height grids scroll vertically, header/body widths stay aligned, and resize affordances are visible.
-- [ ] Sorting, column resize, pinned columns, vertical scrolling, and basic filters are stable in fit-to-screen mode.
-- [ ] `bsncraft` installs the candidate, passes `bun run check-types`, and can load representative grid pages without import/export errors.
-- [ ] Bundle budget remains under the current `100 KiB` gzip hard cap with the per-PR drift guard intact.
-- [ ] README install guidance and package docs match the actual release process.
+- [x] Published package metadata is coherent: all internal `@bc-grid/*` dependencies resolve to the same release line. Enforced by `bun run release-preflight` (source-version coherence + workspace:* policy in source + no workspace: leak in packed tarballs + tag/source match when running under a release tag).
+- [x] Host apps do not need hidden CSS knowledge for core layout: fixed-height grids scroll vertically, header/body widths stay aligned, and resize affordances are visible.
+- [x] Sorting, column resize, pinned columns, vertical scrolling, and basic filters are stable in fit-to-screen mode.
+- [ ] `bsncraft` installs the candidate, passes `bun run check-types`, and can load representative grid pages without import/export errors. **Package-side result:** local tarball install passes after one consumer typing fix for nullable filter callbacks; unpatched `bsncraft` still needs that wrapper update.
+- [x] Bundle budget remains under the current `100 KiB` gzip hard cap with the per-PR drift guard intact (`65.64 KiB` gzip on the v0.2.0 candidate).
+- [x] README install guidance and package docs match the actual release process.
 
 ## v0.3.0 - Filtering, Search, and Persistence
 

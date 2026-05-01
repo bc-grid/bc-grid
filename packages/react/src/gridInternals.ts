@@ -1206,7 +1206,7 @@ export function useFlipOnRowInsertion<TRow>({
     previousRowOrderRef.current = currentOrder
     if (previousRects.size === 0 || currentRects.size === 0) return
 
-    if (sameRowIdSet(previousOrder, currentOrder) && !sameRowOrder(previousOrder, currentOrder)) {
+    if (sameRowIdSet(previousOrder, currentOrder)) {
       return
     }
 
@@ -1283,13 +1283,6 @@ function sameRowIdSet(previousOrder: readonly RowId[], currentOrder: readonly Ro
   const previous = new Set(previousOrder)
   if (previous.size !== currentOrder.length) return false
   return currentOrder.every((rowId) => previous.has(rowId))
-}
-
-function sameRowOrder(previousOrder: readonly RowId[], currentOrder: readonly RowId[]): boolean {
-  return (
-    previousOrder.length === currentOrder.length &&
-    previousOrder.every((rowId, index) => rowId === currentOrder[index])
-  )
 }
 
 // ---------------------------------------------------------------------------

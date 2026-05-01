@@ -174,6 +174,11 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
   cellStyle?:
     | CSSProperties
     | ((params: BcCellRendererParams<TRow, TValue>) => CSSProperties | undefined)
+  /**
+   * Opt this column out of the built-in header menu while leaving the grid
+   * level `showColumnMenu` setting enabled for other columns.
+   */
+  columnMenu?: boolean
   cellEditor?: BcCellEditor<TRow, TValue>
   aggregationFormatter?: (params: BcAggregationFormatterParams<TRow, TValue>) => ReactNode
   /**
@@ -391,6 +396,19 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    *   reachable from each column header.
    */
   showFilterRow?: boolean
+
+  /**
+   * Compatibility alias for host apps that migrated from an earlier
+   * wrapper-level "show filters" toggle. Prefer `showFilterRow` for new
+   * code; when both are supplied, `showFilterRow` wins.
+   */
+  showFilters?: boolean
+
+  /**
+   * Controls the built-in header column menu button and header
+   * right-click menu. Defaults to true.
+   */
+  showColumnMenu?: boolean
 
   /**
    * Flash the cell briefly when an edit commits, per
