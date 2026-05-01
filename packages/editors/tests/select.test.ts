@@ -37,6 +37,19 @@ describe("select-style editor helpers", () => {
     ).toEqual([])
   })
 
+  test("normalizes missing option labels from the typed option value", () => {
+    expect(
+      resolveEditorOptions(
+        [{ value: 7 }, { value: { id: "owner-1" } }, { value: "closed", label: "Closed" }],
+        {},
+      ),
+    ).toEqual([
+      { value: 7, label: "7" },
+      { value: { id: "owner-1" }, label: '{"id":"owner-1"}' },
+      { value: "closed", label: "Closed" },
+    ])
+  })
+
   test("stringifies option values for native option attributes", () => {
     expect(editorOptionToString(null)).toBe("")
     expect(editorOptionToString("open")).toBe("open")

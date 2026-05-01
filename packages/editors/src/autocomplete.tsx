@@ -1,6 +1,7 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { type FormEvent, useId, useLayoutEffect, useRef, useState } from "react"
 import {
+  type EditorOption,
   editorAccessibleName,
   editorControlState,
   editorInputClassName,
@@ -9,6 +10,64 @@ import {
 } from "./chrome"
 
 const DEBOUNCE_MS = 200
+
+export type AutocompleteFetchOptions = (
+  query: string,
+  signal: AbortSignal,
+) => Promise<readonly EditorOption[]>
+
+export interface AutocompleteRequestController {
+  abort: () => void
+  request: (query: string) => AbortSignal | null
+}
+
+export function createAutocompleteRequestController({
+  fetchOptions,
+  setLoading,
+  setOptions,
+}: {
+  fetchOptions: AutocompleteFetchOptions | undefined
+  setLoading: (loading: boolean) => void
+  setOptions: (options: readonly EditorOption[]) => void
+}): AutocompleteRequestController {
+  let activeController: AbortController | null = null
+
+  return {
+    abort() {
+      activeController?.abort()
+      activeController = null
+    },
+    request(query) {
+      activeController?.abort()
+      if (!fetchOptions) {
+        setOptions([])
+        setLoading(false)
+        return null
+      }
+
+      const controller = new AbortController()
+      activeController = controller
+      setLoading(true)
+
+      void (async () => {
+        try {
+          const result = await fetchOptions(query, controller.signal)
+          if (!controller.signal.aborted) setOptions(result)
+        } catch {
+          // Aborted or fetch errored: keep free-text editing available and
+          // leave the existing suggestions in place for the current edit.
+        } finally {
+          if (activeController === controller && !controller.signal.aborted) {
+            activeController = null
+            setLoading(false)
+          }
+        }
+      })()
+
+      return controller.signal
+    },
+  }
+}
 
 /**
  * Autocomplete editor — `kind: "autocomplete"`. Default for free-form
@@ -48,50 +107,41 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
   const datalistId = useId()
   const errorId = useId()
   const statusId = useId()
-  const [options, setOptions] = useState<readonly { value: unknown; label: string }[]>([])
+  const [options, setOptions] = useState<readonly EditorOption[]>([])
   const [loading, setLoading] = useState(false)
 
   const fetchOptions = (
     column as {
-      fetchOptions?: (
-        query: string,
-        signal: AbortSignal,
-      ) => Promise<readonly { value: unknown; label: string }[]>
+      fetchOptions?: AutocompleteFetchOptions
     }
   ).fetchOptions
 
-  const abortRef = useRef<AbortController | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const requestControllerRef = useRef<AutocompleteRequestController | null>(null)
+  if (!requestControllerRef.current) {
+    requestControllerRef.current = createAutocompleteRequestController({
+      fetchOptions,
+      setLoading,
+      setOptions,
+    })
+  }
 
   const queryFor = (query: string, debounce: boolean) => {
     if (timerRef.current) clearTimeout(timerRef.current)
-    if (abortRef.current) abortRef.current.abort()
+    requestControllerRef.current?.abort()
     if (!fetchOptions) {
       setOptions([])
       setLoading(false)
       return
     }
     setLoading(true)
-    const fire = async () => {
-      const ac = new AbortController()
-      abortRef.current = ac
-      try {
-        const result = await fetchOptions(query, ac.signal)
-        if (!ac.signal.aborted) setOptions(result)
-      } catch {
-        // Aborted or fetch errored — leave options as-is. Per the RFC,
-        // failing the fetch shouldn't block the user from typing free text.
-      } finally {
-        if (abortRef.current === ac && !ac.signal.aborted) {
-          abortRef.current = null
-          setLoading(false)
-        }
-      }
+    const fire = () => {
+      requestControllerRef.current?.request(query)
     }
     if (debounce) {
       timerRef.current = setTimeout(fire, DEBOUNCE_MS)
     } else {
-      void fire()
+      fire()
     }
   }
 
@@ -116,7 +166,7 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
     queryFor(initialQuery, false)
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
-      if (abortRef.current) abortRef.current.abort()
+      requestControllerRef.current?.abort()
     }
   }, [])
 
