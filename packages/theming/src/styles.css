@@ -34,6 +34,7 @@
     var(--bc-grid-focus-ring) 58%,
     var(--bc-grid-column-separator)
   );
+  --bc-grid-column-resize-affordance-active: var(--bc-grid-focus-ring);
   --bc-grid-focus-ring: var(--ring, hsl(221 83% 53%));
   --bc-grid-invalid: var(--destructive, hsl(0 84% 60%));
   --bc-grid-accent: var(--primary, var(--bc-grid-focus-ring));
@@ -270,6 +271,25 @@
   );
   opacity: 0.82;
   pointer-events: none;
+  transition: border-color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
+    background var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard), opacity
+    var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
+}
+
+.bc-grid-header-cell-resizable .bc-grid-header-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  width: 2px;
+  height: 1rem;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--bc-grid-column-resize-affordance);
+  opacity: 0.46;
+  pointer-events: none;
+  transition: background var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
+    opacity var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
 }
 
 .bc-grid-header-cell:hover,
@@ -287,6 +307,31 @@
     var(--bc-grid-column-resize-affordance-hover) 3px 4px,
     transparent 4px
   );
+  opacity: 1;
+}
+
+.bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::after,
+.bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::after,
+.bc-grid-header-resize-handle:hover::after {
+  height: calc(100% - 14px);
+  background: var(--bc-grid-column-resize-affordance-hover);
+  opacity: 0.9;
+}
+
+.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::before {
+  border-right-color: var(--bc-grid-column-resize-affordance-active);
+  background: linear-gradient(
+    to right,
+    transparent 0 3px,
+    var(--bc-grid-column-resize-affordance-active) 3px 4px,
+    transparent 4px
+  );
+  opacity: 1;
+}
+
+.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after {
+  height: calc(100% - 10px);
+  background: var(--bc-grid-column-resize-affordance-active);
   opacity: 1;
 }
 
@@ -2491,8 +2536,8 @@ table.bc-grid-detail-nested-grid {
   /*
    * Column-resize handle: full-height grab area, but width bumped to
    * the touch hit-target minimum so the user can grab it reliably.
-   * The visible separator continues to render via the header cell's
-   * `::before` pseudo-element at its narrow width.
+   * The visible affordance continues to render via the resize handle's
+   * pseudo-elements at their narrow width.
    */
   .bc-grid-header-resize-handle {
     width: var(--bc-grid-hit-target-min);
@@ -2525,6 +2570,7 @@ table.bc-grid-detail-nested-grid {
     --bc-grid-column-separator: CanvasText;
     --bc-grid-column-resize-affordance: CanvasText;
     --bc-grid-column-resize-affordance-hover: Highlight;
+    --bc-grid-column-resize-affordance-active: Highlight;
     --bc-grid-focus-ring: Highlight;
     --bc-grid-invalid: ButtonText;
     --bc-grid-accent: Highlight;
@@ -2615,6 +2661,26 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-header-cell-resizable .bc-grid-header-resize-handle::before {
     background: none;
     border-right-color: var(--bc-grid-column-resize-affordance);
+  }
+
+  .bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::before,
+  .bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::before,
+  .bc-grid-header-resize-handle:hover::before,
+  .bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::before {
+    background: none;
+    border-right-color: var(--bc-grid-column-resize-affordance-hover);
+  }
+
+  .bc-grid-header-cell-resizable .bc-grid-header-resize-handle::after {
+    background: var(--bc-grid-column-resize-affordance);
+    opacity: 1;
+  }
+
+  .bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::after,
+  .bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::after,
+  .bc-grid-header-resize-handle:hover::after,
+  .bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after {
+    background: var(--bc-grid-column-resize-affordance-hover);
   }
 }
 

@@ -1914,6 +1914,13 @@ The shipped CSS treats host shadcn tokens as complete CSS colors, so Tailwind v4
 complete CSS colors (`oklch(...)`, `hsl(...)`, hex, or system colors) when grid
 chrome needs to differ from the host app.
 
+Column resize affordances use `--bc-grid-column-resize-affordance`,
+`--bc-grid-column-resize-affordance-hover`, and
+`--bc-grid-column-resize-affordance-active`. Resizable headers expose
+`data-bc-grid-resizable="true"` and their drag targets expose
+`data-bc-grid-resize-handle="true"`; while a resize drag is in flight the handle
+sets `data-bc-grid-resizing="true"`.
+
 ### `@bc-grid/aggregations`
 
 ```ts

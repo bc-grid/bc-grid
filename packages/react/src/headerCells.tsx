@@ -291,6 +291,7 @@ export function renderHeaderCell<TRow>({
         zIndex: column.pinned ? 4 : 3,
       })}
       data-column-id={column.columnId}
+      data-bc-grid-resizable={column.source.resizable === false ? undefined : "true"}
       aria-label={headerLabel}
     >
       <span className="bc-grid-header-label">{column.source.header}</span>
@@ -365,6 +366,7 @@ export function renderHeaderCell<TRow>({
         <div
           aria-hidden="true"
           className="bc-grid-header-resize-handle"
+          data-bc-grid-resize-handle="true"
           onPointerDown={(event) => {
             event.stopPropagation()
             onResizeStart(column, event)
