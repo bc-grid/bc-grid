@@ -1,11 +1,11 @@
-# Three-Worker Handoff - v0.4 / v0.5
+# Three-Worker Handoff - v0.4 / v0.5 audit-refactor / v0.6
 
-**Date:** 2026-05-02  
-**Coordinator:** Claude in `~/work/bc-grid`  
-**Consumer validation repo:** `~/work/bsncraft`  
+**Date:** 2026-05-02 (updated for audit-refactor pivot)
+**Coordinator:** Claude in `~/work/bc-grid`
+**Consumer validation repo:** `~/work/bsncraft`
 **Active workers:** worker1 Claude, worker2 Codex, worker3 Claude
 
-This handoff replaces the previous 5-worker sprint. The goal is to reduce Codex usage while keeping bc-grid moving toward `v0.4.0` editing/server-edit quality and `v0.5.0` range/clipboard work.
+This handoff replaces the previous 5-worker sprint. The goal is to reduce Codex usage while keeping bc-grid moving toward `v0.4.0` editing/server-edit quality, `v0.5.0` audit-driven ergonomics refactor, and `v0.6.0` range/clipboard work (range/clipboard renumbered from v0.5 after the 2026-05-02 audit-refactor pivot — see `docs/coordination/v0.5-audit-refactor-plan.md`).
 
 ## Directory Contract
 
@@ -60,7 +60,7 @@ Start from fresh branches. Recommended first branch:
 agent/worker1/server-grid-stability-v040
 ```
 
-### worker2 - Codex - Filters and v0.5 Prep
+### worker2 - Codex - Filters and v0.6 Prep
 
 Primary outcome for v0.4:
 
@@ -70,7 +70,7 @@ Primary outcome for v0.4:
 
 Secondary outcome after v0.4 blockers:
 
-- internal range/clipboard helper work for v0.5 only; no browser clipboard UI without coordinator approval.
+- internal range/clipboard helper work for v0.6 only; no browser clipboard UI without coordinator approval.
 
 Recommended first branch:
 
@@ -117,4 +117,6 @@ The Claude coordinator in `~/work/bc-grid` should:
 
 `v0.4.0` should ship when editing, validation, and server-backed edit contracts are credible enough for `bsncraft` to wire a realistic editable customers grid.
 
-`v0.5.0` should focus on spreadsheet workflows: range state, copy TSV/HTML, paste planning/apply helpers, validation rollback, and fill handle.
+`v0.5.0` is the **audit-driven ergonomics refactor** — turnkey state hooks (`useBcGridState`, `useServerPagedGrid`), expanded `apiRef` (focus/scroll/edit/filter), and four hero-use-case spike grids in `apps/examples/`. Detailed scope in `docs/coordination/v0.5-audit-refactor-plan.md`.
+
+`v0.6.0` (formerly `v0.5.0`) focuses on spreadsheet workflows: range state, copy TSV/HTML, paste planning/apply helpers, validation rollback, and fill handle.

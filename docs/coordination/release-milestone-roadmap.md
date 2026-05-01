@@ -55,7 +55,7 @@ Goal: complete the day-to-day data finding workflow.
 
 Goal: make editable ERP grids viable.
 
-> **Alpha focus:** see `docs/coordination/v0.4-alpha-plan.md`. `v0.4-alpha` should prove the editing contract and server-backed edit contract before broad spreadsheet workflows. Range paste helper work may land in this train if it is internal/helper-only, but user-facing clipboard paste and fill handle remain `v0.5.0` gates.
+> **Alpha focus:** see `docs/coordination/v0.4-alpha-plan.md`. `v0.4-alpha` should prove the editing contract and server-backed edit contract before broad spreadsheet workflows. Range paste helper work may land in this train if it is internal/helper-only, but user-facing clipboard paste and fill handle remain `v0.6.0` gates (renumbered from `v0.5.0` after the 2026-05-02 audit-refactor pivot).
 
 - [ ] `BcEditGrid` commit lifecycle is complete: prepare, validate, commit, optimistic update, rollback, and stale mutation handling.
 - [ ] Built-in editors are complete enough for ERP data entry: text, number, date, datetime, time, select, multi-select, autocomplete, and boolean/checkbox.
@@ -67,7 +67,21 @@ Goal: make editable ERP grids viable.
 - [ ] Examples app exposes editing and grouping clearly enough that the maintainer can find and test the features without hidden knowledge.
 - [ ] `bsncraft` can wire at least one realistic editable server-backed grid without forking bc-grid.
 
-## v0.5.0 - Range, Clipboard, and Spreadsheet Flows
+## v0.5.0 - Audit-Driven Ergonomics Refactor
+
+Goal: every CRUD grid in the BusinessCraft ERP becomes ~30 lines of consumer code instead of ~200, and each of the four hero use cases (sales estimating, production estimating, colour selection, document management) renders cleanly in <100 LOC of consumer code as a spike grid.
+
+> **Pivot context (2026-05-02):** the original `v0.5.0` plan (Range, Clipboard, Spreadsheet Flows) is bumped to `v0.6.0`. This milestone replaces it as a response to the bc-grid audit at `docs/coordination/audit-2026-05/`. The audit found exceptional engineering discipline (zero `any` across 11 packages, clean DAG, type-check green) but a severe API ergonomics gap: every consumer grid wires ~30 controlled-state props plus a hand-rolled server pagination state machine, and `apiRef` is missing imperative methods that ERP UX patterns need. bsncraft already carries 2,142 LOC of wrapper code across 5 wrappers, and zero of the four hero use cases are built yet — fixing ergonomics now (before the migration scales) is dramatically cheaper than retrofitting later. **Detailed scope:** `docs/coordination/v0.5-audit-refactor-plan.md`.
+
+- [ ] `useBcGridState({ persistTo, columns, server? })` turnkey hook owns the ~30 controlled-state pairs and exposes a single discriminated `onChange` event for consumers that need to observe state. Existing controlled-prop API stays for advanced users; opinionated path becomes the default.
+- [ ] `useServerPagedGrid({ gridId, loadPage })` owns request-id flow, stale-response rejection, debounce, page reset on filter change, optimistic edits in flight. Companion: `useServerInfiniteGrid`, `useServerTreeGrid`.
+- [ ] `BcGridApi` expands with `focusCell`, `scrollToCell`, `startEdit`, `commitEdit`, `cancelEdit`, `openFilter`, `closeFilter`, `getActiveCell`, `getSelection`. Documented in `api.md`.
+- [ ] Four hero-use-case spike grids land in `apps/examples/`, each <100 LOC of consumer code: sales estimating (money column + dependent cells + Excel paste), production estimating (outline rendering + drag-to-reorder + multi-row edit), colour selection (swatch-aware lookup), document management (file/thumbnail column + drag-drop upload + bulk action).
+- [ ] Cheap-but-real cleanups land alongside: 10 internal-path test imports replaced with `@bc-grid/<pkg>` imports plus a lint rule, `filter` prop becomes optional, `<BcGrid searchHotkey>` prop owns Cmd+F, `fit="content" | "viewport" | "auto"` prop owns viewport-fit height math.
+- [ ] `bsncraft` migrates at least one CRUD grid to the new turnkey hooks and the diff is at least -100 LOC of wrapper code.
+- [ ] Audit synthesis at `docs/coordination/audit-2026-05/synthesis.md` is published with ranked P0/P1/P2 + author tags + sprint plan, and this milestone closes the P0 items.
+
+## v0.6.0 - Range, Clipboard, and Spreadsheet Flows
 
 Goal: make spreadsheet-style work practical.
 
@@ -78,7 +92,7 @@ Goal: make spreadsheet-style work practical.
 - [ ] Keyboard range extension and clear/select-all behavior match the range RFC.
 - [ ] Visual range overlays, active cell, selection, and editing states do not fight each other.
 
-## v0.6.0 - Server Row Model and Live Data
+## v0.7.0 - Server Row Model and Live Data
 
 Goal: support large ERP datasets without loading everything into the browser.
 
@@ -89,7 +103,7 @@ Goal: support large ERP datasets without loading everything into the browser.
 - [ ] Server-mode performance tuning has a baseline and no obvious cache/fetch regressions.
 - [ ] `bsncraft` has at least one server-backed grid path validated against the candidate package.
 
-## v0.7.0 - Aggregation, Pivot, and Export
+## v0.8.0 - Aggregation, Pivot, and Export
 
 Goal: cover analytical and reporting workflows.
 
@@ -100,7 +114,7 @@ Goal: cover analytical and reporting workflows.
 - [ ] Exported values respect value getters, formatters, hidden columns, and selected/range scopes as documented.
 - [ ] Pivot/export interactions have focused tests for the public behavior, not only helper functions.
 
-## v0.8.0 - Chrome and Productivity Surface
+## v0.9.0 - Chrome and Productivity Surface
 
 Goal: make the grid feel like a full product surface, not just a table.
 
@@ -112,11 +126,11 @@ Goal: make the grid feel like a full product surface, not just a table.
 
 Charts peer-dep integration is post-1.0 and should not gate v0.x or v1.0 milestones.
 
-## v0.9.0 - Release Candidate Hardening
+## v0.10.0 - Release Candidate Hardening
 
 Goal: stop adding broad surface area and remove release risk.
 
-This milestone is optional. If v0.8.0 already satisfies the GA gate, the coordinator may recommend going directly to `1.0.0`.
+This milestone is optional. If v0.9.0 already satisfies the GA gate, the coordinator may recommend going directly to `1.0.0`.
 
 - [ ] WCAG deep pass is complete and issues are either fixed or explicitly deferred below P1.
 - [ ] Clean-room AG Grid comparison audits cover the major v1.0 surfaces in `docs/coordination/ag-grid-clean-room-audit-plan.md`.

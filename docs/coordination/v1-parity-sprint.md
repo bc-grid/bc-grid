@@ -227,7 +227,7 @@ All workers start clean from their parking branches:
 | Worker | Model | Worktree | First claim | Why |
 |---|---|---|---|---|
 | worker1 | Claude | `~/work/bcg-worker1` | `server-grid-stability-v040` | Server-backed sort/filter/page refresh and server edit contracts are v0.4 blockers. |
-| worker2 | Codex | `~/work/bcg-worker2` | `filter-panel-popup-polish-v040` | Keeps the limited Codex lane focused on filters/tool panels and later v0.5 range helpers. |
+| worker2 | Codex | `~/work/bcg-worker2` | `filter-panel-popup-polish-v040` | Keeps the limited Codex lane focused on filters/tool panels and later v0.6 range helpers. |
 | worker3 | Claude | `~/work/bcg-worker3` | `editor-validation-contract-v040` | Critical-path editor keyboard/a11y/validation/lookup contract work. |
 
 The table above is the preferred launch order, not a pre-claim. Each worker still claims by editing `docs/queue.md` from `[ready]` to `[in-flight: workerN]`, creates `agent/workerN/<task-slug>`, and opens a PR. If a worker arrives after a task has already been claimed, it picks the next highest-priority `[ready]` task from the same plan.

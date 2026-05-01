@@ -40,6 +40,25 @@ Read-only audits, one findings doc per author. See `docs/coordination/audit-2026
 - `[in-flight: coordinator]` **audit-coordinator** — API ergonomics, package boundaries, type discipline, visual quality, bsncraft integration, ERP comparison, worker2 cross-check. Scope: `docs/coordination/audit-2026-05/coordinator-scope.md`. Output: `docs/coordination/audit-2026-05/coordinator-audit.md`.
 - `[blocked: coordinator - waits on all four findings docs]` **audit-synthesis** — synthesize all four findings into ranked P0/P1/P2 with author tags + sprint plan. Output: `docs/coordination/audit-2026-05/synthesis.md`.
 
+## v0.5 — Audit-Driven Ergonomics Refactor (DRAFT — pending audit synthesis)
+
+Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. These task entries are draft and are not claimable until the audit synthesis ratifies the scope. Worker handoffs do not pivot to v0.5 work until the coordinator updates each handoff doc.
+
+- `[draft]` **v05-use-bc-grid-state** (worker3) — `useBcGridState({ persistTo, columns })` turnkey state hook owning the ~30 controlled-state pairs.
+- `[draft]` **v05-use-server-paged-grid** (worker1) — `useServerPagedGrid({ gridId, loadPage })` owning request-id, stale rejection, debounce, page reset on filter, optimistic edits.
+- `[draft]` **v05-api-ref-server** (worker1) — `BcGridApi.scrollToCell` for server-paged grids.
+- `[draft]` **v05-api-ref-editor** (worker3) — `BcGridApi.focusCell` / `startEdit` / `commitEdit` / `cancelEdit` / `getActiveCell`.
+- `[draft]` **v05-spike-sales-estimating** (worker3) — hero spike at `apps/examples/src/sales-estimating.example.tsx`, <100 LOC consumer code.
+- `[draft]` **v05-spike-colour-selection** (worker3) — hero spike at `apps/examples/src/colour-selection.example.tsx`, <100 LOC consumer code.
+- `[draft]` **v05-spike-production-estimating** (coordinator) — hero spike at `apps/examples/src/production-estimating.example.tsx`, <100 LOC consumer code.
+- `[draft]` **v05-spike-document-management** (coordinator) — hero spike at `apps/examples/src/document-management.example.tsx`, <100 LOC consumer code.
+- `[draft]` **v05-test-import-lint** (worker2) — replace 10 internal-path test imports with `@bc-grid/editors` and add a lint rule.
+- `[draft]` **v05-search-hotkey-prop** (worker2) — `<BcGrid searchHotkey>` prop owning Cmd+F.
+- `[draft]` **v05-fit-prop** (worker2) — `fit="content" | "viewport" | "auto"` prop owning viewport-fit height math.
+- `[draft]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional.
+- `[draft, stretch]` **v05-filter-discriminated-union** (worker2) — `BcColumnFilter` becomes a tagged union per type.
+- `[draft]` **v05-bsncraft-migration-proof** (coordinator) — migrate one bsncraft CRUD grid to the new hooks; target diff ≥-100 LOC wrapper code.
+
 ## Q1 — Foundation + Vertical Slice
 
 ### Phase 1 — Get the repo right (week 1, blocks everything)
