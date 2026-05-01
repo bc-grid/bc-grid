@@ -802,6 +802,12 @@ export function assignRef<T>(ref: RefObject<T | null> | undefined, value: T): ()
   }
 }
 
+export function shouldApplyClientRowProcessing(
+  rowProcessingMode: BcGridProps<unknown>["rowProcessingMode"] | undefined,
+): boolean {
+  return rowProcessingMode !== "manual"
+}
+
 // ---------------------------------------------------------------------------
 // Controlled-state utilities.
 // ---------------------------------------------------------------------------
@@ -1402,6 +1408,7 @@ function reorderColumnState<TRow>({
 // ---------------------------------------------------------------------------
 
 export interface UseFlipOnSortParams {
+  disabled?: boolean
   sortState: readonly BcGridSort[]
   scrollerRef: RefObject<HTMLDivElement | null>
   virtualizer: Virtualizer
@@ -1494,7 +1501,12 @@ export function resolveStableRowFlipCandidates(
   return { status: "animate", candidates }
 }
 
-export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOnSortParams): {
+export function useFlipOnSort({
+  disabled = false,
+  sortState,
+  scrollerRef,
+  virtualizer,
+}: UseFlipOnSortParams): {
   /**
    * Capture current visible row rects before a sort is committed. The next
    * `useLayoutEffect` after `sortState` changes will play FLIP from these
@@ -1516,6 +1528,10 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
 
   const prepareSortAnimation = useCallback((): void => {
     cancelActiveSortAnimations()
+    if (disabled) {
+      sortFlipRectsRef.current = new Map()
+      return
+    }
     const rects = new Map<RowId, FlipRect>()
     const scroller = scrollerRef.current
     if (!scroller) {
@@ -1528,9 +1544,14 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
       if (snapshot) rects.set(snapshot.rowId, snapshot.rect)
     }
     sortFlipRectsRef.current = rects
-  }, [cancelActiveSortAnimations, scrollerRef])
+  }, [cancelActiveSortAnimations, disabled, scrollerRef])
 
   useEffect(() => () => cancelActiveSortAnimations(), [cancelActiveSortAnimations])
+  useEffect(() => {
+    if (!disabled) return
+    sortFlipRectsRef.current = new Map()
+    cancelActiveSortAnimations()
+  }, [cancelActiveSortAnimations, disabled])
 
   // After sortState commits and the new row positions render, run FLIP.
   // useLayoutEffect runs synchronously before paint, so we read the new
@@ -1539,6 +1560,7 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
   // even though we don't read its value here — it's the change trigger.
   // biome-ignore lint/correctness/useExhaustiveDependencies: sortState is a re-run trigger
   useLayoutEffect(() => {
+    if (disabled) return
     const captured = sortFlipRectsRef.current
     if (captured.size === 0) return
     sortFlipRectsRef.current = new Map()
@@ -1573,7 +1595,7 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
       .filter((candidate): candidate is RowFlipCandidate => candidate != null)
 
     activeSortAnimationsRef.current = playRowFlipCandidates(candidates, flipBudget, virtualizer)
-  }, [cancelActiveSortAnimations, flipBudget, sortState, virtualizer, scrollerRef])
+  }, [cancelActiveSortAnimations, disabled, flipBudget, sortState, virtualizer, scrollerRef])
 
   return { prepareSortAnimation }
 }
@@ -1583,6 +1605,7 @@ export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOn
 // ---------------------------------------------------------------------------
 
 export interface UseFlipOnRowInsertionParams<TRow> {
+  disabled?: boolean
   motionKey?: unknown
   rowEntries: readonly RowEntry<TRow>[]
   scrollerRef: RefObject<HTMLDivElement | null>
@@ -1590,6 +1613,7 @@ export interface UseFlipOnRowInsertionParams<TRow> {
 }
 
 export function useFlipOnRowInsertion<TRow>({
+  disabled = false,
   motionKey,
   rowEntries,
   scrollerRef,
@@ -1601,6 +1625,12 @@ export function useFlipOnRowInsertion<TRow>({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: rowEntries/motionKey are render-change triggers.
   useLayoutEffect(() => {
+    if (disabled) {
+      previousRowRectsRef.current = new Map()
+      previousRowOrderRef.current = []
+      return
+    }
+
     const scroller = scrollerRef.current
     if (!scroller) {
       previousRowRectsRef.current = new Map()
@@ -1646,7 +1676,7 @@ export function useFlipOnRowInsertion<TRow>({
 
     playRowFlipCandidates(candidates, flipBudget, virtualizer)
     playRowEnterAnimations(enteringRows, flipBudget)
-  }, [flipBudget, motionKey, rowEntries, scrollerRef, virtualizer])
+  }, [disabled, flipBudget, motionKey, rowEntries, scrollerRef, virtualizer])
 }
 
 function rowFlipCandidate(

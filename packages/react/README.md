@@ -88,6 +88,11 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Pivot grid rendering | Planned | Not exposed in examples | Pivot row/column rendering integration |
 | Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
 
+`<BcServerGrid>` treats returned rows as server-processed data. Sort, filter,
+search, grouping, and pagination changes update the server query view; while a
+new result is loading, the grid keeps the current rows stable and does not
+client-sort/filter stale rows or play row-change animations over them.
+
 ## Global search
 
 bc-grid leaves the global search input to the host application. Keep the input

@@ -96,6 +96,7 @@ import {
   rootStyle,
   rowStyle,
   scrollerStyle,
+  shouldApplyClientRowProcessing,
   useColumnReorder,
   useColumnResize,
   useControlledState,
@@ -275,6 +276,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setScrollOffset(next)
   }, [])
   const isRowDisabled = useCallback((row: TRow) => rowIsDisabled?.(row) ?? false, [rowIsDisabled])
+  const applyClientRowProcessing = shouldApplyClientRowProcessing(props.rowProcessingMode)
 
   const [sortState, setSortState] = useControlledState<readonly BcGridSort[]>(
     hasProp(props, "sort"),
@@ -534,14 +536,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   const allRowEntries = useMemo<readonly DataRowEntry<TRow>[]>(() => {
     let visibleRows: TRow[] =
-      props.showInactive === false && rowIsInactive
+      applyClientRowProcessing && props.showInactive === false && rowIsInactive
         ? data.filter((row) => !rowIsInactive(row))
         : [...data]
 
     // Filter step: pass the row's per-column formatted values to the
     // matcher. We use formatted values (not raw) so the result matches
     // what the user sees in the cell.
-    if (activeFilter) {
+    if (applyClientRowProcessing && activeFilter) {
       const columnsById = new Map(consumerResolvedColumns.map((c) => [c.columnId, c]))
       visibleRows = visibleRows.filter((row) =>
         matchesGridFilter(activeFilter, (columnId) => {
@@ -556,7 +558,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       )
     }
 
-    if (searchText.trim()) {
+    if (applyClientRowProcessing && searchText.trim()) {
       const searchableColumns = consumerResolvedColumns.filter(
         (column) => column.source.filter !== false,
       )
@@ -578,7 +580,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       rowId: rowId(row, index),
     }))
 
-    if (sortState.length === 0) return built
+    if (!applyClientRowProcessing || sortState.length === 0) return built
 
     // Sort using each column's comparator (or the default). Multi-column:
     // run keys in order, return the first non-zero comparison. After sort,
@@ -600,6 +602,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     return sorted.map((entry, index) => ({ ...entry, index }))
   }, [
     activeFilter,
+    applyClientRowProcessing,
     data,
     locale,
     props.showInactive,
@@ -778,11 +781,18 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       buildGroupedRowModel({
         rows: leafRowEntries,
         columns: consumerResolvedColumns,
-        groupBy: groupByState,
+        groupBy: applyClientRowProcessing ? groupByState : [],
         expansionState,
         locale,
       }),
-    [consumerResolvedColumns, expansionState, groupByState, leafRowEntries, locale],
+    [
+      applyClientRowProcessing,
+      consumerResolvedColumns,
+      expansionState,
+      groupByState,
+      leafRowEntries,
+      locale,
+    ],
   )
   const rowEntries = groupedRowModel.rows
   const groupingActive = groupedRowModel.active
@@ -1785,8 +1795,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ],
   )
 
-  const { prepareSortAnimation } = useFlipOnSort({ sortState, scrollerRef, virtualizer })
-  useFlipOnRowInsertion({ rowEntries, scrollerRef, virtualizer })
+  const rowMotionDisabled = !applyClientRowProcessing
+  const { prepareSortAnimation } = useFlipOnSort({
+    disabled: rowMotionDisabled,
+    sortState,
+    scrollerRef,
+    virtualizer,
+  })
+  useFlipOnRowInsertion({ disabled: rowMotionDisabled, rowEntries, scrollerRef, virtualizer })
 
   const handleHeaderSort = useCallback(
     (

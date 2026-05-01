@@ -460,6 +460,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
               : []
       }
       apiRef={gridApiRef}
+      rowProcessingMode="manual"
       {...(props.rowModel === "paged" ? { footer: pagedFooter } : {})}
       loading={loading}
       loadingOverlay={loadingOverlay}

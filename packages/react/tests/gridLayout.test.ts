@@ -6,6 +6,7 @@ import {
   resolveFallbackBodyHeight,
   rootStyle,
   scrollerStyle,
+  shouldApplyClientRowProcessing,
 } from "../src/gridInternals"
 
 describe("rootStyle", () => {
@@ -110,5 +111,13 @@ describe("resolveFallbackBodyHeight", () => {
 
   test("undefined falls back to DEFAULT_BODY_HEIGHT", () => {
     expect(resolveFallbackBodyHeight(undefined, 36, 40)).toBe(DEFAULT_BODY_HEIGHT)
+  })
+})
+
+describe("row processing mode", () => {
+  test("defaults to client row transforms and disables them in manual mode", () => {
+    expect(shouldApplyClientRowProcessing(undefined)).toBe(true)
+    expect(shouldApplyClientRowProcessing("client")).toBe(true)
+    expect(shouldApplyClientRowProcessing("manual")).toBe(false)
   })
 })

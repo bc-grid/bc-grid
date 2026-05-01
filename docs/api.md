@@ -1089,6 +1089,15 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   data: readonly TRow[]
   columns: readonly BcReactGridColumn<TRow>[]
   rowId: BcRowId<TRow>
+  /**
+   * Controls whether `<BcGrid>` applies client-side row transforms
+   * (filter/search/sort/grouping) to `data`.
+   *
+   * `"client"` is the default. `"manual"` treats `data` as already
+   * processed by the host/server and is used by `<BcServerGrid>` so refreshes
+   * keep current rows stable while the next server result loads.
+   */
+  rowProcessingMode?: "client" | "manual"
 
   // Layout
   density?: "compact" | "normal" | "comfortable"
@@ -1604,24 +1613,16 @@ correctness implications.
 - **`<BcGrid data={rows}>` — client full-data grouping.** Group buckets
   cover every row in `data` after client filter / search runs. Stable
   across pagination because the grid sees the full dataset.
-- **`<BcServerGrid>` without server-side group support — current-page
-  grouping.** bc-grid runs the same client engine over the rows
-  currently rendered, which on a server-row-model adapter is **only
-  the loaded page or block**. Group buckets reflect that slice. They
-  do not imply global grouping over rows the client hasn't loaded —
-  a "Region" bucket on page 2 of an unsorted server feed is "Region
-  within page 2", not "Region across all customers". Useful in dev
-  to confirm the wire format; misleading as a production grouping
-  surface.
-- **`<BcServerGrid>` with server-side group delegation — full-dataset
-  grouping.** bc-grid forwards `groupBy` to the consumer-supplied
-  `loadPage` / `loadBlock` callback as `query.view.groupBy:
-  ServerGroup[]`. Whether the rendered buckets span the full dataset
-  depends on whether the server applies the hint and returns rows in
-  global group order. bc-grid does not synthesise server-aggregated
-  group rows the server didn't return; the production path is to
-  return the rows in group order and let the client engine layer in
-  group-row chrome over the loaded page.
+- **`<BcServerGrid>` — server-owned query view.** bc-grid forwards
+  `groupBy` to the consumer-supplied `loadPage` / `loadBlock` callback
+  as `query.view.groupBy: ServerGroup[]` and renders the returned rows
+  with manual row processing. The React layer does not client-sort,
+  client-filter, client-search, client-group, or play row FLIP/enter
+  animations against stale rows while the next server result is loading.
+  Whether rendered rows reflect global grouping depends on whether the
+  server applies the hint and returns the intended grouped/windowed row
+  set. bc-grid does not synthesise server-aggregated group rows the
+  server didn't return.
 
 For bsncraft-style customer grids, the expected server-backed path is
 to treat `query.view` as the source of truth, apply search / filter /

@@ -365,6 +365,15 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   data: readonly TRow[]
   columns: readonly BcReactGridColumn<TRow>[]
   rowId: BcRowId<TRow>
+  /**
+   * Controls whether `<BcGrid>` applies client-side row transforms
+   * (filter/search/sort/grouping) to `data`.
+   *
+   * `"client"` is the default. `"manual"` is used by `<BcServerGrid>` so
+   * server refreshes keep the current rows stable while the next result
+   * loads, instead of transiently sorting/filtering stale rows on the client.
+   */
+  rowProcessingMode?: "client" | "manual"
 
   density?: BcGridDensity
   height?: "auto" | number
