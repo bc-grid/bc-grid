@@ -59,7 +59,7 @@ const components = [
   [
     "BcServerGrid",
     "partial",
-    "Exports the server-grid shell and API type. Paged mode can render initialResult rows; live loaders, cache, invalidation, infinite mode, and tree mode are reserved for Q4.",
+    "Server-grid wrapper with live paged loading, server-owned pagination, cache/invalidation, mutation APIs, diagnostics, and hardening in progress for infinite/tree modes.",
   ],
   [
     "useBcGridApi",
@@ -396,7 +396,7 @@ const serverGridProps = [
     "rowModel",
     '"paged" | "infinite" | "tree"',
     "partial",
-    "Discriminates the public prop union. Paged mode uses the server row count for pagination.",
+    "Discriminates the public prop union. Paged mode is the recommended bsncraft customer-grid path; infinite/tree are available but still hardening.",
   ],
   [
     "loadPage",
@@ -410,18 +410,28 @@ const serverGridProps = [
     "partial",
     "Paged mode renders these rows immediately.",
   ],
-  ["loadBlock", "LoadServerBlock<TRow>", "reserved", "Reserved Q4 infinite mode."],
-  ["blockSize", "number", "reserved", "Reserved with infinite mode."],
-  ["maxCachedBlocks", "number", "reserved", "Reserved with infinite mode cache."],
-  ["blockLoadDebounceMs", "number", "reserved", "Reserved with infinite mode."],
-  ["maxConcurrentRequests", "number", "reserved", "Reserved with infinite mode."],
-  ["loadChildren", "LoadServerTreeChildren<TRow>", "reserved", "Reserved Q4 tree mode."],
-  ["loadRoots", "LoadServerTreeChildren<TRow>", "reserved", "Reserved Q4 tree mode."],
+  ["loadBlock", "LoadServerBlock<TRow>", "partial", "Infinite-mode block loader; still hardening."],
+  ["blockSize", "number", "partial", "Infinite-mode block size."],
+  ["maxCachedBlocks", "number", "partial", "Infinite-mode cache limit."],
+  ["blockLoadDebounceMs", "number", "partial", "Infinite-mode load debounce."],
+  ["maxConcurrentRequests", "number", "partial", "Infinite-mode request concurrency limit."],
+  [
+    "loadChildren",
+    "LoadServerTreeChildren<TRow>",
+    "partial",
+    "Tree-mode child loader; still hardening.",
+  ],
+  [
+    "loadRoots",
+    "LoadServerTreeChildren<TRow>",
+    "partial",
+    "Optional tree-mode root loader; still hardening.",
+  ],
   [
     "apiRef",
     "RefObject<BcServerGridApi<TRow> | null>",
-    "partial",
-    "Delegates base grid API and exposes a static server-state snapshot.",
+    "implemented",
+    "Delegates base grid API and exposes live server refresh, invalidation, mutation, update, state, and diagnostics methods.",
   ],
 ]
 
@@ -484,16 +494,44 @@ const serverApi = [
   [
     "refreshServerRows",
     "({ purge }?) => void",
-    "partial",
-    "Currently delegates to base refresh; real refetch/purge is Q4.",
+    "implemented",
+    "Refetches the active server view; purge clears cached server rows first.",
   ],
-  ["invalidateServerRows", "(invalidation) => void", "reserved", "Reserved Q4."],
-  ["retryServerBlock", "(blockKey) => void", "reserved", "Reserved Q4."],
+  [
+    "invalidateServerRows",
+    "(invalidation) => void",
+    "implemented",
+    "Invalidates all/view/block/row/tree cache scopes and refetches the active server view where relevant.",
+  ],
+  [
+    "retryServerBlock",
+    "(blockKey) => void",
+    "implemented",
+    "Drops a failed/stale server block and schedules the mode-specific loader again.",
+  ],
+  [
+    "applyServerRowUpdate",
+    "(update) => void",
+    "implemented",
+    "Applies pushed rowAdded/rowUpdated/rowRemoved/viewInvalidated updates by stable row identity.",
+  ],
+  [
+    "queueServerRowMutation",
+    "(patch) => void",
+    "implemented",
+    "Queues an optimistic ServerRowPatch against loaded server-row-model cache state.",
+  ],
+  [
+    "settleServerRowMutation",
+    "(result) => void",
+    "implemented",
+    "Settles an optimistic mutation as accepted, rejected, or conflict.",
+  ],
   [
     "getServerRowModelState",
     "() => ServerRowModelState<TRow>",
-    "partial",
-    "Returns a static snapshot over current props and base selection.",
+    "implemented",
+    "Returns the current server-row-model state snapshot.",
   ],
   [
     "getServerDiagnostics",
@@ -562,7 +600,7 @@ const serverTypes = [
   ["ServerInvalidation", "All/view/block/row/tree invalidation command."],
   ["ServerExportQuery", "Server export request."],
   ["ServerExportResult", "Blob/url/job export response."],
-  ["ServerRowUpdate", "Reserved streaming row update event."],
+  ["ServerRowUpdate", "Streaming row update event for loaded server-row-model state."],
   ["ServerRowModelState", "Server row model state snapshot."],
   ["ServerRowModelEvent", "Server row model event union."],
 ]
@@ -744,9 +782,9 @@ const packageExports = [
   ],
   [
     "@bc-grid/server-row-model",
-    "reserved",
-    "Planned: createServerRowModel, ServerBlockCache, defaultBlockKey.",
-    "Placeholder package; server types live in @bc-grid/core.",
+    "implemented",
+    "createServerRowModel, ServerBlockCache, defaultBlockKey, diagnostics helpers.",
+    "Runtime cache, invalidation, mutation, diagnostics, and streaming update helpers for server grids.",
   ],
   [
     "@bc-grid/editors",
@@ -1124,9 +1162,9 @@ function statusClass(status: keyof typeof statusLabels) {
   <section class="section">
     <h2>Server Query Types</h2>
     <p class="section-note">
-      These types are exported from <code>@bc-grid/core</code> now. Runtime behavior is reserved for
-      Q4, where <code>@bc-grid/server-row-model</code> will provide the cache and fetcher
-      implementation.
+      These types are exported from <code>@bc-grid/core</code>. Runtime cache, invalidation,
+      mutation, diagnostics, and streaming update behavior lives in
+      <code>@bc-grid/server-row-model</code> and is wired through <code>BcServerGrid</code>.
     </p>
     <div class="api-table">
       <table>
