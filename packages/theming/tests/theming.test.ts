@@ -270,6 +270,53 @@ describe("@bc-grid/theming", () => {
     expect(selectedActive).toContain("background: var(--bc-grid-pinned-selected-active-cell-bg)")
   })
 
+  test("pinned actions column has opaque surfaces and restrained action buttons", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    expect(css).toContain("--bc-grid-pinned-actions-bg: var(--bc-grid-pinned-bg)")
+    expect(css).toContain("--bc-grid-pinned-actions-header-bg: var(--bc-grid-pinned-header-bg)")
+    expect(css).toContain("--bc-grid-pinned-actions-selected-bg:")
+    expect(css).toContain("--bc-grid-pinned-actions-bg: Canvas")
+
+    const base = ruleFor('.bc-grid-cell[data-column-id="__bc_actions"],')
+    expect(base).toContain("background: var(--bc-grid-pinned-actions-bg)")
+    expect(base).toContain("background-clip: border-box")
+
+    const header = ruleFor('.bc-grid-header .bc-grid-cell[data-column-id="__bc_actions"],')
+    expect(header).toContain("justify-content: center")
+    expect(header).toContain("background: var(--bc-grid-pinned-actions-header-bg)")
+
+    const hover = ruleFor('.bc-grid-row:hover .bc-grid-cell[data-column-id="__bc_actions"]')
+    expect(hover).toContain("background: var(--bc-grid-pinned-actions-hover-bg)")
+    expect(hover).not.toContain("transparent")
+
+    const selected = ruleFor(
+      '.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-column-id="__bc_actions"],',
+    )
+    expect(selected).toContain("background: var(--bc-grid-pinned-actions-selected-bg)")
+    expect(selected).toContain("color: var(--bc-grid-row-selected-fg)")
+
+    const actions = ruleFor(".bc-grid-actions {")
+    expect(actions).toContain("justify-content: flex-end")
+    expect(actions).toContain("gap: 0.25rem")
+
+    const button = ruleFor(".bc-grid-action {")
+    expect(button).toContain("border: 1px solid transparent")
+    expect(button).toContain("border-radius: calc(var(--bc-grid-radius) - 2px)")
+    expect(button).toContain("background: transparent")
+    expect(button).not.toContain("box-shadow")
+
+    const buttonHover = ruleFor(".bc-grid-action:hover:not(:disabled) {")
+    expect(buttonHover).toContain("var(--bc-grid-pinned-actions-bg)")
+    expect(buttonHover).not.toContain("transparent")
+  })
+
   test("pinned column boundary and z-index contracts are preserved", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     const ruleFor = (selector: string) => {

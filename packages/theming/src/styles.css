@@ -45,6 +45,14 @@
     var(--bc-grid-focus-ring) 14%,
     var(--bc-grid-pinned-row-selected-bg)
   );
+  --bc-grid-pinned-actions-bg: var(--bc-grid-pinned-bg);
+  --bc-grid-pinned-actions-header-bg: var(--bc-grid-pinned-header-bg);
+  --bc-grid-pinned-actions-hover-bg: var(--bc-grid-pinned-row-hover-bg);
+  --bc-grid-pinned-actions-focused-bg: var(--bc-grid-pinned-row-focused-bg);
+  --bc-grid-pinned-actions-selected-bg: var(--bc-grid-pinned-row-selected-bg);
+  --bc-grid-pinned-actions-selected-hover-bg: var(--bc-grid-pinned-row-selected-hover-bg);
+  --bc-grid-pinned-actions-active-bg: var(--bc-grid-pinned-active-cell-bg);
+  --bc-grid-pinned-actions-selected-active-bg: var(--bc-grid-pinned-selected-active-cell-bg);
   --bc-grid-pinned-boundary: color-mix(in srgb, var(--bc-grid-border) 76%, var(--bc-grid-fg) 24%);
   --bc-grid-header-bg: var(--muted, hsl(210 40% 96%));
   --bc-grid-header-fg: var(--muted-foreground, hsl(215 16% 47%));
@@ -843,6 +851,135 @@
 .bc-grid-cell-pinned-right[aria-selected="true"][data-bc-grid-active-cell="true"] {
   background: var(--bc-grid-pinned-selected-active-cell-bg);
   color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-cell[data-column-id="__bc_actions"],
+.bc-grid-row .bc-grid-cell[data-column-id="__bc_actions"] {
+  background: var(--bc-grid-pinned-actions-bg);
+  background-clip: border-box;
+}
+
+.bc-grid-header .bc-grid-cell[data-column-id="__bc_actions"],
+.bc-grid-filter-row .bc-grid-cell[data-column-id="__bc_actions"] {
+  justify-content: center;
+  background: var(--bc-grid-pinned-actions-header-bg);
+}
+
+.bc-grid-row:hover .bc-grid-cell[data-column-id="__bc_actions"] {
+  background: var(--bc-grid-pinned-actions-hover-bg);
+}
+
+.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell[data-column-id="__bc_actions"] {
+  background: var(--bc-grid-pinned-actions-focused-bg);
+}
+
+.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-column-id="__bc_actions"],
+.bc-grid-cell[data-column-id="__bc_actions"][aria-selected="true"] {
+  background: var(--bc-grid-pinned-actions-selected-bg);
+  color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell[data-column-id="__bc_actions"],
+.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"]
+  .bc-grid-cell[data-column-id="__bc_actions"] {
+  background: var(--bc-grid-pinned-actions-selected-hover-bg);
+  color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-cell[data-column-id="__bc_actions"]:focus-visible,
+.bc-grid-cell[data-column-id="__bc_actions"][data-bc-grid-active-cell="true"],
+.bc-grid-row:hover .bc-grid-cell[data-column-id="__bc_actions"][data-bc-grid-active-cell="true"],
+.bc-grid-row[data-bc-grid-focused-row="true"]
+  .bc-grid-cell[data-column-id="__bc_actions"][data-bc-grid-active-cell="true"] {
+  background: var(--bc-grid-pinned-actions-active-bg);
+}
+
+.bc-grid-row[aria-selected="true"]
+  .bc-grid-cell[data-column-id="__bc_actions"][data-bc-grid-active-cell="true"],
+.bc-grid-cell[data-column-id="__bc_actions"][aria-selected="true"][data-bc-grid-active-cell="true"] {
+  background: var(--bc-grid-pinned-actions-selected-active-bg);
+  color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-header .bc-grid-cell[data-column-id="__bc_actions"] .bc-grid-header-label {
+  justify-content: center;
+  width: 100%;
+  color: var(--bc-grid-muted-fg);
+  font-weight: 600;
+}
+
+.bc-grid-actions-cell {
+  justify-content: center;
+  padding-inline: 0.5rem;
+}
+
+.bc-grid-actions {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.bc-grid-action {
+  display: inline-flex;
+  min-width: 0;
+  height: 1.625rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0 0.5rem;
+  transition: background-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), border-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
+}
+
+.bc-grid-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bc-grid-accent) 8%, var(--bc-grid-pinned-actions-bg));
+  border-color: var(--bc-grid-input-border);
+}
+
+.bc-grid-action:active:not(:disabled) {
+  background: color-mix(in srgb, var(--bc-grid-accent) 12%, var(--bc-grid-pinned-actions-bg));
+}
+
+.bc-grid-action:focus-visible {
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: 2px;
+}
+
+.bc-grid-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.bc-grid-action-destructive,
+.bc-grid-action[data-variant="destructive"] {
+  color: var(--bc-grid-invalid);
+}
+
+.bc-grid-action-destructive:hover:not(:disabled),
+.bc-grid-action[data-variant="destructive"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bc-grid-invalid) 10%, var(--bc-grid-pinned-actions-bg));
+  border-color: color-mix(in srgb, var(--bc-grid-invalid) 28%, var(--bc-grid-input-border));
+}
+
+.bc-grid-action-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: 0 0 auto;
 }
 
 .bc-grid-cell[aria-invalid="true"],
@@ -3268,6 +3405,14 @@ table.bc-grid-detail-nested-grid {
     --bc-grid-pinned-row-selected-hover-bg: Highlight;
     --bc-grid-pinned-active-cell-bg: Canvas;
     --bc-grid-pinned-selected-active-cell-bg: Canvas;
+    --bc-grid-pinned-actions-bg: Canvas;
+    --bc-grid-pinned-actions-header-bg: Canvas;
+    --bc-grid-pinned-actions-hover-bg: Canvas;
+    --bc-grid-pinned-actions-focused-bg: Canvas;
+    --bc-grid-pinned-actions-selected-bg: Highlight;
+    --bc-grid-pinned-actions-selected-hover-bg: Highlight;
+    --bc-grid-pinned-actions-active-bg: Canvas;
+    --bc-grid-pinned-actions-selected-active-bg: Canvas;
     --bc-grid-pinned-boundary: CanvasText;
     --bc-grid-header-bg: Canvas;
     --bc-grid-header-fg: CanvasText;
