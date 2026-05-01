@@ -107,8 +107,9 @@ import {
   BcGridPagination,
   DEFAULT_CLIENT_PAGE_SIZE,
   getPaginationWindow,
-  isPaginationEnabled,
   normalisePageSizeOptions,
+  resolvePaginationEnabled,
+  resolvePaginationRowCount,
 } from "./pagination"
 import {
   readPersistedGridState,
@@ -517,14 +518,32 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     sortState,
   ])
   const effectivePageSize = pageSizeState ?? pageSizeOptions[0] ?? DEFAULT_CLIENT_PAGE_SIZE
-  const paginationEnabled = isPaginationEnabled(
-    props.pagination,
+  // Manual pagination — the consumer (typically `BcServerGrid` paged
+  // rowModel) feeds the grid one page of pre-sliced rows + the dataset
+  // total. The pager renders against the server total, the grid never
+  // slices `data` itself, and page changes propagate via
+  // `onPaginationChange` so the host can fetch the next page.
+  const paginationMode: "client" | "manual" = props.paginationMode ?? "client"
+  const isManualPagination = paginationMode === "manual"
+  const paginationTotalRows = isManualPagination
+    ? Number.isFinite(props.paginationTotalRows)
+      ? Math.max(0, Math.floor(props.paginationTotalRows as number))
+      : null
+    : null
+  const paginationRowCount = resolvePaginationRowCount(
+    paginationMode,
+    props.paginationTotalRows,
     allRowEntries.length,
+  )
+  const paginationEnabled = resolvePaginationEnabled(
+    paginationMode,
+    props.pagination,
+    paginationRowCount,
     effectivePageSize,
   )
   const paginationWindow = useMemo(
-    () => getPaginationWindow(allRowEntries.length, pageState, effectivePageSize),
-    [allRowEntries.length, effectivePageSize, pageState],
+    () => getPaginationWindow(paginationRowCount, pageState, effectivePageSize),
+    [paginationRowCount, effectivePageSize, pageState],
   )
   const paginationPageSizeOptions = useMemo(
     () =>
@@ -534,12 +553,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [effectivePageSize, pageSizeOptions],
   )
   const leafRowEntries = useMemo<readonly DataRowEntry<TRow>[]>(() => {
-    if (!paginationEnabled) return allRowEntries
+    // Manual pagination: `data` is already the current page; client-side
+    // slicing would double-page. Pass through as-is.
+    if (isManualPagination || !paginationEnabled) return allRowEntries
 
     return allRowEntries
       .slice(paginationWindow.startIndex, paginationWindow.endIndex)
       .map((entry, index) => ({ ...entry, index }))
-  }, [allRowEntries, paginationEnabled, paginationWindow.endIndex, paginationWindow.startIndex])
+  }, [
+    allRowEntries,
+    isManualPagination,
+    paginationEnabled,
+    paginationWindow.endIndex,
+    paginationWindow.startIndex,
+  ])
   const groupedRowModel = useMemo(
     () =>
       buildGroupedRowModel({
@@ -1221,7 +1248,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   const handlePaginationChange = useCallback(
     (next: BcPaginationState) => {
-      const normalized = getPaginationWindow(allRowEntries.length, next.page, next.pageSize)
+      const normalized = getPaginationWindow(paginationRowCount, next.page, next.pageSize)
       const nextState = {
         page: normalized.page,
         pageSize: normalized.pageSize,
@@ -1238,7 +1265,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       props.onPaginationChange?.(nextState, prevState)
     },
     [
-      allRowEntries.length,
+      paginationRowCount,
       effectivePageSize,
       paginationWindow.page,
       props.onPaginationChange,
@@ -1672,7 +1699,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-rowcount={
-        rowEntries.length + (hasInlineFilters ? 2 : 1) + (hasAggregationFooter ? 1 : 0)
+        // Per accessibility-rfc §aria-rowcount: total rows in the
+        // underlying dataset. In manual pagination with a known server
+        // total, surface that total + the chrome rows (header + filter
+        // row + aggregation footer). In client mode `rowEntries.length`
+        // already equals the post-filter row set on the visible page,
+        // and we add the chrome rows on top.
+        (isManualPagination && paginationTotalRows != null
+          ? paginationTotalRows
+          : rowEntries.length) +
+        (hasInlineFilters ? 2 : 1) +
+        (hasAggregationFooter ? 1 : 0)
       }
       aria-colcount={resolvedColumns.length}
       aria-activedescendant={activeCellId}

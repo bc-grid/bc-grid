@@ -322,6 +322,32 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   pagination?: boolean
   pageSizeOptions?: number[]
+  /**
+   * Source of truth for the pager's page count + slicing.
+   *
+   * - `"client"` (default) — `data` carries the full row set; the grid
+   *   slices the current page from `data.length` rows. Sorting,
+   *   filtering, search, and grouping all run client-side over `data`.
+   * - `"manual"` — `data` carries **only the rows for the current
+   *   page** (typically driven by a server-paged source). The grid
+   *   sources `pageCount` / `totalRows` from `paginationTotalRows`,
+   *   does NOT slice `data` again, and surfaces page changes through
+   *   `onPaginationChange` so the host can call its loader. Pair with
+   *   controlled `page` / `pageSize`. `aria-rowcount` reflects the
+   *   server total when manual + `paginationTotalRows` is finite.
+   *
+   * Default is `"client"` so existing consumers of `<BcGrid>` are
+   * unaffected.
+   */
+  paginationMode?: "client" | "manual"
+  /**
+   * Total dataset row count when `paginationMode === "manual"`. Required
+   * for the manual pager to render `pageCount` and "Rows X-Y of Z".
+   * Ignored in `"client"` mode (the grid uses `data.length`). When
+   * `BcServerGrid` is wrapping `<BcGrid>` in paged rowModel, the server
+   * total comes from `ServerPagedResult.totalRows`.
+   */
+  paginationTotalRows?: number
   aggregationScope?: BcAggregationScope
 
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
