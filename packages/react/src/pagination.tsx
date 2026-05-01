@@ -1,4 +1,10 @@
 import type { BcPaginationState } from "@bc-grid/core"
+import {
+  ChevronLeftDoubleIcon,
+  ChevronLeftIcon,
+  ChevronRightDoubleIcon,
+  ChevronRightIcon,
+} from "./internal/pagination-icons"
 
 export const DEFAULT_CLIENT_PAGE_SIZE = 100
 const DEFAULT_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const
@@ -137,7 +143,7 @@ export function BcGridPagination({
           onClick={() => onChange({ page: 0, pageSize })}
           aria-label="First page"
         >
-          First
+          {ChevronLeftDoubleIcon}
         </button>
         <button
           type="button"
@@ -146,7 +152,7 @@ export function BcGridPagination({
           onClick={() => onChange({ page: page - 1, pageSize })}
           aria-label="Previous page"
         >
-          Prev
+          {ChevronLeftIcon}
         </button>
         <span className="bc-grid-pagination-page">
           Page {(page + 1).toLocaleString()} of {pageCount.toLocaleString()}
@@ -158,7 +164,7 @@ export function BcGridPagination({
           onClick={() => onChange({ page: page + 1, pageSize })}
           aria-label="Next page"
         >
-          Next
+          {ChevronRightIcon}
         </button>
         <button
           type="button"
@@ -167,20 +173,33 @@ export function BcGridPagination({
           onClick={() => onChange({ page: pageCount - 1, pageSize })}
           aria-label="Last page"
         >
-          Last
+          {ChevronRightDoubleIcon}
         </button>
         <label className="bc-grid-pagination-size">
           <span>Rows</span>
-          <select
-            value={pageSize}
-            onChange={(event) => onChange({ page: 0, pageSize: Number(event.currentTarget.value) })}
-          >
-            {pageSizeOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          {/*
+           * The wrapper is `position: relative` and an `::after`
+           * chevron sits on the right edge, so the native `<select>`
+           * gets right-padding to clear the affordance. Keeping the
+           * native control here is intentional — it preserves the
+           * platform dropdown UX (keyboard typeahead, OS-native scrim,
+           * etc.) without bundling a popover primitive just for the
+           * page-size knob.
+           */}
+          <span className="bc-grid-pagination-size-control">
+            <select
+              value={pageSize}
+              onChange={(event) =>
+                onChange({ page: 0, pageSize: Number(event.currentTarget.value) })
+              }
+            >
+              {pageSizeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </span>
         </label>
       </div>
     </nav>

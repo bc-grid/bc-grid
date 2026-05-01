@@ -239,3 +239,183 @@ describe("resolvePaginationEnabled", () => {
     expect(resolvePaginationEnabled("client", false, 5_000, 100)).toBe(false)
   })
 })
+
+describe("BcGridPagination — CSS-contract markup hooks", () => {
+  // The shadcn polish slice (CSS-only) targets these class hooks
+  // and the native :disabled pseudo-class. Pin the markup so a
+  // future renderer refactor that drops a hook fails noisily —
+  // otherwise the styles silently stop applying and the pager
+  // looks unstyled in dark mode without any test signal.
+  function renderPager(args: {
+    page: number
+    pageCount: number
+    pageSize: number
+    totalRows: number
+  }): string {
+    return renderToStaticMarkup(
+      <BcGridPagination
+        page={args.page}
+        pageCount={args.pageCount}
+        pageSize={args.pageSize}
+        pageSizeOptions={[25, 50, 100]}
+        totalRows={args.totalRows}
+        onChange={() => {}}
+      />,
+    )
+  }
+
+  test("nav root carries the bc-grid-pagination class + an accessible name", () => {
+    const html = renderPager({ page: 0, pageCount: 3, pageSize: 25, totalRows: 75 })
+
+    expect(html).toContain('class="bc-grid-pagination"')
+    expect(html).toContain('aria-label="Pagination"')
+    expect(html).toMatch(/<nav[^>]*aria-label="Pagination"/)
+  })
+
+  test("controls + summary + page-size containers carry their CSS hooks", () => {
+    const html = renderPager({ page: 0, pageCount: 3, pageSize: 25, totalRows: 75 })
+
+    expect(html).toContain('class="bc-grid-pagination-summary"')
+    expect(html).toContain('class="bc-grid-pagination-controls"')
+    expect(html).toContain('class="bc-grid-pagination-page"')
+    expect(html).toContain('class="bc-grid-pagination-size"')
+    // The select wrapper is a new hook the chevron CSS depends on —
+    // pin it so a future markup refactor that drops the wrapper
+    // surfaces here before the chevron stops painting.
+    expect(html).toContain('class="bc-grid-pagination-size-control"')
+  })
+
+  test("aria-live='polite' on the row-count summary so AT announces page changes", () => {
+    const html = renderPager({ page: 0, pageCount: 3, pageSize: 25, totalRows: 75 })
+
+    expect(html).toMatch(
+      /class="bc-grid-pagination-summary"[^>]*aria-live="polite"|aria-live="polite"[^>]*class="bc-grid-pagination-summary"/,
+    )
+  })
+
+  test("every navigation button carries the bc-grid-pagination-button class hook", () => {
+    const html = renderPager({ page: 1, pageCount: 3, pageSize: 25, totalRows: 75 })
+
+    for (const label of ["First page", "Previous page", "Next page", "Last page"]) {
+      expect(html).toMatch(
+        new RegExp(
+          `class="bc-grid-pagination-button"[^>]*aria-label="${label}"|aria-label="${label}"[^>]*class="bc-grid-pagination-button"`,
+        ),
+      )
+    }
+  })
+
+  test("disabled boundary buttons emit the native disabled attribute (matches CSS :disabled)", () => {
+    const empty = renderPager({ page: 0, pageCount: 1, pageSize: 25, totalRows: 0 })
+
+    for (const label of ["First page", "Previous page", "Next page", "Last page"]) {
+      expect(empty).toMatch(
+        new RegExp(`aria-label="${label}"[^>]*disabled(?!=)|disabled[^>]*aria-label="${label}"`),
+      )
+    }
+  })
+
+  test("page-size <select> emits the option list in the order it received", () => {
+    const html = renderPager({ page: 0, pageCount: 3, pageSize: 25, totalRows: 75 })
+
+    const indexes = ["25", "50", "100"].map((value) => html.indexOf(`value="${value}"`))
+    expect(indexes.every((index) => index > -1)).toBe(true)
+    expect(indexes[0]).toBeLessThan(indexes[1] ?? -1)
+    expect(indexes[1]).toBeLessThan(indexes[2] ?? -1)
+  })
+
+  test("the active page-size option is marked selected (CSS dropdown anchor)", () => {
+    const html = renderPager({ page: 0, pageCount: 3, pageSize: 50, totalRows: 150 })
+
+    expect(html).toMatch(/<option[^>]*value="50"[^>]*selected/)
+  })
+})
+
+describe("BcGridPagination — icon-only navigation buttons", () => {
+  // The v0.4 polish slice replaced the text "First / Prev / Next /
+  // Last" with shadcn-style chevron glyphs. Pin the icon markup so a
+  // future renderer change that drops the SVG (or accidentally
+  // surfaces visible button text again) fails noisily.
+  function renderPager(): string {
+    return renderToStaticMarkup(
+      <BcGridPagination
+        page={1}
+        pageCount={3}
+        pageSize={25}
+        pageSizeOptions={[25, 50, 100]}
+        totalRows={75}
+        onChange={() => {}}
+      />,
+    )
+  }
+
+  test("each navigation button renders a single SVG glyph instead of text", () => {
+    const html = renderPager()
+    const svgCount = (html.match(/<svg/g) ?? []).length
+    expect(svgCount).toBeGreaterThanOrEqual(4)
+    expect(html).toContain('class="bc-grid-pagination-icon"')
+    // The legacy text labels must NOT appear inside the buttons.
+    expect(html).not.toContain(">First<")
+    expect(html).not.toContain(">Prev<")
+    expect(html).not.toContain(">Next<")
+    expect(html).not.toContain(">Last<")
+  })
+
+  test("each navigation button keeps its descriptive aria-label for AT users", () => {
+    // Removing the visible text means aria-label is now the only
+    // accessible-name source. Pin it so a future change can't drop
+    // the label without surfacing a test failure.
+    const html = renderPager()
+
+    expect(html).toContain('aria-label="First page"')
+    expect(html).toContain('aria-label="Previous page"')
+    expect(html).toContain('aria-label="Next page"')
+    expect(html).toContain('aria-label="Last page"')
+  })
+
+  test("each glyph SVG is aria-hidden so it doesn't contribute to the accessible name", () => {
+    const html = renderPager()
+    const svgs = html.match(/<svg[^>]*>/g) ?? []
+    expect(svgs.length).toBeGreaterThan(0)
+    for (const svg of svgs) {
+      expect(svg).toContain('aria-hidden="true"')
+    }
+  })
+
+  test("each glyph uses currentColor so it adapts to the button's text colour", () => {
+    // Light / dark / forced-colors all flow through the button's
+    // `color: var(--bc-grid-fg)` automatically when the SVG strokes
+    // currentColor — no per-mode override needed.
+    const html = renderPager()
+    expect(html).toContain('stroke="currentColor"')
+  })
+})
+
+describe("BcGrid footer wrapper — CSS-contract markup hooks", () => {
+  // The grid renders `<div class="bc-grid-footer">…</div>` around
+  // any custom `footer` ReactNode + the built-in pager. The new
+  // `.bc-grid-footer` CSS rule paints the border-top + padding so
+  // the chrome reads as intentional rather than naked. Pin the
+  // wrapper structure here so a renderer refactor that drops the
+  // class silently breaks the styling.
+  test("a custom footer ReactNode rendered inside .bc-grid-footer keeps its content + the wrapper class", () => {
+    const html = renderToStaticMarkup(
+      <div className="bc-grid-footer">
+        <BcGridPagination
+          page={0}
+          pageCount={3}
+          pageSize={25}
+          pageSizeOptions={[25, 50, 100]}
+          totalRows={75}
+          onChange={() => {}}
+        />
+      </div>,
+    )
+
+    expect(html).toContain('class="bc-grid-footer"')
+    expect(html).toContain('class="bc-grid-pagination"')
+    expect(html.indexOf('class="bc-grid-footer"')).toBeLessThan(
+      html.indexOf('class="bc-grid-pagination"'),
+    )
+  })
+})
