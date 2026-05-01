@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test"
 import {
   DEFAULT_BODY_HEIGHT,
   autoHeightHeaderViewportStyle,
+  headerScrollTransform,
   headerViewportStyle,
+  pinnedLaneStyle,
   resolveFallbackBodyHeight,
   rootStyle,
   scrollerStyle,
@@ -94,6 +96,20 @@ describe("headerViewportStyle", () => {
       top: 0,
       zIndex: 4,
     })
+  })
+})
+
+describe("headerScrollTransform", () => {
+  test("uses the same translate contract as body horizontal scrolling", () => {
+    expect(headerScrollTransform(0)).toBe("translate3d(0px, 0, 0)")
+    expect(headerScrollTransform(240)).toBe("translate3d(-240px, 0, 0)")
+  })
+})
+
+describe("pinnedLaneStyle", () => {
+  test("keeps lane descendants pointer-interactive", () => {
+    const style = pinnedLaneStyle("left", 36, 120, 600)
+    expect(style.pointerEvents).toBeUndefined()
   })
 })
 

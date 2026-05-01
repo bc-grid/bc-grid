@@ -85,6 +85,7 @@ import {
   mergeLayoutColumnState,
   overlayStyle,
   pinnedEdgeFor,
+  pinnedLaneStyle,
   pruneLayoutFilterForColumns,
   pruneLayoutGroupByForColumns,
   pruneLayoutSortForColumns,
@@ -96,11 +97,11 @@ import {
   rootStyle,
   rowStyle,
   scrollerStyle,
+  syncHeaderRowsScroll,
   useColumnReorder,
   useColumnResize,
   useControlledState,
   useFlipOnRowInsertion,
-  useFlipOnSort,
   useLiveRegionAnnouncements,
   useViewportSync,
   visuallyHiddenStyle,
@@ -1115,6 +1116,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   }, [activeColIndex, activeRowIndex, requestRender, virtualizer])
 
   const virtualWindow = virtualizer.computeWindow()
+  const virtualLeftPinnedCols = virtualWindow.cols.filter((col) => col.pinned === "left")
+  const virtualCenterCols = virtualWindow.cols.filter((col) => col.pinned === null)
+  const virtualRightPinnedCols = virtualWindow.cols.filter((col) => col.pinned === "right")
+  const pinnedLeftWidth = virtualWindow.bodyLeft
+  const pinnedRightWidth = Math.max(0, virtualWindow.totalWidth - virtualWindow.bodyRight)
   const firstVirtualRow = virtualWindow.rows.reduce(
     (first, row) => Math.min(first, row.index),
     Number.POSITIVE_INFINITY,
@@ -1584,9 +1590,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const target = event.currentTarget
       virtualizer.setScrollTop(target.scrollTop)
       virtualizer.setScrollLeft(target.scrollLeft)
+      syncHeaderRowsScroll(
+        rootRef.current,
+        target.scrollLeft,
+        virtualWindow.totalWidth,
+        viewport.width,
+      )
       updateScrollOffset({ top: target.scrollTop, left: target.scrollLeft })
     },
-    [updateScrollOffset, virtualizer],
+    [updateScrollOffset, viewport.width, virtualWindow.totalWidth, virtualizer],
   )
 
   const focusGroupRow = useCallback(
@@ -1785,7 +1797,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ],
   )
 
-  const { prepareSortAnimation } = useFlipOnSort({ sortState, scrollerRef, virtualizer })
   useFlipOnRowInsertion({ rowEntries, scrollerRef, virtualizer })
 
   const handleHeaderSort = useCallback(
@@ -1797,7 +1808,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       modifiers: SortModifiers,
     ) => {
       if (column.source.sortable === false) return
-      prepareSortAnimation()
       // Ctrl/Cmd-click drops the column from the sort. Shift-click composes
       // a multi-column sort (append/cycle within). Plain click cycles a
       // single primary sort, replacing any multi-column composition.
@@ -1811,7 +1821,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       }
       setSortState(toggleSortFor(sortState, column.columnId))
     },
-    [prepareSortAnimation, setSortState, sortState],
+    [setSortState, sortState],
   )
 
   const { handleResizePointerDown, handleResizePointerMove, endResize } = useColumnResize<TRow>({
@@ -1961,6 +1971,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 key={row.map((cell) => `${cell.groupId}:${cell.ariaColIndex}`).join("|")}
                 className={classNames("bc-grid-header", "bc-grid-header-group-row")}
                 role="row"
+                data-bc-grid-scroll-sync="x"
                 aria-rowindex={rowIndex + 1}
                 style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
               >
@@ -1982,6 +1993,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 columnGroupHeaderRows.length > 0 ? "bc-grid-header-leaf-row" : undefined,
               )}
               role="row"
+              data-bc-grid-scroll-sync="x"
               aria-rowindex={columnGroupHeaderRows.length + 1}
               style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
             >
@@ -2030,6 +2042,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               <div
                 className="bc-grid-filter-row"
                 role="row"
+                data-bc-grid-scroll-sync="x"
                 aria-rowindex={columnHeaderRowCount + 1}
                 style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
               >
@@ -2180,7 +2193,47 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                       onRowDoubleClick?.(entry.row, event)
                     }}
                   >
-                    {virtualWindow.cols.map((virtualCol) =>
+                    {virtualLeftPinnedCols.length > 0 ? (
+                      <div
+                        className="bc-grid-pinned-lane bc-grid-pinned-lane-left"
+                        data-bc-grid-pinned-lane="left"
+                        style={pinnedLaneStyle(
+                          "left",
+                          cellVirtualRow.height,
+                          pinnedLeftWidth,
+                          viewport.width,
+                        )}
+                      >
+                        {virtualLeftPinnedCols.map((virtualCol) =>
+                          renderBodyCell({
+                            activeCell,
+                            column: resolvedColumns[virtualCol.index],
+                            domBaseId,
+                            entry,
+                            locale,
+                            onCellFocus,
+                            pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
+                            pinnedLaneOffset: 0,
+                            searchText,
+                            scrollLeft: scrollOffset.left,
+                            setActiveCell,
+                            totalWidth: virtualWindow.totalWidth,
+                            viewportWidth: viewport.width,
+                            virtualCol,
+                            virtualRow: cellVirtualRow,
+                            selected,
+                            disabled,
+                            expanded,
+                            editingCell,
+                            hasOverlayValue: editController.hasOverlayValue,
+                            getOverlayValue: editController.getOverlayValue,
+                            getCellEditEntry: editController.getCellEditEntry,
+                            getRowEditState: editController.getRowEditState,
+                          }),
+                        )}
+                      </div>
+                    ) : null}
+                    {virtualCenterCols.map((virtualCol) =>
                       renderBodyCell({
                         activeCell,
                         column: resolvedColumns[virtualCol.index],
@@ -2206,6 +2259,46 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         getRowEditState: editController.getRowEditState,
                       }),
                     )}
+                    {virtualRightPinnedCols.length > 0 ? (
+                      <div
+                        className="bc-grid-pinned-lane bc-grid-pinned-lane-right"
+                        data-bc-grid-pinned-lane="right"
+                        style={pinnedLaneStyle(
+                          "right",
+                          cellVirtualRow.height,
+                          pinnedRightWidth,
+                          viewport.width,
+                        )}
+                      >
+                        {virtualRightPinnedCols.map((virtualCol) =>
+                          renderBodyCell({
+                            activeCell,
+                            column: resolvedColumns[virtualCol.index],
+                            domBaseId,
+                            entry,
+                            locale,
+                            onCellFocus,
+                            pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
+                            pinnedLaneOffset: virtualWindow.bodyRight,
+                            searchText,
+                            scrollLeft: scrollOffset.left,
+                            setActiveCell,
+                            totalWidth: virtualWindow.totalWidth,
+                            viewportWidth: viewport.width,
+                            virtualCol,
+                            virtualRow: cellVirtualRow,
+                            selected,
+                            disabled,
+                            expanded,
+                            editingCell,
+                            hasOverlayValue: editController.hasOverlayValue,
+                            getOverlayValue: editController.getOverlayValue,
+                            getCellEditEntry: editController.getCellEditEntry,
+                            getRowEditState: editController.getRowEditState,
+                          }),
+                        )}
+                      </div>
+                    ) : null}
                     {expanded && renderDetailPanel ? (
                       <BcDetailPanelSlot
                         colSpan={resolvedColumns.length}
@@ -2247,7 +2340,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
             {loading ? (
               <div className="bc-grid-overlay" role="status" style={overlayStyle}>
-                {loadingOverlay ?? messages.loadingLabel}
+                {loadingOverlay ?? <BcGridDefaultLoadingOverlay label={messages.loadingLabel} />}
               </div>
             ) : null}
 
@@ -2381,6 +2474,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           })()
         : null}
     </div>
+  )
+}
+
+function BcGridDefaultLoadingOverlay({ label }: { label: string }): ReactNode {
+  return (
+    <span className="bc-grid-loading-state">
+      <span className="bc-grid-loading-spinner" aria-hidden="true" />
+      <span className="bc-grid-loading-label">{label}</span>
+    </span>
   )
 }
 

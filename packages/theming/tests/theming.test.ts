@@ -61,6 +61,7 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("--bc-grid-focus-ring: var(--ring, hsl(221 83% 53%))")
     expect(css).toContain("--bc-grid-context-menu-fg: var(--popover-foreground, var(--bc-grid-fg))")
     expect(css).toContain("--bc-grid-row-hover: color-mix(")
+    expect(css).toContain("--bc-grid-row-border: color-mix(")
     expect(css).not.toContain("hsl(var(")
   })
 
@@ -234,6 +235,10 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("--bc-grid-pinned-header-bg: var(--bc-grid-header-bg)")
     expect(css).toContain("--bc-grid-pinned-row-hover-bg:")
     expect(css).toContain("--bc-grid-pinned-boundary:")
+    expect(css).toContain(".bc-grid-pinned-lane {")
+    expect(css).toContain("grid-column: 1 / -1")
+    expect(css).toContain("grid-row: 1")
+    expect(css).toContain("align-self: start")
 
     const base = ruleFor(".bc-grid-cell-pinned-left,\n.bc-grid-cell-pinned-right,")
     expect(base).toContain("background: var(--bc-grid-pinned-bg)")
@@ -673,6 +678,83 @@ describe("@bc-grid/theming", () => {
     expect(active).not.toMatch(/border-color:/)
   })
 
+  test("sidebar tool-panel lists use flat rows instead of nested cards", () => {
+    // Columns / filters / pivot panels are secondary utility surfaces.
+    // They should read like shadcn command/list rows, not stacked cards
+    // inside a card-like sidebar.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    for (const selector of [
+      ".bc-grid-columns-panel-list {",
+      ".bc-grid-filters-panel-list {",
+      ".bc-grid-pivot-panel-field-list,\n.bc-grid-pivot-panel-chip-list {",
+    ]) {
+      const listRule = ruleFor(selector)
+      expect(listRule).toContain("border: 1px solid var(--bc-grid-border)")
+      expect(listRule).toContain("background: var(--bc-grid-bg)")
+      expect(listRule).toContain("overflow: hidden")
+    }
+
+    for (const selector of [
+      ".bc-grid-columns-panel-item {",
+      ".bc-grid-filters-panel-item {",
+      ".bc-grid-pivot-panel-field,\n.bc-grid-pivot-panel-chip {",
+    ]) {
+      const itemRule = ruleFor(selector)
+      expect(itemRule).toContain("border: 0")
+      expect(itemRule).toContain("background: transparent")
+      expect(itemRule).toContain("box-shadow: inset 0 -1px 0 var(--bc-grid-row-border)")
+      expect(itemRule).toMatch(/transition:\s*background-color[^;]*box-shadow\b/)
+    }
+
+    const columnsDisabled = ruleFor(".bc-grid-columns-panel-button:disabled {")
+    expect(columnsDisabled).toContain("cursor: default")
+    expect(columnsDisabled).toContain("pointer-events: none")
+
+    const pivotDisabled = ruleFor(
+      ".bc-grid-pivot-panel-button:disabled,\n.bc-grid-pivot-panel-icon-button:disabled {",
+    )
+    expect(pivotDisabled).toContain("cursor: default")
+    expect(pivotDisabled).toContain("pointer-events: none")
+  })
+
+  test("loading overlay renders an opaque shadcn-style spinner surface", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    expect(css).toContain("--bc-grid-overlay-bg")
+    expect(css).toContain("--bc-grid-overlay-border")
+    expect(css).toContain("--bc-grid-loading-spinner-track")
+    expect(css).toContain("--bc-grid-loading-spinner-active")
+
+    const overlay = ruleFor(".bc-grid-overlay {")
+    expect(overlay).toContain("z-index: 6")
+    expect(overlay).toContain("color: var(--bc-grid-muted-fg)")
+
+    const state = ruleFor(".bc-grid-loading-state {")
+    expect(state).toContain("display: inline-flex")
+    expect(state).toContain("background: var(--bc-grid-overlay-bg)")
+    expect(state).toContain("border: 1px solid var(--bc-grid-overlay-border)")
+    expect(state).toContain("box-shadow: var(--bc-grid-overlay-shadow)")
+
+    const spinner = ruleFor(".bc-grid-loading-spinner {")
+    expect(spinner).toContain("border: 2px solid var(--bc-grid-loading-spinner-track)")
+    expect(spinner).toContain("border-top-color: var(--bc-grid-loading-spinner-active)")
+    expect(spinner).toContain("animation: bc-grid-loading-spinner")
+    expect(css).toContain("@keyframes bc-grid-loading-spinner")
+  })
+
   test("tooltip surface no longer chains shadcn fallbacks (single-source bridge)", () => {
     // Pre-refactor the tooltip carried triple-chained fallbacks like
     // `var(--bc-grid-context-menu-bg, var(--popover, var(--background, ...)))`.
@@ -684,8 +766,10 @@ describe("@bc-grid/theming", () => {
     expect(idx).toBeGreaterThan(-1)
     const ruleEnd = css.indexOf("}", idx)
     const rule = css.slice(idx, ruleEnd)
-    expect(rule).toContain("background: var(--bc-grid-context-menu-bg)")
-    expect(rule).toContain("color: var(--bc-grid-context-menu-fg)")
+    expect(rule).toContain("background: var(--bc-grid-context-menu-bg, hsl(0 0% 100%))")
+    expect(rule).toContain("color: var(--bc-grid-context-menu-fg, hsl(222 47% 11%))")
+    expect(rule).toContain("border: 1px solid var(--bc-grid-context-menu-border, hsl(214 32% 91%))")
+    expect(rule).toContain("z-index: 1000")
     // No nested `var(--popover` fallback.
     expect(rule).not.toContain("var(--popover")
     expect(rule).not.toContain("var(--background")
@@ -779,11 +863,11 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("--bc-grid-column-resize-affordance-hover")
     expect(css).toContain("--bc-grid-column-resize-affordance-active")
     expect(css).toContain("box-sizing: border-box")
-    expect(css).toContain("box-shadow: inset -1px 0 0 var(--bc-grid-column-separator)")
+    expect(css).toContain("box-shadow: none")
     expect(css).toContain(".bc-grid-header-cell-resizable .bc-grid-header-resize-handle::before")
     expect(css).toContain(".bc-grid-header-cell-resizable .bc-grid-header-resize-handle::after")
-    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::before")
-    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::after")
+    expect(css).toContain(".bc-grid-header-resize-handle:focus-visible::before")
+    expect(css).toContain(".bc-grid-header-resize-handle:focus-visible::after")
     expect(css).toContain("pointer-events: none")
     expect(css).not.toContain(".bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle")
     expect(css).not.toContain(
@@ -794,16 +878,21 @@ describe("@bc-grid/theming", () => {
     )
     expect(css).not.toContain(".bc-grid-header-resize-handle:hover::before")
     expect(css).not.toContain(".bc-grid-header-resize-handle:hover::after")
+    expect(css).not.toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)")
     expect(css).not.toContain(".bc-grid-header-cell::after")
     expect(css).not.toContain(".bc-grid-header-cell-resizable::before")
 
-    const hoverAfterRule = ruleFor(
-      ".bc-grid-header-resize-handle:is(:hover, :focus-visible)::after",
-    )
+    const pipeRule = ruleFor(".bc-grid-header-cell-resizable .bc-grid-header-resize-handle::before")
+    expect(pipeRule).toContain("height: 1.5rem")
+    expect(pipeRule).toContain("transform: translateY(-50%)")
+    expect(pipeRule).toContain("opacity: 0.72")
+    expect(pipeRule).not.toContain("height: calc(100%")
+
+    const focusAfterRule = ruleFor(".bc-grid-header-resize-handle:focus-visible::after")
     const activeAfterRule = ruleFor(
       '.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after',
     )
-    expect(hoverAfterRule).not.toMatch(/\bheight:/)
+    expect(focusAfterRule).not.toMatch(/\bheight:/)
     expect(activeAfterRule).not.toMatch(/\bheight:/)
   })
 
@@ -813,12 +902,12 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain(".bc-grid-cell-pinned-left-edge::after")
     expect(css).toContain(".bc-grid-cell-pinned-right-edge::before")
     expect(css).toContain(".bc-grid-header-cell {")
-    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::before")
+    expect(css).toContain(".bc-grid-header-resize-handle:focus-visible::before")
     expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::before')
     expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after')
     expect(css).toContain("--bc-grid-column-resize-affordance-active: Highlight")
     expect(css).toContain("border-inline-end: 1px solid var(--bc-grid-column-separator)")
-    expect(css).toContain("background: none")
+    expect(css).toContain("background: var(--bc-grid-column-resize-affordance)")
     expect(css).toContain("z-index: 5")
   })
 
@@ -1203,24 +1292,29 @@ describe("@bc-grid/theming", () => {
     expect(rule).toContain("color: var(--bc-grid-fg)")
   })
 
-  test("filters panel item card eases border + background transitions for the focus-within ring", () => {
-    // Smooth shadcn `<Card>` chrome — the focus-within ring should
-    // ease in rather than snap-cut when an inline editor inside the
-    // card receives focus. Pin the multi-property transition + the
-    // focus-within border colour.
+  test("filters panel items render as list rows with an eased focus-within ring", () => {
+    // The filters panel is a utility list, not a pile of nested cards.
+    // Pin the flatter shadcn command/list-item treatment: row divider,
+    // quiet background, eased bg/ring transition, and focus-within
+    // drawn via inset ring rather than a layout-affecting border.
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     const itemIdx = css.indexOf(".bc-grid-filters-panel-item {")
     expect(itemIdx).toBeGreaterThan(-1)
     const itemRuleEnd = css.indexOf("}", itemIdx)
     const itemRule = css.slice(itemIdx, itemRuleEnd)
-    expect(itemRule).toMatch(/transition:\s*border-color[^;]*background-color\b/)
+    expect(itemRule).toContain("border: 0")
+    expect(itemRule).toContain("background: transparent")
+    expect(itemRule).toContain("box-shadow: inset 0 -1px 0 var(--bc-grid-row-border)")
+    expect(itemRule).toMatch(/transition:\s*background-color[^;]*box-shadow\b/)
     expect(itemRule).toContain("var(--bc-grid-motion-duration-fast)")
 
     const focusIdx = css.indexOf(".bc-grid-filters-panel-item:focus-within {")
     expect(focusIdx).toBeGreaterThan(-1)
     const focusRuleEnd = css.indexOf("}", focusIdx)
     const focusRule = css.slice(focusIdx, focusRuleEnd)
-    expect(focusRule).toContain("border-color: var(--bc-grid-focus-ring)")
+    expect(focusRule).toContain("background: var(--bc-grid-row-hover)")
+    expect(focusRule).toContain("box-shadow: inset 0 0 0 1px var(--bc-grid-focus-ring)")
+    expect(focusRule).not.toContain("border-color:")
   })
 
   test("filters panel empty state renders a centered icon + label with breathing room", () => {
@@ -1350,13 +1444,11 @@ describe("@bc-grid/theming", () => {
     expect(rule).toContain("border-color: var(--bc-grid-fg)")
   })
 
-  test("text-filter value input keeps a 6rem min-width so it never collapses to a tiny fragment", () => {
-    // Layout invariant — bsncraft reported the value input
-    // collapsing to an unusable sliver in narrow columns. The
-    // operator <select> reserves 92 px (fixed), the modifier toggles
-    // reserve 28 px each (no shrink), and the value input reserves a
-    // 6 rem floor so the row clips cleanly from the right rather
-    // than crushing the value field.
+  test("advanced text-filter value input keeps a readable min-width", () => {
+    // Popup/panel text filters expose operator + modifier controls, so
+    // their value field keeps a readability floor. The compact inline
+    // row overrides this below with min-width: 0 so it cannot overlap
+    // sticky-column chrome.
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     const idx = css.indexOf(".bc-grid-filter-text > .bc-grid-filter-input {")
     expect(idx).toBeGreaterThan(-1)
@@ -1364,6 +1456,50 @@ describe("@bc-grid/theming", () => {
     const rule = css.slice(idx, ruleEnd)
     expect(rule).toContain("min-width: 6rem")
     expect(rule).not.toMatch(/min-width:\s*0\b/)
+  })
+
+  test("compact inline text filter can shrink inside narrow and pinned columns", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(
+      ".bc-grid-filter-text.bc-grid-filter-text-compact > .bc-grid-filter-input {",
+    )
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("min-width: 0")
+    expect(rule).toContain("flex: 1 1 auto")
+  })
+
+  test("data rows render shadcn-style horizontal dividers by default", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    expect(css).toContain("--bc-grid-row-border: color-mix(")
+
+    const rowIdx = css.indexOf(".bc-grid-row {\n  min-height")
+    expect(rowIdx).toBeGreaterThan(-1)
+    const rowRule = css.slice(rowIdx, css.indexOf("}", rowIdx))
+    expect(rowRule).toContain("border-bottom: 1px solid var(--bc-grid-row-border)")
+
+    const cellIdx = css.indexOf(".bc-grid-row .bc-grid-cell {")
+    expect(cellIdx).toBeGreaterThan(-1)
+    const cellRule = css.slice(cellIdx, css.indexOf("}", cellIdx))
+    expect(cellRule).toContain("box-shadow: inset 0 -1px 0 var(--bc-grid-row-border)")
+  })
+
+  test("inline filter row cells use one deliberate header surface", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const cellIdx = css.indexOf(".bc-grid-filter-row .bc-grid-cell {")
+    expect(cellIdx).toBeGreaterThan(-1)
+    const cellRule = css.slice(cellIdx, css.indexOf("}", cellIdx))
+    expect(cellRule).toContain("background: var(--bc-grid-header-bg)")
+    expect(cellRule).toContain("box-shadow: none")
+
+    const inputIdx = css.indexOf(
+      ".bc-grid-filter-row .bc-grid-filter-input,\n.bc-grid-filter-row .bc-grid-filter-select {",
+    )
+    expect(inputIdx).toBeGreaterThan(-1)
+    const inputRule = css.slice(inputIdx, css.indexOf("}", inputIdx))
+    expect(inputRule).toContain("height: 1.875rem")
+    expect(inputRule).toContain("background: color-mix")
   })
 
   test("inline filter row containers carry a min-height floor so compact density stays readable", () => {
@@ -1457,8 +1593,8 @@ describe("@bc-grid/theming", () => {
   test("filter trigger open-state does not bleed into the resize separator", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
 
-    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::before")
-    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::after")
+    expect(css).toContain(".bc-grid-header-resize-handle:focus-visible::before")
+    expect(css).toContain(".bc-grid-header-resize-handle:focus-visible::after")
     expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::before')
     expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after')
 

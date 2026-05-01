@@ -29,6 +29,7 @@ interface RenderBodyCellParams<TRow> {
   locale: string | undefined
   onCellFocus: ((position: BcCellPosition) => void) | undefined
   pinnedEdge: "left" | "right" | null
+  pinnedLaneOffset?: number | undefined
   scrollLeft: number
   searchText: string
   selected: boolean
@@ -95,6 +96,7 @@ export function renderBodyCell<TRow>({
   locale,
   onCellFocus,
   pinnedEdge,
+  pinnedLaneOffset,
   scrollLeft,
   searchText,
   selected,
@@ -194,6 +196,8 @@ export function renderBodyCell<TRow>({
   // adjacent to the cell so the relationship is preserved across
   // virtualization. Per `editing-rfc §ARIA states on the cell`.
   const errorId = editError ? `${cellId}-error` : undefined
+  const lanePinned = pinnedLaneOffset != null
+  const cellLeft = lanePinned ? virtualCol.left - pinnedLaneOffset : virtualCol.left
 
   return (
     <BcGridTooltip key={column.columnId} content={tooltip} id={`${cellId}-tooltip`}>
@@ -222,8 +226,8 @@ export function renderBodyCell<TRow>({
           ...cellStyle({
             align: column.align,
             height: virtualRow.height,
-            left: virtualCol.left,
-            pinned: virtualCol.pinned,
+            left: cellLeft,
+            pinned: lanePinned ? null : virtualCol.pinned,
             scrollLeft,
             totalWidth,
             viewportWidth,

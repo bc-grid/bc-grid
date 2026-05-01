@@ -51,16 +51,21 @@ Goal: complete the day-to-day data finding workflow.
 - [ ] Custom filter extension recipe is published in docs.
 - [ ] `bsncraft` can exercise the common customer/vendor/invoice filter flows without local patches.
 
-## v0.4.0 - Editing and Validation
+## v0.4.0 - Editing, Validation, and Server Edit Alpha
 
 Goal: make editable ERP grids viable.
 
+> **Alpha focus:** see `docs/coordination/v0.4-alpha-plan.md`. `v0.4-alpha` should prove the editing contract and server-backed edit contract before broad spreadsheet workflows. Range paste helper work may land in this train if it is internal/helper-only, but user-facing clipboard paste and fill handle remain `v0.5.0` gates.
+
 - [ ] `BcEditGrid` commit lifecycle is complete: prepare, validate, commit, optimistic update, rollback, and stale mutation handling.
-- [ ] Built-in editors are complete enough for ERP data entry: text, number, date, datetime, time, select, multi-select, autocomplete.
+- [ ] Built-in editors are complete enough for ERP data entry: text, number, date, datetime, time, select, multi-select, autocomplete, and boolean/checkbox.
+- [ ] Lookup/select/autocomplete editors have clear typed-value, async-options, pending, and error contracts.
 - [ ] Dirty, pending, and error states render clearly and announce correctly.
 - [ ] Keyboard editing flows are covered: Enter, F2, Escape, Tab, Shift+Tab, click-outside, and portal-aware interactions.
+- [ ] Server-backed edit grids have documented and tested semantics for paged rows, total rows, sort/filter/search refetch, pending optimistic mutations, rollback, and stale responses.
 - [ ] Custom editor recipe is documented and uses the same contract as built-in editors.
-- [ ] `bsncraft` can wire at least one realistic editable form/grid without forking bc-grid.
+- [ ] Examples app exposes editing and grouping clearly enough that the maintainer can find and test the features without hidden knowledge.
+- [ ] `bsncraft` can wire at least one realistic editable server-backed grid without forking bc-grid.
 
 ## v0.5.0 - Range, Clipboard, and Spreadsheet Flows
 
