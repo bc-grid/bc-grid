@@ -37,6 +37,8 @@ import type {
   BcCellEditCommitEvent,
   BcGridProps,
   BcReactGridColumn,
+  BcServerEditMutationHandler,
+  BcServerEditPatchFactory,
   BcServerGridProps,
 } from "./types"
 
@@ -245,29 +247,14 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
     async (event: BcCellEditCommitEvent<TRow>) => {
       if (!props.onServerRowMutation) return props.onCellEditCommit?.(event)
 
-      const defaultPatch = createDefaultServerEditMutationPatch(
+      return commitServerEditMutation({
+        createServerRowPatch: props.createServerRowPatch,
         event,
-        `server-edit:${++mutationCounterRef.current}`,
-      )
-      const patch = props.createServerRowPatch?.(event, defaultPatch) ?? defaultPatch
-      queueServerRowMutation(patch)
-
-      let settled = false
-      try {
-        const result = await props.onServerRowMutation({ ...event, patch })
-        settleServerRowMutation(result)
-        settled = true
-        if (result.status !== "accepted") throw createServerEditMutationError(result)
-      } catch (error) {
-        if (!settled) {
-          settleServerRowMutation({
-            mutationId: patch.mutationId,
-            reason: errorMessage(error),
-            status: "rejected",
-          })
-        }
-        throw error
-      }
+        mutationId: `server-edit:${++mutationCounterRef.current}`,
+        onServerRowMutation: props.onServerRowMutation,
+        queueServerRowMutation,
+        settleServerRowMutation,
+      })
     },
     [
       props.createServerRowPatch,
@@ -1485,6 +1472,36 @@ export function createDefaultServerEditMutationPatch<TRow>(
     changes: { [event.columnId]: event.nextValue },
     mutationId,
     rowId: event.rowId,
+  }
+}
+
+export async function commitServerEditMutation<TRow>(input: {
+  createServerRowPatch?: BcServerEditPatchFactory<TRow> | undefined
+  event: BcCellEditCommitEvent<TRow>
+  mutationId: string
+  onServerRowMutation: BcServerEditMutationHandler<TRow>
+  queueServerRowMutation: (patch: ServerRowPatch) => void
+  settleServerRowMutation: (result: ServerMutationResult<TRow>) => void
+}): Promise<void> {
+  const defaultPatch = createDefaultServerEditMutationPatch(input.event, input.mutationId)
+  const patch = input.createServerRowPatch?.(input.event, defaultPatch) ?? defaultPatch
+  input.queueServerRowMutation(patch)
+
+  let settled = false
+  try {
+    const result = await input.onServerRowMutation({ ...input.event, patch })
+    input.settleServerRowMutation(result)
+    settled = true
+    if (result.status !== "accepted") throw createServerEditMutationError(result)
+  } catch (error) {
+    if (!settled) {
+      input.settleServerRowMutation({
+        mutationId: patch.mutationId,
+        reason: errorMessage(error),
+        status: "rejected",
+      })
+    }
+    throw error
   }
 }
 
