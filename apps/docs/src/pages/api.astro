@@ -396,9 +396,14 @@ const serverGridProps = [
     "rowModel",
     '"paged" | "infinite" | "tree"',
     "partial",
-    "Discriminates the public prop union. Only initial paged display is useful in Q1.",
+    "Discriminates the public prop union. Paged mode uses the server row count for pagination.",
   ],
-  ["loadPage", "LoadServerPage<TRow>", "reserved", "Reserved Q4 live loading."],
+  [
+    "loadPage",
+    "LoadServerPage<TRow>",
+    "implemented",
+    "Receives pageIndex/pageSize plus sort, filter, search, groupBy, and visibleColumns in query.view; returns page rows and totalRows.",
+  ],
   [
     "initialResult",
     "ServerPagedResult<TRow>",
@@ -1034,8 +1039,9 @@ function statusClass(status: keyof typeof statusLabels) {
   <section class="section">
     <h2>BcServerGrid Props</h2>
     <p class="section-note">
-      The type surface is frozen now, but server behavior is a Q4 deliverable. Treat the loaders and
-      cache controls as reserved until the server-row-model package ships.
+      Server grids use the same grid state surface, but the data window is owned by the server.
+      Paged mode calls <code>loadPage</code> with page, sort, filter, search, group, and visible-column
+      metadata, then uses <code>totalRows</code> for the pager without slicing the returned page again.
     </p>
     <div class="api-table">
       <table>

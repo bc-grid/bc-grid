@@ -1308,6 +1308,15 @@ export type BcServerEditPatchFactory<TRow> = (
 ) => ServerRowPatch
 ```
 
+Paged mode is a server-owned pagination contract. `loadPage` receives
+`query.pageIndex`, `query.pageSize`, and `query.view` (`sort`, `filter`,
+`search`, `groupBy`, `visibleColumns`, and optional locale/time zone). It must
+return only the rows for that page plus `totalRows` for the full matching server
+view. `<BcServerGrid rowModel="paged">` uses `totalRows` for the built-in pager
+and passes the returned page rows straight to the body; it does not apply
+client-side pagination or slice the page again. Sort, filter, search, group, and
+visible-column changes reset the requested server page to `0`.
+
 The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are declared in `@bc-grid/core` with the rest of the server query contract and re-exported through `@bc-grid/react`. Runtime cache/state-machine helpers live in `@bc-grid/server-row-model`.
 
 `ServerPagedQuery.pivotState?: BcPivotState` and `ServerPagedResult.pivotedRows?: BcPivotedDataDTO` are reserved for server-side pivot pushdown. Client-side pivot uses the pure `@bc-grid/aggregations` engine; server-side pivot consumers can return the same JSON-safe DTO shape without exposing the engine's internal lookup maps.
