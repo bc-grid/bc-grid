@@ -3,6 +3,7 @@ import type { BcRange, ColumnId, RowId } from "@bc-grid/core"
 import type { ResolvedColumn, RowEntry } from "../src/gridInternals"
 import {
   buildRangeClipboard,
+  buildRangeTsvPasteApplyPlan,
   buildRangeTsvPastePlan,
   cellsToHtmlTable,
   cellsToTsv,
@@ -23,6 +24,20 @@ const columns: ResolvedColumn<Row>[] = [
     valueFormatter: (value) => `$${value}`,
   }),
   resolvedColumn("note", "Note"),
+]
+
+const editableColumns: ResolvedColumn<Row>[] = [
+  resolvedColumn("name", "Name", { editable: true }),
+  resolvedColumn("amount", "Amount", {
+    editable: true,
+    valueParser: (input) => {
+      if (input === "bad") throw new Error("Amount must be numeric.")
+      return Number(input)
+    },
+    validate: (value) =>
+      Number(value) >= 0 ? { valid: true } : { valid: false, error: "Amount must be positive." },
+  }),
+  resolvedColumn("note", "Note", { editable: true }),
 ]
 
 const rowEntries: RowEntry<Row>[] = [
@@ -378,5 +393,191 @@ describe("range TSV paste helpers", () => {
         reasons: ["anchor-row-not-found", "anchor-column-not-found"],
       },
     ])
+  })
+
+  test("buildRangeTsvPasteApplyPlan returns an atomic rectangular commit plan", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "name", "r1", "name"),
+      tsv: "Linus\t42\nKatherine\t13",
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.plan.skippedCells).toEqual([])
+    expect(
+      result.plan.commits.map((commit) => [commit.rowId, commit.columnId, commit.nextValue]),
+    ).toEqual([
+      ["r1", "name", "Linus"],
+      ["r1", "amount", 42],
+      ["r2", "name", "Katherine"],
+      ["r2", "amount", 13],
+    ])
+    expect(result.plan.rowPatches).toEqual([
+      {
+        rowId: "r1",
+        row: rowEntries[0]?.kind === "data" ? rowEntries[0].row : undefined,
+        values: { name: "Linus", amount: 42 },
+      },
+      {
+        rowId: "r2",
+        row: rowEntries[1]?.kind === "data" ? rowEntries[1].row : undefined,
+        values: { name: "Katherine", amount: 13 },
+      },
+    ])
+  })
+
+  test("buildRangeTsvPasteApplyPlan anchors at range start for reversed ranges", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r2", "amount", "r1", "name"),
+      tsv: "50",
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.plan.commits).toHaveLength(1)
+    expect(result.plan.commits[0]).toMatchObject({
+      rowId: "r2",
+      columnId: "amount",
+      previousValue: 34,
+      nextValue: 50,
+      rawValue: "50",
+    })
+  })
+
+  test("buildRangeTsvPasteApplyPlan rejects overflow by default", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r2", "note", "r2", "note"),
+      tsv: "A\tB\nC\tD",
+      columns: editableColumns,
+      rowEntries: rowEntries.slice(0, 2),
+      rowIds: rowIds.slice(0, 2),
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "paste-out-of-bounds",
+        sourceRowIndex: 0,
+        sourceColumnIndex: 1,
+        targetRowIndex: 1,
+        targetColumnIndex: 3,
+        rowId: "r2",
+        rawValue: "B",
+      },
+    })
+  })
+
+  test("buildRangeTsvPasteApplyPlan can clip overflow while preserving skipped metadata", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r2", "note", "r2", "note"),
+      tsv: "A\tB\nC\tD",
+      columns: editableColumns,
+      rowEntries: rowEntries.slice(0, 2),
+      rowIds: rowIds.slice(0, 2),
+      overflow: "clip",
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.plan.commits).toHaveLength(1)
+    expect(result.plan.commits[0]).toMatchObject({
+      rowId: "r2",
+      columnId: "note",
+      nextValue: "A",
+    })
+    expect(result.plan.skippedCells.map((cell) => cell.reasons)).toEqual([
+      ["column-out-of-bounds"],
+      ["row-out-of-bounds"],
+      ["row-out-of-bounds", "column-out-of-bounds"],
+    ])
+  })
+
+  test("buildRangeTsvPasteApplyPlan rejects read-only target columns", async () => {
+    const readonlyColumns = [
+      resolvedColumn("name", "Name", { editable: true }),
+      resolvedColumn("amount", "Amount", { editable: false }),
+    ]
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "amount", "r1", "amount"),
+      tsv: "12",
+      columns: readonlyColumns,
+      rowEntries,
+      rowIds,
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "cell-readonly",
+        rowId: "r1",
+        columnId: "amount",
+        rawValue: "12",
+      },
+    })
+  })
+
+  test("buildRangeTsvPasteApplyPlan rejects malformed parser diagnostics", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "name", "r1", "name"),
+      tsv: '"A',
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "parse-error",
+        sourceRowIndex: 0,
+        sourceColumnIndex: 0,
+        diagnostic: { code: "unterminated-quoted-cell" },
+      },
+    })
+  })
+
+  test("buildRangeTsvPasteApplyPlan rejects valueParser and validation failures atomically", async () => {
+    const parserResult = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "amount", "r1", "amount"),
+      tsv: "bad",
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+    })
+
+    expect(parserResult).toMatchObject({
+      ok: false,
+      error: {
+        code: "value-parser-error",
+        rowId: "r1",
+        columnId: "amount",
+        rawValue: "bad",
+      },
+    })
+
+    const validationResult = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "amount", "r1", "amount"),
+      tsv: "-1",
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+    })
+
+    expect(validationResult).toMatchObject({
+      ok: false,
+      error: {
+        code: "validation-error",
+        message: "Amount must be positive.",
+        rowId: "r1",
+        columnId: "amount",
+        rawValue: "-1",
+      },
+    })
   })
 })
