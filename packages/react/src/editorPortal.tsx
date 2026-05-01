@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type RefObject,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
 } from "react"
@@ -149,6 +150,7 @@ function EditorMount<TRow>({
       : undefined
   const error = editState.mode === "editing" ? editState.error : undefined
   const pending = editState.mode === "validating"
+  const validationMessageId = useId()
 
   // Initial value for the editor. Read from the overlay first (so a
   // re-edit of a previously-committed cell keeps the latest value), else
@@ -265,6 +267,7 @@ function EditorMount<TRow>({
     cancel: () => void
     error?: string
     focusRef?: RefObject<HTMLElement | null>
+    validationMessageId?: string
     seedKey?: string
     pointerHint?: { x: number; y: number }
     prepareResult?: unknown
@@ -288,12 +291,22 @@ function EditorMount<TRow>({
         commit={(next, opts) => handleCommit(next, opts?.moveOnSettle ?? "down", "keyboard")}
         cancel={cancel}
         focusRef={focusRef}
+        validationMessageId={validationMessageId}
         {...(seedKey != null ? { seedKey } : {})}
         {...(pointerHint ? { pointerHint } : {})}
         {...(prepareResult !== undefined ? { prepareResult } : {})}
         {...(error != null ? { error } : {})}
         {...(pending ? { pending } : {})}
       />
+      {error ? (
+        <div
+          id={validationMessageId}
+          className="bc-grid-editor-validation"
+          data-bc-grid-editor-validation="true"
+        >
+          {error}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -333,6 +346,7 @@ interface DefaultTextEditorProps {
   seedKey?: string
   error?: string
   pending?: boolean
+  validationMessageId?: string
 }
 
 function DefaultTextEditor({
@@ -341,8 +355,10 @@ function DefaultTextEditor({
   seedKey,
   error,
   pending,
+  validationMessageId,
 }: DefaultTextEditorProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const localErrorId = useId()
   // Hand the focusRef back up to the controller — it's the element the
   // grid will focus after mount.
   useEffect(() => {
@@ -355,19 +371,28 @@ function DefaultTextEditor({
   // with that char; else default to the formatted current value. Native
   // input maintains its own state from this point.
   const seeded = seedKey != null ? seedKey : initialValue == null ? "" : String(initialValue)
+  const describedBy = error ? (validationMessageId ?? localErrorId) : undefined
 
   return (
-    <input
-      ref={inputRef}
-      className="bc-grid-editor-input"
-      type="text"
-      defaultValue={seeded}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="text-default"
-      data-bc-grid-editor-state={editorStateAttribute({ error, pending })}
-    />
+    <>
+      <input
+        ref={inputRef}
+        className="bc-grid-editor-input"
+        type="text"
+        defaultValue={seeded}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="text-default"
+        data-bc-grid-editor-state={editorStateAttribute({ error, pending })}
+      />
+      {error && !validationMessageId ? (
+        <span id={localErrorId} style={visuallyHiddenEditorErrorStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
   )
 }
 
@@ -420,4 +445,16 @@ const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
 
 type BcGridSelectElement = HTMLSelectElement & {
   [bcGridSelectOptionValuesKey]?: readonly unknown[]
+}
+
+const visuallyHiddenEditorErrorStyle: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0,
 }

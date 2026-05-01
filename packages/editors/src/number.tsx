@@ -1,6 +1,12 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useId, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName, visuallyHiddenStyle } from "./chrome"
+import {
+  editorControlState,
+  editorDescribedBy,
+  editorInputClassName,
+  shouldRenderLocalEditorError,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 /**
  * Number editor — `kind: "number"`. Default for numeric columns per
@@ -54,7 +60,7 @@ export function acceptNumericSeed(seedKey: string | undefined): string | undefin
 const SEED_ACCEPT = /^[\d.,\-]$/
 
 function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, column } = props
+  const { initialValue, error, focusRef, seedKey, pending, column, validationMessageId } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
   // Stable id per-editor-instance for aria-describedby → hidden error
   // span. Pairs with the cell-level error span the framework renders
@@ -100,6 +106,7 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
   // name. Per `editing-rfc §ARIA states on the cell`.
   const accessibleName =
     typeof column.header === "string" ? column.header : (column.field ?? column.columnId ?? "")
+  const describedBy = editorDescribedBy({ error, localErrorId: errorId, validationMessageId })
 
   return (
     <>
@@ -112,12 +119,12 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
         disabled={pending}
         aria-invalid={error ? true : undefined}
         aria-label={accessibleName || undefined}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="number"
         data-bc-grid-editor-state={editorControlState({ error, pending })}
       />
-      {error ? (
+      {shouldRenderLocalEditorError(error, validationMessageId) ? (
         <span id={errorId} style={visuallyHiddenStyle}>
           {error}
         </span>

@@ -740,6 +740,24 @@ describe("@bc-grid/theming", () => {
     expect(pending).toContain("color: var(--bc-grid-muted-fg)")
     expect(pending).toContain("cursor: progress")
 
+    const portal = ruleFor(".bc-grid-editor-portal {")
+    expect(portal).toContain("border-radius: calc(var(--bc-grid-radius) - 2px)")
+    expect(portal).toContain("overflow: visible")
+
+    const portalError = ruleFor(
+      '.bc-grid-editor-portal[data-bc-grid-editor-state="error"]::before {',
+    )
+    expect(portalError).toContain("background: var(--bc-grid-invalid)")
+
+    const validation = ruleFor(".bc-grid-editor-validation {")
+    expect(validation).toContain("position: absolute")
+    expect(validation).toContain("top: calc(100% + 2px)")
+    expect(validation).toContain("background: var(--bc-grid-bg)")
+    expect(validation).toContain("var(--bc-grid-invalid)")
+    expect(validation).toContain("pointer-events: none")
+    expect(validation).not.toContain("box-shadow")
+    expect(validation).not.toContain("border:")
+
     expect(ruleFor('.bc-grid-editor-input[data-bc-grid-editor-kind="number"] {')).toContain(
       "text-align: right",
     )

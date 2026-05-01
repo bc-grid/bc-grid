@@ -1000,12 +1000,41 @@
 
 .bc-grid-editor-portal {
   box-sizing: border-box;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
   background: var(--bc-grid-bg);
   color: var(--bc-grid-fg);
+  overflow: visible;
 }
 
 .bc-grid-editor-portal[data-bc-grid-editor-state="pending"] {
   cursor: progress;
+}
+
+.bc-grid-editor-portal[data-bc-grid-editor-state="error"]::before {
+  content: "";
+  position: absolute;
+  inset: 3px auto 3px 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--bc-grid-invalid);
+  pointer-events: none;
+}
+
+.bc-grid-editor-validation {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 2px);
+  left: 0;
+  max-width: min(22rem, calc(100vw - 16px));
+  box-sizing: border-box;
+  background: var(--bc-grid-bg);
+  color: var(--bc-grid-invalid);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 0.125rem 0.25rem;
+  pointer-events: none;
+  white-space: normal;
 }
 
 .bc-grid-editor-input {
@@ -3523,6 +3552,15 @@ table.bc-grid-detail-nested-grid {
     outline: 2px solid ButtonText;
     outline-offset: -2px;
     box-shadow: none;
+  }
+
+  .bc-grid-editor-validation {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .bc-grid-editor-portal[data-bc-grid-editor-state="error"]::before {
+    background: ButtonText;
   }
 
   .bc-grid-status {

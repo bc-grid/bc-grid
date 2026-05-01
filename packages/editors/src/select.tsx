@@ -3,10 +3,12 @@ import { useId, useLayoutEffect, useRef } from "react"
 import {
   editorAccessibleName,
   editorControlState,
+  editorDescribedBy,
   editorInputClassName,
   editorOptionToString,
   resolveEditorOptions,
   resolveSelectEditorState,
+  shouldRenderLocalEditorError,
   visuallyHiddenStyle,
 } from "./chrome"
 
@@ -49,7 +51,8 @@ export const selectEditor: BcCellEditor<unknown, unknown> = {
 }
 
 function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, column, row } = props
+  const { initialValue, error, focusRef, seedKey, pending, column, row, validationMessageId } =
+    props
   const selectRef = useRef<HTMLSelectElement | null>(null)
   const errorId = useId()
 
@@ -88,6 +91,7 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   }, [selectOptionValues])
 
   const accessibleName = editorAccessibleName(column, "Select value")
+  const describedBy = editorDescribedBy({ error, localErrorId: errorId, validationMessageId })
 
   return (
     <>
@@ -98,7 +102,7 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
         disabled={pending}
         aria-invalid={error ? true : undefined}
         aria-label={accessibleName}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="select"
         data-bc-grid-editor-state={editorControlState({ error, pending })}
@@ -119,7 +123,7 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
           </option>
         ))}
       </select>
-      {error ? (
+      {shouldRenderLocalEditorError(error, validationMessageId) ? (
         <span id={errorId} style={visuallyHiddenStyle}>
           {error}
         </span>

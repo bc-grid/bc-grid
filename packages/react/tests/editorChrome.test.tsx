@@ -78,7 +78,22 @@ describe("built-in editor chrome hooks", () => {
       const html = renderEditor(entry, { error: "Required" })
 
       expect(html).toContain('aria-invalid="true"')
+      expect(html).toContain("aria-describedby=")
+      expect(html).toContain("Required")
       expect(html).toContain('data-bc-grid-editor-state="error"')
+    }
+  })
+
+  test("editor errors can be described by the portal validation surface", () => {
+    for (const entry of editorCases) {
+      const html = renderEditor(entry, {
+        error: "Required",
+        validationMessageId: "bc-editor-validation-name",
+      })
+
+      expect(html).toContain('aria-invalid="true"')
+      expect(html).toContain("bc-editor-validation-name")
+      expect(html).not.toContain(">Required</span>")
     }
   })
 

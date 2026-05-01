@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { type ComponentType, createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import { defaultTextEditor, readEditorInputValue } from "../src/editorPortal"
+import { EditorPortal, defaultTextEditor, readEditorInputValue } from "../src/editorPortal"
+import type { ResolvedColumn } from "../src/gridInternals"
+import type { EditingController } from "../src/useEditingController"
 
 describe("default editor chrome", () => {
   test("emits the shared editor input class and state hooks", () => {
@@ -20,7 +22,32 @@ describe("default editor chrome", () => {
     expect(pending).toContain("disabled")
     expect(pending).toContain('data-bc-grid-editor-state="pending"')
     expect(error).toContain('aria-invalid="true"')
+    expect(error).toContain("aria-describedby=")
+    expect(error).toContain("Required")
     expect(error).toContain('data-bc-grid-editor-state="error"')
+  })
+
+  test("uses a framework validation id instead of duplicating hidden error text", () => {
+    const html = renderDefaultEditor({
+      error: "Required",
+      validationMessageId: "bc-editor-validation-name",
+    })
+
+    expect(html).toContain('aria-describedby="bc-editor-validation-name"')
+    expect(html).not.toContain(">Required</span>")
+  })
+})
+
+describe("EditorPortal validation surface", () => {
+  test("renders visible validation text and points the editor input at it", () => {
+    const html = renderPortalWithValidationError()
+    const messageId = html.match(/id="([^"]+)" class="bc-grid-editor-validation"/)?.[1]
+
+    expect(messageId).toBeDefined()
+    expect(html).toContain('data-bc-grid-editor-state="error"')
+    expect(html).toContain('data-bc-grid-editor-validation="true"')
+    expect(html).toContain(">Required</div>")
+    expect(html).toContain(`aria-describedby="${messageId}"`)
   })
 })
 
@@ -89,5 +116,43 @@ function renderDefaultEditor(overrides: Record<string, unknown> = {}): string {
       cancel: () => {},
       ...overrides,
     }),
+  )
+}
+
+interface Row {
+  id: string
+  name: string
+}
+
+function renderPortalWithValidationError(): string {
+  const controller = {
+    editState: { mode: "editing", error: "Required" },
+    commit: () => Promise.resolve(),
+    cancel: () => {},
+    dispatchMounted: () => {},
+    dispatchUnmounted: () => {},
+    getOverlayValue: () => undefined,
+  } as unknown as EditingController<Row>
+  const resolvedColumns: ResolvedColumn<Row>[] = [
+    {
+      source: { field: "name", header: "Name" },
+      columnId: "name",
+      left: 0,
+      width: 120,
+      align: "left",
+      pinned: null,
+      position: 0,
+    },
+  ]
+
+  return renderToStaticMarkup(
+    <EditorPortal
+      controller={controller}
+      activeCell={{ rowId: "row-1", columnId: "name" }}
+      rowEntries={[{ kind: "data", row: { id: "row-1", name: "" }, rowId: "row-1", index: 0 }]}
+      resolvedColumns={resolvedColumns}
+      cellRect={{ top: 4, left: 8, width: 120, height: 32 }}
+      defaultEditor={defaultTextEditor}
+    />,
   )
 }

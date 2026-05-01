@@ -4,8 +4,10 @@ import {
   type EditorOption,
   editorAccessibleName,
   editorControlState,
+  editorDescribedBy,
   editorInputClassName,
   editorOptionToString,
+  shouldRenderLocalEditorError,
   visuallyHiddenStyle,
 } from "./chrome"
 
@@ -102,7 +104,7 @@ export const autocompleteEditor: BcCellEditor<unknown, unknown> = {
 }
 
 function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, column } = props
+  const { initialValue, error, focusRef, seedKey, pending, column, validationMessageId } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
   const datalistId = useId()
   const errorId = useId()
@@ -178,7 +180,12 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
   // current value (matches editor-text behaviour).
   const seeded = seedKey != null ? seedKey : initialValue == null ? "" : String(initialValue)
   const accessibleName = editorAccessibleName(column, "Autocomplete value")
-  const describedBy = error ? `${errorId} ${statusId}` : statusId
+  const describedBy = editorDescribedBy({
+    error,
+    localErrorId: errorId,
+    validationMessageId,
+    extraIds: [statusId],
+  })
 
   return (
     <>
@@ -216,7 +223,7 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
       <span id={statusId} style={visuallyHiddenStyle} aria-live="polite">
         {loading ? "Loading suggestions" : `${options.length} suggestions available`}
       </span>
-      {error ? (
+      {shouldRenderLocalEditorError(error, validationMessageId) ? (
         <span id={errorId} style={visuallyHiddenStyle}>
           {error}
         </span>

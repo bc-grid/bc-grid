@@ -3,7 +3,9 @@ import { useId, useLayoutEffect, useRef } from "react"
 import {
   editorAccessibleName,
   editorControlState,
+  editorDescribedBy,
   editorInputClassName,
+  shouldRenderLocalEditorError,
   visuallyHiddenStyle,
 } from "./chrome"
 
@@ -41,7 +43,7 @@ export function resolveCheckboxCheckedValue(initialValue: unknown): boolean {
 }
 
 function CheckboxEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, column } = props
+  const { initialValue, error, focusRef, seedKey, pending, column, validationMessageId } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
   const errorId = useId()
 
@@ -62,6 +64,7 @@ function CheckboxEditor(props: BcCellEditorProps<unknown, unknown>) {
 
   const checked = resolveCheckboxCheckedValue(initialValue)
   const accessibleName = editorAccessibleName(column, "Checkbox value")
+  const describedBy = editorDescribedBy({ error, localErrorId: errorId, validationMessageId })
 
   return (
     <>
@@ -81,10 +84,10 @@ function CheckboxEditor(props: BcCellEditorProps<unknown, unknown>) {
           disabled={pending}
           aria-invalid={error ? true : undefined}
           aria-label={accessibleName || undefined}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={describedBy}
         />
       </span>
-      {error ? (
+      {shouldRenderLocalEditorError(error, validationMessageId) ? (
         <span id={errorId} style={visuallyHiddenStyle}>
           {error}
         </span>

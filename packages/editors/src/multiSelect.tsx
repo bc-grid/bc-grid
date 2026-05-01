@@ -3,9 +3,11 @@ import { useId, useLayoutEffect, useRef } from "react"
 import {
   editorAccessibleName,
   editorControlState,
+  editorDescribedBy,
   editorInputClassName,
   editorOptionToString,
   resolveEditorOptions,
+  shouldRenderLocalEditorError,
   visuallyHiddenStyle,
 } from "./chrome"
 
@@ -51,7 +53,8 @@ export const multiSelectEditor: BcCellEditor<unknown, unknown> = {
 const DEFAULT_VISIBLE_ROWS = 5
 
 function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, column, row } = props
+  const { initialValue, error, focusRef, seedKey, pending, column, row, validationMessageId } =
+    props
   const selectRef = useRef<HTMLSelectElement | null>(null)
   const errorId = useId()
 
@@ -85,6 +88,7 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   const visibleRows = Math.max(2, Math.min(DEFAULT_VISIBLE_ROWS, options.length || 2))
   const accessibleName = editorAccessibleName(column, "Select values")
   const seedActive = seedKey != null && seedKey !== ""
+  const describedBy = editorDescribedBy({ error, localErrorId: errorId, validationMessageId })
 
   return (
     <>
@@ -99,7 +103,7 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
         disabled={pending}
         aria-invalid={error ? true : undefined}
         aria-label={accessibleName}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="multi-select"
         data-bc-grid-editor-state={editorControlState({ error, pending })}
@@ -115,7 +119,7 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
           </option>
         ))}
       </select>
-      {error ? (
+      {shouldRenderLocalEditorError(error, validationMessageId) ? (
         <span id={errorId} style={visuallyHiddenStyle}>
           {error}
         </span>

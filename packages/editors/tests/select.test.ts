@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import {
   editorAccessibleName,
+  editorDescribedBy,
   editorOptionToString,
   findOptionIndexBySeed,
   resolveEditorOptions,
   resolveSelectEditorState,
+  shouldRenderLocalEditorError,
 } from "../src/chrome"
 
 const options = [
@@ -21,6 +23,31 @@ describe("select-style editor helpers", () => {
     expect(editorAccessibleName({ header: null, field: "status" }, "Select value")).toBe("status")
     expect(editorAccessibleName({ columnId: "status-col" }, "Select value")).toBe("status-col")
     expect(editorAccessibleName({}, "Select value")).toBe("Select value")
+  })
+
+  test("resolves validation described-by ids without duplicating portal-rendered errors", () => {
+    expect(
+      editorDescribedBy({
+        error: "Required",
+        localErrorId: "local-error",
+        validationMessageId: "portal-error",
+      }),
+    ).toBe("portal-error")
+    expect(
+      editorDescribedBy({
+        error: "Required",
+        localErrorId: "local-error",
+        extraIds: ["status"],
+      }),
+    ).toBe("local-error status")
+    expect(
+      editorDescribedBy({
+        localErrorId: "local-error",
+        extraIds: ["status"],
+      }),
+    ).toBe("status")
+    expect(shouldRenderLocalEditorError("Required", undefined)).toBe(true)
+    expect(shouldRenderLocalEditorError("Required", "portal-error")).toBe(false)
   })
 
   test("resolves flat and row-scoped options without crashing bad row functions", () => {

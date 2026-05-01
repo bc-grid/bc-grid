@@ -27,6 +27,31 @@ export function editorAccessibleName(
   return name || undefined
 }
 
+export function editorDescribedBy({
+  error,
+  localErrorId,
+  validationMessageId,
+  extraIds = [],
+}: {
+  error?: string | undefined
+  localErrorId: string
+  validationMessageId?: string | undefined
+  extraIds?: readonly (string | undefined)[]
+}): string | undefined {
+  const ids = [
+    ...(error ? [validationMessageId ?? localErrorId] : []),
+    ...extraIds.filter((id): id is string => typeof id === "string" && id.length > 0),
+  ]
+  return ids.length > 0 ? ids.join(" ") : undefined
+}
+
+export function shouldRenderLocalEditorError(
+  error: string | undefined,
+  validationMessageId: string | undefined,
+): error is string {
+  return Boolean(error && !validationMessageId)
+}
+
 export interface EditorOption {
   value: unknown
   label: string

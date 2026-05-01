@@ -1,6 +1,13 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useEffect, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { useId, useLayoutEffect, useRef } from "react"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorDescribedBy,
+  editorInputClassName,
+  shouldRenderLocalEditorError,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 /**
  * Time editor — `kind: "time"`. Default for time-of-day columns per
@@ -27,12 +34,18 @@ export const timeEditor: BcCellEditor<unknown, unknown> = {
 }
 
 function TimeEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending } = props
+  const { initialValue, error, focusRef, seedKey, pending, column, validationMessageId } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const errorId = useId()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (focusRef && inputRef.current) {
       ;(focusRef as { current: HTMLElement | null }).current = inputRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
     }
   }, [focusRef])
 
@@ -51,19 +64,30 @@ function TimeEditor(props: BcCellEditorProps<unknown, unknown>) {
   void seedKey
 
   const seeded = normalizeTimeValue(initialValue)
+  const accessibleName = editorAccessibleName(column, "Time value")
+  const describedBy = editorDescribedBy({ error, localErrorId: errorId, validationMessageId })
 
   return (
-    <input
-      ref={inputRef}
-      className={editorInputClassName}
-      type="time"
-      defaultValue={seeded}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="time"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
-    />
+    <>
+      <input
+        ref={inputRef}
+        className={editorInputClassName}
+        type="time"
+        defaultValue={seeded}
+        disabled={pending}
+        aria-invalid={error ? true : undefined}
+        aria-label={accessibleName}
+        aria-describedby={describedBy}
+        data-bc-grid-editor-input="true"
+        data-bc-grid-editor-kind="time"
+        data-bc-grid-editor-state={editorControlState({ error, pending })}
+      />
+      {shouldRenderLocalEditorError(error, validationMessageId) ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
   )
 }
 

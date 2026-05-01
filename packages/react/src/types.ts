@@ -677,6 +677,16 @@ export interface BcCellEditorProps<TRow, TValue = unknown> {
   focusRef?: RefObject<HTMLElement | null>
 
   /**
+   * Stable id for the framework-rendered validation message. Built-in
+   * editors should include this id in `aria-describedby` when `error`
+   * is present so the focused native control points at the visible
+   * portal error surface instead of rendering a duplicate hidden span.
+   * Custom editors that render their own error text may ignore this and
+   * keep using their own described-by target.
+   */
+  validationMessageId?: string
+
+  /**
    * Seed value when the editor was activated by typing a printable
    * character. Editors should treat this as the user's first keystroke,
    * replacing the cell's prior value. Per `editing-rfc §Activation`.

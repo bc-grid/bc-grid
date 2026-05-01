@@ -1,6 +1,12 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useId, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName, visuallyHiddenStyle } from "./chrome"
+import {
+  editorControlState,
+  editorDescribedBy,
+  editorInputClassName,
+  shouldRenderLocalEditorError,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 /**
  * Text editor — `kind: "text"`. The default for string-typed columns
@@ -44,7 +50,7 @@ export function resolveTextEditorSeed(initialValue: unknown, seedKey: string | u
 }
 
 function TextEditor(props: BcCellEditorProps<unknown, string>) {
-  const { initialValue, error, focusRef, seedKey, pending, column } = props
+  const { initialValue, error, focusRef, seedKey, pending, column, validationMessageId } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
   // Stable id per-editor-instance so aria-describedby can target the
   // hidden error message text. `useId()` is stable across renders.
@@ -92,6 +98,7 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
   // edit text" instead of just "edit text".
   const accessibleName =
     typeof column.header === "string" ? column.header : (column.field ?? column.columnId ?? "")
+  const describedBy = editorDescribedBy({ error, localErrorId: errorId, validationMessageId })
 
   // v0.1 commit/cancel happens via Enter / Tab / Escape on the framework's
   // editor portal — the input is uncontrolled and the portal reads
@@ -107,12 +114,12 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
         disabled={pending}
         aria-invalid={error ? true : undefined}
         aria-label={accessibleName || undefined}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={describedBy}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="text"
         data-bc-grid-editor-state={editorControlState({ error, pending })}
       />
-      {error ? (
+      {shouldRenderLocalEditorError(error, validationMessageId) ? (
         <span id={errorId} style={visuallyHiddenStyle}>
           {error}
         </span>
