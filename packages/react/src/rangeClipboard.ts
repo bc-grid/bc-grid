@@ -1,7 +1,7 @@
-import type { BcRange, ColumnId, RowId } from "@bc-grid/core"
+import type { BcRange, BcValidationResult, ColumnId, RowId } from "@bc-grid/core"
 import type { RowEntry } from "./gridInternals"
 import { type ResolvedColumn, isDataRowEntry } from "./gridInternals"
-import type { BcClipboardPayload } from "./types"
+import type { BcClipboardPayload, BcReactGridColumn } from "./types"
 import { formatCellValue, getCellValue } from "./value"
 
 export interface BuiltRangeClipboard<TRow> {
@@ -81,6 +81,82 @@ export interface RangeTsvPastePlan {
   targetCells: RangeTsvPasteTargetCell[]
   skippedCells: RangeTsvPasteSkippedCell[]
 }
+
+export type RangeTsvPasteOverflowMode = "reject" | "clip"
+
+export interface BuildRangeTsvPasteApplyPlanParams<TRow> {
+  range: BcRange
+  tsv: string
+  columns: readonly ResolvedColumn<TRow>[]
+  rowEntries: readonly RowEntry<TRow>[]
+  rowIds: readonly RowId[]
+  /**
+   * `reject` keeps the operation strictly rectangular and atomic. `clip`
+   * builds a plan for in-bounds cells while preserving skipped metadata for
+   * callers that want spreadsheet-style truncation at grid edges.
+   */
+  overflow?: RangeTsvPasteOverflowMode
+  signal?: AbortSignal
+}
+
+export type RangeTsvPasteApplyFailureCode =
+  | "parse-error"
+  | "anchor-not-found"
+  | "paste-out-of-bounds"
+  | "row-not-found"
+  | "row-not-editable"
+  | "column-not-found"
+  | "cell-readonly"
+  | "value-parser-error"
+  | "validation-error"
+
+export interface RangeTsvPasteApplyFailure {
+  code: RangeTsvPasteApplyFailureCode
+  message: string
+  sourceRowIndex?: number
+  sourceColumnIndex?: number
+  targetRowIndex?: number
+  targetColumnIndex?: number
+  rowId?: RowId
+  columnId?: ColumnId
+  rawValue?: string
+  diagnostic?: RangeTsvParseDiagnostic
+  skippedCell?: RangeTsvPasteSkippedCell
+  validation?: BcValidationResult
+}
+
+export interface RangeTsvPasteCommit<TRow> {
+  sourceRowIndex: number
+  sourceColumnIndex: number
+  targetRowIndex: number
+  targetColumnIndex: number
+  rowId: RowId
+  row: TRow
+  columnId: ColumnId
+  column: BcReactGridColumn<TRow, unknown>
+  previousValue: unknown
+  nextValue: unknown
+  rawValue: string
+}
+
+export interface RangeTsvPasteRowPatch<TRow> {
+  rowId: RowId
+  row: TRow
+  values: Record<string, unknown>
+}
+
+export interface RangeTsvPasteApplyPlan<TRow> {
+  range: BcRange
+  parsed: RangeTsvParseResult
+  pastePlan: RangeTsvPastePlan
+  commits: RangeTsvPasteCommit<TRow>[]
+  rowPatches: RangeTsvPasteRowPatch<TRow>[]
+  skippedCells: RangeTsvPasteSkippedCell[]
+}
+
+export type RangeTsvPasteApplyResult<TRow> =
+  | { ok: true; plan: RangeTsvPasteApplyPlan<TRow> }
+  | { ok: false; error: RangeTsvPasteApplyFailure }
 
 export function buildRangeClipboard<TRow>({
   range,
@@ -341,6 +417,193 @@ export function buildRangeTsvPastePlan({
   }
 }
 
+export async function buildRangeTsvPasteApplyPlan<TRow>({
+  range,
+  tsv,
+  columns,
+  rowEntries,
+  rowIds,
+  overflow = "reject",
+  signal,
+}: BuildRangeTsvPasteApplyPlanParams<TRow>): Promise<RangeTsvPasteApplyResult<TRow>> {
+  const parsed = parseRangeTsv(tsv)
+  const diagnostic = parsed.diagnostics[0]
+  if (diagnostic) {
+    return {
+      ok: false,
+      error: {
+        code: "parse-error",
+        message: pasteDiagnosticMessage(diagnostic),
+        sourceRowIndex: diagnostic.rowIndex,
+        sourceColumnIndex: diagnostic.columnIndex,
+        diagnostic,
+      },
+    }
+  }
+
+  const visibleColumnIds = columns.map((column) => column.columnId)
+  const pastePlan = buildRangeTsvPastePlan({
+    cells: parsed.cells,
+    anchorRowId: range.start.rowId,
+    anchorColumnId: range.start.columnId,
+    visibleRowIds: rowIds,
+    visibleColumnIds,
+  })
+
+  const anchorSkip = pastePlan.skippedCells.find((cell) =>
+    cell.reasons.some(
+      (reason) => reason === "anchor-row-not-found" || reason === "anchor-column-not-found",
+    ),
+  )
+  if (anchorSkip) {
+    return {
+      ok: false,
+      error: {
+        code: "anchor-not-found",
+        message: "Paste anchor is no longer visible in the current row/column model.",
+        skippedCell: anchorSkip,
+        ...failureTargetFields(anchorSkip),
+      },
+    }
+  }
+
+  const overflowSkip = pastePlan.skippedCells[0]
+  if (overflow === "reject" && overflowSkip) {
+    return {
+      ok: false,
+      error: {
+        code: "paste-out-of-bounds",
+        message: "Paste range exceeds the visible grid bounds.",
+        skippedCell: overflowSkip,
+        ...failureTargetFields(overflowSkip),
+      },
+    }
+  }
+
+  const rowEntryById = new Map(rowEntries.map((entry) => [entry.rowId, entry]))
+  const columnById = new Map(columns.map((column) => [column.columnId, column]))
+  const commits: RangeTsvPasteCommit<TRow>[] = []
+  const patchEntries = new Map<RowId, RangeTsvPasteRowPatch<TRow>>()
+
+  for (const target of pastePlan.targetCells) {
+    if (signal?.aborted) {
+      return {
+        ok: false,
+        error: {
+          code: "validation-error",
+          message: "Paste validation was aborted.",
+          ...failureTargetFields(target),
+        },
+      }
+    }
+
+    const rowEntry = rowEntryById.get(target.rowId)
+    if (!rowEntry) {
+      return {
+        ok: false,
+        error: {
+          code: "row-not-found",
+          message: "Paste target row is no longer available.",
+          ...failureTargetFields(target),
+        },
+      }
+    }
+    if (!isDataRowEntry(rowEntry)) {
+      return {
+        ok: false,
+        error: {
+          code: "row-not-editable",
+          message: "Paste target row is not editable.",
+          ...failureTargetFields(target),
+        },
+      }
+    }
+
+    const column = columnById.get(target.columnId)
+    if (!column) {
+      return {
+        ok: false,
+        error: {
+          code: "column-not-found",
+          message: "Paste target column is no longer available.",
+          ...failureTargetFields(target),
+        },
+      }
+    }
+
+    if (!isRangePasteCellEditable(column, rowEntry.row)) {
+      return {
+        ok: false,
+        error: {
+          code: "cell-readonly",
+          message: "Paste target cell is read-only.",
+          ...failureTargetFields(target),
+        },
+      }
+    }
+
+    const parsedValueResult = parseRangePasteValue(target.value, rowEntry.row, column)
+    if (!parsedValueResult.ok) {
+      return {
+        ok: false,
+        error: {
+          code: "value-parser-error",
+          message: parsedValueResult.error,
+          ...failureTargetFields(target),
+        },
+      }
+    }
+
+    const validation = await validateRangePasteValue(
+      parsedValueResult.value,
+      rowEntry.row,
+      column,
+      signal,
+    )
+    if (!validation.valid) {
+      return {
+        ok: false,
+        error: {
+          code: "validation-error",
+          message: validation.error,
+          validation,
+          ...failureTargetFields(target),
+        },
+      }
+    }
+
+    const previousValue = getCellValue(rowEntry.row, column.source)
+    commits.push({
+      ...target,
+      row: rowEntry.row,
+      column: column.source,
+      previousValue,
+      nextValue: parsedValueResult.value,
+      rawValue: target.value,
+    })
+
+    const patch = patchEntries.get(target.rowId) ?? {
+      rowId: target.rowId,
+      row: rowEntry.row,
+      values: {},
+    }
+    patch.values[target.columnId] = parsedValueResult.value
+    patchEntries.set(target.rowId, patch)
+  }
+
+  return {
+    ok: true,
+    plan: {
+      range,
+      parsed,
+      pastePlan,
+      commits,
+      rowPatches: Array.from(patchEntries.values()),
+      skippedCells: pastePlan.skippedCells,
+    },
+  }
+}
+
 function formatClipboardCell<TRow>(
   entry: RowEntry<TRow> | undefined,
   column: ResolvedColumn<TRow> | undefined,
@@ -397,4 +660,81 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;")
+}
+
+function isRangePasteCellEditable<TRow>(column: ResolvedColumn<TRow>, row: TRow): boolean {
+  const editable = column.source.editable
+  if (typeof editable === "function") return editable(row)
+  return editable === true
+}
+
+function parseRangePasteValue<TRow>(
+  value: string,
+  row: TRow,
+  column: ResolvedColumn<TRow>,
+): { ok: true; value: unknown } | { ok: false; error: string } {
+  try {
+    return {
+      ok: true,
+      value: column.source.valueParser ? column.source.valueParser(value, row) : value,
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Value parser rejected the pasted value.",
+    }
+  }
+}
+
+async function validateRangePasteValue<TRow>(
+  value: unknown,
+  row: TRow,
+  column: ResolvedColumn<TRow>,
+  signal: AbortSignal | undefined,
+): Promise<BcValidationResult> {
+  try {
+    return column.source.validate
+      ? await Promise.resolve(column.source.validate(value as never, row, signal))
+      : { valid: true }
+  } catch (err) {
+    return {
+      valid: false,
+      error: err instanceof Error ? err.message : "Validation failed.",
+    }
+  }
+}
+
+function pasteDiagnosticMessage(diagnostic: RangeTsvParseDiagnostic): string {
+  if (diagnostic.code === "unterminated-quoted-cell") {
+    return "TSV paste contains an unterminated quoted cell."
+  }
+  if (diagnostic.code === "unexpected-character-after-closing-quote") {
+    return "TSV paste contains characters after a closing quote."
+  }
+  return "TSV paste contains an unexpected quote."
+}
+
+function failureTargetFields(
+  target: Pick<
+    RangeTsvPasteSkippedCell | RangeTsvPasteTargetCell,
+    | "sourceRowIndex"
+    | "sourceColumnIndex"
+    | "targetRowIndex"
+    | "targetColumnIndex"
+    | "rowId"
+    | "columnId"
+    | "value"
+  >,
+): Omit<RangeTsvPasteApplyFailure, "code" | "message"> {
+  return {
+    sourceRowIndex: target.sourceRowIndex,
+    sourceColumnIndex: target.sourceColumnIndex,
+    ...(target.targetRowIndex !== undefined ? { targetRowIndex: target.targetRowIndex } : {}),
+    ...(target.targetColumnIndex !== undefined
+      ? { targetColumnIndex: target.targetColumnIndex }
+      : {}),
+    ...(target.rowId !== undefined ? { rowId: target.rowId } : {}),
+    ...(target.columnId !== undefined ? { columnId: target.columnId } : {}),
+    rawValue: target.value,
+  }
 }
