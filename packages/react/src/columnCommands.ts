@@ -1,4 +1,56 @@
-import type { BcColumnStateEntry, ColumnId } from "@bc-grid/core"
+import type { BcColumnStateEntry, BcGridApi, ColumnId } from "@bc-grid/core"
+
+/**
+ * Single-column context-menu command IDs that route to a `BcGridApi`
+ * column-state mutation. Bulk variants (`show-all-columns`,
+ * `autosize-all-columns`) live alongside in `BcContextMenuBuiltinItem`
+ * but go through their own dispatch path because they read whole-grid
+ * state before writing.
+ */
+export type ColumnCommandId =
+  | "pin-column-left"
+  | "pin-column-right"
+  | "unpin-column"
+  | "hide-column"
+  | "autosize-column"
+
+/**
+ * Route a column-context built-in to the matching `BcGridApi` method.
+ * Pure dispatch — given a command and a target column id, calls the
+ * single side-effecting api method. Lives outside the renderer so the
+ * mapping can be unit-tested with a mock api stub (the renderer
+ * itself is exercised via Playwright + the SSR markup contract; the
+ * activate switch needs a regression net the unit suite can run).
+ *
+ * Bulk variants (`show-all-columns`, `autosize-all-columns`) are NOT
+ * handled here — they need to read `api.getColumnState()` first to
+ * decide what to write, and the BcGridContextMenu renderer keeps that
+ * logic inline so the read-modify-write happens against the most
+ * recent column state every activation.
+ */
+export function dispatchColumnCommand<TRow>(
+  api: BcGridApi<TRow>,
+  command: ColumnCommandId,
+  columnId: ColumnId,
+): void {
+  switch (command) {
+    case "pin-column-left":
+      api.setColumnPinned(columnId, "left")
+      return
+    case "pin-column-right":
+      api.setColumnPinned(columnId, "right")
+      return
+    case "unpin-column":
+      api.setColumnPinned(columnId, null)
+      return
+    case "hide-column":
+      api.setColumnHidden(columnId, true)
+      return
+    case "autosize-column":
+      api.autoSizeColumn(columnId)
+      return
+  }
+}
 
 export interface AutosizeBounds {
   minWidth: number
