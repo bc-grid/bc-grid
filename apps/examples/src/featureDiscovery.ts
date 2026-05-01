@@ -128,6 +128,13 @@ export const featureDiscoveryRows: readonly FeatureDiscoveryRow[] = [
     shortcutHref: "?edit=1#customer-grid",
   },
   {
+    feature: "Lookup/select editors",
+    status: "Available",
+    entry: "?edit=1 Status, Flags, Collector columns",
+    api: "selectEditor, multiSelectEditor, autocompleteEditor",
+    shortcutHref: "?edit=1#customer-grid",
+  },
+  {
     feature: "Checkbox selection",
     status: "Available",
     entry: "?checkbox=1",

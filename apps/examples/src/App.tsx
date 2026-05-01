@@ -473,7 +473,8 @@ function CustomerGridDemo({
         // ?edit=1: editable free-form name with autocomplete suggestions
         // sourced from a 30-name roster via async fetchOptions. AbortSignal
         // races superseded keystrokes — keeps the network honest under
-        // fast typing.
+        // fast typing. This editor commits a string, so valueParser owns
+        // normalization and validate owns the final domain rule.
         editable: editorFrameworkEnabled(),
         ...(editorFrameworkEnabled()
           ? { cellEditor: autocompleteEditor as unknown as BcCellEditor<CustomerRow, unknown> }
@@ -607,6 +608,8 @@ function CustomerGridDemo({
         },
         // ?edit=1: editable enum field. Native <select> dropdown via
         // editor-select; options enumerate every CustomerStatus value.
+        // The selected option value is committed directly, so valueParser
+        // is intentionally not used for this typed enum column.
         editable: editorFrameworkEnabled(),
         ...(editorFrameworkEnabled()
           ? { cellEditor: selectEditor as unknown as BcCellEditor<CustomerRow, unknown> }
@@ -720,6 +723,8 @@ function CustomerGridDemo({
         },
         // ?edit=1: editable many-of-many field. Native <select multiple>
         // via editor-multi-select; options enumerate every CustomerFlag.
+        // The typed option-value array is committed directly; validation
+        // handles business rules instead of parsing display labels.
         // validate enforces the realistic ERP rule that VIP and Manual
         // Review can't both be set on the same customer (treat one as a
         // contradiction of the other).

@@ -1920,7 +1920,8 @@ portal commit/cancel keys as other editors and expose the shared
 `data-bc-grid-editor-state` hooks for pending/error/disabled styling.
 
 `selectEditor` and `multiSelectEditor` read `column.options`, either as a static
-array or a row function:
+array or a row function. Static options are the right fit for enums and short
+tag lists:
 
 ```ts
 import type { BcCellEditor, BcReactGridColumn } from "@bc-grid/react"
@@ -1952,6 +1953,30 @@ export const statusColumn: BcReactGridColumn<CustomerRow, CustomerStatus> = {
 }
 ```
 
+For many-of-many tags, use the same typed option shape with
+`multiSelectEditor` and store an array in the row:
+
+```ts
+import { multiSelectEditor } from "@bc-grid/editors"
+
+type CustomerFlag = "vip" | "tax-exempt" | "manual-review"
+
+export const flagsColumn: BcReactGridColumn<CustomerRow, readonly CustomerFlag[]> = {
+  field: "flags",
+  header: "Flags",
+  editable: true,
+  cellEditor: multiSelectEditor as unknown as BcCellEditor<
+    CustomerRow,
+    readonly CustomerFlag[]
+  >,
+  options: [
+    { value: "vip", label: "VIP" },
+    { value: "tax-exempt", label: "Tax exempt" },
+    { value: "manual-review", label: "Manual review" },
+  ],
+}
+```
+
 The option `label` is display text. The option `value` is the committed value.
 For `selectEditor` the committed value is a single typed option value; for
 `multiSelectEditor` it is a typed array of selected option values. These editors
@@ -1965,6 +1990,28 @@ equivalent request APIs so superseded lookups abort cleanly. A failed lookup is
 not itself a validation error: bc-grid leaves the current suggestions as-is and
 allows free-text editing to continue. Use `valueParser` and `validate` when the
 typed string must resolve to a known domain value.
+
+```ts
+import { autocompleteEditor } from "@bc-grid/editors"
+
+export const ownerColumn: BcReactGridColumn<CustomerRow, string> = {
+  field: "owner",
+  header: "Collector",
+  editable: true,
+  cellEditor: autocompleteEditor as unknown as BcCellEditor<CustomerRow, string>,
+  fetchOptions: async (query, signal) => {
+    const response = await fetch(`/api/collectors?q=${encodeURIComponent(query)}`, {
+      signal,
+    })
+    return (await response.json()) as readonly { value: string; label: string }[]
+  },
+  valueParser: (input) => input.trim(),
+  validate: (next) =>
+    next.length > 0
+      ? { valid: true }
+      : { valid: false, error: "Collector is required." },
+}
+```
 
 `checkboxEditor` commits a boolean and only treats the literal boolean `true` as
 checked on mount. String and numeric lookalikes (`"true"`, `1`) stay unchecked,
@@ -1981,7 +2028,10 @@ region owned by the React editor protocol.
 Server-backed consumers can use
 `<BcServerGrid onServerRowMutation>` for the built-in patch/queue/settle path,
 or wire `onCellEditCommit` manually with `BcServerGridApi.queueServerRowMutation`
-and `BcServerGridApi.settleServerRowMutation`.
+and `BcServerGridApi.settleServerRowMutation`. Keep lookup validation on the
+column so rejected typed values or unresolved autocomplete strings render
+through the same pending/error hooks as local edits; the server mutation result
+then owns persistence rollback if the backend rejects the patch.
 
 ---
 
