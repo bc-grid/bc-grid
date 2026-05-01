@@ -407,6 +407,19 @@
   color: var(--bc-grid-row-selected-fg);
 }
 
+/*
+ * Trigger open-state highlight. Mirrors the Radix PopoverTrigger
+ * `[data-state="open"]` convention so consumers can target the
+ * trigger with the same selector pattern they'd use for any other
+ * Radix popover. Subtle accent-soft bg keeps the trigger visible
+ * while the popup is open without competing with the popup itself.
+ */
+.bc-grid-header-filter-button[data-state="open"] {
+  background: var(--bc-grid-accent-soft);
+  color: var(--bc-grid-fg);
+  opacity: 1;
+}
+
 .bc-grid-header-filter-icon {
   display: block;
 }
@@ -433,30 +446,38 @@
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.125rem 0.25rem 0;
+  padding: 0.125rem 0.375rem;
 }
 
 .bc-grid-filter-popup-title {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.04em;
   color: var(--bc-grid-muted-fg);
   text-transform: uppercase;
 }
 
+/*
+ * "Filter active" indicator. Slightly larger (8px) than the previous
+ * 6px to read at-a-glance, with a subtle inner ring so it pops on
+ * both light and dark backgrounds without a hard-coded shadow colour.
+ */
 .bc-grid-filter-popup-active-dot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: 0 0 0.5rem;
   border-radius: 50%;
-  background: var(--bc-grid-focus-ring);
+  background: var(--bc-grid-accent);
+  box-shadow: 0 0 0 2px var(--bc-grid-accent-soft);
 }
 
 .bc-grid-filter-popup-footer {
   display: flex;
   justify-content: flex-end;
   gap: 0.375rem;
-  padding-top: 0.375rem;
+  padding-top: 0.5rem;
+  margin-top: 0.125rem;
   border-top: 1px solid var(--bc-grid-context-menu-border);
 }
 
@@ -484,8 +505,14 @@
 }
 
 .bc-grid-filter-popup-button:focus-visible {
+  /*
+   * Inset the focus ring so it stays visible against the Apply
+   * button's accent background. Outline-offset 2 sat the ring
+   * outside the (button + accent border) which made it nearly
+   * invisible at light/dark default themes.
+   */
   outline: 2px solid var(--bc-grid-focus-ring);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .bc-grid-filter-popup-button:disabled {
@@ -503,12 +530,56 @@
   background: color-mix(in srgb, var(--bc-grid-accent) 88%, var(--bc-grid-fg));
 }
 
+/*
+ * Clear button leans on the shadcn "ghost" treatment: no border,
+ * subtle hover bg, muted text that brightens on hover. Differentiates
+ * Clear (secondary, optional) from Apply (primary, terminal) without
+ * a destructive colour — this is "clear my filter input", not
+ * "delete data".
+ */
 .bc-grid-filter-popup-clear {
+  border-color: transparent;
   color: var(--bc-grid-muted-fg);
 }
 
 .bc-grid-filter-popup-clear:hover:not(:disabled) {
+  background: var(--bc-grid-row-hover);
   color: var(--bc-grid-fg);
+}
+
+/*
+ * Fade-in animation on open. Tracks the tooltip pattern; gated by
+ * `prefers-reduced-motion` further down so AT users keep an instant
+ * presentation. Apps that drive `data-state="closed"` for unmount
+ * animation can layer the matching keyframe — bc-grid is unmount-on-
+ * close, so only the open keyframe ships.
+ */
+.bc-grid-filter-popup[data-state="open"] {
+  animation: bc-grid-filter-popup-in var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
+}
+
+@keyframes bc-grid-filter-popup-in {
+  /*
+   * Translate-only animation (no scale) to satisfy the theming
+   * invariant that bc-grid CSS doesn't scale text via transforms —
+   * see `packages/theming/tests/theming.test.ts §"CSS motion avoids
+   * text scaling..."`.
+   */
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bc-grid-filter-popup[data-state="open"] {
+    animation: none;
+  }
 }
 
 .bc-grid-row .bc-grid-cell {

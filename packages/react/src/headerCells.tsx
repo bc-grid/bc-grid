@@ -322,6 +322,13 @@ export function renderHeaderCell<TRow>({
           )}
           data-bc-grid-filter-button="true"
           data-active={filterText ? "true" : undefined}
+          // Mirrors the Radix Popover trigger contract — `data-state`
+          // tracks the popup state ("open" / "closed") so consumer CSS
+          // can hook the trigger the same way it would a Radix
+          // PopoverTrigger. Lets the trigger render an open-state
+          // background subtle highlight without a separate boolean
+          // class on the React side.
+          data-state={filterPopupOpen ? "open" : "closed"}
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()

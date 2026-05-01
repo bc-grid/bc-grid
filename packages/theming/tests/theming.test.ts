@@ -294,6 +294,71 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain("bc-grid-row-expanded {\n  animation")
   })
 
+  test("filter popup chrome — primary action + ghost clear + tokenised active dot", () => {
+    // Pins the chrome-polish contract from `filter-popup-chrome-polish`
+    // (slice 4 of the chrome polish umbrella). Apply uses the primary
+    // (`--bc-grid-accent`) token; Clear is shadcn-ghost (transparent
+    // border on idle, hover bg via `--bc-grid-row-hover`); the active
+    // dot reads as "filter applied", not as a focus ring.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    // Apply primary tokens
+    expect(css).toMatch(
+      /\.bc-grid-filter-popup-apply\s*\{[^}]*background:\s*var\(--bc-grid-accent\)/,
+    )
+    expect(css).toMatch(/\.bc-grid-filter-popup-apply\s*\{[^}]*color:\s*var\(--bc-grid-accent-fg\)/)
+
+    // Clear ghost — transparent border on idle + hover bg
+    expect(css).toMatch(/\.bc-grid-filter-popup-clear\s*\{[^}]*border-color:\s*transparent/)
+    expect(css).toMatch(
+      /\.bc-grid-filter-popup-clear:hover:not\(:disabled\)\s*\{[^}]*background:\s*var\(--bc-grid-row-hover\)/,
+    )
+
+    // Active dot uses the accent token (not the focus ring) so it
+    // reads as "filter applied" rather than "keyboard-focused widget".
+    expect(css).toMatch(
+      /\.bc-grid-filter-popup-active-dot\s*\{[^}]*background:\s*var\(--bc-grid-accent\)/,
+    )
+  })
+
+  test("filter popup trigger surfaces a Radix-style data-state hook for the open state", () => {
+    // Mirrors Radix PopoverTrigger — the `[data-state="open"]` selector
+    // is how host CSS targets the trigger while its popup is up. Pins
+    // the styles.css contract; the trigger React markup is exercised
+    // by `packages/react/tests/headerCells.test.tsx`.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    expect(css).toMatch(/\.bc-grid-header-filter-button\[data-state="open"\]/)
+  })
+
+  test("filter popup opens with a translate-only fade animation gated by reduced-motion", () => {
+    // Animation symmetry with the tooltip — open uses a small
+    // translate + opacity transition; reduced-motion users get an
+    // instant present.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    // The keyframe exists and uses opacity + translateY only (no
+    // scale; pinned by the "CSS motion avoids text scaling" test
+    // above, but locked here too against the specific keyframe).
+    expect(css).toContain("@keyframes bc-grid-filter-popup-in")
+    const keyframeStart = css.indexOf("@keyframes bc-grid-filter-popup-in")
+    const keyframeEnd = css.indexOf("}", css.indexOf("}", keyframeStart) + 1)
+    const keyframe = css.slice(keyframeStart, keyframeEnd + 1)
+    expect(keyframe).toContain("opacity: 0")
+    expect(keyframe).toContain("opacity: 1")
+    expect(keyframe).toMatch(/translateY\(/)
+    expect(keyframe).not.toMatch(/scale[XY]?\(/)
+
+    // The data-state="open" rule applies the animation.
+    expect(css).toMatch(
+      /\.bc-grid-filter-popup\[data-state="open"\][^}]*animation:\s*bc-grid-filter-popup-in/,
+    )
+
+    // A reduced-motion override exists for the popup.
+    expect(css).toMatch(
+      /@media\s+\(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*\.bc-grid-filter-popup\[data-state="open"\]\s*\{\s*animation:\s*none/,
+    )
+  })
+
   test("prefers-reduced-motion block zeroes out motion per accessibility-rfc §Reduced Motion", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     // Locate the last reduced-motion block (the catch-all override) and

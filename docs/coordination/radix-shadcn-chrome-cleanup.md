@@ -66,14 +66,15 @@ Internal pure helper `computePopupPosition` (`packages/react/src/internal/popup-
 
 | Slice | Status | Touches | Risk | Justification |
 |---|---|---|---|---|
-| 2: popup interaction contracts | **landed in this update** | `internal/popup-dismiss.ts` (new) + `FilterPopup`, `BcGridContextMenu`, `ColumnVisibilityMenu`, `grid.tsx` | Low | Shared `usePopupDismiss` hook (Escape + outside-pointer + focus-return-to-trigger). Column chooser now uses `computePopupPosition` (the third inline-clamp site is gone). Every popup root now carries `data-state="open"` + `data-side` + `data-align`. Pure decision helpers (`shouldDismissOnOutsidePointer`, `shouldDismissOnKey`) unit-tested without a live DOM. |
+| 2: popup interaction contracts | **landed (PR #252)** | `internal/popup-dismiss.ts` (new) + `FilterPopup`, `BcGridContextMenu`, `ColumnVisibilityMenu`, `grid.tsx` | Low | Shared `usePopupDismiss` hook (Escape + outside-pointer + focus-return-to-trigger). Column chooser now uses `computePopupPosition` (the third inline-clamp site is gone). Every popup root now carries `data-state="open"` + `data-side` + `data-align`. Pure decision helpers (`shouldDismissOnOutsidePointer`, `shouldDismissOnKey`) unit-tested without a live DOM. |
+| 5: keyboard-nav primitive | **landed (PR #261)** | new `internal/use-roving-focus.ts`; column chooser integration | Low | Shared roving-focus hook + pure helpers (`nextEnabledIndex` / `firstEnabledIndex` / `lastEnabledIndex` / `nextMatchingIndex` / `decideRovingKey`). Column chooser switched to roving tabindex per WAI-ARIA Authoring Practices. Escape stays out (popup-dismiss owns it); no focus trap. |
+| 8 (was 4 of slice-2 audit): filter-popup chrome polish | **landed in this update** | `headerCells.tsx` + `theming/styles.css` + tests | Low | Trigger funnel button gets `data-state="open" \| "closed"` (Radix PopoverTrigger contract). Apply button focus ring inset to be visible against the accent bg. Clear button moves to a shadcn-ghost treatment (transparent border, hover bg). Filter popup root opts into a translate-only fade-in animation (gated by `prefers-reduced-motion`). Header padding rationalised; active-dot bumped to 8px with a token-driven inner ring. SSR markup contracts pinned in tests. |
 | 3: shared menu-item primitive | open | `internal/context-menu.tsx`, `columnVisibility.tsx` | Medium | Extract `<MenuItem>` / `<MenuCheckboxItem>` into `packages/react/src/internal/menu-item.tsx`. Standardises spacing, focus ring, disabled state across the two menus. Test impact: existing context-menu / column-chooser unit tests need to follow the new DOM. |
 | 4: Radix-Popper trial | open | `packages/react/package.json`, `FilterPopup`, possibly `BcGridContextMenu` | Medium-High | Trial `@radix-ui/react-popper`. Compare bundle size + visual parity. Decision recorded in this doc. **Coordinator approval required** before adding the dep. |
-| 5: keyboard-nav primitive | open | new `internal/use-roving-focus.ts` | Low | Right now context-menu manages its own roving focus inline; column chooser relies on Tab. A shared roving-focus hook unifies both and matches the Radix DropdownMenu / DropdownMenuCheckboxItem keyboard contract (ArrowDown/Up cycle, Home/End, type-ahead). |
 | 6: Radix-Tooltip trial | open | `tooltip.tsx`, `package.json` | Medium | Replace the bespoke tooltip with `@radix-ui/react-tooltip` if bundle / SSR story checks out. Likely after slice 4. |
 | 7: shared overlay primitive | open | new `internal/popup-shell.tsx` | Medium | Once all popups use the helper + matching focus, lift the box-shadow / radius / border / `data-state="open"` into a shared shell. Currently each popup re-declares these classes in `styles.css`. |
 
-Slices 1–2 give the visible polish + interaction contract without any dependency change; 3 is also dep-free; 4–7 are the Radix-conversion track and need a coordinator-level dep decision.
+Slices 1–2, 5, and 8 give the visible polish + interaction contract without any dependency change; 3 is also dep-free; 4 / 6 / 7 are the Radix-conversion track and need a coordinator-level dep decision.
 
 ---
 
@@ -145,3 +146,42 @@ A targeted visual pass on the context menu + column-visibility menu chrome that 
 - Full unit suite green.
 - **Coordinator-owned:** Playwright runs covering filter-popup / context-menu (`apps/examples/tests/`) — to verify the new clamp doesn't shift any visible position in the existing flows.
 - No bundle-size baseline shift — the helper is pure JS, no new dependencies.
+
+---
+
+## Slice 8 — Filter popup chrome polish (landed)
+
+Polish pass on the filter popup chrome to align with the broader popup-interaction-contracts work and the Radix PopoverTrigger / Popover.Content visual conventions. **No new runtime dependencies; no React-side state changes.** All visual refinements live in `theming/styles.css` plus a single attribute on the trigger button.
+
+### Trigger button
+
+- **`data-state="open" | "closed"`** added to `.bc-grid-header-filter-button`. Mirrors the Radix PopoverTrigger contract so consumers can target the trigger with `[data-bc-grid-filter-button][data-state="open"] { … }` exactly the same way they would a Radix PopoverTrigger. Coexists with the existing `aria-haspopup` / `aria-expanded` / `aria-controls` linkage.
+- Trigger renders a subtle `--bc-grid-accent-soft` background while the popup is open, so the visual link between trigger and popup is preserved without depending on hover / focus state.
+
+### Popup root
+
+- **Open animation**: opacity + translateY-only fade-in via `bc-grid-filter-popup-in` keyframes (no scale, to satisfy the existing "CSS motion avoids text scaling" theming invariant). `var(--bc-grid-motion-duration-fast)` + `var(--bc-grid-motion-ease-standard)` so it tracks the rest of the motion system.
+- Reduced-motion override: `@media (prefers-reduced-motion: reduce)` disables the animation. Apps that ship a `data-state="closed"` exit transition can layer the matching keyframe; bc-grid is unmount-on-close, so only the open keyframe ships.
+
+### Header
+
+- Symmetric padding (`0.125rem 0.375rem`) — drops the previous one-off asymmetric block.
+- Title gets tracker-style typography (`0.6875rem`, `letter-spacing: 0.04em`, uppercase, muted-fg) consistent with the column-chooser title.
+- **Active-dot** bumped from 6px to 8px (clearly readable at glance), bg switched from `--bc-grid-focus-ring` (was visually conflated with keyboard focus) to `--bc-grid-accent`. A `box-shadow: 0 0 0 2px var(--bc-grid-accent-soft)` halo gives the dot a subtle ring on both light + dark themes without a hard-coded shadow colour.
+
+### Footer buttons
+
+- **Apply** keeps the primary-action treatment (`--bc-grid-accent` bg, `--bc-grid-accent-fg` text) shipped in slice 2's chrome cleanup. Focus-visible outline-offset moved from `1px` to `2px` so the ring is visible against the accent border.
+- **Clear** moves to a shadcn-ghost treatment: transparent border on idle, `--bc-grid-row-hover` bg on hover, muted-fg text that brightens to default-fg on hover. Differentiates Clear (secondary, "clear my filter input") from Apply (primary, terminal) without resorting to a destructive colour.
+
+### Tests pinned
+
+- **`packages/react/tests/headerCells.test.tsx`** — 2 new: trigger emits `data-state="open" | "closed"`; `data-state` and `data-bc-grid-filter-button` coexist on the same button.
+- **`packages/react/tests/filterPopup.test.tsx`** — 3 new: Apply class hooks survive (regression guard), Clear class hooks survive, active-dot class hook survives.
+- **`packages/theming/tests/theming.test.ts`** — 3 new CSS contracts: filter-popup chrome (Apply primary tokens / Clear ghost / active-dot accent), trigger `[data-state="open"]` selector exists, open animation is translate-only + reduced-motion-gated.
+
+### Out of scope
+
+- No structural change to FilterPopup component. Existing tests for the dialog labelling, footer button labels, click-outside dismiss, and aria-controls linkage (PRs #252, #256) all carry over unchanged.
+- No new runtime dependency.
+- Reusing `usePopupDismiss` and `computePopupPosition` (already in place from slices 1–2). The roving-focus hook from slice 5 doesn't apply here since the popup contains form inputs, not a menu list.
