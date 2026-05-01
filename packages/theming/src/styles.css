@@ -923,6 +923,9 @@
 .bc-grid-column-menu {
   position: fixed;
   z-index: 60;
+  /* shadcn DropdownMenu: min-w-[8rem]; size up slightly for the
+     longer column-name strings the chooser usually shows. */
+  min-width: 12rem;
   width: min(15rem, calc(100vw - 16px));
   border: 1px solid var(--bc-grid-context-menu-border);
   border-radius: var(--bc-grid-radius);
@@ -952,7 +955,9 @@
 .bc-grid-column-menu-item {
   display: flex;
   width: 100%;
-  min-height: 1.75rem;
+  /* shadcn DropdownMenu items: ~28px row, py-1.5 px-2. Tighten from
+     1.75rem to land on the same visual rhythm. */
+  min-height: 1.625rem;
   align-items: center;
   border: 0;
   border-radius: calc(var(--bc-grid-radius) - 2px);
@@ -962,19 +967,37 @@
   font: inherit;
   font-size: 0.8125rem;
   gap: 0.5rem;
-  padding: 0 0.5rem;
+  outline: none;
+  padding: 0.25rem 0.5rem;
   text-align: left;
+  /* Smooth hover / focus transitions — shadcn uses transition-colors
+     for the same effect. Picks up the shared motion tokens so dark
+     mode + reduced-motion hooks apply uniformly. */
+  transition: background-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
 }
 
-.bc-grid-column-menu-item:hover,
-.bc-grid-column-menu-item:focus-visible {
+/* Plain pointer hover — subtle row-hover tint. */
+.bc-grid-column-menu-item:hover:not(:disabled) {
   background: var(--bc-grid-row-hover);
-  outline: none;
+}
+
+/* Keyboard focus is more prominent than hover so users can track
+   where the focus ring is going. shadcn DropdownMenu uses --accent
+   for the same purpose; we use the soft variant so the row tint is
+   distinct from the row-selected solid colour. */
+.bc-grid-column-menu-item:focus-visible {
+  background: var(--bc-grid-accent-soft);
 }
 
 .bc-grid-column-menu-item:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+  /* Block click activation while a row is disabled — without this
+     the browser still fires click and React's onClick runs even
+     though the visual state says "no-op". */
+  pointer-events: none;
 }
 
 .bc-grid-column-menu-check {
@@ -1002,6 +1025,9 @@
 .bc-grid-context-menu {
   position: fixed;
   z-index: 70;
+  /* shadcn DropdownMenu: min-w-[8rem]. Keep the upper cap so a long
+     custom item label doesn't stretch the menu past readable width. */
+  min-width: 12rem;
   width: min(16rem, calc(100vw - 16px));
   border: 1px solid var(--bc-grid-context-menu-border);
   border-radius: var(--bc-grid-radius);
@@ -1014,7 +1040,7 @@
 .bc-grid-context-menu-item {
   display: flex;
   width: 100%;
-  min-height: 1.75rem;
+  min-height: 1.625rem;
   align-items: center;
   border: 0;
   border-radius: calc(var(--bc-grid-radius) - 2px);
@@ -1025,20 +1051,58 @@
   font-size: 0.8125rem;
   gap: 0.5rem;
   outline: none;
-  padding: 0 0.5rem;
+  padding: 0.25rem 0.5rem;
   text-align: left;
   user-select: none;
+  transition: background-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
 }
 
-.bc-grid-context-menu-item:hover,
+/* Plain pointer hover — subtle row-hover tint, matches the column
+   chooser. */
+.bc-grid-context-menu-item:not([aria-disabled="true"]):hover {
+  background: var(--bc-grid-row-hover);
+}
+
+/* Keyboard focus / roving-focus active row — more prominent so the
+   user can track keyboard navigation distinctly from pointer hover.
+   `data-active` is set by the menu's roving-focus state machine;
+   `:focus-visible` is the browser-driven keyboard focus.  */
 .bc-grid-context-menu-item[data-active="true"],
 .bc-grid-context-menu-item:focus-visible {
-  background: var(--bc-grid-row-hover);
+  background: var(--bc-grid-accent-soft);
 }
 
 .bc-grid-context-menu-item[aria-disabled="true"] {
   cursor: not-allowed;
-  opacity: 0.52;
+  opacity: 0.5;
+  /* Match the column-chooser's disabled contract: no click activation,
+     no hover background. */
+  pointer-events: none;
+}
+
+/* Destructive variant — opt-in via `data-variant="destructive"` on
+   the row. Custom items can set `variant: "destructive"` to surface
+   actions like "Delete row" / "Discard changes" with shadcn's
+   destructive treatment (text uses the destructive token; hover /
+   focus tints the destructive at 12 % opacity instead of the regular
+   accent-soft so the row reads as dangerous on every interaction
+   state). */
+.bc-grid-context-menu-item[data-variant="destructive"] {
+  color: var(--bc-grid-invalid);
+}
+
+.bc-grid-context-menu-item[data-variant="destructive"]:not([aria-disabled="true"]):hover,
+.bc-grid-context-menu-item[data-variant="destructive"][data-active="true"],
+.bc-grid-context-menu-item[data-variant="destructive"]:focus-visible {
+  background: color-mix(in srgb, var(--bc-grid-invalid) 12%, transparent);
+  color: var(--bc-grid-invalid);
+}
+
+.bc-grid-context-menu-item[data-variant="destructive"] .bc-grid-context-menu-icon,
+.bc-grid-context-menu-item[data-variant="destructive"]:hover .bc-grid-context-menu-icon {
+  color: var(--bc-grid-invalid);
 }
 
 .bc-grid-context-menu-icon {
@@ -1070,7 +1134,11 @@
 
 .bc-grid-context-menu-separator {
   height: 1px;
-  margin: 0.25rem 0.25rem;
+  /* Full-bleed separator — negative horizontal margin pulls the
+     1px line to the menu's outer edges so it reads as a divider
+     between groups instead of a centred underline. Matches shadcn's
+     DropdownMenuSeparator (`-mx-1 my-1`). */
+  margin: 0.25rem -0.25rem;
   background: var(--bc-grid-context-menu-border);
 }
 

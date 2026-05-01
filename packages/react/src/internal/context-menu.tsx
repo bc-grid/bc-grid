@@ -229,10 +229,21 @@ export function BcGridContextMenu<TRow>({
         const disabled = contextMenuItemDisabled(item, context)
         const active = activeIndex === index
         const icon = isCustomContextMenuItem(item) ? null : contextMenuBuiltinIcon(item)
+        // Custom items can opt into shadcn's destructive treatment via
+        // `variant: "destructive"`. The renderer emits the same
+        // `data-variant` attribute shadcn DropdownMenu uses so consumer
+        // CSS can target it identically. Built-in IDs don't have a
+        // destructive flavour today (none of the bundled commands are
+        // irreversible), so the attribute is omitted for them.
+        const variant =
+          isCustomContextMenuItem(item) && item.variant === "destructive"
+            ? "destructive"
+            : undefined
         return (
           <BcGridMenuItem
             active={active}
             disabled={disabled}
+            data-variant={variant}
             id={`${menuId}-item-${index}`}
             key={contextMenuItemKey(item, index)}
             label={label}

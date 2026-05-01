@@ -98,6 +98,38 @@ What this means for consumers:
 
 ---
 
+## Slice 3.5 — Visual polish on the menu surfaces (this PR)
+
+A targeted visual pass on the context menu + column-visibility menu chrome that lands in parallel with the open menu-item primitive (slice 3 / PR #259). Touches `packages/theming/src/styles.css`, `packages/react/src/internal/context-menu.tsx`, and `packages/react/src/types.ts` only — no new shared classes or runtime deps.
+
+### What ships
+
+- **Tighter row rhythm.** `min-height` 1.75 → 1.625 rem, padding 0 → 0.25 rem 0.5 rem, picking up shadcn DropdownMenu's `py-1.5 px-2` rhythm. Both the context menu and the column chooser now read at the same row height.
+- **Smooth `transition-colors`.** Both row classes get a `transition: background-color, color` pair using `var(--bc-grid-motion-duration-fast)` and `var(--bc-grid-motion-ease-standard)` so hover / focus state changes don't snap-cut. The reduced-motion media query already in the stylesheet zeroes out the transition for users who prefer it.
+- **Distinct keyboard-focus state.** Plain pointer hover keeps `var(--bc-grid-row-hover)` (the subtle accent-at-70 % token); keyboard `:focus-visible` and the menu's roving-focus `[data-active="true"]` row now use `var(--bc-grid-accent-soft)` (the tinted accent at 14 %). Result: a keyboard user navigating with arrow keys can see exactly where the focus ring is, distinct from a pointer hover that lights up a different row.
+- **`pointer-events: none` on disabled rows.** Both the context-menu (`[aria-disabled="true"]`) and the column chooser (`:disabled`) now block click activation while the row is disabled. The previous opacity-only treatment let click events through, which the React handlers had to re-check.
+- **Full-bleed separators.** `.bc-grid-context-menu-separator` switched from `margin: 0.25rem 0.25rem` to `margin: 0.25rem -0.25rem` so the 1 px line reaches the menu's outer edges (matches shadcn's `DropdownMenuSeparator -mx-1 my-1`). Reads as a divider between groups instead of a centred underline.
+- **Min-width.** Both menus picked up explicit `min-width` (12 rem) so a one-item menu isn't visually squashed and the row text doesn't crowd against the radius.
+- **Destructive variant — opt-in, shadcn-style.**
+  - New `variant?: "default" | "destructive"` field on `BcContextMenuCustomItem`.
+  - The renderer in `internal/context-menu.tsx` emits `data-variant="destructive"` on the row when the item opts in (omits the attribute otherwise — selectors target `[data-variant="destructive"]`, not the absence of `"default"`).
+  - New CSS rule paints destructive rows: text uses `var(--bc-grid-invalid)`, hover / focus / `data-active` background uses `color-mix(in srgb, var(--bc-grid-invalid) 12%, transparent)`, and the leading icon picks up the destructive colour too.
+  - Built-in IDs (copy / clear-range / pin / hide / autosize) are non-destructive by definition; none of them carry the variant.
+- **Tokens-only.** Every modified rule references the existing `--bc-grid-*` tokens — no new direct `hsl(var(--…))` reads, no new shadcn-token bridge.
+
+### What this slice does NOT do
+
+- **No CSS class consolidation.** Both menu rows still use `.bc-grid-context-menu-item` / `.bc-grid-column-menu-item` rather than a shared `.bc-grid-menu-item` base. Slice 3 (PR #259, in review) introduces the shared class on the rendered DOM; once it lands, a follow-up CSS slice can collapse the duplicated rules into a single `.bc-grid-menu-item` entry. This slice intentionally avoids that to keep the visual diff small and easy to review.
+- **No structural changes to the existing tests.** `tests/contextMenu.test.ts` and `tests/contextMenu.markup.test.tsx` got new tests appended for the destructive variant + the separator markup pin; existing tests are unchanged.
+- **No new built-in destructive command.** The `variant` field is a consumer surface for custom items; the bundled built-ins remain non-destructive.
+
+### Tests added
+
+- `contextMenu.test.ts` — 3 new tests: `variant: "destructive"` accepted as a typed field, `variant: "default"` no-op, `variant` composes with `disabled`.
+- `contextMenu.markup.test.tsx` — 5 new tests: destructive emits `data-variant`, default omits the attribute, "default" literal still omits, built-in items don't carry destructive, destructive composes with `data-active`. Plus a separator-markup pin so the visual slice doesn't accidentally drop the `role="separator"` / class / `aria-orientation` triple.
+
+---
+
 ## Token / styling invariants this work preserves
 
 - Every popup surface continues to consume `--bc-grid-context-menu-bg` / `--bc-grid-context-menu-fg` / `--bc-grid-context-menu-border` (already bridged to shadcn `--popover` / `--popover-foreground` / `--border` at the grid root).

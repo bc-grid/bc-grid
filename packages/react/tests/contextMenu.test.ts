@@ -712,3 +712,52 @@ describe("context menu — bulk column built-ins", () => {
     ])
   })
 })
+
+describe("context menu — destructive variant on custom items", () => {
+  // Visual polish slice opt-in. Custom items can carry
+  // `variant: "destructive"` so the renderer surfaces shadcn's
+  // destructive treatment via `data-variant`. The unit-level
+  // assertions here pin the type + resolver behaviour; the markup
+  // emission is exercised in `contextMenu.markup.test.tsx`.
+  test("custom items accept variant='destructive' as a typed field", () => {
+    const item = {
+      id: "delete",
+      label: "Delete row",
+      onSelect: () => {},
+      variant: "destructive" as const,
+    } satisfies BcContextMenuItem<Row>
+
+    expect(item.variant).toBe("destructive")
+    expect(contextMenuItemLabel(item)).toBe("Delete row")
+    expect(contextMenuItemDisabled(item, makeContext())).toBe(false)
+  })
+
+  test("custom items accept variant='default' as a no-op", () => {
+    // Allow the literal `"default"` so callers can write
+    // `variant: condition ? "destructive" : "default"` ergonomically.
+    const item = {
+      id: "open",
+      label: "Open row",
+      onSelect: () => {},
+      variant: "default" as const,
+    } satisfies BcContextMenuItem<Row>
+
+    expect(item.variant).toBe("default")
+    expect(contextMenuItemLabel(item)).toBe("Open row")
+  })
+
+  test("variant is independent of disabled — the two predicates compose", () => {
+    // A destructive item can also be disabled (e.g., "Delete row" when
+    // the row is locked). Pin that the disabled predicate runs against
+    // the regular `disabled` field and ignores `variant`.
+    const item = {
+      id: "delete",
+      label: "Delete row",
+      onSelect: () => {},
+      variant: "destructive" as const,
+      disabled: true,
+    } satisfies BcContextMenuItem<Row>
+
+    expect(contextMenuItemDisabled(item, makeContext())).toBe(true)
+  })
+})

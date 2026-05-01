@@ -953,6 +953,15 @@ export interface BcContextMenuCustomItem<TRow = unknown> {
   label: string
   onSelect: (ctx: BcContextMenuContext<TRow>) => void
   disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+  /**
+   * Visual treatment hint. `"destructive"` matches shadcn DropdownMenu's
+   * destructive convention — the renderer emits `data-variant="destructive"`
+   * on the row and the bundled theme paints text + hover background using
+   * the `--bc-grid-invalid` token. Use sparingly for irreversible actions
+   * like "Delete row" or "Discard changes". Omitting the field (or
+   * setting `"default"`) keeps the regular menu-row treatment.
+   */
+  variant?: "default" | "destructive"
 }
 
 export type BcContextMenuItem<TRow = unknown> =
