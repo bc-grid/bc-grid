@@ -221,6 +221,108 @@ describe("@bc-grid/theming", () => {
     expect(forced).toContain("color: HighlightText")
   })
 
+  test("pinned column surfaces stay opaque across row states", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    expect(css).toContain("--bc-grid-pinned-bg: var(--bc-grid-bg)")
+    expect(css).toContain("--bc-grid-pinned-header-bg: var(--bc-grid-header-bg)")
+    expect(css).toContain("--bc-grid-pinned-row-hover-bg:")
+    expect(css).toContain("--bc-grid-pinned-boundary:")
+
+    const base = ruleFor(".bc-grid-cell-pinned-left,\n.bc-grid-cell-pinned-right,")
+    expect(base).toContain("background: var(--bc-grid-pinned-bg)")
+    expect(base).toContain("background-clip: padding-box")
+
+    const header = ruleFor(".bc-grid-header .bc-grid-cell-pinned-left,")
+    expect(header).toContain("background: var(--bc-grid-pinned-header-bg)")
+
+    const hover = ruleFor(".bc-grid-row:hover .bc-grid-cell-pinned-left,")
+    expect(hover).toContain("background: var(--bc-grid-pinned-row-hover-bg)")
+    expect(hover).not.toContain("var(--bc-grid-row-hover)")
+
+    const focused = ruleFor(
+      '.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-left,',
+    )
+    expect(focused).toContain("background: var(--bc-grid-pinned-row-focused-bg)")
+
+    const selected = ruleFor('.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left,')
+    expect(selected).toContain("background: var(--bc-grid-pinned-row-selected-bg)")
+    expect(selected).toContain("color: var(--bc-grid-row-selected-fg)")
+
+    const selectedHover = ruleFor(
+      '.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-left,',
+    )
+    expect(selectedHover).toContain("background: var(--bc-grid-pinned-row-selected-hover-bg)")
+    expect(selectedHover).not.toContain("var(--bc-grid-row-hover)")
+
+    const active = ruleFor(".bc-grid-cell-pinned-left:focus-visible,")
+    expect(active).toContain("background: var(--bc-grid-pinned-active-cell-bg)")
+
+    const selectedActive = ruleFor(
+      '.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left[data-bc-grid-active-cell="true"],',
+    )
+    expect(selectedActive).toContain("background: var(--bc-grid-pinned-selected-active-cell-bg)")
+  })
+
+  test("pinned column boundary and z-index contracts are preserved", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const ruleFor = (selector: string) => {
+      const idx = css.indexOf(selector)
+      expect(idx).toBeGreaterThan(-1)
+      const ruleEnd = css.indexOf("}", idx)
+      return css.slice(idx, ruleEnd)
+    }
+
+    const leftEdge = ruleFor(".bc-grid-cell-pinned-left-edge::after {")
+    expect(leftEdge).toContain("var(--bc-grid-pinned-boundary)")
+    expect(leftEdge).toContain("opacity: 0.36")
+
+    const rightEdge = ruleFor(".bc-grid-cell-pinned-right-edge::before {")
+    expect(rightEdge).toContain("var(--bc-grid-pinned-boundary)")
+    expect(rightEdge).toContain("opacity: 0.36")
+
+    expect(
+      ruleFor('.bc-grid[data-scrolled-left="true"] .bc-grid-cell-pinned-left-edge::after {'),
+    ).toContain("opacity: 1")
+    expect(
+      ruleFor('.bc-grid[data-scrolled-right="true"] .bc-grid-cell-pinned-right-edge::before {'),
+    ).toContain("opacity: 1")
+
+    const headerCells = readFileSync(
+      new URL("../../react/src/headerCells.tsx", import.meta.url),
+      "utf8",
+    )
+    expect(headerCells).toContain("zIndex: cell.pinned ? 4 : 3")
+    expect(headerCells).toContain("zIndex: column.pinned ? 4 : 3")
+
+    const internals = readFileSync(
+      new URL("../../react/src/gridInternals.ts", import.meta.url),
+      "utf8",
+    )
+    expect(internals).toContain("zIndex: zIndex ?? (pinned ? 2 : 1)")
+  })
+
+  test("forced-colors mode keeps pinned cells opaque with system colors", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const forcedStart = css.indexOf("@media (forced-colors: active)")
+    expect(forcedStart).toBeGreaterThan(-1)
+    const forced = css.slice(forcedStart)
+
+    expect(forced).toContain("--bc-grid-pinned-bg: Canvas")
+    expect(forced).toContain("--bc-grid-pinned-header-bg: Canvas")
+    expect(forced).toContain("--bc-grid-pinned-row-selected-bg: Highlight")
+    expect(forced).toContain("--bc-grid-pinned-boundary: CanvasText")
+    expect(forced).toContain(".bc-grid-cell-pinned-left-edge::after,")
+    expect(forced).toContain("background: CanvasText")
+    expect(forced).toContain("opacity: 1")
+  })
+
   test("filter popup `Apply` button uses the primary token, not the row-selected accent", () => {
     // Restraint — Apply is a primary action, not a row-selected
     // surface. The two were the same colour pre-refactor (both bridged

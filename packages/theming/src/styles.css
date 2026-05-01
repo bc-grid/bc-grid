@@ -17,6 +17,35 @@
   --bc-grid-row-hover: color-mix(in srgb, var(--accent, hsl(210 40% 96%)) 70%, transparent);
   --bc-grid-row-selected: var(--accent, hsl(210 40% 96%));
   --bc-grid-row-selected-fg: var(--accent-foreground, var(--bc-grid-fg));
+  --bc-grid-pinned-bg: var(--bc-grid-bg);
+  --bc-grid-pinned-header-bg: var(--bc-grid-header-bg);
+  --bc-grid-pinned-row-hover-bg: color-mix(in srgb, var(--bc-grid-accent) 9%, var(--bc-grid-bg));
+  --bc-grid-pinned-row-focused-bg: color-mix(
+    in srgb,
+    var(--bc-grid-focus-ring) 7%,
+    var(--bc-grid-bg)
+  );
+  --bc-grid-pinned-row-selected-bg: color-mix(
+    in srgb,
+    var(--bc-grid-row-selected) 88%,
+    var(--bc-grid-bg)
+  );
+  --bc-grid-pinned-row-selected-hover-bg: color-mix(
+    in srgb,
+    var(--bc-grid-row-selected) 82%,
+    var(--bc-grid-bg)
+  );
+  --bc-grid-pinned-active-cell-bg: color-mix(
+    in srgb,
+    var(--bc-grid-focus-ring) 10%,
+    var(--bc-grid-bg)
+  );
+  --bc-grid-pinned-selected-active-cell-bg: color-mix(
+    in srgb,
+    var(--bc-grid-focus-ring) 14%,
+    var(--bc-grid-pinned-row-selected-bg)
+  );
+  --bc-grid-pinned-boundary: color-mix(in srgb, var(--bc-grid-border) 76%, var(--bc-grid-fg) 24%);
   --bc-grid-header-bg: var(--muted, hsl(210 40% 96%));
   --bc-grid-header-fg: var(--muted-foreground, hsl(215 16% 47%));
   --bc-grid-column-separator: color-mix(
@@ -732,6 +761,68 @@
 .bc-grid-row[aria-selected="true"] .bc-grid-cell[data-bc-grid-active-cell="true"],
 .bc-grid-cell[aria-selected="true"][data-bc-grid-active-cell="true"] {
   background: color-mix(in srgb, var(--bc-grid-focus-ring) 12%, var(--bc-grid-row-selected));
+  color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-cell-pinned-left,
+.bc-grid-cell-pinned-right,
+.bc-grid-row .bc-grid-cell-pinned-left,
+.bc-grid-row .bc-grid-cell-pinned-right {
+  background: var(--bc-grid-pinned-bg);
+  background-clip: padding-box;
+}
+
+.bc-grid-header .bc-grid-cell-pinned-left,
+.bc-grid-header .bc-grid-cell-pinned-right,
+.bc-grid-filter-row .bc-grid-cell-pinned-left,
+.bc-grid-filter-row .bc-grid-cell-pinned-right {
+  background: var(--bc-grid-pinned-header-bg);
+}
+
+.bc-grid-row:hover .bc-grid-cell-pinned-left,
+.bc-grid-row:hover .bc-grid-cell-pinned-right {
+  background: var(--bc-grid-pinned-row-hover-bg);
+}
+
+.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-left,
+.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-right {
+  background: var(--bc-grid-pinned-row-focused-bg);
+}
+
+.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left,
+.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-right,
+.bc-grid-cell-pinned-left[aria-selected="true"],
+.bc-grid-cell-pinned-right[aria-selected="true"] {
+  background: var(--bc-grid-pinned-row-selected-bg);
+  color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-left,
+.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-right,
+.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-left,
+.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-right {
+  background: var(--bc-grid-pinned-row-selected-hover-bg);
+  color: var(--bc-grid-row-selected-fg);
+}
+
+.bc-grid-cell-pinned-left:focus-visible,
+.bc-grid-cell-pinned-right:focus-visible,
+.bc-grid-cell-pinned-left[data-bc-grid-active-cell="true"],
+.bc-grid-cell-pinned-right[data-bc-grid-active-cell="true"],
+.bc-grid-row:hover .bc-grid-cell-pinned-left[data-bc-grid-active-cell="true"],
+.bc-grid-row:hover .bc-grid-cell-pinned-right[data-bc-grid-active-cell="true"],
+.bc-grid-row[data-bc-grid-focused-row="true"]
+  .bc-grid-cell-pinned-left[data-bc-grid-active-cell="true"],
+.bc-grid-row[data-bc-grid-focused-row="true"]
+  .bc-grid-cell-pinned-right[data-bc-grid-active-cell="true"] {
+  background: var(--bc-grid-pinned-active-cell-bg);
+}
+
+.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left[data-bc-grid-active-cell="true"],
+.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-right[data-bc-grid-active-cell="true"],
+.bc-grid-cell-pinned-left[aria-selected="true"][data-bc-grid-active-cell="true"],
+.bc-grid-cell-pinned-right[aria-selected="true"][data-bc-grid-active-cell="true"] {
+  background: var(--bc-grid-pinned-selected-active-cell-bg);
   color: var(--bc-grid-row-selected-fg);
 }
 
@@ -2637,8 +2728,8 @@ table.bc-grid-detail-nested-grid {
   width: 8px;
   height: 100%;
   pointer-events: none;
-  background: linear-gradient(to right, rgb(0 0 0 / 8%), transparent);
-  opacity: 0;
+  background: linear-gradient(to right, var(--bc-grid-pinned-boundary), transparent);
+  opacity: 0.36;
   transition: opacity var(--bc-grid-motion-duration-medium) var(--bc-grid-motion-ease-standard);
 }
 
@@ -2650,8 +2741,8 @@ table.bc-grid-detail-nested-grid {
   width: 8px;
   height: 100%;
   pointer-events: none;
-  background: linear-gradient(to left, rgb(0 0 0 / 8%), transparent);
-  opacity: 0;
+  background: linear-gradient(to left, var(--bc-grid-pinned-boundary), transparent);
+  opacity: 0.36;
   transition: opacity var(--bc-grid-motion-duration-medium) var(--bc-grid-motion-ease-standard);
 }
 
@@ -3056,6 +3147,15 @@ table.bc-grid-detail-nested-grid {
     --bc-grid-row-hover: Highlight;
     --bc-grid-row-selected: Highlight;
     --bc-grid-row-selected-fg: HighlightText;
+    --bc-grid-pinned-bg: Canvas;
+    --bc-grid-pinned-header-bg: Canvas;
+    --bc-grid-pinned-row-hover-bg: Canvas;
+    --bc-grid-pinned-row-focused-bg: Canvas;
+    --bc-grid-pinned-row-selected-bg: Highlight;
+    --bc-grid-pinned-row-selected-hover-bg: Highlight;
+    --bc-grid-pinned-active-cell-bg: Canvas;
+    --bc-grid-pinned-selected-active-cell-bg: Canvas;
+    --bc-grid-pinned-boundary: CanvasText;
     --bc-grid-header-bg: Canvas;
     --bc-grid-header-fg: CanvasText;
     --bc-grid-column-separator: CanvasText;
@@ -3145,6 +3245,13 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-cell[aria-selected="true"][data-bc-grid-active-cell="true"] {
     background: Canvas;
     color: CanvasText;
+  }
+
+  .bc-grid-cell-pinned-left-edge::after,
+  .bc-grid-cell-pinned-right-edge::before {
+    width: 1px;
+    background: CanvasText;
+    opacity: 1;
   }
 
   .bc-grid-editor-input:focus-visible {
