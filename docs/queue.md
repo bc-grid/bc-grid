@@ -235,6 +235,7 @@ Spec pending: `docs/design/charts-rfc.md` (c2 to author; user confirmed peer-dep
 - `[review: worker5 #190]` **animation-polish** — review every transition (sort / filter / expand / collapse / insert / remove / cell-flash); tune to 60fps; document the motion system. **Effort**: M.
 - `[ready]` **browser-compat-matrix** — full Chromium / FF / WebKit / Safari / Edge pass on the AR Customers demo + standalone tests. Document any known issues. **Effort**: S.
 - `[review: x1 #108]` **migration-guide** — from AG Grid Community + Enterprise to bc-grid; documented patterns; side-by-side examples; no codemod (out-of-scope). Lives in `apps/docs`. **Effort**: M.
+- `[review: worker4 #225]` **filter-persistence-contract-audit** — audit `packages/react/src/persistence.ts` against what consumers expect: what persists where (localStorage vs URL), what clears, what is intentionally asymmetric, and what should not be overclaimed. Output: `docs/coordination/v030-filter-persistence-contract.md` with a contract table + corner-case matrix; extends `packages/react/tests/persistence.test.ts` with focused round-trip tests for the corners that the existing suite misses (custom filter pass-through, `sidebarPanel: null`, URL-only `sort` asymmetry, empty-storage read shape, URL state with empty arrays). **Docs + tests only — no code changes; no clearly isolated bugs found during audit.** **Effort**: XS.
 
 ### Quality + infra (parallel throughout Q1)
 
