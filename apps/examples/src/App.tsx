@@ -386,18 +386,27 @@ function columnGroupsEnabled(): boolean {
   return new URLSearchParams(window.location.search).get("columnGroups") === "1"
 }
 
-function initialGroupByColumns(): readonly string[] {
-  if (typeof window === "undefined") return []
-  const groupBy = new URLSearchParams(window.location.search).get("groupBy")
+export function resolveInitialGroupByColumns(search: string | URLSearchParams): readonly string[] {
+  const params = typeof search === "string" ? new URLSearchParams(search) : search
+  const groupBy = params.get("groupBy")
   if (!groupBy) return []
   if (groupBy === "1" || groupBy === "true") return ["region"]
   const groupableColumnIds = new Set<string>(
     customerGridGroupableColumns.map((column) => column.columnId),
   )
-  return groupBy
+  const resolved: string[] = []
+  for (const columnId of groupBy
     .split(",")
     .map((columnId) => columnId.trim())
-    .filter((columnId) => groupableColumnIds.has(columnId))
+    .filter((columnId) => groupableColumnIds.has(columnId))) {
+    if (!resolved.includes(columnId)) resolved.push(columnId)
+  }
+  return resolved
+}
+
+function initialGroupByColumns(): readonly string[] {
+  if (typeof window === "undefined") return []
+  return resolveInitialGroupByColumns(window.location.search)
 }
 
 /**

@@ -41,6 +41,30 @@ describe("buildGroupedRowModel", () => {
     expect(model.rows.every((entry) => entry.kind === "data")).toBe(true)
   })
 
+  test("ignores invalid group columns while preserving valid group columns", () => {
+    const model = buildModel(["missing", "status", "also-missing"])
+
+    expect(model.active).toBe(true)
+    expect(model.rows.map((entry) => (entry as GroupRowEntry).label)).toEqual([
+      "Status: Open",
+      "Status: Closed",
+      "Status: (Blank)",
+    ])
+  })
+
+  test("handles an empty client row model without fabricating groups", () => {
+    const model = buildGroupedRowModel({
+      rows: [],
+      columns: resolveColumns(columns, []),
+      groupBy: ["status"],
+      expansionState: new Set(),
+    })
+
+    expect(model.active).toBe(true)
+    expect(model.rows).toEqual([])
+    expect(model.allGroupRowIds).toEqual([])
+  })
+
   test("creates collapsed group headers in leaf row order with row counts", () => {
     const model = buildModel(["status"])
 
@@ -95,6 +119,30 @@ describe("buildGroupedRowModel", () => {
       ["group", visibleGroupIds(byStatus)[1], 1],
       ["group", visibleGroupIds(byStatus)[2], 1],
     ])
+  })
+
+  test("expands every discovered group when expansion contains all group ids", () => {
+    const collapsed = buildModel(["status", "region"])
+    const expanded = buildModel(["status", "region"], new Set(collapsed.allGroupRowIds))
+
+    expect(expanded.rows.map((entry) => [entry.kind, entry.level])).toEqual([
+      ["group", 1],
+      ["group", 2],
+      ["data", 3],
+      ["group", 2],
+      ["data", 3],
+      ["group", 1],
+      ["group", 2],
+      ["data", 3],
+      ["group", 1],
+      ["group", 2],
+      ["data", 3],
+    ])
+    expect(
+      expanded.rows
+        .filter((entry): entry is GroupRowEntry => entry.kind === "group")
+        .every((entry) => entry.expanded),
+    ).toBe(true)
   })
 })
 
