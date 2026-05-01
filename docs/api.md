@@ -1532,6 +1532,20 @@ Per [`docs/design/accessibility-rfc.md` §Pointer and Touch Fallback](./design/a
 - **Header column-menu button** is hover-revealed on fine pointers; on coarse pointers it is always visible (touch has no hover signal to discover the affordance).
 - **Pointer selection handles** introduced by the Q3 range-selection track are pre-styled to the 44px minimum via the `.bc-grid-range-handle` selector — they ship at the correct hit-target size from day one.
 
+### 5.5 Master / detail and group-row disclosure motion (binding)
+
+Master/detail row expansion and tree group expand/collapse follow a deliberately restrained motion contract. The visible "open" / "closed" state changes layout instantly; any accompanying animation is restricted to the disclosure chevron and the detail-panel content's first paint.
+
+The contract:
+
+- **No text scaling.** No `transform: scale()` ever runs over rows, cells, the toggle button, the toggle icon, or the detail panel — text glyphs must never grow / shrink during expansion. The shared `<DisclosureChevron>` component (`packages/react/src/internal/disclosure-icon.tsx`) is an inline SVG vector, so the rotation animation runs on a vector path, not on a text glyph. Replaces the previous `&gt;` text-character chevron and the CSS-pseudo-element border-arrow constructions, both of which exposed visible text or text-shaped pixels to the rotation transform.
+- **No font-size morph.** The CSS rules for `.bc-grid-group-toggle`, `.bc-grid-detail-toggle`, `.bc-grid-detail-panel`, and `.bc-grid-row-expanded` never animate or transition `font-size`.
+- **No height / max-height transitions.** The detail panel sets its `height` inline from `resolveDetailPanelHeight()`; no CSS transition or animation interpolates the height. Rows snap from `rowHeight` to `rowHeight + detailHeight` instantly.
+- **Allowed motion (translate-only, gated by reduced-motion):** the detail-panel content (`.bc-grid-detail-panel-region`) fades in via the `@keyframes bc-grid-detail-panel-content-in` keyframe, which interpolates only `opacity` and `translateY(2px) → translateY(0)`. The chevron icons (`.bc-grid-group-toggle-icon`, `.bc-grid-detail-toggle-icon`) rotate via `transition: transform var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard)` when the parent toggle reports `aria-expanded="true"`. Both motions are zeroed out under `@media (prefers-reduced-motion: reduce)`.
+- **ARIA labelling.** Every disclosure toggle carries `aria-expanded` (mirroring the open/closed state), `aria-controls` (linking to the panel id, when applicable), and `aria-label` ("Expand …" / "Collapse …"). The visible label / count text always renders **outside** the rotation target so the SVG transform never touches surrounding text.
+
+The contract is enforced by tests in `packages/theming/tests/theming.test.ts` (CSS invariants) and `packages/react/tests/masterDetail.test.tsx` + `packages/react/tests/groupToggle.markup.test.tsx` (rendered markup). Adding a new disclosure surface (chevron-driven row expansion, tree node, etc.) should reuse `<DisclosureChevron>` and follow the same translate-only motion contract — pin a CSS invariant in `theming.test.ts` if the new surface needs its own selector.
+
 ---
 
 ## 6. Imperative API

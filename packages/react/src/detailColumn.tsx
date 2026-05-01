@@ -1,6 +1,7 @@
 import type { RowId } from "@bc-grid/core"
 import type { CSSProperties, ReactNode } from "react"
 import { domToken } from "./gridInternals"
+import { DisclosureChevron } from "./internal/disclosure-icon"
 import type { BcReactGridColumn } from "./types"
 
 /**
@@ -72,7 +73,7 @@ export function createDetailToggleColumn<TRow>({
           }}
           onKeyDown={stopDetailToggleGridKeyboardNav}
         >
-          <span aria-hidden="true" className="bc-grid-detail-toggle-icon" />
+          <DisclosureChevron className="bc-grid-detail-toggle-icon" />
         </button>
       )
     },
