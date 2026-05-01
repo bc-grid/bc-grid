@@ -1,4 +1,5 @@
 export { autocompleteEditor } from "./autocomplete"
+export { checkboxEditor } from "./checkbox"
 export { dateEditor } from "./date"
 export { datetimeEditor } from "./datetime"
 export { multiSelectEditor } from "./multiSelect"

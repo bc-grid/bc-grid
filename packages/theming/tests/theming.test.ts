@@ -414,6 +414,10 @@ describe("@bc-grid/theming", () => {
     expect(ruleFor('.bc-grid-editor-input[data-bc-grid-editor-kind="number"] {')).toContain(
       "text-align: right",
     )
+    expect(ruleFor(".bc-grid-editor-checkbox-shell {")).toContain("justify-content: center")
+    expect(ruleFor(".bc-grid-editor-checkbox-control {")).toContain(
+      "accent-color: var(--bc-grid-focus-ring)",
+    )
     expect(ruleFor('.bc-grid-editor-portal[data-bc-grid-editor-state="pending"] {')).toContain(
       "cursor: progress",
     )

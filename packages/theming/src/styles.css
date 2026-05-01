@@ -725,7 +725,25 @@ select.bc-grid-editor-input {
   padding: 0.1875rem 0.375rem;
 }
 
-.bc-grid-editor-input:hover:not(:disabled) {
+.bc-grid-editor-checkbox-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.bc-grid-editor-checkbox-control {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--bc-grid-focus-ring);
+}
+
+.bc-grid-editor-checkbox-control:disabled {
+  cursor: not-allowed;
+}
+
+.bc-grid-editor-input:hover:not(:disabled):not([data-bc-grid-editor-state="pending"]) {
   border-color: color-mix(in srgb, var(--bc-grid-input-border) 60%, var(--bc-grid-focus-ring));
 }
 
