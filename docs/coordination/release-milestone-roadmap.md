@@ -75,11 +75,6 @@ Goal: make spreadsheet-style work practical.
 
 Goal: support large ERP datasets without loading everything into the browser.
 
-- Planning note: `docs/design/server-row-model-mutation-readiness-v060.md`
-  defines the mutation-readiness contract for optimistic patches, stale settle,
-  rollback, invalidation after commit, and customers-style `BcServerGrid`
-  composition.
-
 - [ ] Paged, infinite, and tree row models are complete with request dedupe, abort handling, retry, cache eviction, and invalidation.
 - [ ] Mutation pipeline reconciles optimistic local rows with server results.
 - [ ] Streaming row updates can add, update, remove, and invalidate rows without corrupting row identity.

@@ -1223,9 +1223,6 @@ So:
 - **`@bc-grid/server-row-model` exports**: the state machine factory, the cache, helper utilities. No types — types come from `core`.
 - **`@bc-grid/react` re-exports**: `LoadServerPage`, `LoadServerBlock`, `LoadServerTreeChildren`, `ServerRowUpdate`, `BcServerGridProps`, `BcServerGridApi`, and `useServerRowUpdates` for consumer convenience.
 
-For the v0.6 server mutation readiness plan, see
-`docs/design/server-row-model-mutation-readiness-v060.md`.
-
 ### 8.2 Resolved review-comments from server-query-rfc
 
 These came up in the review of `server-query-rfc`; this RFC pins them:

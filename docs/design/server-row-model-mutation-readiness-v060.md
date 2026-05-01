@@ -1,27 +1,28 @@
 # Server Row Model Mutation Readiness for v0.6
 
-**Status:** planning doc for v0.6 server-row-model readiness
-**Scope:** server mutation contract, cache reconciliation, and `BcServerGrid`
-composition
+**Status:** remaining-gap plan for v0.6 server-row-model mutation readiness
+**Scope:** missing mutation/invalidation behavior needed to compose
+`@bc-grid/server-row-model` with `BcServerGrid`
 **Non-scope:** bsncraft application code, context menu, filters UI, package
 release mechanics, browser/perf validation
 
 ## Goal
 
-v0.6 should make server-backed editable ERP grids viable without each consumer
-inventing its own cache and rollback rules. The target screen is a primary
-business entity grid such as accounts-receivable customers: server-owned
-sort/filter/page state, stable database row identity, in-cell edits, optimistic
-feedback, and deterministic rollback or invalidation when the server responds.
+v0.6 should close the remaining server mutation and invalidation gaps so
+server-backed editable ERP grids can avoid consumer-owned cache patching. The
+target screen is a primary business entity grid such as accounts-receivable
+customers: server-owned sort/filter/page state, stable database row identity,
+in-cell edits, optimistic feedback, and deterministic rollback or invalidation
+when the server responds.
 
 This is not the lookup-grid pattern. Lookup grids are fixed-height modal
 pickers over a narrow result set. A customers grid is a page-level server grid:
 the server owns the query, row identity survives every reload, and edit commits
 must reconcile with server canonical rows.
 
-## Current Building Blocks
+## Already Shipped
 
-The core public contract already defines the required server mutation shapes:
+The public type contract already defines the required server mutation shapes:
 
 ```ts
 interface ServerRowPatch {
@@ -50,8 +51,20 @@ interface ServerMutationResult<TRow> {
 - cache reconciliation across loaded and stale blocks
 
 `<BcServerGrid>` already owns the active server view, cache invalidation, and
-streaming `applyServerRowUpdate` path. v0.6 needs the edit commit bridge to make
-those pieces feel like one workflow for React consumers.
+streaming `applyServerRowUpdate` path.
+
+## Remaining Gap Map
+
+v0.6 still needs the integration layer that connects those primitives into one
+server-edit workflow:
+
+| Gap | Required outcome |
+|---|---|
+| Edit commit bridge | `BcServerGrid` turns `BcCellEditCommitEvent` into a `ServerRowPatch` and queues it before or during persistence. |
+| Mutation settle bridge | Consumer save results become `ServerMutationResult` objects and settle through the server row model. |
+| Invalidation policy | Accepted edits that affect sort/filter/group membership settle first, then invalidate rows/view/cache. |
+| UI error handoff | Rejected/conflict/network outcomes update edit UI state without duplicating server cache rollback logic. |
+| Row identity guardrails | Docs and examples make immutable IDs non-negotiable for server edit grids. |
 
 ## Optimistic Patch Flow
 
@@ -290,16 +303,17 @@ that adapter small, typed, and hard to misuse.
 
 ## v0.6 Readiness Checklist
 
-- [ ] `ServerRowPatch`, `ServerMutationResult`, and `ServerInvalidation` are
-      documented as the mutation contract for server edit grids.
-- [ ] `BcServerGrid` composition path is clear for edit commits.
-- [ ] Optimistic patches overlay loaded and stale cached rows.
-- [ ] Pending patches apply to rows loaded after the mutation was queued.
-- [ ] Stale settles are no-ops when their mutation ID is no longer pending.
-- [ ] Earlier rejected mutations roll back without erasing later pending
-      overlays.
-- [ ] Accepted/conflict results use server canonical rows.
-- [ ] Invalidation guidance is explicit: settle first, invalidate second.
-- [ ] Error state remains UI-owned, cache rollback remains engine-owned.
-- [ ] Customers-style server grids are documented separately from lookup grids.
-
+- [ ] `BcServerGrid` queues `ServerRowPatch` objects for edit commits instead
+      of asking consumers to patch loaded blocks manually.
+- [ ] `BcServerGrid` exposes or accepts a clear settle path for
+      `ServerMutationResult` after consumer persistence resolves.
+- [ ] Accepted edits that can affect sort/filter/group membership settle first
+      and then invalidate rows/view/cache.
+- [ ] Rejected and conflict outcomes keep error state UI-owned while cache
+      rollback remains engine-owned.
+- [ ] Stale settle cases are covered at the React composition layer, not only
+      inside the engine tests.
+- [ ] Row identity guidance is enforced in examples and docs for
+      customers-style server grids.
+- [ ] Lookup grids remain documented as a separate fixed-height/client-row
+      pattern.
