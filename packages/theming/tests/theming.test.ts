@@ -1371,6 +1371,64 @@ describe("@bc-grid/theming", () => {
     expect(block).not.toMatch(/var\(--destructive[,)]/)
   })
 
+  test("filter trigger emits transition-colors on background-color + color (not just opacity)", () => {
+    // The earlier declaration only animated `opacity`, so hover / open / active
+    // background and colour state changes snapped instead of easing.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-header-filter-button {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toMatch(/transition:\s*opacity[^;]*background-color[^;]*color\b/)
+    expect(rule).toContain("var(--bc-grid-motion-duration-fast)")
+    expect(rule).toContain("var(--bc-grid-motion-ease-standard)")
+  })
+
+  test("filter trigger has a Radix-style :active pressed state on the accent-soft surface", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-header-filter-button:active {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("background: var(--bc-grid-accent-soft)")
+    expect(rule).toContain("color: var(--bc-grid-fg)")
+    expect(rule).toContain("opacity: 1")
+  })
+
+  test("filter trigger open-state highlight is tokens-only (no direct shadcn token reads)", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf('.bc-grid-header-filter-button[data-state="open"] {')
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("background: var(--bc-grid-accent-soft)")
+    expect(rule).toContain("color: var(--bc-grid-fg)")
+    expect(rule).toContain("opacity: 1")
+    expect(rule).not.toMatch(/var\(--(?:accent|popover|primary|ring|background|foreground)\b/)
+  })
+
+  test("filter trigger open-state does not bleed into the resize separator", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::before")
+    expect(css).toContain(".bc-grid-header-resize-handle:is(:hover, :focus-visible)::after")
+    expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::before')
+    expect(css).toContain('.bc-grid-header-resize-handle[data-bc-grid-resizing="true"]::after')
+
+    expect(css).not.toContain(
+      ".bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::before",
+    )
+    expect(css).not.toContain(
+      ".bc-grid-header-cell-resizable:hover .bc-grid-header-resize-handle::after",
+    )
+    expect(css).not.toContain(
+      ".bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::before",
+    )
+    expect(css).not.toContain(
+      ".bc-grid-header-cell-resizable:focus-within .bc-grid-header-resize-handle::after",
+    )
+  })
+
   test("CSS uses the kebab-case class convention from design.md", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     expect(css).toContain(".bc-grid-row")

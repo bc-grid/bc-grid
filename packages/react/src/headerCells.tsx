@@ -336,8 +336,18 @@ export function renderHeaderCell<TRow>({
             event.stopPropagation()
             onOpenFilterPopup(column, event.currentTarget.getBoundingClientRect())
           }}
+          // Belt-and-braces propagation hardening so a click / tap on the
+          // filter trigger never bubbles into the parent header cell's
+          // sort, reorder, or right-click handlers. Mirrors the column
+          // menu trigger's pointer contract.
+          onContextMenu={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onPointerUp={(event) => event.stopPropagation()}
+          onPointerCancel={(event) => event.stopPropagation()}
           type="button"
         >
           <FunnelIcon active={Boolean(filterText)} />
