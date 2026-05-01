@@ -1,12 +1,22 @@
 .bc-grid {
+  /*
+   * Surface tokens. Bridge shadcn / Tailwind v4 colour tokens into the
+   * `--bc-grid-*` namespace once at the grid root; every chrome surface
+   * below consumes the bridge, never `var(--background)` directly.
+   * Fallbacks are the shadcn slate defaults so the grid still looks
+   * sensible on hosts that don't expose any tokens at all.
+   */
   --bc-grid-bg: var(--background, hsl(0 0% 100%));
   --bc-grid-fg: var(--foreground, hsl(222 47% 11%));
+  --bc-grid-card-bg: var(--card, var(--bc-grid-bg));
+  --bc-grid-card-fg: var(--card-foreground, var(--bc-grid-fg));
   --bc-grid-border: var(--border, hsl(214 32% 91%));
+  --bc-grid-input-border: var(--input, var(--bc-grid-border));
   --bc-grid-muted: var(--muted, hsl(210 40% 96%));
   --bc-grid-muted-fg: var(--muted-foreground, hsl(215 16% 47%));
   --bc-grid-row-hover: color-mix(in srgb, var(--accent, hsl(210 40% 96%)) 70%, transparent);
   --bc-grid-row-selected: var(--accent, hsl(210 40% 96%));
-  --bc-grid-row-selected-fg: var(--bc-grid-fg);
+  --bc-grid-row-selected-fg: var(--accent-foreground, var(--bc-grid-fg));
   --bc-grid-header-bg: var(--muted, hsl(210 40% 96%));
   --bc-grid-header-fg: var(--muted-foreground, hsl(215 16% 47%));
   --bc-grid-column-separator: color-mix(
@@ -40,9 +50,16 @@
   --bc-grid-status-held-fg: hsl(32 80% 32%);
   --bc-grid-context-menu-bg: var(--popover, var(--bc-grid-bg));
   --bc-grid-context-menu-fg: var(--popover-foreground, var(--bc-grid-fg));
-  --bc-grid-context-menu-border: var(--border, var(--bc-grid-border));
+  --bc-grid-context-menu-border: var(--bc-grid-border);
+  /*
+   * Master/detail outer panel = subdued (muted-tinted), inner cards =
+   * `--card`. Apps that set the shadcn `--card` token get an elevated
+   * surface for the inner sections; apps that don't fall back to the
+   * grid background, matching today's appearance.
+   */
   --bc-grid-detail-panel-bg: color-mix(in srgb, var(--bc-grid-muted) 58%, var(--bc-grid-bg));
-  --bc-grid-detail-surface-bg: var(--bc-grid-bg);
+  --bc-grid-detail-surface-bg: var(--bc-grid-card-bg);
+  --bc-grid-detail-surface-fg: var(--bc-grid-card-fg);
   --bc-grid-detail-surface-border: color-mix(in srgb, var(--bc-grid-border) 86%, transparent);
   --bc-grid-detail-soft-bg: color-mix(in srgb, var(--bc-grid-muted) 62%, transparent);
   --bc-grid-detail-error-bg: color-mix(in srgb, var(--bc-grid-invalid) 10%, var(--bc-grid-bg));
@@ -462,13 +479,13 @@
 }
 
 .bc-grid-filter-popup-apply {
-  background: var(--bc-grid-row-selected);
-  border-color: var(--bc-grid-focus-ring);
-  color: var(--bc-grid-row-selected-fg);
+  background: var(--bc-grid-accent);
+  border-color: var(--bc-grid-accent);
+  color: var(--bc-grid-accent-fg);
 }
 
 .bc-grid-filter-popup-apply:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--bc-grid-row-selected) 82%, var(--bc-grid-focus-ring));
+  background: color-mix(in srgb, var(--bc-grid-accent) 88%, var(--bc-grid-fg));
 }
 
 .bc-grid-filter-popup-clear {
@@ -922,14 +939,11 @@
   position: fixed;
   z-index: 50;
   max-width: min(20rem, calc(100vw - 16px));
-  border: 1px solid var(--bc-grid-context-menu-border, var(--border, hsl(214 32% 91%)));
-  border-radius: calc(var(--bc-grid-radius, var(--radius, 0.375rem)) - 2px);
-  background: var(--bc-grid-context-menu-bg, var(--popover, var(--background, hsl(0 0% 100%))));
+  border: 1px solid var(--bc-grid-context-menu-border);
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: var(--bc-grid-context-menu-bg);
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
-  color: var(
-    --bc-grid-context-menu-fg,
-    var(--popover-foreground, var(--foreground, hsl(222 47% 11%)))
-  );
+  color: var(--bc-grid-context-menu-fg);
   font-size: 0.75rem;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -1002,7 +1016,12 @@
 .bc-grid-sidebar {
   --bc-grid-sidebar-width: 280px;
   --bc-grid-sidebar-rail-width: 40px;
-  --bc-grid-sidebar-bg: var(--bc-grid-bg);
+  /*
+   * Sidebar surface bridges to shadcn `--card` so apps that set a
+   * dedicated card colour get an elevated panel; the fallback chain
+   * lands on `--bc-grid-bg` for visual parity with today's render.
+   */
+  --bc-grid-sidebar-bg: var(--bc-grid-card-bg);
   --bc-grid-sidebar-border: var(--bc-grid-border);
 
   display: flex;
@@ -1521,6 +1540,7 @@
   border: 1px solid var(--bc-grid-detail-surface-border);
   border-radius: calc(var(--bc-grid-radius) - 1px);
   background: var(--bc-grid-detail-surface-bg);
+  color: var(--bc-grid-detail-surface-fg);
   padding: 0.625rem 0.75rem;
 }
 
@@ -1734,6 +1754,15 @@ table.bc-grid-detail-nested-grid {
   background: var(--bc-grid-bg);
   color: var(--bc-grid-fg);
   font: inherit;
+}
+
+/*
+ * The size <select> reads as an input control, not a button — bridge
+ * its border to shadcn's `--input` so apps that distinguish input
+ * borders from card borders get the right colour.
+ */
+.bc-grid-pagination-size select {
+  border-color: var(--bc-grid-input-border);
 }
 
 .bc-grid-pagination-button {

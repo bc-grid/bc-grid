@@ -63,6 +63,144 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain("hsl(var(")
   })
 
+  test("token bridge consumes the full shadcn / Tailwind v4 surface set", () => {
+    // Every shadcn token named in the v4 / shadcn-2025 colour contract
+    // must be readable via a `--bc-grid-*` companion. Apps that already
+    // expose these tokens at `:root` get a coherent grid for free; apps
+    // that don't keep the slate fallbacks. Guarding the bridge here so
+    // a future refactor can't silently drop a slot.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain("--bc-grid-bg: var(--background")
+    expect(css).toContain("--bc-grid-fg: var(--foreground")
+    expect(css).toContain("--bc-grid-card-bg: var(--card")
+    expect(css).toContain("--bc-grid-card-fg: var(--card-foreground")
+    expect(css).toContain("--bc-grid-border: var(--border")
+    expect(css).toContain("--bc-grid-input-border: var(--input")
+    expect(css).toContain("--bc-grid-muted: var(--muted")
+    expect(css).toContain("--bc-grid-muted-fg: var(--muted-foreground")
+    // `--accent` shows up multiple times (row-hover, row-selected, …) —
+    // assert each row consumes it through the bridge declaration line.
+    expect(css).toContain("--bc-grid-row-selected: var(--accent")
+    expect(css).toContain("--bc-grid-row-selected-fg: var(--accent-foreground")
+    expect(css).toContain("--bc-grid-focus-ring: var(--ring")
+    expect(css).toContain("--bc-grid-invalid: var(--destructive")
+    expect(css).toContain("--bc-grid-accent: var(--primary")
+    expect(css).toContain("--bc-grid-context-menu-bg: var(--popover")
+    expect(css).toContain("--bc-grid-context-menu-fg: var(--popover-foreground")
+  })
+
+  test("chrome surfaces consume `--bc-grid-*` only — shadcn tokens are bridged once at the root", () => {
+    // Single-place-override invariant. Direct `var(--background)` /
+    // `var(--popover)` / `var(--card)` / `var(--accent)` / `var(--ring)`
+    // / `var(--primary)` / `var(--input)` / `var(--destructive)` calls
+    // belong inside the grid root token-bridge block ONLY. Any chrome
+    // selector below must consume the `--bc-grid-*` companion so apps
+    // can override every grid surface from a single place. Without
+    // this, a chrome rule could regress to reading shadcn tokens
+    // directly and silently bypass user overrides.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    // Find the token-bridge block: the first `.bc-grid {` rule. Strip
+    // it before scanning. The bridge declarations are the only place
+    // shadcn tokens may be referenced.
+    const bridgeStart = css.indexOf(".bc-grid {")
+    expect(bridgeStart).toBeGreaterThanOrEqual(0)
+    const bridgeEnd = css.indexOf("\n}", bridgeStart)
+    expect(bridgeEnd).toBeGreaterThan(bridgeStart)
+    const afterBridge = css.slice(bridgeEnd)
+
+    // Each shadcn / Tailwind v4 token below must be absent from every
+    // chrome rule. Comments inside the bridge cite these names but
+    // those live in `cssBridge` — already excluded above.
+    for (const token of [
+      "var(--background",
+      "var(--foreground",
+      "var(--card,",
+      "var(--card-foreground",
+      "var(--popover,",
+      "var(--popover-foreground",
+      "var(--accent,",
+      "var(--accent-foreground",
+      "var(--primary,",
+      "var(--primary-foreground",
+      "var(--ring,",
+      "var(--input,",
+      "var(--destructive,",
+      "var(--muted,",
+      "var(--muted-foreground",
+    ]) {
+      expect(afterBridge).not.toContain(token)
+    }
+  })
+
+  test("filter popup `Apply` button uses the primary token, not the row-selected accent", () => {
+    // Restraint — Apply is a primary action, not a row-selected
+    // surface. The two were the same colour pre-refactor (both bridged
+    // `--accent`), but on hosts that distinguish `--primary` from
+    // `--accent` the Apply button must follow the primary token so
+    // it reads as a button, not as a row-state highlight.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-filter-popup-apply {")
+    expect(idx).toBeGreaterThan(-1)
+    // Take just this rule — the next `}` plus a newline closes it.
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("background: var(--bc-grid-accent)")
+    expect(rule).toContain("color: var(--bc-grid-accent-fg)")
+    expect(rule).not.toContain("var(--bc-grid-row-selected)")
+  })
+
+  test("master/detail inner sections bridge to the shadcn `--card` surface", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    // The bridge is at the grid root; chrome consumes the bridged
+    // `--bc-grid-card-bg` via the detail-surface companion.
+    expect(css).toContain("--bc-grid-detail-surface-bg: var(--bc-grid-card-bg)")
+    expect(css).toContain("--bc-grid-detail-surface-fg: var(--bc-grid-card-fg)")
+  })
+
+  test("sidebar panel surface bridges to the shadcn `--card` surface", () => {
+    // Apps that expose `--card` get an elevated sidebar panel; the
+    // fallback chain lands on `--bc-grid-bg` for visual parity.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    expect(css).toContain("--bc-grid-sidebar-bg: var(--bc-grid-card-bg)")
+  })
+
+  test("pagination size <select> consumes `--bc-grid-input-border` (not the generic border)", () => {
+    // Distinguishes input-control borders from card borders so apps
+    // that set `--input` separately get the right look on the size
+    // dropdown.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-pagination-size select {")
+    // Two `.bc-grid-pagination-size select {` rules exist (the shared
+    // declaration and the input-border override). Locate the override
+    // by searching after the first occurrence.
+    const overrideIdx = css.indexOf(".bc-grid-pagination-size select {", idx + 1)
+    expect(overrideIdx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", overrideIdx)
+    const rule = css.slice(overrideIdx, ruleEnd)
+    expect(rule).toContain("border-color: var(--bc-grid-input-border)")
+  })
+
+  test("tooltip surface no longer chains shadcn fallbacks (single-source bridge)", () => {
+    // Pre-refactor the tooltip carried triple-chained fallbacks like
+    // `var(--bc-grid-context-menu-bg, var(--popover, var(--background, ...)))`.
+    // After the bridge consolidation those are redundant — the bridge
+    // already lands on a defined value. Guarding so a future refactor
+    // can't reintroduce duplicate fallback chains.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-tooltip-content {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("background: var(--bc-grid-context-menu-bg)")
+    expect(rule).toContain("color: var(--bc-grid-context-menu-fg)")
+    // No nested `var(--popover` fallback.
+    expect(rule).not.toContain("var(--popover")
+    expect(rule).not.toContain("var(--background")
+    expect(rule).not.toContain("var(--foreground")
+  })
+
   test("React and editor inline styles use bc-grid tokens instead of shadcn HSL channels", () => {
     const sources = [
       "../../react/src/headerCells.tsx",
