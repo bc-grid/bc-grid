@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { isValidElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
 import { highlightSearchText, splitSearchText } from "../src/bodyCells"
 
 describe("splitSearchText", () => {
@@ -39,6 +40,7 @@ describe("highlightSearchText", () => {
     expect(parts[0]).toSatisfy(isValidElement)
     expect(parts[0]).toMatchObject({
       props: {
+        className: "bc-grid-search-match",
         "data-bc-grid-search-match": "true",
         children: "Ac",
       },
@@ -46,5 +48,16 @@ describe("highlightSearchText", () => {
     })
     expect(parts[1]).toBe("me ")
     expect(parts[2]).toSatisfy(isValidElement)
+  })
+
+  test("renders multiple case-insensitive matches without extra layout wrappers", () => {
+    const html = renderToStaticMarkup(highlightSearchText("Acme account AC-44", "ac"))
+
+    expect(html).toBe(
+      '<mark class="bc-grid-search-match" data-bc-grid-search-match="true">Ac</mark>me <mark class="bc-grid-search-match" data-bc-grid-search-match="true">ac</mark>count <mark class="bc-grid-search-match" data-bc-grid-search-match="true">AC</mark>-44',
+    )
+    expect(html.match(/<mark/g)).toHaveLength(3)
+    expect(html).not.toContain("<span")
+    expect(html).not.toContain("style=")
   })
 })
