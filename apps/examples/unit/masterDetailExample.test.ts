@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { customerRows } from "../src/examples"
-import { customerContacts } from "../src/masterDetailExample"
+import { customerContactPanelState, customerContacts } from "../src/masterDetailExample"
 
 function firstCustomer() {
   const row = customerRows[0]
@@ -43,6 +43,31 @@ describe("master/detail example helpers", () => {
       channel: "Internal owner",
       note: row.region,
       role: "Collector",
+    })
+  })
+
+  test("maps customer rows to stable async child panel states", () => {
+    const row = firstCustomer()
+
+    expect(customerContactPanelState({ ...row, flags: [] as const, status: "Open" })).toMatchObject(
+      {
+        contacts: customerContacts(row),
+        kind: "ready",
+      },
+    )
+    expect(
+      customerContactPanelState({ ...row, flags: ["manual-review"] as const, status: "Open" }),
+    ).toMatchObject({
+      kind: "empty",
+      title: "No contacts on file",
+    })
+    expect(customerContactPanelState({ ...row, status: "Credit Hold" })).toMatchObject({
+      kind: "loading",
+      title: "Refreshing contacts",
+    })
+    expect(customerContactPanelState({ ...row, status: "Disputed" })).toMatchObject({
+      kind: "error",
+      title: "Contact sync failed",
     })
   })
 })

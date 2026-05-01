@@ -25,7 +25,7 @@ import {
   customerRows,
   packageRows,
 } from "./examples"
-import { customerContacts } from "./masterDetailExample"
+import { type CustomerContactPanelState, customerContactPanelState } from "./masterDetailExample"
 import { ServerEditGridExample } from "./serverEditExample"
 
 type ThemeMode = "light" | "dark"
@@ -1076,7 +1076,7 @@ function CustomerDetail({ row }: { row: CustomerRow }) {
 }
 
 function CustomerMasterDetail({ row }: { row: CustomerRow }) {
-  const contacts = customerContacts(row)
+  const contactState = customerContactPanelState(row)
   const contactsHeadingId = `customer-contacts-${row.id}`
 
   return (
@@ -1113,13 +1113,13 @@ function CustomerMasterDetail({ row }: { row: CustomerRow }) {
         className="bc-grid-detail-section customer-contact-panel"
         aria-labelledby={contactsHeadingId}
       >
-        <div className="customer-contact-panel-header">
+        <div className="bc-grid-detail-section-header customer-contact-panel-header">
           <span id={contactsHeadingId} className="bc-grid-detail-kicker">
             Customer Contacts
           </span>
-          <strong>{contacts.length} contacts</strong>
+          <strong>{customerContactPanelCountLabel(contactState)}</strong>
         </div>
-        {contacts.length > 0 ? (
+        {contactState.kind === "ready" ? (
           <table
             aria-labelledby={contactsHeadingId}
             className="bc-grid-detail-nested-grid customer-contact-grid"
@@ -1132,7 +1132,7 @@ function CustomerMasterDetail({ row }: { row: CustomerRow }) {
               </tr>
             </thead>
             <tbody>
-              {contacts.map((contact) => (
+              {contactState.contacts.map((contact) => (
                 <tr key={contact.id}>
                   <td className="customer-contact-name">
                     <strong>{contact.name}</strong>
@@ -1145,9 +1145,48 @@ function CustomerMasterDetail({ row }: { row: CustomerRow }) {
             </tbody>
           </table>
         ) : (
-          <p className="bc-grid-detail-empty">No customer contacts are on file.</p>
+          <CustomerContactStateMessage state={contactState} />
         )}
       </section>
+    </div>
+  )
+}
+
+function customerContactPanelCountLabel(state: CustomerContactPanelState): string {
+  if (state.kind === "ready") return `${state.contacts.length} contacts`
+  if (state.kind === "loading") return "Loading"
+  if (state.kind === "error") return "Needs attention"
+  return "Empty"
+}
+
+function CustomerContactStateMessage({
+  state,
+}: {
+  state: Exclude<CustomerContactPanelState, { kind: "ready" }>
+}) {
+  if (state.kind === "loading") {
+    return (
+      // biome-ignore lint/a11y/useSemanticElements: detail-panel loading text should be an explicit live status region for host-owned async child data.
+      <div className="bc-grid-detail-loading" role="status" aria-live="polite">
+        <span className="bc-grid-detail-state-title">{state.title}</span>
+        <span className="bc-grid-detail-state-description">{state.description}</span>
+      </div>
+    )
+  }
+
+  if (state.kind === "error") {
+    return (
+      <div className="bc-grid-detail-error" role="alert">
+        <span className="bc-grid-detail-state-title">{state.title}</span>
+        <span className="bc-grid-detail-state-description">{state.description}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bc-grid-detail-empty">
+      <span className="bc-grid-detail-state-title">{state.title}</span>
+      <span className="bc-grid-detail-state-description">{state.description}</span>
     </div>
   )
 }
