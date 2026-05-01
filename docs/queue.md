@@ -13,7 +13,9 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 >
 > Cut a release after each demo-critical PR merges; bsncraft pulls the new version + a follow-up updates wrappers. Coordinator: Claude in `~/work/bc-grid` (auditor / merge integrator / Playwright owner).
 >
-> **3-worker reset (2026-05-02):** the 5-worker launch plan is retired. Active workers are `worker1` = Claude, `worker2` = Codex, and `worker3` = Claude. `worker4` and `worker5` are retired. Claude in `~/work/bc-grid` coordinates PR review, merge, releases, and Playwright. Workers should read `docs/coordination/three-worker-handoff.md` plus their local `WORKER_HANDOFF.md` before claiming work.
+> **3-worker reset (2026-05-02):** the 5-worker launch plan is retired. Active workers are `worker1` = Claude, `worker2` = Codex, and `worker3` = Claude. `worker4` and `worker5` are retired. Claude in `~/work/bc-grid` coordinates PR review, merge, releases, and Playwright. Workers should read `docs/coordination/three-worker-handoff.md` plus their per-worker handoff at `docs/coordination/handoff-worker{1,2,3}.md` before claiming work. The coordinator keeps each handoff doc current; the maintainer can simply tell a worker "review your handoff" to dispatch new work.
+>
+> **Audit lane (2026-05-02):** a full bc-grid quality audit is in flight. Each worker is auditing their lane (read-only, one findings doc each). Coordinator covers cross-cutting concerns and synthesizes. See `docs/coordination/audit-2026-05/README.md`. Audit task entries are listed in the new "Audit 2026-05" section below.
 >
 > Older `[review: worker4 ...]`, `[review: worker5 ...]`, and closed-PR entries below are historical unless the 3-worker handoff explicitly reassigns them. Do not rebase them mechanically. If the idea is still useful, create a fresh branch from current `main`, update the queue entry in that PR, and link the new PR.
 
@@ -27,6 +29,16 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 **Update protocol:** edit this file via PR (or via the integrator's worktree if no integrator online). Always include task slug + assigned agent + PR or branch reference. Transition tags (`in-flight` → `review` → `done`) at the moment of state change, not in batches.
 
 ---
+
+## Audit 2026-05
+
+Read-only audits, one findings doc per author. See `docs/coordination/audit-2026-05/README.md` for the structure, severity legend, and output template. Each worker's handoff doc points to their brief.
+
+- `[ready]` **audit-worker1** — server-row-model + react server bindings + perf posture. Brief: `docs/coordination/audit-2026-05/brief-worker1.md`. Output: `docs/coordination/audit-2026-05/worker1-findings.md`. Branch: `agent/worker1/audit-2026-05`.
+- `[ready]` **audit-worker2** — filters + aggregations + chrome consistency. Brief: `docs/coordination/audit-2026-05/brief-worker2.md`. Output: `docs/coordination/audit-2026-05/worker2-findings.md`. Branch: `agent/worker2/audit-2026-05`.
+- `[ready]` **audit-worker3** — editors + keyboard/a11y + lookup UX. Brief: `docs/coordination/audit-2026-05/brief-worker3.md`. Output: `docs/coordination/audit-2026-05/worker3-findings.md`. Branch: `agent/worker3/audit-2026-05`.
+- `[in-flight: coordinator]` **audit-coordinator** — API ergonomics, package boundaries, type discipline, visual quality, bsncraft integration, ERP comparison, worker2 cross-check. Scope: `docs/coordination/audit-2026-05/coordinator-scope.md`. Output: `docs/coordination/audit-2026-05/coordinator-audit.md`.
+- `[blocked: coordinator - waits on all four findings docs]` **audit-synthesis** — synthesize all four findings into ranked P0/P1/P2 with author tags + sprint plan. Output: `docs/coordination/audit-2026-05/synthesis.md`.
 
 ## Q1 — Foundation + Vertical Slice
 
