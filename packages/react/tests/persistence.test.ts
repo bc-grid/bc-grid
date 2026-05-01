@@ -283,6 +283,140 @@ describe("grid URL state persistence", () => {
   })
 })
 
+describe("filter persistence contract corners", () => {
+  test("custom filter type round-trips through localStorage with value / values pass-through", () => {
+    // Custom filter types are consumer-owned per the audit (§2.4 of
+    // v030-filter-persistence-contract.md). bc-grid does not validate
+    // their `value` / `values` shape; round-trip must preserve them.
+    const storage = new MemoryStorage()
+    const gridId = "tags-grid"
+    const filter = {
+      kind: "column" as const,
+      columnId: "tags",
+      type: "custom" as const,
+      op: "tags-any",
+      values: ["finance", "audit"],
+    }
+
+    writePersistedGridState(gridId, { filter }, storage)
+    expect(readPersistedGridState(gridId, storage).filter).toEqual(filter)
+  })
+
+  test("custom filter type round-trips through URL state", () => {
+    const history = historyLike()
+    const location = locationLike("?tab=tags")
+    const filter = {
+      kind: "column" as const,
+      columnId: "tags",
+      type: "custom" as const,
+      op: "tags-any",
+      values: ["finance", "audit"],
+    }
+
+    writeUrlPersistedGridState({ searchParam: "grid" }, { filter }, history, location)
+    const written = history.urls.at(-1) ?? ""
+    const replayed = locationLike(written.replace(/^\//, ""))
+    expect(readUrlPersistedGridState({ searchParam: "grid" }, replayed).filter).toEqual(filter)
+  })
+
+  test("sidebarPanel: null round-trips as null (explicitly closed, distinct from undefined)", () => {
+    // writeJson writes the JSON-string "null" for null values rather
+    // than removing the key. parseSidebarPanel(null) returns null.
+    // The distinction matters: null == "explicitly closed",
+    // undefined == "no preference, fall back to default".
+    const storage = new MemoryStorage()
+    const gridId = "with-sidebar"
+
+    writePersistedGridState(gridId, { sidebarPanel: null }, storage)
+    expect(storage.getItem(gridStorageKey(gridId, "sidebarPanel"))).toBe(JSON.stringify(null))
+    expect(readPersistedGridState(gridId, storage).sidebarPanel).toBeNull()
+  })
+
+  test("empty-storage read returns six explicit-undefined keys (not {})", () => {
+    // Documented corner: PersistedGridState makes every field optional
+    // (`?:`) so the runtime can return `undefined` per key; the reader
+    // returns the full six-key shape regardless. Object.keys(state)
+    // therefore returns six entries, not zero. Consumers iterating
+    // with `Object.keys` should be aware.
+    const storage = new MemoryStorage()
+    const state = readPersistedGridState("nothing-persisted", storage)
+    const keys = Object.keys(state).sort()
+    expect(keys).toEqual(
+      ["columnState", "density", "filter", "groupBy", "pageSize", "sidebarPanel"].sort(),
+    )
+    for (const key of keys) {
+      expect(state[key as keyof typeof state]).toBeUndefined()
+    }
+  })
+
+  test("URL reader returns {} when the configured search param is missing entirely", () => {
+    // Distinct from the localStorage shape: the URL reader does not
+    // synthesise undefined-valued keys. Consumers that destructure
+    // `const { filter } = readUrlPersistedGridState(...)` get
+    // `filter === undefined` either way, but `Object.keys(state)`
+    // differs. Pin the contract.
+    const empty = readUrlPersistedGridState({ searchParam: "grid" }, locationLike("?tab=customers"))
+    expect(empty).toEqual({})
+    expect(Object.keys(empty)).toHaveLength(0)
+  })
+
+  test("URL writer keeps the search param when state has empty arrays", () => {
+    // Writer drops the param ONLY when columnState / sort / filter are
+    // all undefined. Empty arrays mean "explicit empty" (e.g., user
+    // cleared all sorts) and stay in the URL.
+    const history = historyLike()
+    const location = locationLike("?tab=customers")
+
+    writeUrlPersistedGridState(
+      { searchParam: "grid" },
+      { columnState: [], sort: [] },
+      history,
+      location,
+    )
+
+    const url = history.urls.at(-1) ?? ""
+    expect(url.includes("grid=")).toBe(true)
+    const encoded = new URL(`https://example.test${url}`).searchParams.get("grid")
+    expect(encoded ? JSON.parse(encoded) : null).toEqual({ columnState: [], sort: [] })
+  })
+
+  test("URL writer drops the param when every persisted field is undefined", () => {
+    // Mirror of the above: undefined / undefined / undefined → param
+    // is removed. Pin the discriminator at the same time as the
+    // empty-array case.
+    const history = historyLike()
+    const location = locationLike("?tab=customers&grid=%7B%7D")
+
+    writeUrlPersistedGridState({ searchParam: "grid" }, {}, history, location)
+    expect(history.urls.at(-1)).toBe("/?tab=customers")
+  })
+
+  test("unicode + special characters round-trip through both backends", () => {
+    // ERP data isn't ASCII-only. Confirms JSON.stringify + URL-encode
+    // round-trip stays clean for non-ASCII filter values, including
+    // emoji and CJK characters.
+    const exotic = "résumé / 顧客 / 🚀"
+    const filter = {
+      kind: "column" as const,
+      columnId: "name",
+      type: "text" as const,
+      op: "contains",
+      value: exotic,
+    }
+
+    const storage = new MemoryStorage()
+    writePersistedGridState("unicode-grid", { filter }, storage)
+    expect(readPersistedGridState("unicode-grid", storage).filter).toEqual(filter)
+
+    const history = historyLike()
+    const location = locationLike("?tab=customers")
+    writeUrlPersistedGridState({ searchParam: "grid" }, { filter }, history, location)
+    const written = history.urls.at(-1) ?? ""
+    const replayed = locationLike(written.replace(/^\//, ""))
+    expect(readUrlPersistedGridState({ searchParam: "grid" }, replayed).filter).toEqual(filter)
+  })
+})
+
 function locationLike(searchAndHash: string): LocationLike {
   const [search = "", hash = ""] = searchAndHash.split("#")
   return {
