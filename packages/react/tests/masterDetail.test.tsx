@@ -9,6 +9,7 @@ import {
   detailPanelLabel,
   detailPanelStyle,
   detailRowHeight,
+  normalizeDetailPanelHeight,
   resolveDetailPanelHeight,
   stopDetailToggleGridKeyboardNav,
   toggleDetailExpansion,
@@ -109,9 +110,13 @@ describe("master detail helpers", () => {
     expect(arrowStopped).toBe(false)
   })
 
-  test("clamps detail heights and keeps style free of text-scaling motion", () => {
+  test("normalizes detail heights and keeps style free of text-scaling motion", () => {
     const entry = { index: 3, kind: "data", row: rows[0], rowId: "cust-1" } as const
 
+    expect(normalizeDetailPanelHeight(-12)).toBe(0)
+    expect(normalizeDetailPanelHeight(Number.NaN)).toBe(0)
+    expect(normalizeDetailPanelHeight(Number.POSITIVE_INFINITY)).toBe(0)
+    expect(normalizeDetailPanelHeight(188)).toBe(188)
     expect(
       resolveDetailPanelHeight({
         defaultHeight: 144,
@@ -128,10 +133,20 @@ describe("master detail helpers", () => {
         hasDetail: true,
       }),
     ).toBe(144)
+    expect(
+      resolveDetailPanelHeight({
+        defaultHeight: 144,
+        detailPanelHeight: Number.NaN,
+        entry,
+        hasDetail: true,
+      }),
+    ).toBe(0)
     expect(detailRowHeight(36, -10)).toBe(36)
+    expect(detailRowHeight(Number.NaN, 144)).toBe(144)
     expect(detailRowHeight(36, 144)).toBe(180)
 
-    const style = detailPanelStyle(36, 144, 480)
+    const style = detailPanelStyle(Number.NaN, Number.POSITIVE_INFINITY, Number.NaN)
+    expect(style).toMatchObject({ height: 0, top: 0, width: 1 })
     expect(style).not.toHaveProperty("transform")
     expect(style).not.toHaveProperty("transition")
   })

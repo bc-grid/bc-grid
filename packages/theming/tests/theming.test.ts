@@ -271,6 +271,8 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain(".bc-grid-detail-section")
     expect(css).toContain(".bc-grid-detail-section-header")
     expect(css).toContain(".bc-grid-detail-section-actions")
+    expect(css).toContain(".bc-grid-detail-panel-region")
+    expect(css).toContain("@keyframes bc-grid-detail-panel-content-in")
     expect(css).toContain(".bc-grid-detail-empty")
     expect(css).toContain(".bc-grid-detail-loading")
     expect(css).toContain(".bc-grid-detail-error")
@@ -287,6 +289,9 @@ describe("@bc-grid/theming", () => {
 
     expect(css).not.toMatch(/scale[XY]?\(/)
     expect(css).not.toMatch(/transition:\s*(?:all|height|width|max-height)/)
+    expect(css).toContain("animation: bc-grid-detail-panel-content-in")
+    expect(css).toContain("transform: translateY(2px)")
+    expect(css).not.toContain("bc-grid-row-expanded {\n  animation")
   })
 
   test("prefers-reduced-motion block zeroes out motion per accessibility-rfc §Reduced Motion", () => {
@@ -302,6 +307,8 @@ describe("@bc-grid/theming", () => {
     const combined = bodies.join("\n")
     expect(combined).toContain("transition-duration: 0s")
     expect(combined).toContain("animation-duration: 0s")
+    expect(combined).toContain(".bc-grid-detail-panel-region")
+    expect(combined).toContain("animation: none")
     expect(combined).toContain("scroll-behavior: auto")
   })
 

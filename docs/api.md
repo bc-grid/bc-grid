@@ -1209,6 +1209,14 @@ children via `bc-grid-detail-state-title` and
 `bc-grid-detail-state-actions`; avoid autofocus so keyboard users return to the
 same disclosure control after collapse.
 
+Production expansion contract: the row layout state changes immediately so the
+virtualizer can recalculate row positions without a height tween. The only
+built-in reveal motion is a short opacity/translate on the detail content
+region, with `prefers-reduced-motion` disabling that animation. Consumers should
+not animate `height`, `max-height`, or apply `scale()` to row/detail text. For
+async child views, keep the panel mounted at a predictable `detailPanelHeight`
+and swap compact empty/loading/error content in place.
+
 ```tsx
 <BcGrid<Customer>
   // ...

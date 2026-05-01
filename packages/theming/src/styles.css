@@ -1898,6 +1898,8 @@
 
 .bc-grid-detail-panel-region {
   min-width: 0;
+  animation: bc-grid-detail-panel-content-in var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
 }
 
 .bc-grid-detail-section {
@@ -2131,6 +2133,18 @@ table.bc-grid-detail-nested-grid {
   font-weight: 700;
 }
 
+@keyframes bc-grid-detail-panel-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /*
  * Pinned-region scroll shadows. Active when body content has scrolled
  * under a pinned region — signals to the user that the pinned columns
@@ -2301,6 +2315,10 @@ table.bc-grid-detail-nested-grid {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .bc-grid-detail-panel-region {
+    animation: none;
+  }
+
   .bc-grid,
   .bc-grid *,
   .bc-grid *::before,
