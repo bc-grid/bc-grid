@@ -583,6 +583,46 @@ describe("range TSV paste helpers", () => {
         rowId: "r1",
         columnId: "amount",
         rawValue: "12",
+        skippedCell: {
+          sourceRowIndex: 0,
+          sourceColumnIndex: 0,
+          targetRowIndex: 0,
+          targetColumnIndex: 1,
+          rowId: "r1",
+          columnId: "amount",
+          value: "12",
+          reasons: ["cell-readonly"],
+        },
+      },
+    })
+  })
+
+  test("buildRangeTsvPasteApplyPlan reports skipped metadata for group-row targets", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("group-region", "name", "group-region", "name"),
+      tsv: "Ada",
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "row-not-editable",
+        rowId: "group-region",
+        columnId: "name",
+        rawValue: "Ada",
+        skippedCell: {
+          sourceRowIndex: 0,
+          sourceColumnIndex: 0,
+          targetRowIndex: 2,
+          targetColumnIndex: 0,
+          rowId: "group-region",
+          columnId: "name",
+          value: "Ada",
+          reasons: ["row-not-editable"],
+        },
       },
     })
   })
