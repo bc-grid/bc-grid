@@ -4,6 +4,7 @@ import {
   emptyBcRangeSelection,
   expandRangeTo,
   newRangeAt,
+  normaliseRange,
   parseRangeSelection,
   rangeBounds,
   rangeClear,
@@ -63,6 +64,33 @@ describe("@bc-grid/core range helpers", () => {
     expect(
       rangeBounds({ start: cell("missing", "c3"), end: cell("r2", "c1") }, columns, rowIds),
     ).toEqual({ rowSpan: 0, colSpan: 0 })
+  })
+
+  test("normaliseRange returns ordered indexes and corner cells for reversed ranges", () => {
+    expect(
+      normaliseRange({ start: cell("r4", "c3"), end: cell("r2", "c1") }, columns, rowIds),
+    ).toEqual({
+      rowStart: 1,
+      rowEnd: 3,
+      colStart: 0,
+      colEnd: 2,
+      rowSpan: 3,
+      colSpan: 3,
+      topLeft: cell("r2", "c1"),
+      bottomRight: cell("r4", "c3"),
+    })
+  })
+
+  test("normaliseRange rejects stale endpoints and empty axes", () => {
+    expect(
+      normaliseRange({ start: cell("missing", "c3"), end: cell("r2", "c1") }, columns, rowIds),
+    ).toBeUndefined()
+    expect(
+      normaliseRange({ start: cell("r1", "c1"), end: cell("r1", "c1") }, [], rowIds),
+    ).toBeUndefined()
+    expect(
+      normaliseRange({ start: cell("r1", "c1"), end: cell("r1", "c1") }, columns, []),
+    ).toBeUndefined()
   })
 
   test("expandRangeTo keeps the anchor and updates the frontier", () => {
@@ -168,12 +196,47 @@ describe("@bc-grid/core range keyboard state machine", () => {
     })
   })
 
+  test("keyboard extension clamps at the upper-left grid edges", () => {
+    const initial = rangePointerDown(emptyBcRangeSelection, cell("r1", "c1"), {})
+
+    expect(rangeKeydown(initial, { type: "extend", direction: "up" }, columns, rowIds)).toEqual({
+      ranges: [{ start: cell("r1", "c1"), end: cell("r1", "c1") }],
+      anchor: cell("r1", "c1"),
+    })
+    expect(rangeKeydown(initial, { type: "extend", direction: "left" }, columns, rowIds)).toEqual({
+      ranges: [{ start: cell("r1", "c1"), end: cell("r1", "c1") }],
+      anchor: cell("r1", "c1"),
+    })
+  })
+
+  test("ctrl/cmd-shift-arrow clamps to the upper-left data edges", () => {
+    const initial = rangePointerDown(emptyBcRangeSelection, cell("r3", "c2"), {})
+    const up = rangeKeydown(
+      initial,
+      { type: "extend", direction: "up", toEdge: true },
+      columns,
+      rowIds,
+    )
+
+    expect(up).toEqual({
+      ranges: [{ start: cell("r3", "c2"), end: cell("r1", "c2") }],
+      anchor: cell("r3", "c2"),
+    })
+    expect(
+      rangeKeydown(up, { type: "extend", direction: "left", toEdge: true }, columns, rowIds),
+    ).toEqual({
+      ranges: [{ start: cell("r3", "c2"), end: cell("r1", "c1") }],
+      anchor: cell("r3", "c2"),
+    })
+  })
+
   test("select-all creates a single full-grid range", () => {
     expect(rangeSelectAll(columns, rowIds)).toEqual({
       ranges: [{ start: cell("r1", "c1"), end: cell("r4", "c3") }],
       anchor: cell("r1", "c1"),
     })
     expect(rangeSelectAll([], rowIds)).toEqual(emptyBcRangeSelection)
+    expect(rangeSelectAll(columns, [])).toEqual(emptyBcRangeSelection)
   })
 
   test("select-row uses the active frontier row and keeps the anchor", () => {

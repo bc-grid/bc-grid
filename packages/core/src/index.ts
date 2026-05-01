@@ -183,6 +183,7 @@ export {
   emptyBcRangeSelection,
   expandRangeTo,
   newRangeAt,
+  normaliseRange,
   parseRangeSelection,
   rangeBounds,
   rangeClear,
@@ -195,7 +196,7 @@ export {
   rangesContain,
   serializeRangeSelection,
 } from "./range"
-export type { BcRangeKeyAction, BcRangeSelection } from "./range"
+export type { BcNormalisedRange, BcRangeKeyAction, BcRangeSelection } from "./range"
 
 export interface BcPaginationState {
   page: number
