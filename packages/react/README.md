@@ -172,6 +172,96 @@ state (and column state, density, page size, sidebar panel) is what the
 persistence layer round-trips. Reload the page and the row visibility
 follows the toolbar's default; the active filter survives.
 
+## Context menu column commands
+
+The `contextMenuItems` prop accepts an array of built-in IDs (or a factory
+that returns one). The bundled defaults cover clipboard + range:
+
+```ts
+import { DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
+
+DEFAULT_CONTEXT_MENU_ITEMS
+// ["copy", "copy-row", "copy-with-headers",
+//  "separator", "clear-selection", "clear-range"]
+```
+
+Column commands (pin / hide / autosize) and filter-clearing are
+**consumer-opt-in** — they're not in the defaults because every grid has a
+slightly different idea of what belongs in the right-click menu. Spread the
+defaults and append the column commands you want; everything below is wired
+to existing `BcGridApi` methods and renders through the same
+`BcGridMenuItem` primitive as the bundled items, so no extra install or
+custom item is needed:
+
+```tsx
+import {
+  BcGrid,
+  DEFAULT_CONTEXT_MENU_ITEMS,
+  type BcContextMenuItems,
+} from "@bc-grid/react"
+
+const contextMenuItems: BcContextMenuItems<Customer> = [
+  ...DEFAULT_CONTEXT_MENU_ITEMS,
+  "separator",
+  "clear-column-filter",
+  "clear-all-filters",
+  "separator",
+  "pin-column-left",
+  "pin-column-right",
+  "unpin-column",
+  "separator",
+  "hide-column",
+  "show-all-columns",
+  "autosize-column",
+  "autosize-all-columns",
+]
+
+return (
+  <BcGrid
+    columns={columns}
+    data={rows}
+    rowId={(row) => row.id}
+    contextMenuItems={contextMenuItems}
+  />
+)
+```
+
+Adjacent separators are collapsed automatically, so consumers can group
+freely without worrying about doubled dividers when an item list happens to
+land empty in a particular trigger context.
+
+### Disabled-state expectations
+
+Column commands disable themselves when the action would be a no-op or
+when the trigger context is missing — consumers don't need to gate them
+manually. The grid re-evaluates each item every time the menu opens.
+
+- `pin-column-left` / `pin-column-right` — disabled when the column is
+  already in the target pin state, or when the right-click didn't land on
+  a column (e.g. the menu was opened from a body cell with no column
+  context).
+- `unpin-column` — disabled when the column isn't pinned.
+- `hide-column` — disabled when the column is already hidden, when there's
+  no column context, **and** when the column is the last visible one (so a
+  user can't strand themselves out of the chooser).
+- `show-all-columns` — disabled when every column is already visible.
+- `autosize-column` — disabled when the column has no DOM to measure (no
+  context or hidden).
+- `autosize-all-columns` — disabled when every column is hidden.
+- `clear-column-filter` — disabled when there's no cell context, or when
+  that column has no active filter entry.
+- `clear-all-filters` — disabled when no filter is active across the grid.
+- `copy` / `copy-with-headers` — disabled when there's neither a cell
+  context nor an active range selection.
+- `copy-cell` — disabled when there's no cell context.
+- `copy-row` — disabled when there's no cell or row context.
+
+For row-conditional custom items (e.g. "Open customer", "Deactivate"),
+pass `contextMenuItems` as a factory and gate on `ctx.row` directly —
+falsy entries are filtered, so `ctx.row && { … }` reads cleanly. See
+`docs/api.md §5.1` for the full ID table and the
+`@bc-grid/react` docs site for an end-to-end recipe.
+
 ## Layout persistence
 
 Use `initialLayout` for a one-time saved-view restore and
