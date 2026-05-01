@@ -1770,21 +1770,107 @@ table.bc-grid-detail-nested-grid {
   }
 }
 
+/*
+ * Touch-friendly defaults per `docs/design/accessibility-rfc.md
+ * §Pointer and Touch Fallback`. `touch-action: manipulation` disables
+ * the legacy 350ms tap delay and double-tap-to-zoom on these surfaces
+ * so single-tap selection is responsive and double-tap-to-edit fires
+ * `dblclick` reliably. No-op for mouse pointers.
+ */
+.bc-grid-cell,
+.bc-grid-header-cell,
+.bc-grid-header-menu-button,
+.bc-grid-header-filter-button,
+.bc-grid-header-resize-handle,
+.bc-grid-group-toggle,
+.bc-grid-detail-toggle,
+.bc-grid-pagination-button,
+.bc-grid-pagination-size select,
+.bc-grid-cell-checkbox,
+.bc-grid-context-menu-item,
+.bc-grid-column-menu-item,
+.bc-grid-sidebar-tab,
+.bc-grid-filter-text-toggle,
+.bc-grid-filter-set-button {
+  touch-action: manipulation;
+}
+
 @media (pointer: coarse) {
   .bc-grid {
     --bc-grid-hit-target-min: 44px;
   }
 
+  /*
+   * Compact density on a coarse pointer is unreliable to tap. Lift the
+   * row + header heights to the "normal" density values so cells meet
+   * the 44px guideline; the rest of the visual treatment (font-size,
+   * padding) keeps its compact look. Per accessibility-rfc: "default
+   * the grid to `normal` or `comfortable` interaction hit targets while
+   * preserving the visual density where practical".
+   */
+  .bc-grid--compact,
+  .bc-grid[data-density="compact"] {
+    --bc-grid-row-height: 36px;
+    --bc-grid-header-height: 40px;
+  }
+
+  /*
+   * Ensure all interactive grid chrome meets the 44px minimum hit-target.
+   * The visible icon may be smaller; `min-width` / `min-height` only
+   * grow the touch area without forcing the icon to scale.
+   */
   .bc-grid-cell [role="button"],
   .bc-grid-cell button,
   .bc-grid-cell a,
   .bc-grid-detail-panel button,
   .bc-grid-detail-panel a,
+  .bc-grid-cell-checkbox,
+  .bc-grid-header-menu-button,
+  .bc-grid-header-filter-button,
+  .bc-grid-group-toggle,
+  .bc-grid-detail-toggle,
+  .bc-grid-pagination-button,
+  .bc-grid-pagination-size select,
+  .bc-grid-context-menu-item,
+  .bc-grid-column-menu-item,
   .bc-grid-sidebar-tab,
   .bc-grid-columns-panel-button,
   .bc-grid-columns-panel-chip-remove,
   .bc-grid-filters-panel-clear,
-  .bc-grid-filters-panel-remove {
+  .bc-grid-filters-panel-remove,
+  .bc-grid-filter-text-toggle,
+  .bc-grid-filter-set-button {
+    min-width: var(--bc-grid-hit-target-min);
+    min-height: var(--bc-grid-hit-target-min);
+  }
+
+  /*
+   * Header column-menu button is hover-revealed on fine pointers; on
+   * coarse pointers there is no hover, so it must always be visible
+   * (the user can't tap something they can't see).
+   */
+  .bc-grid-header-menu-button {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /*
+   * Column-resize handle: full-height grab area, but width bumped to
+   * the touch hit-target minimum so the user can grab it reliably.
+   * The visible separator continues to render via the header cell's
+   * `::before` pseudo-element at its narrow width.
+   */
+  .bc-grid-header-resize-handle {
+    width: var(--bc-grid-hit-target-min);
+  }
+
+  /*
+   * Q3 pointer selection handles. Selector reserved here so the handles
+   * ship with a 44px hit target the moment range-selection-handles
+   * ships them. Per accessibility-rfc: "Pointer selection handles
+   * introduced in Q3 must have 44px hit targets."
+   */
+  .bc-grid-range-handle {
     min-width: var(--bc-grid-hit-target-min);
     min-height: var(--bc-grid-hit-target-min);
   }
