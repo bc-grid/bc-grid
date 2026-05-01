@@ -58,11 +58,19 @@ Expected behavior:
 
 ## Safe Test Coverage Added
 
-`packages/react/tests/serverGridPaged.test.ts` now pins the server-row-model
+`packages/react/tests/serverGridPaged.test.ts` pins the server-row-model
 boundary: a pending server-owned sort/filter/search request keeps the last
 accepted page rows stable until the next server result resolves, while the
 pending request carries the new `query.view`.
 
-The end-to-end assertion that `<BcServerGrid>` can pass active sort/filter/search
-chrome state to `<BcGrid>` without local row transforms should be added with the
-shared `rowProcessingMode="manual"` implementation.
+`packages/react/tests/bcGridRowProcessing.test.tsx` pins the
+`rowProcessingMode="manual"` contract end-to-end against `<BcGrid>` SSR:
+sort, filter, search, and grouping props no longer mutate row order or
+membership in manual mode, while header sort indicators and other chrome
+attributes remain controlled by the same props. Default `"client"` mode
+remains a regression-guarded passthrough.
+
+The `<BcServerGrid>` wrapper passes `rowProcessingMode="manual"` after
+spreading consumer props (single literal in `serverGrid.tsx`), so all
+three rowModels (`paged`, `infinite`, `tree`) inherit the contract without
+rowModel-specific code paths.

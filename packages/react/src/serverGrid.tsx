@@ -449,6 +449,12 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   return (
     <BcGrid
       {...gridProps}
+      // Server-backed grids own row order/membership in every rowModel.
+      // Forcing manual row processing keeps the inner grid from
+      // client-sorting/filtering/searching/grouping the previously
+      // accepted page while a new server query is pending. Always
+      // applied after spreading consumer props.
+      rowProcessingMode="manual"
       columns={props.rowModel === "tree" ? tree.columns : gridProps.columns}
       data={
         props.rowModel === "paged"

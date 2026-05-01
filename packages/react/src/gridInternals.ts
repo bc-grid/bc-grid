@@ -1640,6 +1640,15 @@ export interface UseFlipOnRowInsertionParams<TRow> {
   rowEntries: readonly RowEntry<TRow>[]
   scrollerRef: RefObject<HTMLDivElement | null>
   virtualizer: Virtualizer
+  /**
+   * Default `true`. Pass `false` to disable row FLIP/enter animations
+   * (e.g. server-backed grids in `rowProcessingMode="manual"`, where
+   * server responses can replace row identity/order in ways that
+   * break row-motion assumptions). When disabled, the hook still
+   * resets its captured row rects so re-enabling later does not play
+   * a flicker against stale measurements.
+   */
+  enabled?: boolean
 }
 
 export function useFlipOnRowInsertion<TRow>({
@@ -1647,6 +1656,7 @@ export function useFlipOnRowInsertion<TRow>({
   rowEntries,
   scrollerRef,
   virtualizer,
+  enabled = true,
 }: UseFlipOnRowInsertionParams<TRow>): void {
   const flipBudget = useMemo(() => new AnimationBudget(), [])
   const previousRowRectsRef = useRef<Map<RowId, FlipRect>>(new Map())
@@ -1654,6 +1664,12 @@ export function useFlipOnRowInsertion<TRow>({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: rowEntries/motionKey are render-change triggers.
   useLayoutEffect(() => {
+    if (!enabled) {
+      previousRowRectsRef.current = new Map()
+      previousRowOrderRef.current = []
+      flipBudget.reset()
+      return
+    }
     const scroller = scrollerRef.current
     if (!scroller) {
       previousRowRectsRef.current = new Map()
@@ -1699,7 +1715,7 @@ export function useFlipOnRowInsertion<TRow>({
 
     playRowFlipCandidates(candidates, flipBudget, virtualizer)
     playRowEnterAnimations(enteringRows, flipBudget)
-  }, [flipBudget, motionKey, rowEntries, scrollerRef, virtualizer])
+  }, [enabled, flipBudget, motionKey, rowEntries, scrollerRef, virtualizer])
 }
 
 function rowFlipCandidate(

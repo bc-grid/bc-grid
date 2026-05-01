@@ -398,6 +398,31 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * total comes from `ServerPagedResult.totalRows`.
    */
   paginationTotalRows?: number
+  /**
+   * Controls whether `<BcGrid>` applies client-side row transforms
+   * (sort, filter, search, grouping) and row-motion animations to
+   * `data`.
+   *
+   * - `"client"` (default) — `data` is the full client row set; the
+   *   grid sorts, filters, searches, and groups it before render and
+   *   plays row FLIP/enter animations on layout change.
+   * - `"manual"` — the host (typically `<BcServerGrid>`) owns row
+   *   order and membership. The grid renders `data` in the order
+   *   provided and skips the four client transforms. Header sort
+   *   indicators, filter editors, search highlighting, grouping
+   *   controls, callbacks, and `BcGridApi` state continue to reflect
+   *   the controlled chrome props so the visible chrome stays in
+   *   sync with the host's pending server query. Row FLIP/enter
+   *   animations are also disabled because server responses can
+   *   replace row identity/order in ways that break row-motion
+   *   assumptions.
+   *
+   * Independent of `paginationMode`: `"manual"` row processing only
+   * affects row transforms; `paginationMode="manual"` only affects
+   * client-side page slicing. Server-backed grids typically want
+   * both.
+   */
+  rowProcessingMode?: "client" | "manual"
   aggregationScope?: BcAggregationScope
 
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
