@@ -170,6 +170,7 @@ export const apiSurfaceManifest = [
       "BcGridColumn",
       "BcGridDensity",
       "BcGridFilter",
+      "BcGridLayoutState",
       "BcGridMessages",
       "BcGridProps",
       "BcGridSort",

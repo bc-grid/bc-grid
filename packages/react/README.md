@@ -77,6 +77,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
 | Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
 | Checkbox selection | Available | `?checkbox=1` | `checkboxSelection` |
+| Layout persistence | Available | Host-owned saved views | `initialLayout`, `layoutState`, `onLayoutStateChange` |
 | URL state persistence | Available | `?urlstate=1` | `gridId`, `urlStatePersistence` |
 | Pagination | Available | `?pagination=1` | `pagination`, `pageSizeOptions` |
 | Aggregations | Available | `?aggregations=1` | `aggregation`, `statusBar` |
@@ -115,6 +116,35 @@ return (
 Use `defaultSearchText` for an uncontrolled initial query. For a host-owned
 search input, prefer controlling the query with `searchText` as shown above. Do
 not combine `defaultSearchText` with `searchText` on the same grid.
+
+## Layout persistence
+
+Use `initialLayout` for a one-time saved-view restore and
+`onLayoutStateChange` to capture the current JSON-safe layout. Consumers own
+storage; bc-grid does not write localStorage for this API.
+
+```tsx
+import type { BcGridLayoutState } from "@bc-grid/react"
+
+const [layout, setLayout] = useState<BcGridLayoutState | undefined>(() =>
+  loadCustomerGridLayout(),
+)
+
+return (
+  <BcGrid
+    columns={columns}
+    data={rows}
+    rowId={(row) => row.id}
+    initialLayout={layout}
+    onLayoutStateChange={(next) => setLayout(next)}
+  />
+)
+```
+
+The layout snapshot covers column order, width/flex, pinning, visibility,
+sort, filter, search text, group-by, density, sidebar panel, and public
+pagination state. Unknown columns are ignored on restore; missing columns keep
+their current/default state.
 
 ## Bundle size
 

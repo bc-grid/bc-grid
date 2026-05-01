@@ -44,6 +44,23 @@ import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } f
 
 export type BcGridDensity = "compact" | "normal" | "comfortable"
 
+export interface BcGridLayoutState {
+  /**
+   * Version tag for consumer-owned persisted layouts. The grid currently
+   * writes and accepts version 1; consumers should store it with the DTO so
+   * future migrations can branch safely.
+   */
+  version: 1
+  columnState?: readonly BcColumnStateEntry[]
+  sort?: readonly BcGridSort[]
+  filter?: BcGridFilter | null
+  searchText?: string
+  groupBy?: readonly ColumnId[]
+  density?: BcGridDensity
+  pagination?: BcPaginationState
+  sidebarPanel?: string | null
+}
+
 export interface BcGridMessages {
   noRowsLabel: string
   loadingLabel: string
@@ -371,6 +388,21 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
   groupsExpandedByDefault?: boolean
+
+  /**
+   * Initial JSON-safe layout snapshot to restore when the grid mounts.
+   * Consumers own storage; the grid only applies the supplied state to the
+   * existing controlled/uncontrolled state paths.
+   */
+  initialLayout?: BcGridLayoutState
+  /**
+   * External layout snapshot to apply after mount. Individual controlled
+   * props (`sort`, `filter`, `columnState`, etc.) remain the source of truth
+   * when supplied; in that case applying a layout invokes the matching
+   * controlled callbacks.
+   */
+  layoutState?: BcGridLayoutState
+  onLayoutStateChange?: (next: BcGridLayoutState, prev: BcGridLayoutState) => void
 
   showInactive?: boolean
   onShowInactiveChange?: (next: boolean) => void

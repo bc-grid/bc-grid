@@ -67,6 +67,7 @@ import {
   assertNoMixedControlledProps,
   assignRef,
   autoHeightHeaderViewportStyle,
+  buildLayoutColumnState,
   canvasStyle,
   cellDomId,
   classNames,
@@ -80,8 +81,12 @@ import {
   headerRowStyle,
   headerViewportStyle,
   isDataRowEntry,
+  mergeLayoutColumnState,
   overlayStyle,
   pinnedEdgeFor,
+  pruneLayoutFilterForColumns,
+  pruneLayoutGroupByForColumns,
+  pruneLayoutSortForColumns,
   resolveColumns,
   resolveFallbackBodyHeight,
   resolveFilterRowVisibility,
@@ -147,6 +152,7 @@ import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } fro
 import { BcStatusBar } from "./statusBar"
 import type {
   BcCellEditCommitEvent,
+  BcGridLayoutState,
   BcGridProps,
   BcReactGridColumn,
   BcSidebarContext,
@@ -161,6 +167,13 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
 const DEFAULT_DETAIL_HEIGHT = 144
 const editableKeyTargetTags = new Set(["INPUT", "TEXTAREA", "SELECT"])
 const BcGridContextMenuLayer = lazy(() => import("./internal/context-menu-layer"))
+
+function hasLayoutStateValue<K extends keyof BcGridLayoutState>(
+  layout: BcGridLayoutState | undefined,
+  key: K,
+): layout is BcGridLayoutState & Required<Pick<BcGridLayoutState, K>> {
+  return layout != null && Object.prototype.hasOwnProperty.call(layout, key)
+}
 
 export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   assertNoMixedControlledProps(props)
@@ -203,7 +216,35 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => readUrlPersistedGridState(props.urlStatePersistence),
     [props.urlStatePersistence],
   )
-  const density = props.density ?? persistedGridState.density ?? "normal"
+  const defaultLayoutState = props.initialLayout ?? props.layoutState
+  const layoutColumnIds = useMemo(
+    () =>
+      new Set(
+        flattenColumnDefinitions(columns, { includeHidden: true }).map((entry) => entry.columnId),
+      ),
+    [columns],
+  )
+  const defaultLayoutSort = useMemo(
+    () => pruneLayoutSortForColumns(defaultLayoutState?.sort, layoutColumnIds),
+    [defaultLayoutState?.sort, layoutColumnIds],
+  )
+  const defaultLayoutFilter = useMemo(
+    () =>
+      hasLayoutStateValue(defaultLayoutState, "filter")
+        ? pruneLayoutFilterForColumns(defaultLayoutState.filter, layoutColumnIds)
+        : undefined,
+    [defaultLayoutState, layoutColumnIds],
+  )
+  const defaultLayoutGroupBy = useMemo(
+    () => pruneLayoutGroupByForColumns(defaultLayoutState?.groupBy, layoutColumnIds),
+    [defaultLayoutState?.groupBy, layoutColumnIds],
+  )
+  const density =
+    props.density ??
+    props.layoutState?.density ??
+    defaultLayoutState?.density ??
+    persistedGridState.density ??
+    "normal"
   const instanceId = useId()
   const domBaseId = useMemo(
     () => `bc-grid-${domToken(props.gridId ?? instanceId)}`,
@@ -236,11 +277,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [sortState, setSortState] = useControlledState<readonly BcGridSort[]>(
     hasProp(props, "sort"),
     props.sort ?? [],
-    props.defaultSort ?? urlPersistedGridState.sort ?? [],
+    props.defaultSort ?? defaultLayoutSort ?? urlPersistedGridState.sort ?? [],
     props.onSortChange,
   )
-  const defaultFilterState =
-    props.defaultFilter ?? urlPersistedGridState.filter ?? persistedGridState.filter ?? null
+  const defaultFilterState = hasProp(props, "defaultFilter")
+    ? (props.defaultFilter ?? null)
+    : defaultLayoutFilter !== undefined
+      ? defaultLayoutFilter
+      : (urlPersistedGridState.filter ?? persistedGridState.filter ?? null)
   const filterControlled = hasProp(props, "filter")
   const [filterState, setFilterState] = useControlledState<BcGridFilter | null>(
     filterControlled,
@@ -330,19 +374,29 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const sidebarPanels = useMemo(() => resolveSidebarPanels(props.sidebar), [props.sidebar])
   const hasSidebar = sidebarPanels.length > 0
 
+  const defaultColumnState = useMemo(() => {
+    if (props.defaultColumnState !== undefined) return props.defaultColumnState
+    const base = urlPersistedGridState.columnState ?? persistedGridState.columnState ?? []
+    return defaultLayoutState?.columnState
+      ? mergeLayoutColumnState(columns, base, defaultLayoutState.columnState)
+      : base
+  }, [
+    columns,
+    defaultLayoutState?.columnState,
+    persistedGridState.columnState,
+    props.defaultColumnState,
+    urlPersistedGridState.columnState,
+  ])
   const [columnState, setColumnState] = useControlledState<readonly BcColumnStateEntry[]>(
     hasProp(props, "columnState"),
     props.columnState ?? [],
-    props.defaultColumnState ??
-      urlPersistedGridState.columnState ??
-      persistedGridState.columnState ??
-      [],
+    defaultColumnState,
     props.onColumnStateChange,
   )
   const [groupByState, setGroupByState] = useControlledState<readonly ColumnId[]>(
     hasProp(props, "groupBy"),
     props.groupBy ?? [],
-    props.defaultGroupBy ?? persistedGridState.groupBy ?? [],
+    props.defaultGroupBy ?? defaultLayoutGroupBy ?? persistedGridState.groupBy ?? [],
     props.onGroupByChange,
   )
   const [pivotState, setPivotState] = useControlledState<BcPivotState>(
@@ -354,13 +408,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [pageState, setPageState] = useControlledState<number>(
     hasProp(props, "page"),
     props.page ?? 0,
-    props.defaultPage ?? 0,
+    props.defaultPage ?? defaultLayoutState?.pagination?.page ?? 0,
     undefined,
   )
   const [pageSizeState, setPageSizeState] = useControlledState<number | undefined>(
     hasProp(props, "pageSize"),
     props.pageSize,
-    props.defaultPageSize ?? persistedGridState.pageSize,
+    props.defaultPageSize ??
+      defaultLayoutState?.pagination?.pageSize ??
+      persistedGridState.pageSize,
     undefined,
   )
   const [activeCell, setActiveCell] = useControlledState<BcCellPosition | null>(
@@ -374,7 +430,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.sidebarPanel ?? null,
     resolveInitialSidebarPanelId({
       defaultPanelId: hasProp(props, "defaultSidebarPanel") ? props.defaultSidebarPanel : undefined,
-      persistedPanelId: persistedGridState.sidebarPanel,
+      persistedPanelId: hasLayoutStateValue(defaultLayoutState, "sidebarPanel")
+        ? defaultLayoutState.sidebarPanel
+        : persistedGridState.sidebarPanel,
       panels: sidebarPanels,
     }),
     props.onSidebarPanelChange,
@@ -409,6 +467,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const persistedColumnState = useMemo(
     () => deriveColumnState(consumerResolvedColumns, columnState),
     [columnState, consumerResolvedColumns],
+  )
+  const layoutColumnState = useMemo(
+    () => buildLayoutColumnState(columns, columnState),
+    [columns, columnState],
   )
   const columnVisibilityItems = useMemo(
     () => buildColumnVisibilityItems(columns, columnState),
@@ -458,7 +520,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [columnFilterText, columnFilterTypes],
   )
   const activeFilter = filterState
-  const searchText = props.searchText ?? props.defaultSearchText ?? ""
+  const searchText =
+    props.searchText ??
+    props.layoutState?.searchText ??
+    props.defaultSearchText ??
+    props.initialLayout?.searchText ??
+    ""
   const aggregationScope = props.aggregationScope ?? "filtered"
 
   const allRowEntries = useMemo<readonly DataRowEntry<TRow>[]>(() => {
@@ -573,6 +640,120 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         : normalisePageSizeOptions([...pageSizeOptions, effectivePageSize]),
     [effectivePageSize, pageSizeOptions],
   )
+  const layoutStateFingerprint = useMemo(
+    () => (props.layoutState ? JSON.stringify(props.layoutState) : null),
+    [props.layoutState],
+  )
+  const lastAppliedLayoutRef = useRef<string | null>(null)
+  useEffect(() => {
+    const layout = props.layoutState
+    if (!layout || layoutStateFingerprint === null) return
+    if (lastAppliedLayoutRef.current === layoutStateFingerprint) return
+    lastAppliedLayoutRef.current = layoutStateFingerprint
+
+    if (hasLayoutStateValue(layout, "columnState")) {
+      setColumnState(mergeLayoutColumnState(columns, columnState, layout.columnState))
+    }
+    if (hasLayoutStateValue(layout, "sort")) {
+      setSortState(pruneLayoutSortForColumns(layout.sort, layoutColumnIds) ?? [])
+    }
+    if (hasLayoutStateValue(layout, "filter")) {
+      applyFilterState(pruneLayoutFilterForColumns(layout.filter, layoutColumnIds) ?? null)
+    }
+    if (hasLayoutStateValue(layout, "groupBy")) {
+      setGroupByState(pruneLayoutGroupByForColumns(layout.groupBy, layoutColumnIds) ?? [])
+    }
+    if (hasLayoutStateValue(layout, "searchText") && props.searchText !== undefined) {
+      props.onSearchTextChange?.(layout.searchText, props.searchText)
+    }
+    if (hasLayoutStateValue(layout, "sidebarPanel")) {
+      setActiveSidebarPanel(layout.sidebarPanel)
+    }
+    if (hasLayoutStateValue(layout, "pagination")) {
+      const pageSize = Number.isFinite(layout.pagination.pageSize)
+        ? Math.max(1, Math.floor(layout.pagination.pageSize))
+        : effectivePageSize
+      const page = Number.isFinite(layout.pagination.page)
+        ? Math.max(0, Math.floor(layout.pagination.page))
+        : paginationWindow.page
+      const normalized = getPaginationWindow(paginationRowCount, page, pageSize)
+      const nextState = { page: normalized.page, pageSize: normalized.pageSize }
+      const prevState = { page: paginationWindow.page, pageSize: effectivePageSize }
+      if (nextState.page !== prevState.page || nextState.pageSize !== prevState.pageSize) {
+        setPageState(nextState.page)
+        setPageSizeState(nextState.pageSize)
+        props.onPaginationChange?.(nextState, prevState)
+      }
+    }
+  }, [
+    applyFilterState,
+    columnState,
+    columns,
+    effectivePageSize,
+    layoutColumnIds,
+    layoutStateFingerprint,
+    paginationRowCount,
+    paginationWindow.page,
+    props.layoutState,
+    props.onPaginationChange,
+    props.onSearchTextChange,
+    props.searchText,
+    setActiveSidebarPanel,
+    setColumnState,
+    setGroupByState,
+    setPageSizeState,
+    setPageState,
+    setSortState,
+  ])
+  const currentLayoutState = useMemo<BcGridLayoutState>(
+    () => ({
+      columnState: layoutColumnState,
+      density,
+      filter: filterState,
+      groupBy: groupByState,
+      pagination: { page: paginationWindow.page, pageSize: effectivePageSize },
+      searchText,
+      sidebarPanel: hasSidebar ? activeSidebarPanel : null,
+      sort: sortState,
+      version: 1,
+    }),
+    [
+      activeSidebarPanel,
+      density,
+      effectivePageSize,
+      filterState,
+      groupByState,
+      hasSidebar,
+      layoutColumnState,
+      paginationWindow.page,
+      searchText,
+      sortState,
+    ],
+  )
+  const currentLayoutFingerprint = useMemo(
+    () => JSON.stringify(currentLayoutState),
+    [currentLayoutState],
+  )
+  const previousLayoutRef = useRef<{
+    fingerprint: string
+    state: BcGridLayoutState
+  } | null>(null)
+  useEffect(() => {
+    const previous = previousLayoutRef.current
+    if (!previous) {
+      previousLayoutRef.current = {
+        fingerprint: currentLayoutFingerprint,
+        state: currentLayoutState,
+      }
+      return
+    }
+    if (previous.fingerprint === currentLayoutFingerprint) return
+    previousLayoutRef.current = {
+      fingerprint: currentLayoutFingerprint,
+      state: currentLayoutState,
+    }
+    props.onLayoutStateChange?.(currentLayoutState, previous.state)
+  }, [currentLayoutFingerprint, currentLayoutState, props.onLayoutStateChange])
   const leafRowEntries = useMemo<readonly DataRowEntry<TRow>[]>(() => {
     // Manual pagination: `data` is already the current page; client-side
     // slicing would double-page. Pass through as-is.
