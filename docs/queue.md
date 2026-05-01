@@ -14,6 +14,8 @@ The single source of truth for "what's available to be picked up." Read `AGENTS.
 > Cut a release after each demo-critical PR merges; bsncraft pulls the new version + a follow-up updates wrappers. Coordinator: Claude in `~/work/bc-grid` (auditor / merge integrator / Playwright owner).
 >
 > **3-worker reset (2026-05-02):** the 5-worker launch plan is retired. Active workers are `worker1` = Claude, `worker2` = Codex, and `worker3` = Claude. `worker4` and `worker5` are retired. Claude in `~/work/bc-grid` coordinates PR review, merge, releases, and Playwright. Workers should read `docs/coordination/three-worker-handoff.md` plus their local `WORKER_HANDOFF.md` before claiming work.
+>
+> Older `[review: worker4 ...]`, `[review: worker5 ...]`, and closed-PR entries below are historical unless the 3-worker handoff explicitly reassigns them. Do not rebase them mechanically. If the idea is still useful, create a fresh branch from current `main`, update the queue entry in that PR, and link the new PR.
 
 **Status legend:**
 - `[ready]` — task spec written, no blockers, claim by editing this file + branching

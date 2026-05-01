@@ -7,7 +7,7 @@
 **Authorising:** JohnC
 **Supersedes (timeline only):** `docs/roadmap.md` Q5-Q8 — feature scope from those quarters is pulled forward into this sprint; the original quarter-by-quarter calendar is replaced by the parallel-track plan below.
 **Does NOT supersede:** `docs/AGENTS.md` golden rules, `docs/design.md` architectural decisions (§13), `docs/api.md` v0.1 surface, `docs/PARALLEL_WORK.md` worktree scheme. All still binding.
-**Worker execution plan:** `docs/coordination/five-worker-v1-execution-plan.md`
+**Worker execution plan:** `docs/coordination/three-worker-handoff.md`
 
 ---
 
@@ -15,7 +15,7 @@
 
 **Old goal:** AG Grid Enterprise replacement for ~80-90% of ERP use cases over a 2-year, 8-quarter timeline.
 
-**New goal:** Functional parity with AG Grid Enterprise for ERP workloads over a **2-week parallel sprint with 5 worker agents plus a Codex coordinator**, leveraging best-of-class agent velocity demonstrated on day 0 (Q1 vertical-slice gate cleared via #42).
+**New goal:** Functional parity with AG Grid Enterprise for ERP workloads over an accelerated parallel sprint. The original plan used 5 worker agents plus a Codex coordinator; as of 2026-05-02 the active operating model is 3 workers plus a Claude coordinator.
 
 ### Why this is plausible
 
@@ -209,35 +209,33 @@ Each track has one suggested owner; agents are free to swap based on availabilit
 
 ## Cross-cutting concerns (continuous, not per-track)
 
-- **Coordinator / worker split** — Codex in `~/work/bc-grid` coordinates the sprint, reviews PRs, fixes merge-train issues, merges PRs, cuts releases, and runs Playwright / smoke-perf / benchmarks. Worker agents should spend their cycles coding, unit tests, type-checks, builds, and concise PR handoffs. Workers must not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs.
-- **Reviews** — every PR gets a non-author review. The Codex coordinator is default reviewer; agents rotate as backup when explicitly assigned. Self-merge prohibited for worker PRs per `AGENTS.md §3.7`.
+- **Coordinator / worker split** — Claude in `~/work/bc-grid` coordinates the sprint, reviews PRs, fixes merge-train issues, merges PRs, cuts releases, and runs Playwright / smoke-perf / benchmarks. Worker agents should spend their cycles coding, unit tests, type-checks, builds, and concise PR handoffs. Workers must not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs.
+- **Reviews** — every PR gets a non-author review. The Claude coordinator is default reviewer; agents rotate as backup when explicitly assigned. Self-merge prohibited for worker PRs per `AGENTS.md §3.7`.
 - **Smoke perf on every PR** — once `smoke-perf-ci` lands in Phase A, every PR runs cold-mount/sort-10k/scroll-10k locally + in CI.
 - **Bundle size budget** — `core+virtualizer+animations+react` < 100KB gzipped per `design.md §3.2`, with a 10% per-PR drift guard from the latest release baseline. Drift fails the build. Charts are post-1.0 and do not count toward v1.0 scope.
 - **API surface manifest** — every public-export change bumps `tools/api-surface/src/manifest.ts` in the same PR. Already enforced.
 - **Decision log discipline** — every cross-cutting decision gets a `design.md §13` entry in the PR that introduces it, not after the fact.
-- **`docs/queue.md` hygiene** — claim transitions: `[ready]` → `[in-flight: <agent>]` (when branch created) → `[review: <agent> #N]` (when PR opened) → `[done: <agent> #N]` (when merged). Each transition lands in a commit on the branch making the change. The Codex coordinator audits drift in periodic queue-sync PRs.
-- **Audit cadence** — the Codex coordinator runs an end-to-end audit every ~10 merged PRs (`docs/audit-c2-NNN.md`). Rolling.
+- **`docs/queue.md` hygiene** — claim transitions: `[ready]` → `[in-flight: <agent>]` (when branch created) → `[review: <agent> #N]` (when PR opened) → `[done: <agent> #N]` (when merged). Each transition lands in a commit on the branch making the change. The Claude coordinator audits drift in periodic queue-sync PRs.
+- **Audit cadence** — the Claude coordinator runs an end-to-end audit every ~10 merged PRs (`docs/audit-c2-NNN.md`). Rolling.
 
 ---
 
-## Current 5-worker launch plan
+## Current 3-worker launch plan
 
 All workers start clean from their parking branches:
 
 | Worker | Model | Worktree | First claim | Why |
 |---|---|---|---|---|
-| worker1 | Codex | `~/work/bcg-worker1` | `range-state-machine` | Demo-critical unblocker for range copy; mostly core logic, low conflict risk. |
-| worker2 | Claude | `~/work/bcg-worker2` | `filter-set-impl` | Demo-critical; pairs with `filter-popup-variant` after coordinator merges/rebases it. |
-| worker3 | Codex | `~/work/bcg-worker3` | `group-by-client` | Demo-critical and independent of filter popup/set work. |
-| worker4 | Claude | `~/work/bcg-worker4` | `editor-framework` | Critical-path unblocker for the remaining editing surface. |
-| worker5 | Codex | `~/work/bcg-worker5` | `sidebar-impl` | Unblocks columns/filter tool panels and pivot drag zones. |
+| worker1 | Claude | `~/work/bcg-worker1` | `server-grid-stability-v040` | Server-backed sort/filter/page refresh and server edit contracts are v0.4 blockers. |
+| worker2 | Codex | `~/work/bcg-worker2` | `filter-panel-popup-polish-v040` | Keeps the limited Codex lane focused on filters/tool panels and later v0.5 range helpers. |
+| worker3 | Claude | `~/work/bcg-worker3` | `editor-validation-contract-v040` | Critical-path editor keyboard/a11y/validation/lookup contract work. |
 
 The table above is the preferred launch order, not a pre-claim. Each worker still claims by editing `docs/queue.md` from `[ready]` to `[in-flight: workerN]`, creates `agent/workerN/<task-slug>`, and opens a PR. If a worker arrives after a task has already been claimed, it picks the next highest-priority `[ready]` task from the same plan.
 
 Coordinator first actions before workers begin:
 
 1. Review and merge any green demo-critical PRs already open.
-2. Reset all worker worktrees to `worker1` through `worker5` at `origin/main`.
+2. Reset worker worktrees `worker1` through `worker3` to `origin/main`.
 3. Tell workers to start from their parking branch, pull latest `origin/main`, read `CLAUDE.md` / `docs/AGENTS.md`, then claim from `docs/queue.md`.
 
 Wave 2 after the first PRs merge:
