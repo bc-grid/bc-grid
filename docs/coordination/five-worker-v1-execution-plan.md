@@ -1,4 +1,6 @@
-# Five-Worker v1.0 Execution Plan
+# Retired Five-Worker v1.0 Execution Plan
+
+> **Retired 2026-05-02.** The active setup is now the 3-worker model documented in `docs/coordination/three-worker-handoff.md` and `docs/PARALLEL_WORK.md`: Claude coordinator, Claude worker1, Codex worker2, Claude worker3. This document remains only as historical context for decisions made during the 2026-04-30 5-worker launch.
 
 **Owner:** Codex coordinator in `~/work/bc-grid`  
 **Date:** 2026-04-30  

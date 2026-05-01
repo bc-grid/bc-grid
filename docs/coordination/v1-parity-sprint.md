@@ -1,6 +1,8 @@
 # v1 Parity Sprint — orchestration plan
 
-**Owner:** Codex in `~/work/bc-grid` (auditor + coordinator + merge integrator + Playwright owner)
+**Owner:** Claude in `~/work/bc-grid` (auditor + coordinator + merge integrator + Playwright owner)
+
+> **2026-05-02 update:** the 5-worker allocation in this historical sprint plan has been superseded by `docs/coordination/three-worker-handoff.md` and `docs/PARALLEL_WORK.md`. Use those files for current worker assignments.
 **Decision date:** 2026-04-29
 **Authorising:** JohnC
 **Supersedes (timeline only):** `docs/roadmap.md` Q5-Q8 — feature scope from those quarters is pulled forward into this sprint; the original quarter-by-quarter calendar is replaced by the parallel-track plan below.
@@ -19,7 +21,7 @@
 
 On day 0 (~5 hours of focused work), **13 substantive PRs** landed at sustained quality (q1-pinned-cols, api-surface-diff, docs-q1-content, row-selection, nightly-perf-harness, filter-cell-role fix, live-regions, audit, etc.) — sustained ~2 PRs/hour with three implementer agents + one auditor. That pace ships ~10-20% of the original 2-year scope on day 0.
 
-**At 5 max-tier worker agents × ~10 hours/day × 14 days, the budget is ~700 worker-hours, plus coordinator time for review, merge, release, and Playwright validation.** The remaining v1.0 scope (Tracks 1-7) is roughly 50-80 impl PRs of 1-3 hours each plus integration / e2e / perf hardening — a comfortable fit if the RFCs land cleanly and the queue stays parallel-safe. Bug-for-bug parity with AG Grid's 7+ years of polish remains a post-sprint backlog.
+**Capacity note is historical.** The current setup is 3 workers plus a Claude coordinator; do not use the old 5-worker capacity math for planning. The remaining v1.0 scope (Tracks 1-7) is still roughly 50-80 impl PRs of 1-3 hours each plus integration / e2e / perf hardening. Bug-for-bug parity with AG Grid's 7+ years of polish remains a post-sprint backlog.
 
 **Target:** v1.0-rc1 by day 12; v1.0 tag by day 14.
 

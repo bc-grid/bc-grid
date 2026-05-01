@@ -8,7 +8,17 @@ This is the binding process for all agents (Claude Max, Codex Max, or any other)
 
 Build a high-performance shadcn-native data grid that competes with AG Grid Enterprise. See `design.md` for the architecture, `roadmap.md` for the **2-week parallel sprint to v1.0** (compressed from the original 2-year plan; see `design.md §13` for the 2026-04-29 scope+timeline pivot), `queue.md` for the current task list, and `coordination/v1-parity-sprint.md` for the active orchestration.
 
-**Coordinator release memory:** the Codex coordinator must keep `docs/coordination/release-milestone-roadmap.md` current. When a milestone's checklist and release gates are complete, the coordinator should recommend bumping the package version and publishing the next release. AG Grid comparisons must follow `docs/coordination/ag-grid-clean-room-audit-plan.md`; use public docs, APIs, examples, and black-box behavior for pattern validation, but do not inspect or clone AG Grid source.
+**Coordinator release memory:** the Claude coordinator in `~/work/bc-grid` must keep `docs/coordination/release-milestone-roadmap.md` current. When a milestone's checklist and release gates are complete, the coordinator should recommend bumping the package version and publishing the next release. AG Grid comparisons must follow `docs/coordination/ag-grid-clean-room-audit-plan.md`; use public docs, APIs, examples, and black-box behavior for pattern validation, but do not inspect or clone AG Grid source.
+
+**Current operating model (2026-05-02):** the 5-worker sprint is retired. Active work uses 3 worker folders only:
+
+- `~/work/bc-grid` — Claude coordinator, PR reviewer/merge integrator, release owner, Playwright/smoke-perf owner.
+- `~/work/bcg-worker1` — Claude worker1.
+- `~/work/bcg-worker2` — Codex worker2.
+- `~/work/bcg-worker3` — Claude worker3.
+- `~/work/bsncraft` — consumer implementation repo for validating bc-grid in the ERP app.
+
+Do not assign new bc-grid work to `worker4` or `worker5`; those worktrees are retired.
 
 ## 2. Reading order on first session
 
@@ -62,7 +72,7 @@ Before requesting review:
 - [ ] Tests added or updated (coverage gates met)
 - [ ] Type-check passes locally (`bun run type-check`)
 - [ ] Lint + unit/package tests pass locally (`bun run lint`, `bun run test`, plus any focused package test)
-- [ ] Playwright / smoke-perf / benchmark validation is left for the Codex coordinator
+- [ ] Playwright / smoke-perf / benchmark validation is left for the Claude coordinator
 - [ ] Public API diff is intentional (or empty)
 - [ ] Linked to the task in `queue.md`
 - [ ] Updated relevant design docs if the architecture shifted
@@ -72,7 +82,7 @@ Before requesting review:
 
 Default to **unit tests for edges and at most 1 happy-path Playwright spec added/updated when browser behavior truly needs it**. Unit tests are 0.5s; e2e tests are 5-30s × 6 browser projects. Cover validation, error states, and edge cases via `bun test` against the editor / column / hook in isolation. The goal is fast feedback for the author and fast review for the next agent.
 
-**Worker rule for the 5-worker sprint:** workers do **not** run Playwright or perf commands locally. Do not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs. If you add or update a `.pw.ts` file, note in the PR that it was not run locally and the Codex coordinator in `~/work/bc-grid` will run it during review/merge.
+**Worker rule for the 3-worker sprint:** workers do **not** run Playwright or perf commands locally. Do not run `bun run test:e2e`, `bun run test:e2e:full`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark runs. If you add or update a `.pw.ts` file, note in the PR that it was not run locally and the Claude coordinator in `~/work/bc-grid` will run it during review/merge.
 
 If an RFC or design doc says a feature needs Playwright/e2e acceptance, workers should read that as "add or update the coverage if needed"; execution remains coordinator-owned.
 
