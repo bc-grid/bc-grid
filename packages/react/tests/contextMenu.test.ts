@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { BcSelection } from "@bc-grid/core"
+import type { BcGridFilter, BcSelection } from "@bc-grid/core"
 import {
   DEFAULT_CONTEXT_MENU_ITEMS,
   contextMenuItemDisabled,
@@ -31,6 +31,13 @@ function makeContext(
     selection: emptySelection,
     ...overrides,
   }
+}
+
+function apiWithFilter(filter: BcGridFilter | null): BcContextMenuContext<Row>["api"] {
+  return {
+    getRangeSelection: () => ({ ranges: [], anchor: null }),
+    getFilter: () => filter,
+  } as BcContextMenuContext<Row>["api"]
 }
 
 describe("context menu items", () => {
@@ -234,5 +241,115 @@ describe("context menu — resolver edge cases", () => {
     // Distinct from passing `undefined`, which falls back to defaults.
     // An empty array is a deliberate 'show nothing' signal.
     expect(resolveContextMenuItems<Row>([], makeContext())).toEqual([])
+  })
+})
+
+describe("context menu — filter clear built-ins", () => {
+  const nameFilter: BcGridFilter = {
+    kind: "column",
+    columnId: "name",
+    type: "text",
+    op: "contains",
+    value: "John",
+  }
+  const compoundFilter: BcGridFilter = {
+    kind: "group",
+    op: "and",
+    filters: [
+      nameFilter,
+      {
+        kind: "column",
+        columnId: "email",
+        type: "text",
+        op: "contains",
+        value: "@acme",
+      },
+    ],
+  }
+
+  test("labels match the design doc strings", () => {
+    expect(contextMenuItemLabel("clear-all-filters")).toBe("Clear All Filters")
+    expect(contextMenuItemLabel("clear-column-filter")).toBe("Clear Filter")
+  })
+
+  test("contextMenuItemKey returns the built-in id for the new actions", () => {
+    expect(contextMenuItemKey("clear-all-filters", 0)).toBe("clear-all-filters")
+    expect(contextMenuItemKey("clear-column-filter", 1)).toBe("clear-column-filter")
+  })
+
+  test("clear-all-filters is disabled when no filter is active", () => {
+    expect(
+      contextMenuItemDisabled("clear-all-filters", makeContext({ api: apiWithFilter(null) })),
+    ).toBe(true)
+  })
+
+  test("clear-all-filters is enabled when any filter is active", () => {
+    expect(
+      contextMenuItemDisabled("clear-all-filters", makeContext({ api: apiWithFilter(nameFilter) })),
+    ).toBe(false)
+    expect(
+      contextMenuItemDisabled(
+        "clear-all-filters",
+        makeContext({ api: apiWithFilter(compoundFilter) }),
+      ),
+    ).toBe(false)
+  })
+
+  test("clear-column-filter is disabled when no cell context is available", () => {
+    // Shift+F10 with no active cell: there's no column to target.
+    expect(
+      contextMenuItemDisabled(
+        "clear-column-filter",
+        makeContext({ api: apiWithFilter(nameFilter) }),
+      ),
+    ).toBe(true)
+  })
+
+  test("clear-column-filter is disabled when the cell's column has no filter entry", () => {
+    expect(
+      contextMenuItemDisabled(
+        "clear-column-filter",
+        makeContext({
+          api: apiWithFilter(nameFilter),
+          cell: { rowId: "r1", columnId: "email" },
+        }),
+      ),
+    ).toBe(true)
+  })
+
+  test("clear-column-filter is enabled when the cell's column has a filter entry", () => {
+    expect(
+      contextMenuItemDisabled(
+        "clear-column-filter",
+        makeContext({
+          api: apiWithFilter(nameFilter),
+          cell: { rowId: "r1", columnId: "name" },
+        }),
+      ),
+    ).toBe(false)
+    expect(
+      contextMenuItemDisabled(
+        "clear-column-filter",
+        makeContext({
+          api: apiWithFilter(compoundFilter),
+          cell: { rowId: "r1", columnId: "email" },
+        }),
+      ),
+    ).toBe(false)
+  })
+
+  test("the new built-ins are NOT in DEFAULT_CONTEXT_MENU_ITEMS (consumer-opt-in only)", () => {
+    // Per the v0.3 brief, default item set stays untouched — consumers
+    // wire these IDs explicitly via the contextMenuItems prop.
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("clear-all-filters")
+    expect(DEFAULT_CONTEXT_MENU_ITEMS).not.toContain("clear-column-filter")
+  })
+
+  test("resolveContextMenuItems accepts the new built-ins in a consumer-supplied list", () => {
+    const items = resolveContextMenuItems<Row>(
+      ["copy", "separator", "clear-column-filter", "clear-all-filters"],
+      makeContext({ api: apiWithFilter(nameFilter) }),
+    )
+    expect(items).toEqual(["copy", "separator", "clear-column-filter", "clear-all-filters"])
   })
 })

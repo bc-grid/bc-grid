@@ -15,7 +15,9 @@ import {
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
   encodeTextFilterInput,
+  filterHasColumn,
   matchesGridFilter,
+  removeColumnFromFilter,
   setFilterValueKeys,
 } from "../src/filter"
 
@@ -1295,5 +1297,157 @@ describe("text filter operators — persistence round-trip", () => {
   test("clearing a text filter erases its column entry (no zombie key)", () => {
     expect(columnFilterTextFromGridFilter(null)).toEqual({})
     expect(columnFilterTextEqual(columnFilterTextFromGridFilter(null), {})).toBe(true)
+  })
+})
+
+describe("removeColumnFromFilter", () => {
+  test("returns null when input is null/undefined", () => {
+    expect(removeColumnFromFilter(null, "name")).toBeNull()
+    expect(removeColumnFromFilter(undefined, "name")).toBeNull()
+  })
+
+  test("returns null when the bare column filter matches the target", () => {
+    const filter = buildGridFilter({ name: "John" })
+    if (!filter) throw new Error("expected filter")
+    expect(removeColumnFromFilter(filter, "name")).toBeNull()
+  })
+
+  test("returns the original filter when no leaf matches", () => {
+    const filter = buildGridFilter({ name: "John" })
+    if (!filter) throw new Error("expected filter")
+    expect(removeColumnFromFilter(filter, "email")).toEqual(filter)
+  })
+
+  test("collapses to a single child when only one survives in an AND group", () => {
+    const filter = buildGridFilter({ name: "John", email: "@acme" })
+    if (!filter) throw new Error("expected filter")
+    const next = removeColumnFromFilter(filter, "email")
+    expect(next).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "contains",
+      value: "John",
+    })
+  })
+
+  test("preserves group when multiple children remain", () => {
+    const filter = buildGridFilter({ name: "John", email: "@acme", region: "EU" })
+    if (!filter) throw new Error("expected filter")
+    const next = removeColumnFromFilter(filter, "email")
+    expect(next?.kind).toBe("group")
+    if (next?.kind === "group") {
+      expect(next.op).toBe("and")
+      expect(next.filters).toHaveLength(2)
+      const cols = next.filters
+        .map((child) => (child.kind === "column" ? child.columnId : null))
+        .filter(Boolean)
+      expect(cols).toEqual(["name", "region"])
+    }
+  })
+
+  test("recurses into nested OR groups, collapsing empty branches", () => {
+    const filter = {
+      kind: "group" as const,
+      op: "and" as const,
+      filters: [
+        {
+          kind: "column" as const,
+          columnId: "name",
+          type: "text" as const,
+          op: "contains",
+          value: "John",
+        },
+        {
+          kind: "group" as const,
+          op: "or" as const,
+          filters: [
+            {
+              kind: "column" as const,
+              columnId: "tier",
+              type: "text" as const,
+              op: "contains",
+              value: "Gold",
+            },
+            {
+              kind: "column" as const,
+              columnId: "region",
+              type: "text" as const,
+              op: "contains",
+              value: "EU",
+            },
+          ],
+        },
+      ],
+    }
+    const next = removeColumnFromFilter(filter, "tier")
+    // The OR branch collapses to a single column-leaf, which then collapses
+    // the surrounding AND group into a two-leaf group.
+    expect(next?.kind).toBe("group")
+    if (next?.kind === "group") {
+      expect(next.op).toBe("and")
+      expect(next.filters).toHaveLength(2)
+    }
+  })
+
+  test("removing every column collapses the filter tree to null", () => {
+    const filter = buildGridFilter({ name: "John", email: "@acme" })
+    if (!filter) throw new Error("expected filter")
+    const afterFirst = removeColumnFromFilter(filter, "name")
+    const afterSecond = removeColumnFromFilter(afterFirst, "email")
+    expect(afterSecond).toBeNull()
+  })
+})
+
+describe("filterHasColumn", () => {
+  test("null/undefined inputs do not contain any column", () => {
+    expect(filterHasColumn(null, "name")).toBe(false)
+    expect(filterHasColumn(undefined, "name")).toBe(false)
+  })
+
+  test("matches a bare column-leaf filter", () => {
+    const filter = buildGridFilter({ name: "John" })
+    if (!filter) throw new Error("expected filter")
+    expect(filterHasColumn(filter, "name")).toBe(true)
+    expect(filterHasColumn(filter, "email")).toBe(false)
+  })
+
+  test("walks AND/OR groups to find leaves", () => {
+    const filter = buildGridFilter({ name: "John", email: "@acme" })
+    if (!filter) throw new Error("expected filter")
+    expect(filterHasColumn(filter, "name")).toBe(true)
+    expect(filterHasColumn(filter, "email")).toBe(true)
+    expect(filterHasColumn(filter, "region")).toBe(false)
+  })
+
+  test("walks nested OR branches", () => {
+    const filter = {
+      kind: "group" as const,
+      op: "and" as const,
+      filters: [
+        {
+          kind: "column" as const,
+          columnId: "name",
+          type: "text" as const,
+          op: "contains",
+          value: "John",
+        },
+        {
+          kind: "group" as const,
+          op: "or" as const,
+          filters: [
+            {
+              kind: "column" as const,
+              columnId: "tier",
+              type: "text" as const,
+              op: "contains",
+              value: "Gold",
+            },
+          ],
+        },
+      ],
+    }
+    expect(filterHasColumn(filter, "tier")).toBe(true)
+    expect(filterHasColumn(filter, "region")).toBe(false)
   })
 })

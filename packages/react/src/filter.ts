@@ -175,6 +175,60 @@ export function columnFilterTextEqual(left: ColumnFilterText, right: ColumnFilte
   return leftKeys.every((key) => left[key] === right[key])
 }
 
+/**
+ * Walk a `BcGridFilter` and return a copy with every column-leaf
+ * targeting `columnId` removed. A group whose children are all
+ * removed collapses to `null`; a group with a single remaining child
+ * collapses to that child. Returns `null` when the input filter has
+ * no entries left.
+ *
+ * Pure: never mutates the input. Used by `BcGridApi.clearFilter` to
+ * implement "clear filter for this column" without touching the
+ * other columns' filter state. Per `docs/design/context-menu-
+ * command-map.md §2.3`.
+ */
+export function removeColumnFromFilter(
+  filter: BcGridFilter | null | undefined,
+  columnId: ColumnId,
+): BcGridFilter | null {
+  if (!filter) return null
+  return removeColumnFromServerFilter(filter, columnId)
+}
+
+function removeColumnFromServerFilter(
+  filter: ServerFilter,
+  columnId: ColumnId,
+): ServerFilter | null {
+  if (filter.kind === "column") {
+    return filter.columnId === columnId ? null : filter
+  }
+  const next = filter.filters
+    .map((child) => removeColumnFromServerFilter(child, columnId))
+    .filter((child): child is ServerFilter => child !== null)
+  if (next.length === 0) return null
+  if (next.length === 1 && next[0]) return next[0]
+  return { kind: "group", op: filter.op, filters: next }
+}
+
+/**
+ * Read whether a `BcGridFilter` carries any column-leaf targeting
+ * `columnId`. Used by the `clear-column-filter` context-menu item's
+ * disabled-state predicate so the menu shows the affordance disabled
+ * when there's nothing to clear for the right-clicked column.
+ */
+export function filterHasColumn(
+  filter: BcGridFilter | null | undefined,
+  columnId: ColumnId,
+): boolean {
+  if (!filter) return false
+  return serverFilterHasColumn(filter, columnId)
+}
+
+function serverFilterHasColumn(filter: ServerFilter, columnId: ColumnId): boolean {
+  if (filter.kind === "column") return filter.columnId === columnId
+  return filter.filters.some((child) => serverFilterHasColumn(child, columnId))
+}
+
 function assignColumnFilterText(filter: ServerFilter, text: Record<ColumnId, string>): void {
   if (filter.kind === "group") {
     if (filter.op !== "and") return

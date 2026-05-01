@@ -840,6 +840,8 @@ export type BcContextMenuBuiltinItem =
   | "copy-with-headers"
   | "clear-selection"
   | "clear-range"
+  | "clear-all-filters"
+  | "clear-column-filter"
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {
@@ -852,7 +854,18 @@ export interface BcContextMenuCustomItem<TRow = unknown> {
 export type BcContextMenuItem<TRow = unknown> =
   | BcContextMenuBuiltinItem
   | BcContextMenuCustomItem<TRow>
+```
 
+The default `contextMenuItems` set is `["copy", "copy-with-headers", "separator",
+"clear-selection", "clear-range"]`. The two filter-clearing built-ins
+(`clear-all-filters`, `clear-column-filter`) are **consumer-opt-in**: pass them
+explicitly via `contextMenuItems` to surface them. Their disabled-state is wired
+through `BcGridApi.getFilter()` — `clear-all-filters` disables when no filter is
+active, and `clear-column-filter` disables unless the right-clicked cell's
+column has a filter entry. See `docs/design/context-menu-command-map.md` for the
+full v0.3 command map.
+
+```ts
 export interface BcContextMenuContext<TRow = unknown> {
   cell: BcCellPosition | null
   row: TRow | null
@@ -1219,11 +1232,13 @@ export interface BcGridApi<TRow = unknown> {
   getSelection(): BcSelection
   getRangeSelection(): BcRangeSelection
   getColumnState(): BcColumnStateEntry[]
+  getFilter(): BcGridFilter | null
 
   // Mutations (controlled-state shortcuts; only effective in uncontrolled mode)
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter | null): void
+  clearFilter(columnId?: ColumnId): void
   setRangeSelection(selection: BcRangeSelection): void
   copyRange(range?: BcRange): Promise<void>
   clearRangeSelection(): void
@@ -1234,6 +1249,19 @@ export interface BcGridApi<TRow = unknown> {
   refresh(): void
 }
 ```
+
+`getFilter()` returns the current `BcGridFilter` (or `null` if no filter is
+active). It is the read counterpart to `setFilter` and is the way the
+`clear-column-filter` / `clear-all-filters` context-menu built-ins decide whether
+they should be enabled.
+
+`clearFilter(columnId?)` is a convenience wrapper around `setFilter`. With no
+argument it clears the entire filter tree (same as `setFilter(null)`). With a
+`columnId`, it removes only the leaves for that column from the filter tree,
+collapsing surrounding `and` / `or` groups when only one branch survives.
+Designed for surface-level "clear this column's filter" UX (context menu,
+column header menu) without touching neighbouring columns. See
+`docs/design/context-menu-command-map.md` §2.3.
 
 ### 6.2 `BcServerGridApi<TRow>` (frozen at v0.1)
 

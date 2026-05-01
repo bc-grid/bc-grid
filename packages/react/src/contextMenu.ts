@@ -1,3 +1,4 @@
+import { filterHasColumn } from "./filter"
 import type {
   BcContextMenuBuiltinItem,
   BcContextMenuContext,
@@ -19,6 +20,8 @@ const builtInLabels: Partial<Record<BcContextMenuBuiltinItem, string>> = {
   "copy-with-headers": "Copy with Headers",
   "clear-selection": "Clear Selection",
   "clear-range": "Clear Range",
+  "clear-all-filters": "Clear All Filters",
+  "clear-column-filter": "Clear Filter",
 }
 
 export function resolveContextMenuItems<TRow>(
@@ -72,6 +75,18 @@ export function contextMenuItemDisabled<TRow>(
   if (item === "clear-range") return context.api.getRangeSelection().ranges.length === 0
   if (item === "clear-selection") {
     return context.selection.mode === "explicit" && context.selection.rowIds.size === 0
+  }
+  if (item === "clear-all-filters") {
+    // Disabled when no filter is active. Reads current filter via the
+    // BcGridApi.getFilter() method added alongside this built-in.
+    return context.api.getFilter() == null
+  }
+  if (item === "clear-column-filter") {
+    // Disabled when there's no right-click cell context (the user
+    // triggered the menu via Shift+F10 with no active cell, say) OR
+    // when the active cell's column has no filter entry to clear.
+    if (!context.cell) return true
+    return !filterHasColumn(context.api.getFilter(), context.cell.columnId)
   }
   return false
 }

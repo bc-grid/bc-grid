@@ -50,6 +50,7 @@ import {
   columnFilterTextEqual,
   columnFilterTextFromGridFilter,
   matchesGridFilter,
+  removeColumnFromFilter,
   setFilterValueKeys,
 } from "./filter"
 import {
@@ -1116,6 +1117,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       getColumnState() {
         return deriveColumnState(resolvedColumns, columnState)
       },
+      getFilter() {
+        return filterState
+      },
       setColumnState(next) {
         setColumnState(next)
       },
@@ -1124,6 +1128,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       },
       setFilter(next) {
         applyFilterState(next)
+      },
+      clearFilter(columnId) {
+        if (columnId == null) {
+          applyFilterState(null)
+          return
+        }
+        applyFilterState(removeColumnFromFilter(filterState, columnId))
       },
       setRangeSelection(next) {
         setRangeSelectionState(next)
@@ -1153,6 +1164,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     columnIndexById,
     columnState,
     copyRangeToClipboard,
+    filterState,
     focusCell,
     rangeSelectionState,
     requestRender,
