@@ -8,11 +8,13 @@ import {
   decodeNumberFilterInput,
   decodeNumberRangeFilterInput,
   decodeSetFilterInput,
+  decodeTextFilterInput,
   encodeDateFilterInput,
   encodeDateRangeFilterInput,
   encodeNumberFilterInput,
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
+  encodeTextFilterInput,
   matchesGridFilter,
   setFilterValueKeys,
 } from "../src/filter"
@@ -908,5 +910,254 @@ describe("matchesGridFilter — AND/OR groups", () => {
     expect(matchesGridFilter(filter, lookup({ name: "Jane", tier: "Gold", region: "EU" }))).toBe(
       false,
     )
+  })
+})
+
+describe("text filter operators — encode/decode", () => {
+  test("decode falls back to plain-string contract for legacy state", () => {
+    expect(decodeTextFilterInput("john")).toEqual({ op: "contains", value: "john" })
+    expect(decodeTextFilterInput("")).toEqual({ op: "contains", value: "" })
+  })
+
+  test("decode rejects invalid JSON shape and treats input as plain needle", () => {
+    expect(decodeTextFilterInput("{not-json")).toEqual({ op: "contains", value: "{not-json" })
+    expect(decodeTextFilterInput(JSON.stringify({ op: "weird", value: "x" }))).toEqual({
+      op: "contains",
+      value: JSON.stringify({ op: "weird", value: "x" }),
+    })
+  })
+
+  test("decode preserves operator + modifier flags", () => {
+    expect(
+      decodeTextFilterInput(JSON.stringify({ op: "equals", value: "John", caseSensitive: true })),
+    ).toEqual({ op: "equals", value: "John", caseSensitive: true })
+
+    expect(
+      decodeTextFilterInput(
+        JSON.stringify({ op: "starts-with", value: "Jo", regex: true, caseSensitive: true }),
+      ),
+    ).toEqual({ op: "starts-with", value: "Jo", regex: true, caseSensitive: true })
+  })
+
+  test("encode/decode round-trips structured payloads", () => {
+    for (const input of [
+      { op: "contains" as const, value: "needle" },
+      { op: "starts-with" as const, value: "pre" },
+      { op: "ends-with" as const, value: "fix" },
+      { op: "equals" as const, value: "John", caseSensitive: true },
+      { op: "contains" as const, value: "^AC.*$", regex: true },
+    ]) {
+      expect(decodeTextFilterInput(encodeTextFilterInput(input))).toEqual(input)
+    }
+  })
+})
+
+describe("text filter operators — buildGridFilter", () => {
+  test("default contains keeps the bare canonical shape (no modifier flags)", () => {
+    expect(buildGridFilter({ name: "John" })).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "contains",
+      value: "John",
+    })
+  })
+
+  test("structured operator payloads round-trip into ServerColumnFilter", () => {
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "starts-with", value: "John" }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "starts-with",
+      value: "John",
+    })
+
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "equals", value: "John", caseSensitive: true }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "equals",
+      value: "John",
+      caseSensitive: true,
+    })
+  })
+
+  test("regex inputs that fail to compile are dropped at build time", () => {
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "contains", value: "(unbalanced", regex: true }),
+      }),
+    ).toBeNull()
+  })
+
+  test("regex inputs that compile carry the regex flag through", () => {
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "contains", value: "^AC.*Z$", regex: true }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "contains",
+      value: "^AC.*Z$",
+      regex: true,
+    })
+  })
+
+  test("whitespace-only structured value is dropped (consistent with plain string)", () => {
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "equals", value: "   " }),
+      }),
+    ).toBeNull()
+  })
+})
+
+describe("text filter operators — matchesGridFilter", () => {
+  const lookup =
+    (values: Record<ColumnId, string>) =>
+    (columnId: ColumnId): string =>
+      values[columnId] ?? ""
+
+  test("contains is case-insensitive by default", () => {
+    const filter = buildGridFilter({ name: "joHN" })
+    if (!filter) throw new Error("expected filter")
+    expect(matchesGridFilter(filter, lookup({ name: "Johnathan" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "Jane" }))).toBe(false)
+  })
+
+  test("contains honours caseSensitive flag", () => {
+    const filter = buildGridFilter({
+      name: encodeTextFilterInput({ op: "contains", value: "John", caseSensitive: true }),
+    })
+    if (!filter) throw new Error("expected filter")
+    expect(matchesGridFilter(filter, lookup({ name: "Johnathan" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "johnathan" }))).toBe(false)
+  })
+
+  test("equals demands an exact match (case-insensitive by default)", () => {
+    const filter = buildGridFilter({
+      name: encodeTextFilterInput({ op: "equals", value: "John" }),
+    })
+    if (!filter) throw new Error("expected filter")
+    expect(matchesGridFilter(filter, lookup({ name: "john" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "John" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "Johnny" }))).toBe(false)
+  })
+
+  test("equals + caseSensitive demands character-exact match", () => {
+    const filter = buildGridFilter({
+      name: encodeTextFilterInput({ op: "equals", value: "John", caseSensitive: true }),
+    })
+    if (!filter) throw new Error("expected filter")
+    expect(matchesGridFilter(filter, lookup({ name: "John" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "john" }))).toBe(false)
+  })
+
+  test("starts-with / ends-with anchor the comparison (case-insensitive default)", () => {
+    const startsWith = buildGridFilter({
+      name: encodeTextFilterInput({ op: "starts-with", value: "Joh" }),
+    })
+    const endsWith = buildGridFilter({
+      name: encodeTextFilterInput({ op: "ends-with", value: "doe" }),
+    })
+    if (!startsWith || !endsWith) throw new Error("expected filters")
+
+    expect(matchesGridFilter(startsWith, lookup({ name: "Johnathan Doe" }))).toBe(true)
+    expect(matchesGridFilter(startsWith, lookup({ name: "John" }))).toBe(true)
+    expect(matchesGridFilter(startsWith, lookup({ name: "Anna Joh" }))).toBe(false)
+
+    expect(matchesGridFilter(endsWith, lookup({ name: "John Doe" }))).toBe(true)
+    expect(matchesGridFilter(endsWith, lookup({ name: "Doe John" }))).toBe(false)
+  })
+
+  test("starts-with honours caseSensitive flag", () => {
+    const filter = buildGridFilter({
+      name: encodeTextFilterInput({
+        op: "starts-with",
+        value: "Joh",
+        caseSensitive: true,
+      }),
+    })
+    if (!filter) throw new Error("expected filter")
+    expect(matchesGridFilter(filter, lookup({ name: "Johnathan Doe" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "johnathan doe" }))).toBe(false)
+  })
+
+  test("regex flag overrides operator and matches as a pattern", () => {
+    const filter = buildGridFilter({
+      name: encodeTextFilterInput({ op: "contains", value: "^AC[0-9]+$", regex: true }),
+    })
+    if (!filter) throw new Error("expected filter")
+    expect(matchesGridFilter(filter, lookup({ name: "AC123" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "ac123" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "ZAC123" }))).toBe(false)
+  })
+
+  test("regex + caseSensitive distinguishes letter case", () => {
+    const filter = buildGridFilter({
+      name: encodeTextFilterInput({
+        op: "contains",
+        value: "^AC[0-9]+$",
+        regex: true,
+        caseSensitive: true,
+      }),
+    })
+    if (!filter) throw new Error("expected filter")
+    expect(matchesGridFilter(filter, lookup({ name: "AC123" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ name: "ac123" }))).toBe(false)
+  })
+
+  test("missing column treated as empty value across operators", () => {
+    const equalsFilter = buildGridFilter({
+      name: encodeTextFilterInput({ op: "equals", value: "John" }),
+    })
+    if (!equalsFilter) throw new Error("expected filter")
+    expect(matchesGridFilter(equalsFilter, lookup({}))).toBe(false)
+  })
+})
+
+describe("text filter operators — persistence round-trip", () => {
+  test("default contains persists as plain string for legacy compat", () => {
+    const filter = buildGridFilter({ name: "John" })
+    if (!filter) throw new Error("expected filter")
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text).toEqual({ name: "John" })
+    expect(buildGridFilter(text)).toEqual(filter)
+  })
+
+  test("operator + modifier payload persists as JSON and round-trips", () => {
+    const filter = buildGridFilter({
+      name: encodeTextFilterInput({ op: "equals", value: "John", caseSensitive: true }),
+    })
+    if (!filter) throw new Error("expected filter")
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(buildGridFilter(text)).toEqual(filter)
+
+    const decoded = decodeTextFilterInput(text.name ?? "")
+    expect(decoded).toEqual({ op: "equals", value: "John", caseSensitive: true })
+  })
+
+  test("regex payload persists as JSON and round-trips", () => {
+    const filter = buildGridFilter({
+      name: encodeTextFilterInput({ op: "contains", value: "^AC[0-9]+$", regex: true }),
+    })
+    if (!filter) throw new Error("expected filter")
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(buildGridFilter(text)).toEqual(filter)
+  })
+
+  test("clearing a text filter erases its column entry (no zombie key)", () => {
+    expect(columnFilterTextFromGridFilter(null)).toEqual({})
+    expect(columnFilterTextEqual(columnFilterTextFromGridFilter(null), {})).toBe(true)
   })
 })

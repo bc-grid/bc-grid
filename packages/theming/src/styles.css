@@ -372,7 +372,8 @@
 .bc-grid-filter-number-range,
 .bc-grid-filter-date,
 .bc-grid-filter-date-range,
-.bc-grid-filter-set {
+.bc-grid-filter-set,
+.bc-grid-filter-text {
   display: flex;
   width: 100%;
   height: 70%;
@@ -387,9 +388,50 @@
 .bc-grid-filter-date > .bc-grid-filter-select,
 .bc-grid-filter-date-range > .bc-grid-filter-input,
 .bc-grid-filter-set > .bc-grid-filter-select,
-.bc-grid-filter-set > .bc-grid-filter-set-button {
+.bc-grid-filter-set > .bc-grid-filter-set-button,
+.bc-grid-filter-text > .bc-grid-filter-input,
+.bc-grid-filter-text > .bc-grid-filter-select,
+.bc-grid-filter-text > .bc-grid-filter-text-toggle {
   height: 100%;
   padding: 0 0.25rem;
+}
+
+.bc-grid-filter-text > .bc-grid-filter-select {
+  width: 92px;
+  flex: 0 0 92px;
+}
+
+.bc-grid-filter-text > .bc-grid-filter-input {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.bc-grid-filter-text-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--border, 220 13% 91%));
+  border-radius: calc(var(--radius, 0.375rem) - 2px);
+  background: hsl(var(--background, 0 0% 100%));
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  min-width: 28px;
+}
+
+.bc-grid-filter-text-toggle[aria-pressed="true"] {
+  background: var(--bc-grid-accent);
+  color: var(--bc-grid-accent-fg);
+  border-color: var(--bc-grid-accent);
+}
+
+.bc-grid-filter-text-toggle:focus-visible {
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: 1px;
 }
 
 .bc-grid-filter-number > .bc-grid-filter-select {

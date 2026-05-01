@@ -16,16 +16,20 @@ import {
   type NumberFilterOperator,
   type SetFilterOperator,
   type SetFilterOption,
+  type TextFilterInput,
+  type TextFilterOperator,
   decodeDateFilterInput,
   decodeDateRangeFilterInput,
   decodeNumberFilterInput,
   decodeNumberRangeFilterInput,
   decodeSetFilterInput,
+  decodeTextFilterInput,
   encodeDateFilterInput,
   encodeDateRangeFilterInput,
   encodeNumberFilterInput,
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
+  encodeTextFilterInput,
 } from "./filter"
 import {
   type ResolvedColumn,
@@ -411,6 +415,101 @@ export function renderFilterCell<TRow>({
 
 type FilterFocusElement = HTMLInputElement | HTMLSelectElement | HTMLButtonElement
 type FilterKeyDownHandler = (event: KeyboardEvent<HTMLElement>) => void
+
+function TextFilterControl({
+  filterId,
+  filterLabel,
+  filterText,
+  onFilterChange,
+  onFilterKeyDown,
+  primaryRef,
+  placeholder,
+}: {
+  filterId: string
+  filterLabel: string
+  filterText: string
+  onFilterChange: (next: string) => void
+  onFilterKeyDown: FilterKeyDownHandler
+  primaryRef?: { current: FilterFocusElement | null }
+  placeholder?: string
+}): ReactNode {
+  const input = decodeTextFilterInput(filterText)
+  const emit = (next: {
+    op: TextFilterOperator
+    value: string
+    caseSensitive: boolean
+    regex: boolean
+  }) => {
+    if (next.op === "contains" && !next.caseSensitive && !next.regex) {
+      // Preserve the legacy plain-string contract for the default case so
+      // pre-existing persisted state and consumers reading filterText keep
+      // round-tripping unchanged.
+      onFilterChange(next.value)
+      return
+    }
+    const payload: TextFilterInput = { op: next.op, value: next.value }
+    if (next.caseSensitive) payload.caseSensitive = true
+    if (next.regex) payload.regex = true
+    onFilterChange(encodeTextFilterInput(payload))
+  }
+  const flat = {
+    op: input.op,
+    value: input.value,
+    caseSensitive: input.caseSensitive === true,
+    regex: input.regex === true,
+  }
+  const update = (next: Partial<typeof flat>) => emit({ ...flat, ...next })
+
+  return (
+    <div className="bc-grid-filter-text">
+      <select
+        aria-label={`${filterLabel} operator`}
+        className="bc-grid-filter-select"
+        value={input.op}
+        onChange={(event) => update({ op: event.currentTarget.value as TextFilterOperator })}
+        onKeyDown={onFilterKeyDown}
+      >
+        <option value="contains">Contains</option>
+        <option value="equals">Equals</option>
+        <option value="starts-with">Starts with</option>
+        <option value="ends-with">Ends with</option>
+      </select>
+      <input
+        ref={(el) => {
+          if (primaryRef) primaryRef.current = el
+        }}
+        aria-label={filterLabel}
+        className="bc-grid-filter-input"
+        id={filterId}
+        type="text"
+        value={input.value}
+        onChange={(event) => update({ value: event.currentTarget.value })}
+        onKeyDown={onFilterKeyDown}
+        placeholder={placeholder}
+      />
+      <button
+        type="button"
+        aria-label={`${filterLabel} case sensitive`}
+        aria-pressed={flat.caseSensitive}
+        className="bc-grid-filter-text-toggle"
+        onClick={() => update({ caseSensitive: !flat.caseSensitive })}
+        onKeyDown={onFilterKeyDown}
+      >
+        Aa
+      </button>
+      <button
+        type="button"
+        aria-label={`${filterLabel} regex`}
+        aria-pressed={flat.regex}
+        className="bc-grid-filter-text-toggle"
+        onClick={() => update({ regex: !flat.regex })}
+        onKeyDown={onFilterKeyDown}
+      >
+        .*
+      </button>
+    </div>
+  )
+}
 
 function DateFilterControl({
   filterId,
@@ -827,6 +926,19 @@ export function FilterEditorBody({
         onFilterChange={onFilterChange}
         onFilterKeyDown={onFilterKeyDown}
         primaryRef={focusRef}
+      />
+    )
+  }
+  if (filterType === "text") {
+    return (
+      <TextFilterControl
+        filterId={filterId}
+        filterLabel={filterLabel}
+        filterText={filterText}
+        onFilterChange={onFilterChange}
+        onFilterKeyDown={onFilterKeyDown}
+        primaryRef={focusRef}
+        placeholder={messages.filterPlaceholder}
       />
     )
   }
