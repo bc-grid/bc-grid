@@ -142,6 +142,88 @@ describe("editor edit-mode keyboard contract", () => {
   })
 })
 
+describe("editor keyboard modifier-gating contract", () => {
+  // Per editing-rfc §Keyboard model in edit mode: Ctrl / Alt / Meta on
+  // any of the contract keys belong to the browser or the host app
+  // (Ctrl+Enter is "send" in many forms; Cmd+Tab / Alt+Escape are
+  // system shortcuts; Ctrl+F2 is sometimes a host accessibility
+  // shortcut). Activation and edit-mode handlers MUST ignore them so
+  // the host shortcut runs and we don't silently drop a typed commit.
+
+  test("Ctrl / Alt / Meta on F2 or Enter activation are ignored (browser / host shortcut wins)", () => {
+    for (const modifier of ["ctrlKey", "altKey", "metaKey"] as const) {
+      expect(getEditorActivationIntent({ key: "F2", [modifier]: true })).toEqual({
+        type: "ignore",
+      })
+      expect(getEditorActivationIntent({ key: "Enter", [modifier]: true })).toEqual({
+        type: "ignore",
+      })
+    }
+  })
+
+  test("Shift+F2 and Shift+Enter still activate (Shift is the legitimate edit-mode modifier)", () => {
+    // Shift+Enter is the canonical "commit + move up" gesture; the
+    // activation arm has to accept it so the user can land directly
+    // in edit mode with Shift held. Shift+F2 is harmless — there is
+    // no documented host shortcut bound to it in the major browsers.
+    expect(getEditorActivationIntent({ key: "F2", shiftKey: true })).toEqual({
+      type: "start",
+      activation: "f2",
+    })
+    expect(getEditorActivationIntent({ key: "Enter", shiftKey: true })).toEqual({
+      type: "start",
+      activation: "enter",
+    })
+  })
+
+  test("Ctrl / Alt / Meta on Enter / Tab / Escape in edit mode are ignored (host shortcut wins)", () => {
+    for (const modifier of ["ctrlKey", "altKey", "metaKey"] as const) {
+      expect(getEditorEditModeKeyboardIntent({ key: "Enter", [modifier]: true })).toEqual({
+        type: "ignore",
+      })
+      expect(getEditorEditModeKeyboardIntent({ key: "Tab", [modifier]: true })).toEqual({
+        type: "ignore",
+      })
+      expect(getEditorEditModeKeyboardIntent({ key: "Escape", [modifier]: true })).toEqual({
+        type: "ignore",
+      })
+    }
+  })
+
+  test("Ctrl + Shift + Enter etc. are ignored — Ctrl wins over Shift", () => {
+    // The Shift-allowance only applies when Shift is the *only*
+    // modifier. Ctrl + Shift + Enter is still a host shortcut
+    // (commonly "send and add another" in form apps); we must not
+    // claim it.
+    expect(
+      getEditorEditModeKeyboardIntent({ key: "Enter", shiftKey: true, ctrlKey: true }),
+    ).toEqual({ type: "ignore" })
+    expect(getEditorEditModeKeyboardIntent({ key: "Tab", shiftKey: true, metaKey: true })).toEqual({
+      type: "ignore",
+    })
+  })
+
+  test("Ctrl / Alt / Meta on a printable key continues to ignore (printable seed already gated)", () => {
+    // Pre-existing behaviour — re-asserted under the new modifier-gate
+    // helper so the contract stays uniform across all key paths.
+    expect(getEditorActivationIntent({ key: "a", ctrlKey: true })).toEqual({ type: "ignore" })
+    expect(getEditorActivationIntent({ key: "a", altKey: true })).toEqual({ type: "ignore" })
+    expect(getEditorActivationIntent({ key: "a", metaKey: true })).toEqual({ type: "ignore" })
+  })
+
+  test("Shift on a printable key activates with the original key value (Shift is the casing modifier)", () => {
+    // Shift+a → the browser already maps `event.key` to "A". The grid
+    // doesn't re-derive casing; it forwards the resolved key to the
+    // editor as the seed. This pin guards against a future regression
+    // where a "no Shift on activation" rule sneaks in.
+    expect(getEditorActivationIntent({ key: "A", shiftKey: true })).toEqual({
+      type: "start",
+      activation: "printable",
+      seedKey: "A",
+    })
+  })
+})
+
 describe("editor validation and pending commit contract", () => {
   test("validation rejection returns to editing with the error and no committed value", () => {
     let state = mountedEditingStateFromKey("Enter")

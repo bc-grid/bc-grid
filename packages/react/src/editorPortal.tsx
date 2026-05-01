@@ -222,9 +222,7 @@ function EditorMount<TRow>({
   // autocomplete) are ignored — the editor still has focus.
   useEffect(() => {
     const handlePointerDown = (event: globalThis.PointerEvent) => {
-      const target = event.target
-      if (!(target instanceof Element)) return
-      if (target.closest("[data-bc-grid-editor-root], [data-bc-grid-editor-portal]")) return
+      if (!shouldCommitOnPointerDown(event.target)) return
       const value = readEditorInputValue(focusRef.current)
       handleCommitRef.current?.(value, "stay", "pointer")
     }
@@ -343,11 +341,27 @@ function DefaultTextEditor({
   pending,
 }: DefaultTextEditorProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
-  // Hand the focusRef back up to the controller — it's the element the
-  // grid will focus after mount.
-  useEffect(() => {
+  // Hand the focusRef back up to the controller in `useLayoutEffect`
+  // (NOT `useEffect`) so the assignment lands BEFORE the parent
+  // EditorMount's `useLayoutEffect` calls `focusRef.current?.focus()`.
+  // React fires child layout effects before parent layout effects in
+  // the commit phase, but useEffect runs after paint — by which point
+  // the parent has already read `focusRef.current` as `null` and given
+  // up. This bug shipped silently because `<BcEditGrid>` consumers
+  // typically pass their own `column.cellEditor` (which uses
+  // useLayoutEffect correctly); the default editor only fires when a
+  // column is `editable: true` with no `cellEditor` set, but the
+  // contract is supposed to be uniform per editing-rfc §Lifecycle.
+  // Cleanup nulls out the focusRef so a stale element doesn't leak
+  // after unmount — same as the built-in `text` editor.
+  useLayoutEffect(() => {
     if (focusRef && inputRef.current) {
       ;(focusRef as { current: HTMLElement | null }).current = inputRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
     }
   }, [focusRef])
 
@@ -381,6 +395,34 @@ function editorStateAttribute({
   if (pending) return "pending"
   if (error) return "error"
   return "idle"
+}
+
+/**
+ * Decide whether a `pointerdown` should commit the open editor.
+ *
+ * Per `editing-rfc §Portal click-outside rules`:
+ *   - Clicks inside the editor's wrapper (`[data-bc-grid-editor-root]`)
+ *     never commit — the user is interacting with the input itself.
+ *   - Clicks inside a portaled popover (`[data-bc-grid-editor-portal]`)
+ *     never commit — date pickers, autocomplete dropdowns, custom
+ *     popovers attached to the document body (rather than rendered
+ *     inline) opt in via this attribute so click-outside doesn't fire
+ *     while the user is picking from the popover.
+ *   - Anything else — commits with `stay` move semantics.
+ *
+ * Pure (takes a target rather than reading from a live event) so tests
+ * can pin the contract without firing real pointer events. Duck-types
+ * the target's `closest` so synthetic event targets (programmatic
+ * dispatches, non-DOM pointer targets like `window` / `document`) are
+ * filtered out — the wrapper attaches the listener at the document
+ * level so `event.target` is always an Element in practice, but the
+ * helper stays defensive.
+ */
+export function shouldCommitOnPointerDown(target: EventTarget | null): boolean {
+  const closest = (target as { closest?: (selector: string) => Element | null } | null)?.closest
+  if (typeof closest !== "function") return false
+  if (closest.call(target, "[data-bc-grid-editor-root], [data-bc-grid-editor-portal]")) return false
+  return true
 }
 
 export function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {

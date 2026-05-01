@@ -119,6 +119,118 @@ describe("reduceEditState — invalid validation", () => {
     expect(s.mode).toBe("editing")
     if (s.mode === "editing") expect(s.error).toBe("Required")
   })
+
+  test("re-commit after rejection clears the error and re-enters validating with the new value", () => {
+    // Per editing-rfc §a11y for edit mode: the editor stays mounted on
+    // rejection so focus is retained in the input. The user fixes the
+    // value and presses Enter again; the second commit must clear the
+    // error and start a fresh validation. Pin the error-clearing
+    // invariant so a future refactor (e.g. one that copies error
+    // through validating for live feedback) doesn't accidentally leak
+    // a stale error into the next pendingValue cycle.
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "bad", moveOnSettle: "down" })
+    s = reduceEditState(s, {
+      type: "validateResolved",
+      result: { valid: false, error: "Required" },
+    })
+    expect(s.mode).toBe("editing")
+    if (s.mode === "editing") expect(s.error).toBe("Required")
+
+    // User edits the value and re-commits.
+    s = reduceEditState(s, { type: "commit", value: "good", moveOnSettle: "right" })
+    expect(s.mode).toBe("validating")
+    if (s.mode === "validating") {
+      expect(s.pendingValue).toBe("good")
+      expect(s.moveOnSettle).toBe("right")
+      // No `error` field on the validating discriminant — error is
+      // structurally absent during the new commit's validation phase.
+      expect((s as { error?: string }).error).toBeUndefined()
+    }
+
+    s = reduceEditState(s, { type: "validateResolved", result: { valid: true } })
+    expect(s.mode).toBe("committing")
+    if (s.mode === "committing") {
+      expect(s.committedValue).toBe("good")
+      expect(s.moveOnSettle).toBe("right")
+    }
+
+    s = reduceEditState(s, { type: "unmounted" })
+    s = reduceEditState(s, { type: "unmounted" })
+    expect(s.mode).toBe("navigation")
+  })
+
+  test("Esc from editing-with-error returns to navigation cleanly (no error leak)", () => {
+    // Cancel after a validation rejection drops the error AND the
+    // candidate value — the user gave up on this edit cycle. The
+    // active cell stays put per the cancel contract.
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "bad", moveOnSettle: "down" })
+    s = reduceEditState(s, {
+      type: "validateResolved",
+      result: { valid: false, error: "Required" },
+    })
+    expect(s.mode).toBe("editing")
+    if (s.mode === "editing") expect(s.error).toBe("Required")
+
+    s = reduceEditState(s, { type: "cancel" })
+    expect(s.mode).toBe("cancelling")
+
+    s = reduceEditState(s, { type: "unmounted" })
+    expect(s.mode).toBe("unmounting")
+    if (s.mode === "unmounting") {
+      expect(s.next.move).toBe("stay")
+      // Cancel never carries a committed value through to the row
+      // model — the user explicitly bailed.
+      expect(s.next.committedValue).toBeUndefined()
+    }
+    s = reduceEditState(s, { type: "unmounted" })
+    expect(s.mode).toBe("navigation")
+  })
+
+  test("multiple consecutive rejections surface each new error without leaking the prior one", () => {
+    // The user types, rejects with "Required", types again, rejects
+    // with "Out of range", types a third time, valid. Each rejection
+    // surfaces only the latest error; the prior error doesn't carry
+    // through to the next validating cycle.
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+
+    // First rejection.
+    s = reduceEditState(s, { type: "commit", value: "v1", moveOnSettle: "down" })
+    s = reduceEditState(s, {
+      type: "validateResolved",
+      result: { valid: false, error: "Required" },
+    })
+    if (s.mode === "editing") expect(s.error).toBe("Required")
+
+    // Second rejection — error replaces, doesn't append.
+    s = reduceEditState(s, { type: "commit", value: "v2", moveOnSettle: "down" })
+    if (s.mode === "validating") expect((s as { error?: string }).error).toBeUndefined()
+    s = reduceEditState(s, {
+      type: "validateResolved",
+      result: { valid: false, error: "Out of range" },
+    })
+    expect(s.mode).toBe("editing")
+    if (s.mode === "editing") {
+      expect(s.error).toBe("Out of range")
+      expect(s.error).not.toBe("Required")
+    }
+
+    // Third commit succeeds — error cleared, value committed.
+    s = reduceEditState(s, { type: "commit", value: "v3", moveOnSettle: "down" })
+    s = reduceEditState(s, { type: "validateResolved", result: { valid: true } })
+    expect(s.mode).toBe("committing")
+    if (s.mode === "committing") expect(s.committedValue).toBe("v3")
+  })
 })
 
 describe("reduceEditState — invalid transitions are absorbed", () => {
@@ -152,6 +264,83 @@ describe("reduceEditState — invalid transitions are absorbed", () => {
       cell: { rowId: "row-2" as RowId, columnId: "other" },
       activation: "enter",
     })
+    expect(next).toBe(before)
+  })
+
+  test("double-commit is absorbed — second commit while validating doesn't replace pendingValue", () => {
+    // Per editing-rfc §Concurrency: a commit while we're already in
+    // validating means the user pressed Enter twice fast. The first
+    // pendingValue is still load-bearing (its async validator is in
+    // flight); the second event is dropped at the machine level. The
+    // controller's AbortSignal handles the underlying validator
+    // cancellation if the user changes the value first; here we just
+    // pin the machine-level absorption.
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "first", moveOnSettle: "down" })
+    expect(s.mode).toBe("validating")
+
+    const before = s
+    const next = reduceEditState(s, { type: "commit", value: "second", moveOnSettle: "right" })
+    expect(next).toBe(before)
+    if (next.mode === "validating") {
+      expect(next.pendingValue).toBe("first")
+      expect(next.moveOnSettle).toBe("down")
+    }
+  })
+
+  test("commit during committing is absorbed (the consumer hook is already in flight)", () => {
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "v", moveOnSettle: "down" })
+    s = reduceEditState(s, { type: "validateResolved", result: { valid: true } })
+    expect(s.mode).toBe("committing")
+    const before = s
+
+    const next = reduceEditState(s, { type: "commit", value: "newer", moveOnSettle: "right" })
+    expect(next).toBe(before)
+  })
+
+  test("cancel during committing is absorbed (commit must run to settle for the overlay invariant)", () => {
+    // Per editing-rfc §Server commit + optimistic UI: once the
+    // overlay has been written and the consumer hook fired, the
+    // user can no longer "cancel" — the rollback would race with the
+    // consumer hook's own settle handler. The state machine absorbs
+    // the cancel; the controller's AbortSignal is the only safe path
+    // out of an in-flight async settle.
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "v", moveOnSettle: "down" })
+    s = reduceEditState(s, { type: "validateResolved", result: { valid: true } })
+    expect(s.mode).toBe("committing")
+    const before = s
+
+    const next = reduceEditState(s, { type: "cancel" })
+    expect(next).toBe(before)
+  })
+
+  test("validateResolved during cancelling is absorbed (cancel wins over a late validator)", () => {
+    // Esc during async validation: the controller dispatches `cancel`,
+    // moving the machine to `cancelling`. If the original validator
+    // resolves a tick later (its AbortSignal hadn't propagated yet),
+    // the late resolution must NOT push the machine back to validating
+    // → committing. Pin the absorption.
+    let s: EditState<string> = initial
+    s = reduceEditState(s, { type: "activate", cell, activation: "enter" })
+    s = reduceEditState(s, { type: "prepareResolved" })
+    s = reduceEditState(s, { type: "mounted" })
+    s = reduceEditState(s, { type: "commit", value: "v", moveOnSettle: "down" })
+    s = reduceEditState(s, { type: "cancel" })
+    expect(s.mode).toBe("cancelling")
+    const before = s
+
+    const next = reduceEditState(s, { type: "validateResolved", result: { valid: true } })
     expect(next).toBe(before)
   })
 })
