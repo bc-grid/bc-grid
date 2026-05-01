@@ -294,6 +294,81 @@ describe("server paged query reset semantics", () => {
       visibleColumns: ["id", "name"],
     })
   })
+
+  test("sort/filter/search changes each reset to page zero with the active query payload", async () => {
+    const filter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["active"],
+    }
+    const scenarios = [
+      {
+        expected: { sort: [{ columnId: "name", direction: "desc" }] },
+        view: model.createViewState({
+          groupBy: [],
+          sort: [{ columnId: "name", direction: "desc" }],
+          visibleColumns: ["id", "name", "status"],
+        }),
+      },
+      {
+        expected: { filter },
+        view: model.createViewState({
+          filter,
+          groupBy: [],
+          sort: [],
+          visibleColumns: ["id", "name", "status"],
+        }),
+      },
+      {
+        expected: { search: "acme" },
+        view: model.createViewState({
+          groupBy: [],
+          searchText: "acme",
+          sort: [],
+          visibleColumns: ["id", "name", "status"],
+        }),
+      },
+    ] as const
+
+    for (const scenario of scenarios) {
+      const viewKey = viewKeyFor(scenario.view)
+      const pageIndex = resolveServerPagedRequestPage({
+        pageIndex: 9,
+        previousViewKey: baseViewKey,
+        viewKey,
+      })
+      let capturedQuery: ServerPagedQuery | undefined
+
+      await model.loadPagedPage({
+        loadPage: async (query) => {
+          capturedQuery = query
+          return {
+            pageIndex: query.pageIndex,
+            pageSize: query.pageSize,
+            rows: pageRows.slice(0, 3),
+            totalRows: 137,
+            viewKey: query.viewKey,
+          }
+        },
+        pageIndex,
+        pageSize: 25,
+        view: scenario.view,
+        viewKey,
+      }).promise
+
+      expect(pageIndex).toBe(0)
+      expect(capturedQuery).toMatchObject({
+        mode: "paged",
+        pageIndex: 0,
+        pageSize: 25,
+        view: scenario.expected,
+        viewKey,
+      })
+      expect(capturedQuery?.view.visibleColumns).toEqual(["id", "name", "status"])
+    }
+  })
 })
 
 describe("server paged stale response ordering", () => {
@@ -422,6 +497,113 @@ describe("server paged stale response ordering", () => {
     })
     await firstObserver
     expect(acceptedRows).toEqual(["new"])
+  })
+
+  test("aborted stale sort/filter/search response does not replace active rows or diagnostics", async () => {
+    const model = createServerRowModel<Row>()
+    const staleFilter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["inactive"],
+    }
+    const activeFilter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["active"],
+    }
+    const staleView = model.createViewState({
+      filter: staleFilter,
+      groupBy: [],
+      searchText: "old",
+      sort: [{ columnId: "name", direction: "desc" }],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const activeView = model.createViewState({
+      filter: activeFilter,
+      groupBy: [],
+      searchText: "new",
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const staleViewKey = model.createViewKey(staleView)
+    const activeViewKey = model.createViewKey(activeView)
+    const staleLoad = deferred<ServerPagedResult<Row>>()
+    const activeLoad = deferred<ServerPagedResult<Row>>()
+
+    const staleRequest = model.loadPagedPage({
+      loadPage: () => staleLoad.promise,
+      pageIndex: 4,
+      pageSize: 25,
+      view: staleView,
+      viewKey: staleViewKey,
+    })
+    staleRequest.promise.catch(() => {})
+    const activeRequest = model.loadPagedPage({
+      loadPage: () => activeLoad.promise,
+      pageIndex: 0,
+      pageSize: 25,
+      view: activeView,
+      viewKey: activeViewKey,
+    })
+    model.abortExcept(activeRequest.blockKey)
+
+    activeLoad.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "new", name: "New", status: "active" }],
+      totalRows: 1,
+      viewKey: activeViewKey,
+    })
+    await activeRequest.promise
+
+    staleLoad.resolve({
+      pageIndex: 4,
+      pageSize: 25,
+      rows: [{ id: "stale", name: "Stale", status: "inactive" }],
+      totalRows: 76,
+      viewKey: staleViewKey,
+    })
+    await expect(staleRequest.promise).rejects.toThrow("Aborted")
+
+    expect(model.cache.get(activeRequest.blockKey)?.rows).toEqual([
+      { id: "new", name: "New", status: "active" },
+    ])
+    const staleBlock = model.cache.get(staleRequest.blockKey)
+    if (staleBlock) {
+      expect(staleBlock.state).not.toBe("loaded")
+      expect(staleBlock.rows).not.toContainEqual({
+        id: "stale",
+        name: "Stale",
+        status: "inactive",
+      })
+    }
+
+    const diagnostics = model.getDiagnostics({
+      mode: "paged",
+      rowCount: 1,
+      selection: emptySelection,
+      view: activeView,
+      viewKey: activeViewKey,
+    })
+    expect(diagnostics.lastLoad).toMatchObject({
+      query: {
+        mode: "paged",
+        pageIndex: 0,
+        view: {
+          filterActive: true,
+          searchActive: true,
+          sortCount: 1,
+          visibleColumnCount: 2,
+        },
+        viewKey: activeViewKey,
+      },
+      rowCount: 1,
+      status: "success",
+    })
   })
 })
 
