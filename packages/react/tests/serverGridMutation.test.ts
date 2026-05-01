@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { ServerSelection } from "@bc-grid/core"
+import type { BcGridFilter, ServerSelection } from "@bc-grid/core"
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import type {
   BcCellEditCommitEvent,
@@ -36,6 +36,13 @@ const editEvent: BcCellEditCommitEvent<Row, string> = {
 }
 
 const emptySelection: ServerSelection = { mode: "explicit", rowIds: new Set() }
+const activeCustomerFilter: BcGridFilter = {
+  columnId: "name",
+  kind: "column",
+  op: "contains",
+  type: "text",
+  value: "Acme",
+}
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -284,6 +291,217 @@ describe("server edit mutation helpers", () => {
     ).toBe(0)
     expect(model.cache.get(reloadedPage0Request.blockKey)?.rows).toEqual([
       { id: "customer-1", name: "Acme Co." },
+    ])
+  })
+
+  test("keeps a pending server edit overlay across sort/filter refetches and clears on accepted settle", async () => {
+    const model = createServerRowModel<Row>()
+    const baseView = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name"],
+    })
+    const baseViewKey = model.createViewKey(baseView)
+    const baseRequest = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "customer-1", name: "Acme Inc." }],
+        totalRows: 1,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view: baseView,
+      viewKey: baseViewKey,
+    })
+    await baseRequest.promise
+
+    const serverSettle = deferred<ServerMutationResult<Row>>()
+    const commit = commitServerEditMutation({
+      event: editEvent,
+      mutationId: "mutation-sort-filter-accepted",
+      onServerRowMutation: () => serverSettle.promise,
+      queueServerRowMutation: (patch) => model.queueMutation({ patch, rowId: (row) => row.id }),
+      settleServerRowMutation: (result) => model.settleMutation({ result, rowId: (row) => row.id }),
+    })
+    expect(model.cache.get(baseRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+    ])
+
+    const sortedView = model.createViewState({
+      groupBy: [],
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const sortedViewKey = model.createViewKey(sortedView)
+    const sortedRequest = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [
+          { id: "customer-1", name: "Acme Inc." },
+          { id: "customer-2", name: "Beta Ltd." },
+        ],
+        totalRows: 2,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view: sortedView,
+      viewKey: sortedViewKey,
+    })
+    expect((await sortedRequest.promise).rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+      { id: "customer-2", name: "Beta Ltd." },
+    ])
+
+    const filteredView = model.createViewState({
+      filter: activeCustomerFilter,
+      groupBy: [],
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const filteredViewKey = model.createViewKey(filteredView)
+    const filteredRequest = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "customer-1", name: "Acme Inc." }],
+        totalRows: 1,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view: filteredView,
+      viewKey: filteredViewKey,
+    })
+    expect((await filteredRequest.promise).rows).toEqual([{ id: "customer-1", name: "Acme Co." }])
+    expect(
+      model.getState({
+        mode: "paged",
+        rowCount: 1,
+        selection: emptySelection,
+        view: filteredView,
+        viewKey: filteredViewKey,
+      }).pendingMutations.size,
+    ).toBe(1)
+
+    serverSettle.resolve({
+      mutationId: "mutation-sort-filter-accepted",
+      row: { id: "customer-1", name: "Acme Co." },
+      status: "accepted",
+    })
+    await commit
+
+    expect(
+      model.getState({
+        mode: "paged",
+        rowCount: 1,
+        selection: emptySelection,
+        view: filteredView,
+        viewKey: filteredViewKey,
+      }).pendingMutations.size,
+    ).toBe(0)
+    expect(model.cache.get(baseRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+    ])
+    expect(model.cache.get(sortedRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+      { id: "customer-2", name: "Beta Ltd." },
+    ])
+    expect(model.cache.get(filteredRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+    ])
+  })
+
+  test("rolls back a pending server edit overlay across sort/filter refetches on rejected settle", async () => {
+    const model = createServerRowModel<Row>()
+    const baseView = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name"],
+    })
+    const baseViewKey = model.createViewKey(baseView)
+    const baseRequest = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "customer-1", name: "Acme Inc." }],
+        totalRows: 1,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view: baseView,
+      viewKey: baseViewKey,
+    })
+    await baseRequest.promise
+
+    const serverSettle = deferred<ServerMutationResult<Row>>()
+    const commit = commitServerEditMutation({
+      event: editEvent,
+      mutationId: "mutation-sort-filter-rejected",
+      onServerRowMutation: () => serverSettle.promise,
+      queueServerRowMutation: (patch) => model.queueMutation({ patch, rowId: (row) => row.id }),
+      settleServerRowMutation: (result) => model.settleMutation({ result, rowId: (row) => row.id }),
+    })
+    expect(model.cache.get(baseRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Co." },
+    ])
+
+    const filteredView = model.createViewState({
+      filter: activeCustomerFilter,
+      groupBy: [],
+      sort: [{ columnId: "name", direction: "desc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const filteredViewKey = model.createViewKey(filteredView)
+    const filteredRequest = model.loadPagedPage({
+      loadPage: async (query): Promise<ServerPagedResult<Row>> => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "customer-1", name: "Acme Inc." }],
+        totalRows: 1,
+        viewKey: query.viewKey,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view: filteredView,
+      viewKey: filteredViewKey,
+    })
+    expect((await filteredRequest.promise).rows).toEqual([{ id: "customer-1", name: "Acme Co." }])
+    expect(
+      model.getState({
+        mode: "paged",
+        rowCount: 1,
+        selection: emptySelection,
+        view: filteredView,
+        viewKey: filteredViewKey,
+      }).pendingMutations.size,
+    ).toBe(1)
+
+    serverSettle.resolve({
+      mutationId: "mutation-sort-filter-rejected",
+      reason: "Name conflicts with another customer.",
+      status: "rejected",
+    })
+    await expect(commit).rejects.toThrow("Name conflicts with another customer.")
+
+    expect(
+      model.getState({
+        mode: "paged",
+        rowCount: 1,
+        selection: emptySelection,
+        view: filteredView,
+        viewKey: filteredViewKey,
+      }).pendingMutations.size,
+    ).toBe(0)
+    expect(model.cache.get(baseRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Inc." },
+    ])
+    expect(model.cache.get(filteredRequest.blockKey)?.rows).toEqual([
+      { id: "customer-1", name: "Acme Inc." },
     ])
   })
 })
