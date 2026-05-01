@@ -939,6 +939,31 @@ filter narrows the row count, `selected` only when a selection is active, and
 `aggregations` only when at least one aggregation result is available. Custom
 segments render unconditionally — visibility is the consumer's responsibility.
 
+The `sidebar` prop registers right-edge tool panel tabs by id. For primary grid
+demos, prefer an explicit control (or a URL flag) over `defaultSidebarPanel` so
+the panel rail is discoverable without covering pointer-heavy grid workflows on
+first paint:
+
+```tsx
+const [toolPanel, setToolPanel] = useState<"columns" | "filters" | null>(null)
+
+<BcGrid
+  // ...
+  sidebar={["columns", "filters"]}
+  sidebarPanel={toolPanel}
+  onSidebarPanelChange={(next) =>
+    setToolPanel(next === "columns" || next === "filters" ? next : null)
+  }
+  sidebarWidth={320}
+/>
+```
+
+`defaultSidebarPanel` remains available for dedicated tool-panel demos that
+should open a panel immediately. `sidebarWidth` controls the open panel width in
+pixels and falls back to `280`. Passing `defaultSidebarPanel={null}` explicitly
+starts collapsed, even when a persisted sidebar panel exists. The examples app
+uses `?toolPanel=columns` or `?toolPanel=filters` as its opt-in URL path.
+
 ```ts
 type BcStatusBarSegment<TRow = unknown> =
   | "total"

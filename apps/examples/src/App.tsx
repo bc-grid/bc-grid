@@ -14,6 +14,7 @@ import {
   type BcGridColumn,
   type BcGridDensity,
   type BcSelection,
+  type BcSidebarPanel,
   useBcGridApi,
 } from "@bc-grid/react"
 import { useCallback, useMemo, useState } from "react"
@@ -37,6 +38,20 @@ const themeModes = [
   { id: "light", label: "Light" },
   { id: "dark", label: "Dark" },
 ] as const satisfies readonly { id: ThemeMode; label: string }[]
+
+const customerGridSidebarPanels = [
+  "columns",
+  "filters",
+] as const satisfies readonly BcSidebarPanel<CustomerRow>[]
+
+type CustomerGridSidebarPanel = (typeof customerGridSidebarPanels)[number]
+
+const customerGridGroupableColumns = [
+  { columnId: "region", header: "Region" },
+  { columnId: "owner", header: "Collector" },
+  { columnId: "terms", header: "Terms" },
+  { columnId: "status", header: "Status" },
+] as const
 
 const statusLabels: Record<CustomerStatus, string> = {
   Open: "open",
@@ -252,6 +267,16 @@ function applyPopupFilterVariant<TRow>(
   })
 }
 
+function initialToolPanel(): CustomerGridSidebarPanel | null {
+  if (typeof window === "undefined") return null
+  const panel = new URLSearchParams(window.location.search).get("toolPanel")
+  return isCustomerGridSidebarPanel(panel) ? panel : null
+}
+
+function isCustomerGridSidebarPanel(value: string | null): value is CustomerGridSidebarPanel {
+  return value === "columns" || value === "filters"
+}
+
 function CustomerGridDemo({
   density,
   onDensityChange,
@@ -267,6 +292,7 @@ function CustomerGridDemo({
   const [lastAction, setLastAction] = useState("Ready")
   const [searchText, setSearchText] = useState("")
   const [selectedCount, setSelectedCount] = useState(0)
+  const [toolPanel, setToolPanel] = useState<CustomerGridSidebarPanel | null>(initialToolPanel)
   const [activeCustomer, setActiveCustomer] = useState<CustomerRow | null>(customerRows[0] ?? null)
   const rows = customerRows
   const urlStateEnabled = urlStatePersistenceEnabled()
@@ -651,6 +677,14 @@ function CustomerGridDemo({
     setSelectedCount(selectionCount(next) ?? 0)
   }, [])
 
+  const toggleToolPanel = useCallback((panel: CustomerGridSidebarPanel) => {
+    setToolPanel((current) => (current === panel ? null : panel))
+  }, [])
+
+  const handleToolPanelChange = useCallback((next: string | null) => {
+    setToolPanel(isCustomerGridSidebarPanel(next) ? next : null)
+  }, [])
+
   return (
     <section id="customer-grid" className="demo-panel" aria-label="Customer grid demo">
       <div className="summary-strip" aria-label="Accounts receivable summary">
@@ -689,6 +723,25 @@ function CustomerGridDemo({
             value={density}
             onChange={onDensityChange}
           />
+          <div className="tool-panel-control" aria-label="Tool panels">
+            <span>Tool panels</span>
+            <div className="tool-panel-buttons">
+              <button
+                type="button"
+                aria-pressed={toolPanel === "columns"}
+                onClick={() => toggleToolPanel("columns")}
+              >
+                Columns
+              </button>
+              <button
+                type="button"
+                aria-pressed={toolPanel === "filters"}
+                onClick={() => toggleToolPanel("filters")}
+              >
+                Filters
+              </button>
+            </div>
+          </div>
           <button type="button" className="primary-action" onClick={handleScrollToRow500}>
             Row 500
           </button>
@@ -708,6 +761,7 @@ function CustomerGridDemo({
           { label: "Statement", onSelect: () => handleStatement(row) },
         ]}
         gridId="accounts-receivable.customers"
+        groupableColumns={customerGridGroupableColumns}
         height={gridHeight}
         linkField="legalName"
         locale="en-US"
@@ -728,6 +782,10 @@ function CustomerGridDemo({
         rowIsDisabled={rowIsDisabled}
         rowId={(row: CustomerRow) => row.id}
         searchText={searchText}
+        sidebar={customerGridSidebarPanels}
+        sidebarPanel={toolPanel}
+        sidebarWidth={320}
+        onSidebarPanelChange={handleToolPanelChange}
         {...(urlStatePersistence ? { urlStatePersistence } : {})}
       />
 

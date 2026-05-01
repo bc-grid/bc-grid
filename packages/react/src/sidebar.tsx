@@ -193,6 +193,19 @@ export function normalizeSidebarPanelId(
   return panels.some((panel) => panel.id === panelId) ? panelId : null
 }
 
+export function resolveInitialSidebarPanelId({
+  defaultPanelId,
+  persistedPanelId,
+  panels,
+}: {
+  defaultPanelId: string | null | undefined
+  persistedPanelId: string | null | undefined
+  panels: readonly { id: string }[]
+}): string | null {
+  if (defaultPanelId !== undefined) return normalizeSidebarPanelId(defaultPanelId, panels)
+  return normalizeSidebarPanelId(persistedPanelId, panels)
+}
+
 export function nextSidebarPanelForActivation(
   currentPanelId: string | null,
   requestedPanelId: string,
