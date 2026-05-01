@@ -185,3 +185,47 @@ Polish pass on the filter popup chrome to align with the broader popup-interacti
 - No structural change to FilterPopup component. Existing tests for the dialog labelling, footer button labels, click-outside dismiss, and aria-controls linkage (PRs #252, #256) all carry over unchanged.
 - No new runtime dependency.
 - Reusing `usePopupDismiss` and `computePopupPosition` (already in place from slices 1–2). The roving-focus hook from slice 5 doesn't apply here since the popup contains form inputs, not a menu list.
+
+---
+
+## Slice 11 — Sidebar / tool-panel keyboard + focus audit (this update)
+
+Audit pass over the sidebar and the three built-in tool panels (columns / filters / pivot) plus one small safe accessibility fix. Companion to slice 9 (popup-focus-followup) which already documented the sidebar tablist roving tabindex and locked the focus contracts on the three popup surfaces.
+
+### Audit — keyboard + focus contract per surface
+
+Every sidebar / tool-panel surface today (assuming PR #273's roving-tabindex fix lands):
+
+| Surface | Open / close | Tab order | Escape | Focus return | ARIA labels | Notes |
+|---|---|---|---|---|---|---|
+| Sidebar root (`<aside>`) | `data-state="open" \| "collapsed"` | n/a | passes through to children | n/a | implicit "complementary" landmark, no `aria-label` | The implicit landmark name is empty. AT landmark navigation announces it without a name. **Acceptable** because the inner tablist names itself ("Sidebar tools"), but a future slice could give the `<aside>` an explicit `aria-label` for landmark-list navigation parity with AG Grid. |
+| Sidebar tablist (rail) | always rendered | roving tabindex (after #273) | `aria-label="Sidebar tools"`; `aria-orientation="vertical"` | n/a | named | Standard WAI-ARIA tablist. ArrowDown/Up cycle (with wrap), Home/End jump, Enter/Space activate. |
+| Sidebar tab buttons | activate via Enter/Space (focus moves to panel) or click (focus stays on tab) | one tabbable anchor at a time (after #273) | n/a | n/a | `aria-label={panel.label}` per tab, `aria-controls`, `aria-selected`, `data-state` | `aria-controls` correctly references the panel id; the panel body uses `aria-labelledby={tab.id}`, completing the tab/panel linkage. |
+| Sidebar panel body | mounted only while open | tabIndex=-1 on root, programmatic focus on activate; Tab walks through inner controls | Escape closes panel and returns focus to the trigger tab via `requestFocusFrame(focusPanelTab)` | yes — to the tab that opened it | `role="tabpanel"` + `aria-labelledby` | No focus trap. Tab from the last inner control walks out of the panel (browser default). Convention. |
+| Columns tool panel | inside sidebar panel body | search input → list rows (drag handle / checkbox / pin select / Up / Down / "Group by") → group-by zone | inherits sidebar Escape | n/a (inherits) | every interactive control has an `aria-label`; the lists carry `aria-label="Columns"` / `aria-label="Grouped columns"` / `aria-label="Group by columns"` | Drag handle is `aria-hidden="true"` (visual-only); keyboard reorder is via Up/Down buttons. |
+| Filters tool panel | inside sidebar panel body | "Clear all" button → per-filter sections (each section has `<h3>` + remove button + `<FilterEditorBody>`) | inherits sidebar Escape | n/a | "Clear all" had visible text only — **fixed in this update** with `aria-label="Clear all filters"`; per-row Clear (`x`) buttons carry `aria-label="Clear filter on …"` | `<FilterEditorBody>` reuses the inline-row editor; Escape inside the editor propagates to the sidebar handler (note `allowEscapeKeyPropagation`). |
+| Pivot tool panel | inside sidebar panel body | search → field list → row / column / values zones (each with chip lists) | inherits sidebar Escape | n/a | every action button has an `aria-label` (Add/Remove/Move/Aggregate); chip lists carry `aria-label={label}` / `${label} fields` | Standard. |
+
+### What ships in this update
+
+- **Filters tool panel "Clear all" button** picks up `aria-label="Clear all filters"`. The visible text "Clear all" is correct visually but ambiguous on its own when announced — adding the explicit accessible name resolves the disambiguation without changing visible UI or behaviour. One-line fix; zero risk.
+- **`packages/react/tests/filterToolPanel.markup.test.tsx`** (new file, 5 SSR tests): Clear-all carries the new `aria-label`; Clear-all toggles `disabled` with `hasFilters`; the Active filters list keeps its `aria-label="Active filters"`; per-row Clear button keeps `aria-label="Clear filter on …"`; empty-state placeholder renders.
+
+### What's intentionally NOT in this update
+
+- **No structural changes to sidebar.tsx.** Slice 9's tablist tabindex is in PR #273 review; this PR doesn't duplicate. Re-coordinating the touchpoint on sidebar requires waiting for #273 to land.
+- **No `aria-label` on the `<aside>`.** Adding it would either hardcode an English string (not localised — bc-grid threads localisable strings through `BcGridMessages`) or extend the messages interface (public-API change). Either path is bigger than "very small safe fix" and goes in the next slice.
+- **No tool-panel structural changes.** Existing inner controls + section headings work; the Tab traversal already terminates correctly at panel boundaries.
+- **No new runtime dependency.**
+- **No focus traps introduced.** The existing convention (Tab walks through inner controls, then out of the panel; Escape closes the panel and returns focus to the trigger tab) stays.
+
+### Next implementation tasks (slice 12 candidate, after #273 lands)
+
+1. **`<aside>` landmark name.** Add a `BcGridMessages.sidebarLabel` field (default: `"Grid sidebar"`) and wire it as `aria-label` on the `<aside>`. Allows host apps to localise. Public-API change to the messages interface — needs coordinator approval before wiring.
+2. **Tool-panel section headings linkage.** Each tool panel renders an `<h2 className="bc-grid-sidebar-panel-title">` matching the tab's accessible name. Locking that into `aria-labelledby={tab.id}` on the panel body (already done) AND ensuring the heading id chain doesn't drift on rename. Lock-in test for each tool panel.
+3. **Filters tool panel — `<FilterEditorBody>` `Escape` propagation contract.** Today the inline editor allows Escape to propagate via `allowEscapeKeyPropagation`. That's load-bearing for the sidebar's Escape-closes-panel behaviour. Pin the contract with a markup or hook test.
+4. **Sidebar tab `aria-disabled` for unavailable panels.** If a host app wants to offer a panel that's contextually disabled (no filters available, etc.), today the only choice is to drop the panel from the array. Adding `aria-disabled` support without breaking activation is a small addition, ideally via the panel resolver.
+5. **Columns tool panel — keyboard reorder shortcut.** Drag handles are pointer-only today. The Up/Down buttons cover keyboard reorder, but a single-key shortcut on the row (Alt+ArrowUp / Alt+ArrowDown, like Radix DnD) would be a parity improvement.
+6. **Pivot tool panel — Move Up / Move Down keyboard parity** with the columns panel.
+
+These are individually small. Slices 12 and 13 likely group them as `sidebar-landmark-naming` and `tool-panel-keyboard-parity` respectively.

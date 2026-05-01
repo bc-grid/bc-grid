@@ -37,6 +37,12 @@ export function BcFiltersToolPanel<TRow>({
       <div className="bc-grid-filters-panel-header">
         <h2 className="bc-grid-sidebar-panel-title">Filters</h2>
         <button
+          // The visible label "Clear all" relies on the surrounding
+          // section heading for context. Setting the accessible name
+          // explicitly to "Clear all filters" so AT users hear the full
+          // intent without depending on heading proximity (some screen
+          // reader / browser combinations strip the section context).
+          aria-label="Clear all filters"
           className="bc-grid-filters-panel-clear"
           disabled={!hasFilters}
           type="button"
