@@ -352,23 +352,28 @@
   font: inherit;
   line-height: 1;
   opacity: 0;
+  outline: none;
   padding: 0;
   pointer-events: none;
   z-index: 5;
+  /*
+   * Smooth fade in / out so the affordance doesn't snap-cut on hover
+   * out, and smooth bg / color transitions on hover / focus / active.
+   * The `*` reduced-motion rule already in this stylesheet zeroes
+   * the transition for users who prefer it.
+   */
+  transition: opacity var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard),
+    background-color var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard), color
+    var(--bc-grid-motion-duration-fast) var(--bc-grid-motion-ease-standard);
 }
 
-.bc-grid-header-menu-button::before {
+/*
+ * The button hosts an inline SVG glyph (see
+ * `internal/header-icons.tsx`); the icon class lets consumer themes
+ * target the glyph without overriding the button chrome.
+ */
+.bc-grid-header-menu-icon {
   display: block;
-  width: 0.875rem;
-  height: 0.875rem;
-  background:
-    radial-gradient(circle, currentcolor 1.2px, transparent 1.4px) 50% 25% / 100% 100%
-    no-repeat,
-    radial-gradient(circle, currentcolor 1.2px, transparent 1.4px) 50% 50% / 100% 100%
-    no-repeat,
-    radial-gradient(circle, currentcolor 1.2px, transparent 1.4px) 50% 75% / 100% 100%
-    no-repeat;
-  content: "";
 }
 
 .bc-grid-header-cell:hover .bc-grid-header-menu-button,
@@ -396,6 +401,22 @@
 .bc-grid-header-menu-button:hover {
   background: var(--bc-grid-row-hover);
   color: var(--bc-grid-fg);
+}
+
+/*
+ * Pressed state — slightly stronger tint than hover so the click
+ * registers visually even on the brief press-release window before
+ * the popup mounts. Matches the shadcn DropdownMenu trigger
+ * `:active` treatment used elsewhere in the chrome.
+ */
+.bc-grid-header-menu-button:active {
+  background: var(--bc-grid-accent-soft);
+  color: var(--bc-grid-fg);
+}
+
+.bc-grid-header-menu-button:focus-visible {
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: 1px;
 }
 
 /* ---- header funnel button (filter-popup-variant trigger) ---- */
