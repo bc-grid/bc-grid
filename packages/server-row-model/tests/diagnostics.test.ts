@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type {
   ServerBlockQuery,
   ServerPagedQuery,
+  ServerPagedResult,
   ServerSelection,
   ServerTreeQuery,
   ServerViewState,
@@ -146,6 +147,73 @@ describe("server row model diagnostics", () => {
     expect(diagnostics.cache.loadedRowCount).toBe(2)
     expect(diagnostics.pendingMutationCount).toBe(0)
     expect("state" in diagnostics).toBe(false)
+  })
+
+  test("keeps diagnostics on the newest request when an aborted older page settles late", async () => {
+    const model = createServerRowModel<Row>()
+    const nextView: ServerViewState = { ...view, search: "bravo" }
+    let resolveOldPage: (value: ServerPagedResult<Row>) => void = () => {}
+    const loadPage = (query: ServerPagedQuery) => {
+      if (query.view.search === "acme") {
+        return new Promise<ServerPagedResult<Row>>((resolve) => {
+          resolveOldPage = resolve
+        })
+      }
+      return Promise.resolve<ServerPagedResult<Row>>({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "2", name: "Bravo" }],
+        totalRows: 1,
+        viewKey: query.viewKey,
+      })
+    }
+
+    const oldRequest = model.loadPagedPage({ loadPage, pageIndex: 4, pageSize: 25, view })
+    oldRequest.promise.catch(() => {})
+    const nextRequest = model.loadPagedPage({
+      loadPage,
+      pageIndex: 0,
+      pageSize: 25,
+      view: nextView,
+    })
+    model.abortExcept(nextRequest.blockKey)
+
+    await nextRequest.promise
+    expect(
+      model.getDiagnostics({
+        mode: "paged",
+        rowCount: 1,
+        selection: emptySelection,
+        view: nextView,
+        viewKey: nextRequest.query.viewKey ?? "",
+      }).lastLoad,
+    ).toMatchObject({
+      query: { pageIndex: 0, requestId: nextRequest.query.requestId, view: { searchActive: true } },
+      rowCount: 1,
+      status: "success",
+    })
+
+    resolveOldPage({
+      pageIndex: 4,
+      pageSize: 25,
+      rows: [{ id: "1", name: "Acme" }],
+      totalRows: 1,
+      viewKey: oldRequest.query.viewKey,
+    })
+    await expect(oldRequest.promise).rejects.toThrow("Aborted")
+
+    const diagnostics = model.getDiagnostics({
+      mode: "paged",
+      rowCount: 1,
+      selection: emptySelection,
+      view: nextView,
+      viewKey: nextRequest.query.viewKey ?? "",
+    })
+    expect(diagnostics.lastLoad).toMatchObject({
+      query: { pageIndex: 0, requestId: nextRequest.query.requestId },
+      rowCount: 1,
+      status: "success",
+    })
   })
 
   test("summarizes mixed cache states without exposing row data", () => {

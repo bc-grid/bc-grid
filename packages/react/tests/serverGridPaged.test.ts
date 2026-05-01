@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import type { BcGridFilter, ServerViewState } from "@bc-grid/core"
+import type { BcGridFilter, ServerSelection, ServerViewState } from "@bc-grid/core"
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import {
+  isActiveServerPagedResponse,
   resolveServerPagedGridShell,
   resolveServerPagedRequestPage,
   resolveServerVisibleColumns,
@@ -20,6 +21,8 @@ const pageRows: readonly Row[] = Array.from({ length: 25 }, (_, index) => ({
   name: `Customer ${index + 51}`,
   status: "active",
 }))
+
+const emptySelection: ServerSelection = { mode: "explicit", rowIds: new Set() }
 
 describe("server paged grid shell", () => {
   test("uses server totalRows for page count and keeps current page rows intact", () => {
@@ -130,21 +133,39 @@ describe("server paged query reset semantics", () => {
     }
   })
 
-  test("keeps the requested page for the same view or when already on page zero", () => {
+  test("keeps the requested page for pagination, refresh, and active-view invalidate", () => {
+    const sameViewTransitions = [
+      { pageIndex: 4, reason: "pagination" },
+      { pageIndex: 2, reason: "refresh" },
+      { pageIndex: 3, reason: "invalidate" },
+    ] as const
+
+    for (const transition of sameViewTransitions) {
+      expect(
+        resolveServerPagedRequestPage({
+          pageIndex: transition.pageIndex,
+          previousViewKey: baseViewKey,
+          viewKey: baseViewKey,
+        }),
+      ).toBe(transition.pageIndex)
+      expect(
+        shouldResetServerPagedPage({
+          pageIndex: transition.pageIndex,
+          previousViewKey: baseViewKey,
+          viewKey: baseViewKey,
+        }),
+      ).toBe(false)
+    }
+  })
+
+  test("does not request a negative reset when already on page zero", () => {
     expect(
       resolveServerPagedRequestPage({
-        pageIndex: 3,
+        pageIndex: 0,
         previousViewKey: baseViewKey,
-        viewKey: baseViewKey,
+        viewKey: viewKeyFor({ ...baseView, search: "acme" }),
       }),
-    ).toBe(3)
-    expect(
-      shouldResetServerPagedPage({
-        pageIndex: 3,
-        previousViewKey: baseViewKey,
-        viewKey: baseViewKey,
-      }),
-    ).toBe(false)
+    ).toBe(0)
     expect(
       shouldResetServerPagedPage({
         pageIndex: 0,
@@ -152,6 +173,144 @@ describe("server paged query reset semantics", () => {
         viewKey: viewKeyFor({ ...baseView, search: "acme" }),
       }),
     ).toBe(false)
+  })
+})
+
+describe("server paged stale response ordering", () => {
+  test("accepts only the response for the latest active block key", async () => {
+    const model = createServerRowModel<Row>()
+    const firstView = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const nextView = model.createViewState({
+      groupBy: [],
+      searchText: "acme",
+      sort: [],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const firstRequest = model.loadPagedPage({
+      loadPage: async (query) => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "old", name: "Old", status: "inactive" }],
+        totalRows: 1,
+      }),
+      pageIndex: 4,
+      pageSize: 25,
+      view: firstView,
+    })
+    const nextRequest = model.loadPagedPage({
+      loadPage: async (query) => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: [{ id: "new", name: "New", status: "active" }],
+        totalRows: 1,
+      }),
+      pageIndex: 0,
+      pageSize: 25,
+      view: nextView,
+    })
+    const firstBlockKey = firstRequest.blockKey
+    const nextBlockKey = nextRequest.blockKey
+
+    expect(firstBlockKey).not.toBe(nextBlockKey)
+    expect(
+      isActiveServerPagedResponse({
+        activeBlockKey: nextBlockKey,
+        responseBlockKey: firstBlockKey,
+      }),
+    ).toBe(false)
+    expect(
+      isActiveServerPagedResponse({
+        activeBlockKey: nextBlockKey,
+        responseBlockKey: nextBlockKey,
+      }),
+    ).toBe(true)
+    await Promise.all([firstRequest.promise, nextRequest.promise])
+  })
+})
+
+describe("server paged diagnostics", () => {
+  test("reflects the active view and reset page after a view transition", async () => {
+    const model = createServerRowModel<Row>()
+    const baseView = model.createViewState({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["id", "name", "status"],
+    })
+    const baseViewKey = model.createViewKey(baseView)
+    const activeFilter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["active"],
+    }
+    const activeView = model.createViewState({
+      filter: activeFilter,
+      groupBy: ["status"],
+      searchText: "acme",
+      sort: [{ columnId: "name", direction: "asc" }],
+      visibleColumns: ["id", "name"],
+    })
+    const activeViewKey = model.createViewKey(activeView)
+    const pageIndex = resolveServerPagedRequestPage({
+      pageIndex: 4,
+      previousViewKey: baseViewKey,
+      viewKey: activeViewKey,
+    })
+    const request = model.loadPagedPage({
+      loadPage: async (query) => ({
+        pageIndex: query.pageIndex,
+        pageSize: query.pageSize,
+        rows: pageRows.slice(0, query.pageSize),
+        totalRows: 137,
+        viewKey: query.viewKey,
+      }),
+      pageIndex,
+      pageSize: 25,
+      view: activeView,
+      viewKey: activeViewKey,
+    })
+
+    const loadingDiagnostics = model.getDiagnostics({
+      mode: "paged",
+      rowCount: 0,
+      selection: emptySelection,
+      view: activeView,
+      viewKey: activeViewKey,
+    })
+    expect(loadingDiagnostics.viewKey).toBe(activeViewKey)
+    expect(loadingDiagnostics.view).toEqual(activeView)
+    expect(loadingDiagnostics.viewSummary).toMatchObject({
+      filterActive: true,
+      groupByCount: 1,
+      searchActive: true,
+      sortCount: 1,
+      visibleColumnCount: 2,
+    })
+    expect(loadingDiagnostics.lastLoad.status).toBe("loading")
+    expect(loadingDiagnostics.lastLoad.query).toMatchObject({
+      mode: "paged",
+      pageIndex: 0,
+      pageSize: 25,
+      viewKey: activeViewKey,
+    })
+
+    await request.promise
+
+    const settledDiagnostics = model.getDiagnostics({
+      mode: "paged",
+      rowCount: 137,
+      selection: emptySelection,
+      view: activeView,
+      viewKey: activeViewKey,
+    })
+    expect(settledDiagnostics.lastLoad.status).toBe("success")
+    expect(settledDiagnostics.lastLoad.rowCount).toBe(137)
+    expect(settledDiagnostics.rowCount).toBe(137)
   })
 })
 

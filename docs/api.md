@@ -1315,7 +1315,11 @@ return only the rows for that page plus `totalRows` for the full matching server
 view. `<BcServerGrid rowModel="paged">` uses `totalRows` for the built-in pager
 and passes the returned page rows straight to the body; it does not apply
 client-side pagination or slice the page again. Sort, filter, search, group, and
-visible-column changes reset the requested server page to `0`.
+visible-column changes reset the requested server page to `0`. Pagination,
+refresh, and active-view invalidation preserve the active query model and
+request the intended global server page. If an older load resolves after a newer
+view/page request starts, `<BcServerGrid>` ignores the stale response and
+diagnostics continue to describe the active request view.
 
 The `LoadServerPage`, `LoadServerBlock`, and `LoadServerTreeChildren` types are declared in `@bc-grid/core` with the rest of the server query contract and re-exported through `@bc-grid/react`. Runtime cache/state-machine helpers live in `@bc-grid/server-row-model`.
 
