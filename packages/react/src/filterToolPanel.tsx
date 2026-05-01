@@ -2,6 +2,7 @@ import type { BcColumnFilter, ColumnId } from "@bc-grid/core"
 import { type ReactNode, useCallback, useId, useMemo } from "react"
 import { domToken, flattenColumnDefinitions } from "./gridInternals"
 import { FilterEditorBody } from "./headerCells"
+import { FilterEmptyIcon, XIcon } from "./internal/panel-icons"
 import type { BcReactGridColumn, BcSidebarContext } from "./types"
 
 export interface FilterToolPanelItem {
@@ -67,7 +68,7 @@ export function BcFiltersToolPanel<TRow>({
                   type="button"
                   onClick={() => clearFilter(item.columnId)}
                 >
-                  x
+                  {XIcon}
                 </button>
               </div>
               <div className="bc-grid-filters-panel-control">
@@ -89,7 +90,10 @@ export function BcFiltersToolPanel<TRow>({
             </li>
           ))
         ) : (
-          <li className="bc-grid-filters-panel-empty">No active filters</li>
+          <li className="bc-grid-filters-panel-empty">
+            {FilterEmptyIcon}
+            <span className="bc-grid-filters-panel-empty-label">No active filters</span>
+          </li>
         )}
       </ul>
     </section>

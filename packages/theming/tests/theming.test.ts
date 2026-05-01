@@ -853,6 +853,104 @@ describe("@bc-grid/theming", () => {
     expect(body).toMatch(/min-height:\s*var\(--bc-grid-hit-target-min\)/)
   })
 
+  test("filters panel disabled clear-all uses cursor: default + pointer-events: none (matches shadcn DropdownMenu)", () => {
+    // bsncraft flagged the panel as feeling unfinished. The legacy
+    // disabled treatment used `cursor: not-allowed`; the rest of the
+    // grid chrome uses `cursor: default` + `pointer-events: none` (the
+    // pagination disabled rule is the canonical reference). Pin the
+    // alignment so a future refactor doesn't fork the disabled
+    // treatment again.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-filters-panel-clear:disabled {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("cursor: default")
+    expect(rule).toContain("pointer-events: none")
+    expect(rule).not.toContain("cursor: not-allowed")
+  })
+
+  test("filters panel buttons share a Radix-style :active pressed state on the accent-soft surface", () => {
+    // Mirrors the filter-trigger / context-menu pressed feel — the
+    // accent-soft surface flashes on tap-down so the click registers
+    // visually before the column-filter state updates. Also covers
+    // the keyboard Space / Enter activation cycle.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(
+      ".bc-grid-filters-panel-clear:active:not(:disabled),\n.bc-grid-filters-panel-remove:active",
+    )
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("background: var(--bc-grid-accent-soft)")
+    expect(rule).toContain("color: var(--bc-grid-fg)")
+  })
+
+  test("filters panel item card eases border + background transitions for the focus-within ring", () => {
+    // Smooth shadcn `<Card>` chrome — the focus-within ring should
+    // ease in rather than snap-cut when an inline editor inside the
+    // card receives focus. Pin the multi-property transition + the
+    // focus-within border colour.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const itemIdx = css.indexOf(".bc-grid-filters-panel-item {")
+    expect(itemIdx).toBeGreaterThan(-1)
+    const itemRuleEnd = css.indexOf("}", itemIdx)
+    const itemRule = css.slice(itemIdx, itemRuleEnd)
+    expect(itemRule).toMatch(/transition:\s*border-color[^;]*background-color\b/)
+    expect(itemRule).toContain("var(--bc-grid-motion-duration-fast)")
+
+    const focusIdx = css.indexOf(".bc-grid-filters-panel-item:focus-within {")
+    expect(focusIdx).toBeGreaterThan(-1)
+    const focusRuleEnd = css.indexOf("}", focusIdx)
+    const focusRule = css.slice(focusIdx, focusRuleEnd)
+    expect(focusRule).toContain("border-color: var(--bc-grid-focus-ring)")
+  })
+
+  test("filters panel empty state renders a centered icon + label with breathing room", () => {
+    // Polished empty card. Reads as a deliberate shadcn empty surface
+    // rather than a one-line muted sentence: column flex layout,
+    // gap between icon and label, taller min-height, centred text.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-filters-panel-empty {")
+    expect(idx).toBeGreaterThan(-1)
+    const ruleEnd = css.indexOf("}", idx)
+    const rule = css.slice(idx, ruleEnd)
+    expect(rule).toContain("flex-direction: column")
+    expect(rule).toContain("text-align: center")
+    expect(rule).toMatch(/min-height:\s*4(?:\.\d+)?rem/)
+    expect(rule).toContain("gap:")
+  })
+
+  test("filters panel chrome consumes `--bc-grid-*` tokens only (no direct shadcn-token reads)", () => {
+    // Single-place-override invariant — the polished filters panel
+    // must not bypass the bridge by reading shadcn host tokens
+    // directly. Slice the panel section and pin tokens-only.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-filters-panel {")
+    expect(idx).toBeGreaterThan(-1)
+    const sectionEnd = css.indexOf(".bc-grid-pivot-panel {", idx)
+    expect(sectionEnd).toBeGreaterThan(idx)
+    const block = css.slice(idx, sectionEnd)
+
+    // Sanity — the block consumes the bc-grid tokens it should.
+    expect(block).toContain("var(--bc-grid-border)")
+    expect(block).toContain("var(--bc-grid-fg)")
+    expect(block).toContain("var(--bc-grid-bg)")
+    expect(block).toContain("var(--bc-grid-accent-soft)")
+    expect(block).toContain("var(--bc-grid-focus-ring)")
+
+    // Forbidden direct reads — `tailwind-v4-token-compat` invariant.
+    expect(block).not.toMatch(/var\(--background[,)]/)
+    expect(block).not.toMatch(/var\(--foreground[,)]/)
+    expect(block).not.toMatch(/var\(--input[,)]/)
+    expect(block).not.toMatch(/var\(--ring[,)]/)
+    expect(block).not.toMatch(/var\(--accent[,)]/)
+    expect(block).not.toMatch(/var\(--popover[,)]/)
+    expect(block).not.toMatch(/var\(--primary[,)]/)
+    expect(block).not.toMatch(/var\(--muted-foreground[,)]/)
+    expect(block).not.toMatch(/var\(--destructive[,)]/)
+  })
+
   test("CSS uses the kebab-case class convention from design.md", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     expect(css).toContain(".bc-grid-row")
