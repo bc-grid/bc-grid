@@ -32,20 +32,28 @@ describe("@bc-grid/animations FLIP helpers", () => {
     expect(delta.scaleY).toBe(2)
   })
 
-  test("builds transform-only keyframes", () => {
+  test("builds translate-only keyframes by default", () => {
     const keyframes = createFlipKeyframes({ x: 10, y: -20, scaleX: 1, scaleY: 1 })
 
     expect(keyframes[0]?.transform).toBe("translate3d(10px, -20px, 0)")
-    expect(keyframes[1]?.transform).toBe("translate3d(0, 0, 0) scale(1, 1)")
+    expect(keyframes[1]?.transform).toBe("translate3d(0, 0, 0)")
     expectCompositorOnly(keyframes)
   })
 
-  test("can disable scale for text-bearing FLIP targets", () => {
-    const keyframes = createFlipKeyframes({ x: 0, y: 32, scaleX: 1, scaleY: 2 }, { scale: false })
+  test("omits scale for text-bearing FLIP targets by default", () => {
+    const keyframes = createFlipKeyframes({ x: 0, y: 32, scaleX: 1, scaleY: 2 })
 
     expect(keyframes[0]?.transform).toBe("translate3d(0px, 32px, 0)")
     expect(keyframes[1]?.transform).toBe("translate3d(0, 0, 0)")
     expect(String(keyframes[0]?.transform)).not.toContain("scale")
+    expectCompositorOnly(keyframes)
+  })
+
+  test("can opt into scale for non-text FLIP targets", () => {
+    const keyframes = createFlipKeyframes({ x: 0, y: 32, scaleX: 1, scaleY: 2 }, { scale: true })
+
+    expect(keyframes[0]?.transform).toBe("translate3d(0px, 32px, 0) scale(1, 2)")
+    expect(keyframes[1]?.transform).toBe("translate3d(0, 0, 0) scale(1, 1)")
     expectCompositorOnly(keyframes)
   })
 
@@ -115,6 +123,21 @@ describe("animation primitives", () => {
       motionPolicy: "reduced",
     })
     expect(animations).toEqual([])
+  })
+
+  test("flip skips pure dimension changes unless scale is explicitly enabled", async () => {
+    const first = { top: 0, left: 0, width: 100, height: 32 }
+    const element = createFakeElement({ top: 0, left: 0, width: 100, height: 64 })
+    const budget = new AnimationBudget({ maxInFlight: 1 })
+
+    expect(flip([{ element, first }], { budget })).toEqual([])
+    expect(budget.inFlight).toBe(0)
+
+    const animations = flip([{ element, first }], { budget, scale: true })
+    expect(animations).toHaveLength(1)
+    await animations[0]?.finished
+    await Promise.resolve()
+    expect(budget.inFlight).toBe(0)
   })
 
   test("flash and slide reserve from the budget", async () => {

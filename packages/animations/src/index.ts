@@ -28,9 +28,9 @@ export interface FlipOptions extends AnimationOptions {
   /**
    * Whether FLIP should animate dimension changes with scale().
    *
-   * Keep enabled for non-text visual elements. Disable for text-bearing
-   * containers such as virtualized grid rows; scaling live text during expand /
-   * collapse reads as distortion, not motion.
+   * Defaults to false so text-bearing targets move without stretching glyphs.
+   * Set true only for non-text decorative targets where dimension interpolation
+   * is intentional.
    */
   scale?: boolean
 }
@@ -132,12 +132,12 @@ export function createFlipKeyframes(
   delta: FlipDelta,
   options: Pick<FlipOptions, "scale"> = {},
 ): Keyframe[] {
-  const useScale = options.scale !== false
+  const useScale = options.scale === true
   const fromScale =
     useScale && (delta.scaleX !== 1 || delta.scaleY !== 1)
       ? ` scale(${delta.scaleX}, ${delta.scaleY})`
       : ""
-  const toScale = useScale ? " scale(1, 1)" : ""
+  const toScale = fromScale ? " scale(1, 1)" : ""
 
   return [
     {
@@ -183,7 +183,7 @@ export function flip(targets: Iterable<FlipTarget>, options: FlipOptions = {}): 
     if (animations.length >= maxAnimations) break
     const last = target.last ?? readFlipRect(target.element)
     const delta = calculateFlipDelta(target.first, last)
-    if (!shouldAnimateDelta(delta)) continue
+    if (!shouldAnimateDeltaForOptions(delta, options)) continue
 
     const animation = animateWithBudget(
       target.element,
@@ -220,7 +220,7 @@ export function slide(
 export function playFlip(
   element: HTMLElement,
   first: FlipRect,
-  options: AnimationOptions = {},
+  options: FlipOptions = {},
 ): Animation | null {
   return flip([{ element, first }], { ...options, maxAnimations: 1 })[0] ?? null
 }
@@ -235,6 +235,14 @@ export function resolveMotionPolicy(policy?: MotionPolicy): MotionPolicy {
 
 function shouldReduceMotion(options: AnimationOptions): boolean {
   return options.reducedMotion === true || resolveMotionPolicy(options.motionPolicy) === "reduced"
+}
+
+function shouldAnimateDeltaForOptions(
+  delta: FlipDelta,
+  options: Pick<FlipOptions, "scale">,
+): boolean {
+  if (delta.x !== 0 || delta.y !== 0) return true
+  return options.scale === true && (delta.scaleX !== 1 || delta.scaleY !== 1)
 }
 
 function animateWithBudget(

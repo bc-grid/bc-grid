@@ -5,7 +5,6 @@ import {
   calculateFlipDelta,
   flip,
   readFlipRect,
-  shouldAnimateDelta,
   slide,
 } from "@bc-grid/animations"
 import type {
@@ -1268,9 +1267,9 @@ interface RowFlipCandidate extends FlipTarget {
   rowIndex: number
 }
 
-const ROW_FLIP_DURATION_MS = 200
-const ROW_ENTER_DURATION_MS = 140
-const ROW_ENTER_DISTANCE_PX = 8
+const ROW_FLIP_DURATION_MS = 160
+const ROW_ENTER_DURATION_MS = 120
+const ROW_ENTER_DISTANCE_PX = 4
 
 export function useFlipOnSort({ sortState, scrollerRef, virtualizer }: UseFlipOnSortParams): {
   /**
@@ -1416,7 +1415,8 @@ function rowFlipCandidate(
   if (!rowIndexAttr) return null
   const rowIndex = Number(rowIndexAttr)
   if (!Number.isFinite(rowIndex)) return null
-  if (!shouldAnimateDelta(calculateFlipDelta(first, last))) return null
+  const delta = calculateFlipDelta(first, last)
+  if (delta.x === 0 && delta.y === 0) return null
   return { element: rowEl, first, last, rowIndex }
 }
 

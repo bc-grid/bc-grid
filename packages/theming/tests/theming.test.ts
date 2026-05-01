@@ -120,6 +120,13 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain("transition: height")
   })
 
+  test("CSS motion avoids text scaling and layout-property transitions", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).not.toMatch(/scale[XY]?\(/)
+    expect(css).not.toMatch(/transition:\s*(?:all|height|width|max-height)/)
+  })
+
   test("prefers-reduced-motion block zeroes out motion per accessibility-rfc §Reduced Motion", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     // Locate the last reduced-motion block (the catch-all override) and
