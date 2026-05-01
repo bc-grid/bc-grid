@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useId, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName, visuallyHiddenStyle } from "./chrome"
+import {
+  editorAccessibleName,
+  editorControlState,
+  editorInputClassName,
+  visuallyHiddenStyle,
+} from "./chrome"
 
 /**
  * Checkbox editor — `kind: "checkbox"`. The built-in boolean editor for
@@ -56,8 +61,7 @@ function CheckboxEditor(props: BcCellEditorProps<unknown, unknown>) {
   void seedKey
 
   const checked = resolveCheckboxCheckedValue(initialValue)
-  const accessibleName =
-    typeof column.header === "string" ? column.header : (column.field ?? column.columnId ?? "")
+  const accessibleName = editorAccessibleName(column, "Checkbox value")
 
   return (
     <>

@@ -52,6 +52,32 @@ describe("readEditorInputValue", () => {
 
     expect(readEditorInputValue(input)).toBe("Acme")
   })
+
+  test("reads select typed option values without running valueParser", () => {
+    const select = {
+      tagName: "SELECT",
+      multiple: false,
+      selectedIndex: 1,
+      value: "closed",
+      __bcGridSelectOptionValues: ["open", 3],
+    } as unknown as HTMLElement
+
+    expect(readEditorInputValue(select)).toBe(3)
+  })
+
+  test("reads multi-select typed option arrays without running valueParser", () => {
+    const select = {
+      tagName: "SELECT",
+      multiple: true,
+      selectedOptions: [
+        { index: 0, value: "open" },
+        { index: 2, value: "escalated" },
+      ],
+      __bcGridSelectOptionValues: ["open", "closed", 3],
+    } as unknown as HTMLElement
+
+    expect(readEditorInputValue(select)).toEqual(["open", 3])
+  })
 })
 
 function renderDefaultEditor(overrides: Record<string, unknown> = {}): string {

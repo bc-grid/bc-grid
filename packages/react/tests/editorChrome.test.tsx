@@ -114,6 +114,22 @@ describe("built-in editor chrome hooks", () => {
     expect(html).toContain('data-bc-grid-editor-option-count="2"')
   })
 
+  test("multi-select editor keeps typed options and exposes native listbox hooks", () => {
+    const html = renderEditor(
+      {
+        editor: multiSelectEditor,
+        initialValue: ["open"],
+        column: optionColumn,
+      },
+      { seedKey: "c" },
+    )
+
+    expect(html).toContain("multiple")
+    expect(html).toContain('aria-label="Status"')
+    expect(html).toContain('data-bc-grid-editor-kind="multi-select"')
+    expect(html).toContain('data-bc-grid-editor-option-count="2"')
+  })
+
   test("autocomplete editor exposes datalist, busy, and live status hooks", () => {
     const html = renderEditor(
       {
@@ -133,6 +149,23 @@ describe("built-in editor chrome hooks", () => {
     expect(html).toContain('data-bc-grid-editor-seeded="true"')
     expect(html).toContain('data-bc-grid-editor-datalist="true"')
     expect(html).toContain("0 suggestions available")
+  })
+
+  test("checkbox editor links labels and validation descriptions", () => {
+    const html = renderEditor(
+      {
+        editor: checkboxEditor,
+        initialValue: true,
+        column: { header: null, field: "active" },
+      },
+      { error: "Required" },
+    )
+
+    expect(html).toContain('aria-label="active"')
+    expect(html).toContain('aria-describedby="')
+    expect(html).toContain("Required")
+    expect(html).toContain('data-bc-grid-editor-kind="checkbox"')
+    expect(html).toContain('data-bc-grid-editor-state="error"')
   })
 })
 
