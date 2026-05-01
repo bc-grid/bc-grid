@@ -63,6 +63,27 @@ export function CustomerGrid() {
 - `<BcServerGrid>` — server-row-model wrapper supporting `rowModel="paged"` and `rowModel="infinite"` (tree mode reserved).
 - `useBcGridApi()` — imperative API hook (scroll-to-row, get-selection, etc.).
 
+## Feature discovery map
+
+The examples app keeps advanced chrome closed by default. Use these controls, URL flags, or props to find the shipped surface without changing the baseline AR Customers demo.
+
+| Capability | Status | Example entry | API entry point |
+| --- | --- | --- | --- |
+| Sort, resize, pin | Available | AR Customers headers | `sortable`, `resizable`, `pinned` |
+| Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
+| Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
+| Columns and filters panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` | `sidebar={["columns", "filters"]}` |
+| Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
+| Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
+| Checkbox selection | Available | `?checkbox=1` | `checkboxSelection` |
+| URL state persistence | Available | `?urlstate=1` | `gridId`, `urlStatePersistence` |
+| Pagination | Available | `?pagination=1` | `pagination`, `pageSizeOptions` |
+| Aggregations | Available | `?aggregations=1` | `aggregation`, `statusBar` |
+| Master detail | Available | `?masterDetail=1` | `renderDetailPanel` |
+| Auto height | Available | `?autoHeight=1` | `height="auto"` |
+| Server row model | Available | Package API | `<BcServerGrid>` |
+| Pivot panel and charts | Planned | Not exposed in examples | Pivot UI and charts adapter |
+
 ## Bundle size
 
 Current main baseline for `core+virtualizer+animations+react`: 64.05 KiB gzipped. Enforced under a 100 KiB hard cap with a 10% per-PR drift guard from the latest accepted main baseline by `tools/bundle-size`.

@@ -30,6 +30,29 @@ The spec is grounded in:
 - **Optional vs required:** every required property is documented; every optional property has a stated default. Components reject unknown props at `tsc` (TypeScript's `exact` semantics).
 - **Stability tiers:** every section is marked `frozen at v0.1` (locked), `reserved for Q2+` (declared but not implementable yet), or `experimental` (subject to change without major bump). Q1 ships only `frozen` items + types from `reserved` sections.
 
+### Feature Discovery Map
+
+The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool panels remain closed unless a consumer opts into them, and URL flags are explicit. Use this map to locate shipped features and planned surfaces.
+
+| Feature | Status | Example entry | API entry point |
+| --- | --- | --- | --- |
+| Sort, resize, pin | Available | AR Customers headers | `sortable`, `resizable`, `pinned` |
+| Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
+| Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
+| Columns panel | Available | Tool panels control or `?toolPanel=columns` | `sidebar={["columns"]}` |
+| Filters panel | Available | Tool panels control or `?toolPanel=filters` | `sidebar={["filters"]}` |
+| Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
+| Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
+| Checkbox selection | Available | `?checkbox=1` | `checkboxSelection` |
+| URL state persistence | Available | `?urlstate=1` | `gridId`, `urlStatePersistence` |
+| Pagination | Available | `?pagination=1` | `pagination`, `pageSizeOptions` |
+| Aggregations | Available | `?aggregations=1` | `aggregation`, `statusBar` |
+| Master detail | Available | `?masterDetail=1` | `renderDetailPanel` |
+| Auto height | Available | `?autoHeight=1` | `height = "auto"` |
+| Server row model | Available | Package API | `<BcServerGrid>` |
+| Pivot panel | Planned | Not exposed in examples | Pivot sidebar implementation |
+| Charts | Planned | Not exposed in examples | Charts adapter |
+
 ---
 
 ## 1. `BcGridColumn<TRow>` — column surface

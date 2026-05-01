@@ -83,6 +83,110 @@ const FLAG_LABELS: Record<CustomerFlag, string> = {
   vip: "VIP",
 }
 
+const featureDiscoveryRows = [
+  {
+    feature: "Sort, resize, pin",
+    status: "Available",
+    entry: "AR Customers headers",
+    api: "sortable, resizable, pinned",
+  },
+  {
+    feature: "Inline filters",
+    status: "Available",
+    entry: "AR Customers filter row",
+    api: "filter, showFilterRow",
+  },
+  {
+    feature: "Popup filters",
+    status: "Available",
+    entry: "?filterPopup=1",
+    api: "filter.variant = popup",
+  },
+  {
+    feature: "Columns panel",
+    status: "Available",
+    entry: "Tool panels control or ?toolPanel=columns",
+    api: 'sidebar={["columns"]}',
+  },
+  {
+    feature: "Filters panel",
+    status: "Available",
+    entry: "Tool panels control or ?toolPanel=filters",
+    api: 'sidebar={["filters"]}',
+  },
+  {
+    feature: "Context menu",
+    status: "Available",
+    entry: "right-click grid cells",
+    api: "contextMenuItems, showColumnMenu",
+  },
+  {
+    feature: "Cell editing",
+    status: "Available",
+    entry: "?edit=1",
+    api: "BcEditGrid, cellEditor",
+  },
+  {
+    feature: "Checkbox selection",
+    status: "Available",
+    entry: "?checkbox=1",
+    api: "checkboxSelection",
+  },
+  {
+    feature: "URL state",
+    status: "Available",
+    entry: "?urlstate=1",
+    api: "gridId, urlStatePersistence",
+  },
+  {
+    feature: "Pagination",
+    status: "Available",
+    entry: "?pagination=1",
+    api: "pagination, pageSizeOptions",
+  },
+  {
+    feature: "Aggregations",
+    status: "Available",
+    entry: "?aggregations=1",
+    api: "aggregation, statusBar",
+  },
+  {
+    feature: "Master detail",
+    status: "Available",
+    entry: "?masterDetail=1",
+    api: "renderDetailPanel",
+  },
+  {
+    feature: "Auto height",
+    status: "Available",
+    entry: "?autoHeight=1",
+    api: "height = auto",
+  },
+  {
+    feature: "Server row model",
+    status: "Available",
+    entry: "package API",
+    api: "BcServerGrid",
+  },
+  {
+    feature: "Pivot panel",
+    status: "Planned",
+    entry: "not exposed in examples",
+    api: "pivot sidebar slot",
+  },
+  {
+    feature: "Charts",
+    status: "Planned",
+    entry: "not exposed in examples",
+    api: "charts adapter",
+  },
+] as const satisfies readonly {
+  feature: string
+  status: "Available" | "Planned"
+  entry: string
+  api: string
+}[]
+
 /**
  * Master collector roster for the editor-autocomplete demo. The seeded
  * data only uses the first 8 names; this 30-name roster is what the
@@ -165,6 +269,10 @@ export function App() {
             <span>AR Customers</span>
             <small>Q1 vertical slice</small>
           </a>
+          <a className="nav-item" href="#feature-map">
+            <span>Feature Map</span>
+            <small>flags and entry points</small>
+          </a>
           <a className="nav-item" href="#package-matrix">
             <span>Package Matrix</span>
             <small>Q1 packages</small>
@@ -187,6 +295,7 @@ export function App() {
           onThemeChange={setTheme}
           theme={theme}
         />
+        <FeatureDiscoveryMap />
         <PackageMatrix />
       </section>
     </main>
@@ -950,6 +1059,65 @@ function PackageMatrix() {
       </div>
     </section>
   )
+}
+
+function FeatureDiscoveryMap() {
+  const availableCount = featureDiscoveryRows.filter((row) => row.status === "Available").length
+
+  return (
+    <section
+      id="feature-map"
+      className="package-panel feature-map-panel"
+      aria-labelledby="feature-map-title"
+    >
+      <header>
+        <div>
+          <h3 id="feature-map-title">Feature Discovery Map</h3>
+          <p>Controls and URL flags leave the main demo closed by default.</p>
+        </div>
+        <span>
+          {availableCount} available / {featureDiscoveryRows.length - availableCount} planned
+        </span>
+      </header>
+      <div className="feature-map-scroll">
+        <table className="feature-map-table">
+          <thead>
+            <tr>
+              <th scope="col">Feature</th>
+              <th scope="col">Status</th>
+              <th scope="col">Enable or find it</th>
+              <th scope="col">API entry point</th>
+            </tr>
+          </thead>
+          <tbody>
+            {featureDiscoveryRows.map((row) => (
+              <tr key={row.feature}>
+                <th scope="row">{row.feature}</th>
+                <td>
+                  <span className={`feature-status feature-status-${row.status.toLowerCase()}`}>
+                    {row.status}
+                  </span>
+                </td>
+                <td>
+                  <DiscoveryValue value={row.entry} />
+                </td>
+                <td>
+                  <DiscoveryValue value={row.api} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function DiscoveryValue({ value }: { value: string }) {
+  if (value.includes("?") || value.includes("=") || value.includes("{")) {
+    return <code>{value}</code>
+  }
+  return <span>{value}</span>
 }
 
 function formatDateTime(value: string): string {
