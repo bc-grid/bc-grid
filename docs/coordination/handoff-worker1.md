@@ -41,11 +41,26 @@ You implement code; the coordinator reviews and runs the slow gates.
 1. **Pagination chrome toggle** — currently `paginationMode` controls "client" vs "manual"; pagination chrome (`<BcPagination>`) appears unconditionally if pageSize is set. Add a context-menu toggle: View → "Show pagination" so consumers can hide the chrome without unmounting the prop.
 2. **Server tree expand-all / collapse-all** — for `useServerTreeGrid` consumers, add a context-menu action under "Customize" → Server: "Expand all visible groups" / "Collapse all groups". Wire through the `useServerTreeGrid` actions.
 3. **Prefetch budget submenu** — bundle-1 (#391) shipped the `prefetchAhead?` knob; now expose it as a context-menu submenu: Server → Prefetch → 0 / 1 (default) / 2 / 3 blocks ahead. User-adjustable per-grid.
-4. **Server pagination mode toggle** — for `useServerPagedGrid` consumers, add a "Server pagination" toggle under Server → Pagination: "Server-paged" (default) vs "Load all visible." The latter triggers a full fetch via the existing `loadPage` with no pagination, useful for small servers.
+
+(The "Server pagination mode" toggle originally listed here has been pulled — that scope is now subsumed by `v05-server-mode-switch` below.)
 
 The persistence shape will be pinned by the RFC's `BcUserSettings` spec. Until RFC ratifies, store toggles in memory + accept a `userSettings` prop as a placeholder that coordinator will harmonize.
 
-**Branch:** `agent/worker1/v05-context-menu-server-toggles`. **Effort:** ~40-60 min.
+**Branch:** `agent/worker1/v05-context-menu-server-toggles`. **Effort:** ~30-45 min (3 items).
+
+### Next after context-menu lane → `v05-server-mode-switch` (NEW v0.5 commitment, structural fix, multi-session)
+
+**Maintainer call (2026-05-03):** "this should have been day-1 functionality when server mode + grouping was supported." Land in v0.5.0.
+
+**Problem:** today a grid that wants to behave as paged-by-default + tree-when-grouped has to mount one component per mode (`<BcServerGrid rowModel="paged">` vs `rowModel="tree"`), because the three turnkey hooks (`useServerPagedGrid`, `useServerInfiniteGrid`, `useServerTreeGrid`) are three independent state machines. When the user toggles grouping, React unmounts one mode and mounts the other; everything that should carry across (filters, sort, selection, focus, scroll, view-key) is lost. bsncraft's customers grid (~36k rows, server-tree on group, server-paged otherwise) carries ~120 LOC of host-side discriminated wrapper to paper over this — and the carry-over loss is still user-visible.
+
+**Goal:** one bc-grid construct that holds shared state once and switches its row-model engine internally based on a controlled `groupBy` prop (or equivalent). Consumer just sets `groupBy`; the grid handles the rest.
+
+**Wait for the RFC.** Coordinator is drafting `docs/design/server-mode-switch-rfc.md` right now (background subagent). The RFC will pin: the architectural shape (enhanced `<BcServerGrid>` vs new `useServerGrid` polymorphic hook), the state carry-over contract per-piece-of-state, the server query sequence on the switch, the public API delta against `docs/api.md`, the migration path for the existing hook trio, and the perf budget. Maintainer ratifies the RFC + open questions before you start.
+
+**Coordinator will ping you when the RFC is ratified.** Until then, finish the context-menu lane above and (if you're idle after that) you may pull a v0.6 task from `docs/coordination/v05-audit-followups/worker1-server-perf.md` to keep momentum.
+
+**Branch (when ready):** `agent/worker1/v05-server-mode-switch`. **Effort:** structural change spanning `packages/server-row-model/src/index.ts`, `packages/react/src/serverGrid.tsx`, all three turnkey hooks, plus tests and Playwright spec — likely 2-3 worker sessions, broken into stages per the RFC.
 
 ### Previously active → `v05-server-perf-bundle-1` (DONE — #391)
 
