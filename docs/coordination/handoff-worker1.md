@@ -10,20 +10,60 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 ---
 
-## Active task — PR #353 in coordinator review (updated 2026-05-02)
+## Active task — v0.5: `useServerPagedGrid` turnkey hook (updated 2026-05-02)
 
-You went straight to v0.4 server-grid-stability work and opened **PR #353** (`feat(react): rowProcessingMode + manual-mode server-grid contract`) instead of the audit. **That's accepted** — the coordinator's cross-cutting audit at `docs/coordination/audit-2026-05/coordinator-audit.md` covers the server-grid + perf lane, so a separate worker1 findings doc is not needed. Queue marked `audit-worker1` as `[skipped: worker1 - lane covered by coordinator audit]`.
+PR #353 (`rowProcessingMode`) is approved by coordinator and being merged this turn. Bundle baseline bump landed. **Start v0.5 work now** — synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the v0.5 plan.
 
-### What's open
-- **PR #353** is in coordinator review. Two items being checked:
-  - Public API addition (`rowProcessingMode = "client" | "manual"`) — coordinator API surface review.
-  - Bundle-size warning (react bundle 69.52 → 69.79 KiB; +277 B) — coordinator owns baseline policy.
-- Tests pass (1122/1122). Type-check, lint, build all clean.
+### Primary task — `useServerPagedGrid({ gridId, loadPage })`
 
-### What you should do now
-**Wait for coordinator review feedback on #353 before starting new work.** Once #353 lands, this handoff will be updated with the next v0.4 server-grid task or a pivot to v0.5 work (`useServerPagedGrid` hook + `apiRef.scrollToCell` per `docs/coordination/v0.5-audit-refactor-plan.md`).
+Audit P0-6 / synthesis sprint plan. The single biggest API ergonomics win for the BusinessCraft ERP migration.
 
-If review feedback comes back asking for changes on #353, address it on the same branch (`agent/worker1/server-grid-stability-v040`) and push.
+**Spec:**
+```ts
+export function useServerPagedGrid<TRow>(opts: {
+  gridId: string
+  loadPage: LoadServerPage<TRow>
+  initial?: { sort?, filter?, search?, page?, pageSize? }
+  debounceMs?: number  // default 200ms for filter/search
+  rowId: (row: TRow) => RowId
+}): {
+  props: BcServerGridProps<TRow>      // spread-ready into <BcServerGrid>
+  state: ServerPagedState<TRow>       // current sort/filter/page/loading
+  actions: { reload, setPage, setPageSize, applyOptimisticEdit }
+}
+```
+
+**The hook owns:**
+- `requestId` flow (each loadPage call gets an incrementing id; only the latest result is applied)
+- Stale-response rejection (responses for a superseded requestId drop silently)
+- Debounce on filter/search changes (default 200ms; configurable via `debounceMs`)
+- Page reset on filter / sort / search change (back to page 0)
+- Optimistic edits in flight (consumer calls `actions.applyOptimisticEdit({ rowId, patch })`; hook tracks until next loadPage settles or rejects)
+- Error surface (`state.error` carries last loadPage error; `actions.reload()` retries)
+- AbortSignal threading (uses the existing `ServerLoadContext.signal`)
+
+**Reference implementation:** `~/work/bsncraft/apps/web/components/server-edit-grid.tsx:74-163`. That's the 9-`useState` orchestration this hook subsumes. Read it first; the hook should make all of that disappear in the consumer.
+
+**Tests:** unit-level for the orchestration (request-id supersedure, debounce timing, page reset semantics, optimistic edit lifecycle). Don't write Playwright — coordinator runs that.
+
+**Branch:** `agent/worker1/v05-use-server-paged-grid`
+
+### Follow-up tasks (after the hook PR is open)
+
+1. **`apiRef.scrollToCell(rowId, colId, opts)`** for server-paged grids. Returns a Promise that resolves once the cell is loaded + visible (handles the "row not yet loaded" case via the hook's loadPage). Branch: `agent/worker1/v05-api-ref-scroll-to-cell`.
+2. **Companion hooks** if scope permits: `useServerInfiniteGrid`, `useServerTreeGrid`. Defer to v0.6 if tight.
+3. **Stretch: Generic `TRow` propagation** into `LoadServerPage<TRow>` query type so `query.sort` / `query.filter` are typed against column ids. Branch: `agent/worker1/v05-server-loader-generics`. Only ship if low risk.
+
+### Coordinator answers / context
+
+- **PR #353 status:** approved; coordinator merging this turn after baseline bump. You don't need to do anything for it. The `rowProcessingMode="manual"` you added is exactly what `useServerPagedGrid` will rely on internally — your prior PR set up the foundation for this hook.
+- **Cross-worker contract for `apiRef`:** worker3 owns editor-side methods (`focusCell`, `startEdit`, `commitEdit`, `cancelEdit`, `getActiveCell`); you own server-side (`scrollToCell`); worker2 owns filter-side (`openFilter`, `closeFilter`). Coordinate via the public `BcGridApi` type — no shared internal state.
+
+### Rules reminder
+
+- Don't run Playwright / smoke-perf / perf / broad benchmarks.
+- Open PR; do not merge your own.
+- Update `docs/queue.md` `[draft]` → `[in-flight: worker1]` → `[review: worker1 #PR]` at state transitions.
 
 ---
 
