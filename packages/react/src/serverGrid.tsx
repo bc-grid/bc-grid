@@ -351,6 +351,15 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       collapseAll() {
         gridApiRef.current?.collapseAll()
       },
+      startEdit(rowId, columnId, opts) {
+        gridApiRef.current?.startEdit(rowId, columnId, opts)
+      },
+      commitEdit(opts) {
+        gridApiRef.current?.commitEdit(opts)
+      },
+      cancelEdit() {
+        gridApiRef.current?.cancelEdit()
+      },
       refresh() {
         gridApiRef.current?.refresh()
       },

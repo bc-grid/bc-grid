@@ -48,7 +48,12 @@ import {
 } from "./detailColumn"
 import { nextActiveCellAfterEdit } from "./editingStateMachine"
 import { getEditorActivationIntent } from "./editorKeyboard"
-import { EditorPortal, defaultTextEditor } from "./editorPortal"
+import {
+  EditorPortal,
+  defaultTextEditor,
+  findActiveEditorInput,
+  readEditorInputValue,
+} from "./editorPortal"
 import {
   type ColumnFilterText,
   type ColumnFilterTypeByColumnId,
@@ -1474,6 +1479,73 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         if (allExpandableRowIds.length === 0) return
         setExpansionState(new Set<RowId>())
       },
+      startEdit(targetRowId, targetColumnId, opts) {
+        // Audit P0-7. Mirrors keyboard activation but with `"api"`
+        // source so consumer telemetry can split programmatic edits
+        // from user gestures. The state machine itself absorbs the
+        // event when the grid is already editing a different cell —
+        // we don't try to "switch" implicitly, since that races with
+        // an in-flight async commit.
+        if (editController.editState.mode !== "navigation") return
+        const rowEntry = rowsById.get(targetRowId)
+        if (!rowEntry || rowEntry.kind !== "data") return
+        if (isRowDisabled(rowEntry.row)) return
+        const column = resolvedColumns.find((c) => c.columnId === targetColumnId)
+        if (!column) return
+        if (!isCellEditable(column, rowEntry.row)) return
+        const editorForActivation = column.source.cellEditor ?? defaultTextEditor
+        const seedKey =
+          typeof opts?.seedKey === "string" && [...opts.seedKey].length === 1
+            ? opts.seedKey
+            : undefined
+        editController.start({ rowId: targetRowId, columnId: targetColumnId }, "api", {
+          editor: editorForActivation as never,
+          row: rowEntry.row,
+          rowId: targetRowId,
+          ...(seedKey != null ? { seedKey } : {}),
+        })
+      },
+      commitEdit(opts) {
+        // Audit P0-7. The editor portal owns the keyboard / pointer
+        // commit paths and reads the value from the active editor's
+        // input ref directly. The api lives outside that scope, so we
+        // re-discover the input via the stable `data-bc-grid-editor-input`
+        // marker the editor chrome stamps on every mounted editor.
+        // Consumers can short-circuit the DOM read by passing `value`
+        // directly (useful for typed-commit editors that already know
+        // the value programmatically).
+        if (editController.editState.mode !== "editing") return
+        const cell = editController.editState.cell
+        const rowEntry = rowsById.get(cell.rowId)
+        if (!rowEntry || rowEntry.kind !== "data") return
+        const column = resolvedColumns.find((c) => c.columnId === cell.columnId)
+        if (!column) return
+        const value =
+          opts && Object.hasOwn(opts, "value")
+            ? opts.value
+            : readEditorInputValue(findActiveEditorInput(rootRef.current))
+        const previousValue = column.source.field
+          ? (rowEntry.row as Record<string, unknown>)[column.source.field]
+          : undefined
+        void editController.commit(
+          {
+            rowId: cell.rowId,
+            row: rowEntry.row,
+            columnId: cell.columnId,
+            column: column.source,
+            value,
+            previousValue,
+            source: "api",
+          },
+          opts?.moveOnSettle ?? "stay",
+        )
+      },
+      cancelEdit() {
+        // Audit P0-7. The state machine's `cancel` event is a no-op
+        // outside of preparing/mounting/editing/validating modes, so
+        // this is safe to call unconditionally.
+        editController.cancel()
+      },
       refresh() {
         requestRender()
       },
@@ -1485,8 +1557,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     columnIndexById,
     columnState,
     copyRangeToClipboard,
+    editController,
     filterState,
     focusCell,
+    isRowDisabled,
     rangeSelectionState,
     requestRender,
     resolvedColumns,

@@ -1774,6 +1774,14 @@ export interface BcGridApi<TRow = unknown> {
   expandAll(): void
   collapseAll(): void
 
+  // Imperative editor (v0.5; audit P0-7)
+  startEdit(rowId: RowId, columnId: ColumnId, opts?: { seedKey?: string }): void
+  commitEdit(opts?: {
+    value?: unknown
+    moveOnSettle?: "stay" | "down" | "up" | "right" | "left"
+  }): void
+  cancelEdit(): void
+
   // Refresh
   refresh(): void
 }
@@ -1809,6 +1817,33 @@ only mounts visible rows). The result is clamped to the column's `minWidth` /
 `maxWidth` (defaulting to `[48, 800]`). No-op if the grid root is unmounted or
 the column has no DOM cells. See `docs/design/context-menu-command-map.md`
 §2.4 / §5.2.
+
+`startEdit(rowId, columnId, opts?)` programmatically activates the cell editor
+on the supplied cell with `activation: "api"` (so consumer telemetry can split
+programmatic edits from user gestures). Mirrors what F2 / Enter / a printable
+seed produce on the keyboard path. No-op if the row or column id is unknown,
+the column is not editable for that row, the row is disabled via
+`rowIsDisabled`, or the grid is already in edit mode on a different cell —
+call `cancelEdit()` first to switch. The optional `seedKey` is single-character
+only; longer strings are silently dropped to preserve the printable-seed
+contract. Audit-2026-05 P0-7.
+
+`commitEdit(opts?)` programmatically commits the active editor. Reads the
+current value from the editor input (matching the pointer / keyboard commit
+paths) via the stable `[data-bc-grid-editor-input="true"]` marker, then runs
+`column.valueParser` and `column.validate` through the editing controller and
+applies the overlay update. Pass `opts.value` to short-circuit the DOM read
+(useful for typed-commit editors that already know the value). `opts.moveOnSettle`
+controls active-cell movement after commit; defaults to `"stay"` (matching the
+pointer-commit convention). No-op when the grid is not in `editing` mode.
+Returns immediately — validation/commit is async; consumers wanting to await
+the settle should listen on `useEditingController` events or the announce hook.
+Audit-2026-05 P0-7.
+
+`cancelEdit()` programmatically cancels the active editor — overlay unchanged,
+focus returns to the grid root. Mirrors Escape from the keyboard. No-op outside
+the preparing/mounting/editing/validating modes (the state machine absorbs the
+event). Audit-2026-05 P0-7.
 
 ### 6.2 `BcServerGridApi<TRow>` (frozen at v0.1)
 

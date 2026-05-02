@@ -415,6 +415,22 @@ function editorStateAttribute({
   return "idle"
 }
 
+/**
+ * Locate the currently-mounted editor input element inside the supplied
+ * root (typically the grid's `rootRef.current`). The editor chrome stamps
+ * `data-bc-grid-editor-input="true"` on the active input/select/textarea
+ * regardless of editor kind, so `commitEdit()` can read the value through
+ * the public API surface without needing access to `EditorMount`'s
+ * private focusRef. Returns `null` when no editor is mounted; the api
+ * method falls through to a no-op in that case.
+ *
+ * Audit P0-7. Pure DOM traversal; SSR-safe (returns `null` for `null` root).
+ */
+export function findActiveEditorInput(root: HTMLElement | null): HTMLElement | null {
+  if (!root) return null
+  return root.querySelector<HTMLElement>("[data-bc-grid-editor-input='true']")
+}
+
 export function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {
   const tagName = focusRefCurrent?.tagName.toUpperCase()
   if (tagName === "INPUT") {

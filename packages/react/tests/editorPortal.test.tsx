@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import {
   EditorValidationPopover,
   defaultTextEditor,
+  findActiveEditorInput,
   readEditorInputValue,
 } from "../src/editorPortal"
 
@@ -130,6 +131,39 @@ describe("EditorValidationPopover", () => {
     // popover element to live inside it.
     const wrapperBlock = source.match(/data-bc-grid-editor-root="true"[\s\S]*?<\/div>\s*\)\s*\}/)
     expect(wrapperBlock?.[0] ?? "").toContain("<EditorValidationPopover")
+  })
+})
+
+describe("findActiveEditorInput", () => {
+  test("returns null when the root is null (api commitEdit no-op path)", () => {
+    expect(findActiveEditorInput(null)).toBeNull()
+  })
+
+  test("queries for the stable editor-input marker stamped by every built-in editor", () => {
+    // Stub the only DOM surface the helper uses — `querySelector` — so the
+    // test can run in node without a DOM. Asserts the helper passes the
+    // exact selector the editor chrome stamps; if the marker ever moves,
+    // this test fails and the api commit path is updated in lockstep.
+    const calls: string[] = []
+    const fakeInput = { tagName: "INPUT" } as HTMLElement
+    const fakeRoot = {
+      querySelector: (selector: string) => {
+        calls.push(selector)
+        return fakeInput
+      },
+    } as unknown as HTMLElement
+
+    const result = findActiveEditorInput(fakeRoot)
+    expect(result).toBe(fakeInput)
+    expect(calls).toEqual(["[data-bc-grid-editor-input='true']"])
+  })
+
+  test("returns null when no editor is mounted (querySelector miss)", () => {
+    const fakeRoot = {
+      querySelector: () => null,
+    } as unknown as HTMLElement
+
+    expect(findActiveEditorInput(fakeRoot)).toBeNull()
   })
 })
 
