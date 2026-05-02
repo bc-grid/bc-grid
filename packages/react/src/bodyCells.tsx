@@ -120,9 +120,12 @@ export function renderBodyCell<TRow>({
     ? getOverlayValue?.(entry.rowId, column.columnId)
     : getCellValue(entry.row, column.source)
   const formattedValue = formatCellValue(value, entry.row, column.source, locale)
-  // Aggregate row edit state for `rowState.pending` / `.error` so the
-  // BcEditGrid action column can disable destructive actions while a
-  // row has an in-flight commit. `null` when the row has no edits.
+  // Aggregate row edit state for `rowState.pending` / `.error` /
+  // `.dirty` so the BcEditGrid action column can disable destructive
+  // actions while a row has an in-flight commit, and surface a
+  // "Discard" action only when there are uncommitted edits to roll
+  // back. `null` when the row has no edits at all. Audit P1-W3-3 +
+  // editing-rfc §Server commit + optimistic UI.
   const rowEditState = getRowEditState?.(entry.rowId) ?? null
   const rowState = {
     rowId: entry.rowId,
@@ -133,6 +136,7 @@ export function renderBodyCell<TRow>({
     ...(entry.level != null ? { level: entry.level } : {}),
     ...(rowEditState?.pending ? { pending: true } : {}),
     ...(rowEditState?.error != null ? { error: rowEditState.error } : {}),
+    ...(rowEditState != null ? { dirty: true } : {}),
   }
 
   // Editing state per `editing-rfc §Dirty Tracking`. Order of precedence:

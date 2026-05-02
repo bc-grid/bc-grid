@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import type { ColumnId, RowId } from "@bc-grid/core"
 import {
   type BcCellEditEntry,
+  discardRowOverlayEdits,
   pruneOverlayPatches,
   summariseRowEditState,
 } from "../src/useEditingController"
@@ -183,6 +184,107 @@ describe("summariseRowEditState — row aggregation for action column", () => {
       pending: true,
       error: "Server rejected",
     })
+  })
+})
+
+describe("discardRowOverlayEdits — multi-cell row rollback (audit P1-W3-3)", () => {
+  test("drops every overlay patch + entry on the row when nothing is in flight", () => {
+    const patches = new Map<RowId, Map<ColumnId, unknown>>([
+      [
+        rowA,
+        new Map<ColumnId, unknown>([
+          [colName, "Acme Co."],
+          [colTotal, 9999],
+        ]),
+      ],
+    ])
+    const entries = new Map<RowId, Map<ColumnId, BcCellEditEntry>>([
+      [
+        rowA,
+        new Map<ColumnId, BcCellEditEntry>([
+          [colName, makeEntry()],
+          [colTotal, makeEntry()],
+        ]),
+      ],
+    ])
+
+    const result = discardRowOverlayEdits(patches, entries, rowA)
+    expect(result).toEqual({ discarded: 2 })
+    expect(patches.has(rowA)).toBe(false)
+    expect(entries.has(rowA)).toBe(false)
+  })
+
+  test("preserves pending entries (in-flight server commits) per editing-rfc §Concurrency", () => {
+    // Discarding a pending entry would race the server's eventual
+    // accept/reject — the overlay patch is the optimistic value the
+    // server is settling against. Drop it now and the consumer's
+    // upstream store would never see the rollback message.
+    const patches = new Map<RowId, Map<ColumnId, unknown>>([
+      [
+        rowA,
+        new Map<ColumnId, unknown>([
+          [colName, "Acme Co."],
+          [colTotal, 9999],
+        ]),
+      ],
+    ])
+    const entries = new Map<RowId, Map<ColumnId, BcCellEditEntry>>([
+      [
+        rowA,
+        new Map<ColumnId, BcCellEditEntry>([
+          [colName, makeEntry({ pending: true })],
+          [colTotal, makeEntry()],
+        ]),
+      ],
+    ])
+
+    const result = discardRowOverlayEdits(patches, entries, rowA)
+    expect(result).toEqual({ discarded: 1 })
+    expect(patches.get(rowA)?.get(colName)).toBe("Acme Co.")
+    expect(patches.get(rowA)?.has(colTotal)).toBe(false)
+    expect(entries.get(rowA)?.get(colName)?.pending).toBe(true)
+    expect(entries.get(rowA)?.has(colTotal)).toBe(false)
+  })
+
+  test("preserves error entries — surface stays for consumer dismissal", () => {
+    // Discarding an errored entry would hide the failure. The user
+    // must explicitly retry / clear via re-edit; row-discard is for
+    // unsaved edits, not for clearing errored ones.
+    const patches = new Map<RowId, Map<ColumnId, unknown>>([
+      [rowA, new Map<ColumnId, unknown>([[colName, "Acme Co."]])],
+    ])
+    const entries = new Map<RowId, Map<ColumnId, BcCellEditEntry>>([
+      [rowA, new Map([[colName, makeEntry({ error: "Server rejected" })]])],
+    ])
+
+    const result = discardRowOverlayEdits(patches, entries, rowA)
+    expect(result).toEqual({ discarded: 0 })
+    expect(patches.get(rowA)?.get(colName)).toBe("Acme Co.")
+    expect(entries.get(rowA)?.get(colName)?.error).toBe("Server rejected")
+  })
+
+  test("returns 0 when the row has no overlay entries (no-op safe)", () => {
+    const patches = new Map<RowId, Map<ColumnId, unknown>>()
+    const entries = new Map<RowId, Map<ColumnId, BcCellEditEntry>>()
+
+    expect(discardRowOverlayEdits(patches, entries, rowA)).toEqual({ discarded: 0 })
+  })
+
+  test("only touches the targeted row — other rows survive", () => {
+    const patches = new Map<RowId, Map<ColumnId, unknown>>([
+      [rowA, new Map([[colName, "Acme Co."]])],
+      [rowB, new Map([[colName, "Beta Ltd."]])],
+    ])
+    const entries = new Map<RowId, Map<ColumnId, BcCellEditEntry>>([
+      [rowA, new Map([[colName, makeEntry()]])],
+      [rowB, new Map([[colName, makeEntry()]])],
+    ])
+
+    const result = discardRowOverlayEdits(patches, entries, rowA)
+    expect(result).toEqual({ discarded: 1 })
+    expect(patches.has(rowA)).toBe(false)
+    expect(patches.get(rowB)?.get(colName)).toBe("Beta Ltd.")
+    expect(entries.get(rowB)?.get(colName)).toBeDefined()
   })
 })
 

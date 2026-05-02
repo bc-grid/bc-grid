@@ -436,6 +436,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       cancelEdit() {
         gridApiRef.current?.cancelEdit()
       },
+      discardRowEdits(rowId) {
+        return gridApiRef.current?.discardRowEdits(rowId) ?? { discarded: 0 }
+      },
       refresh() {
         gridApiRef.current?.refresh()
       },

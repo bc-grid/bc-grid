@@ -1753,6 +1753,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         // this is safe to call unconditionally.
         editController.cancel()
       },
+      discardRowEdits(targetRowId) {
+        // Audit P1-W3-3. The controller drops every non-pending /
+        // non-error overlay patch on the row + cancels the active
+        // editor if it's on the same row. Returns the discarded
+        // count so consumers can announce "Reverted N changes" or
+        // skip the toast when nothing rolled back.
+        return editController.discardRowEdits(targetRowId)
+      },
       refresh() {
         requestRender()
       },

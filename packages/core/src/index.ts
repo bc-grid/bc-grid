@@ -144,6 +144,15 @@ export interface BcRowState {
   level?: number
   pending?: boolean
   error?: string
+  /**
+   * True when the row has any uncommitted overlay patch — at least one
+   * cell has a pending edit (server commit in flight) OR a settled-but-
+   * not-yet-canonical patch (the consumer's `data` prop hasn't caught
+   * up to the local commit). Used by `<BcEditGrid>` to surface the
+   * row-level "Discard" action button only when there's actually
+   * something to discard. Audit P1-W3-3.
+   */
+  dirty?: boolean
 }
 
 export interface BcGridSort {
@@ -537,6 +546,25 @@ export interface BcGridApi<TRow = unknown> {
    * Audit P0-7.
    */
   cancelEdit(): void
+
+  /**
+   * Discard every uncommitted edit on a row — the multi-cell rollback
+   * the user reaches for after Tab-driven entry into 4 cells then
+   * "actually, never mind, revert this row." Mirrors a row-scoped
+   * Esc (Escape only cancels the active editor; this drops the
+   * overlay patches for every cell on the row).
+   *
+   * Pending entries (in-flight server commits) and error entries
+   * (server-rejected, awaiting consumer dismissal) are preserved —
+   * both are still load-bearing per `editing-rfc §Concurrency`. If
+   * the active editor is on this row, it is cancelled first.
+   *
+   * Returns `{ discarded }` so callers can announce "Reverted N
+   * changes" or skip the toast when nothing actually rolled back.
+   *
+   * Audit P1-W3-3.
+   */
+  discardRowEdits(rowId: RowId): { discarded: number }
 
   refresh(): void
 }

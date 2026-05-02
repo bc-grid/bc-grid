@@ -11,11 +11,13 @@ export function BcEditGrid<TRow>(props: BcEditGridProps<TRow>): ReactNode {
     hideActions,
     onEdit,
     onDelete,
+    onDiscardRowEdits,
     canEdit,
     canDelete,
     extraActions,
     editLabel = defaultMessages.editLabel,
     deleteLabel = defaultMessages.deleteLabel,
+    discardLabel = defaultMessages.discardLabel,
   } = props
 
   const editColumns = useMemo(() => {
@@ -34,7 +36,7 @@ export function BcEditGrid<TRow>(props: BcEditGridProps<TRow>): ReactNode {
       } satisfies BcGridColumn<TRow>
     })
 
-    const hasActions = Boolean(onEdit || onDelete || extraActions)
+    const hasActions = Boolean(onEdit || onDelete || onDiscardRowEdits || extraActions)
     if (hideActions || !hasActions) return nextColumns
 
     return [
@@ -43,9 +45,11 @@ export function BcEditGrid<TRow>(props: BcEditGridProps<TRow>): ReactNode {
         canDelete,
         canEdit,
         deleteLabel,
+        discardLabel,
         editLabel,
         extraActions,
         onDelete,
+        onDiscardRowEdits,
         onEdit,
       }),
     ]
@@ -55,11 +59,13 @@ export function BcEditGrid<TRow>(props: BcEditGridProps<TRow>): ReactNode {
     columns,
     deleteLabel,
     detailPath,
+    discardLabel,
     editLabel,
     extraActions,
     hideActions,
     linkField,
     onDelete,
+    onDiscardRowEdits,
     onEdit,
   ])
 
@@ -70,9 +76,11 @@ export function createActionsColumn<TRow>(options: {
   canDelete: ((row: TRow) => boolean) | undefined
   canEdit: ((row: TRow) => boolean) | undefined
   deleteLabel: string
+  discardLabel: string
   editLabel: string
   extraActions: BcEditGridProps<TRow>["extraActions"]
   onDelete: ((row: TRow) => void) | undefined
+  onDiscardRowEdits: BcEditGridProps<TRow>["onDiscardRowEdits"]
   onEdit: ((row: TRow) => void) | undefined
 }): BcGridColumn<TRow> {
   return {
@@ -103,6 +111,18 @@ export function createActionsColumn<TRow>(options: {
           onSelect: options.onDelete,
           destructive: true,
           disabled: options.canDelete ? !options.canDelete(params.row) : false,
+        })
+      }
+      // Row-level multi-cell discard (audit P1-W3-3). Surfaced only
+      // when the consumer wired `onDiscardRowEdits` AND the row
+      // actually has uncommitted edits to roll back. The handler
+      // typically forwards to `apiRef.current?.discardRowEdits(rowId)`
+      // — see BcEditGridProps docs.
+      if (options.onDiscardRowEdits && params.rowState.dirty === true) {
+        const discardHandler = options.onDiscardRowEdits
+        actions.push({
+          label: options.discardLabel,
+          onSelect: (row) => discardHandler(params.rowState.rowId, row),
         })
       }
       const extra =
