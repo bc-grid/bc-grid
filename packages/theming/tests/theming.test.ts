@@ -1291,7 +1291,13 @@ describe("@bc-grid/theming", () => {
     expect(rule).toContain("background: var(--bc-grid-accent-soft)")
     expect(rule).toContain("color: var(--bc-grid-fg)")
 
-    const summaryIdx = css.indexOf(".bc-grid-filters-panel-summary-remove:active {")
+    // After v0.5 chrome bundle (PR #393) the active rule shares the
+    // selector with the new statusbar filter chip remove button —
+    // both surfaces use the same active treatment, so the rule is
+    // a comma-separated selector now.
+    const summaryIdx = css.indexOf(
+      ".bc-grid-filters-panel-summary-remove:active,\n.bc-grid-statusbar-filter-remove:active",
+    )
     expect(summaryIdx).toBeGreaterThan(-1)
     const summaryRuleEnd = css.indexOf("}", summaryIdx)
     const summaryRule = css.slice(summaryIdx, summaryRuleEnd)
