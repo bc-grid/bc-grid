@@ -5,15 +5,22 @@ import { type Page, expect, test } from "@playwright/test"
  * `status` column on the demo is wired with `cellEditor: selectEditor`
  * + `options: [{value: "Open", label: "Open"}, ...]`.
  *
- * Tests assert the editor-specific behaviour:
- *   - `data-bc-grid-editor-kind="select"` discriminator
- *   - native `<select>` with one `<option>` per `column.options` entry
- *   - existing cell value pre-selected
+ * Updated 2026-05-02 after PR #364: select.tsx migrated from native
+ * `<select>` to the shadcn-native Combobox primitive
+ * (`packages/editors/src/internal/combobox.tsx`). Tests now interact
+ * with the trigger button + `role="listbox"` + `role="option"` pattern
+ * rather than native `<select>` / `<option>` elements.
+ *
+ * Tests assert:
+ *   - `data-bc-grid-editor-kind="select"` discriminator on the trigger
+ *   - listbox renders one `role="option"` per `column.options` entry
+ *   - existing cell value pre-selected (`[data-selected="true"]`)
  *   - commit persists the new value
  */
 
 const URL = "/?edit=1"
 const SELECT_COLUMN = "status"
+const TRIGGER_SELECTOR = 'button[data-bc-grid-editor-input="true"][data-bc-grid-editor-kind="select"]'
 
 async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   // Status column is mid-grid — scroll partway to ensure rendered.
@@ -34,49 +41,60 @@ async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   return cell
 }
 
-test("selectEditor mounts a native <select> with the editor-kind data attribute", async ({
+test("selectEditor mounts a Combobox trigger with the editor-kind data attribute", async ({
   page,
 }) => {
   await page.goto(URL)
   await focusBodyCell(page, 0, SELECT_COLUMN)
   await page.keyboard.press("F2")
-  const select = page.locator('select[data-bc-grid-editor-input="true"]').first()
-  await expect(select).toBeAttached()
-  await expect(select).toHaveAttribute("data-bc-grid-editor-kind", "select")
+  const trigger = page.locator(TRIGGER_SELECTOR).first()
+  await expect(trigger).toBeAttached()
+  await expect(trigger).toHaveAttribute("aria-haspopup", "listbox")
 })
 
 test("editor renders one option per column.options entry", async ({ page }) => {
   await page.goto(URL)
   await focusBodyCell(page, 0, SELECT_COLUMN)
   await page.keyboard.press("F2")
-  const select = page.locator('select[data-bc-grid-editor-input="true"]').first()
+  const trigger = page.locator(TRIGGER_SELECTOR).first()
+  // Combobox opens by default on edit-activate; the option count is
+  // exposed on the trigger via `data-bc-grid-editor-option-count` so
+  // the assertion doesn't need to wait for listbox paint.
+  await expect(trigger).toHaveAttribute("data-bc-grid-editor-option-count", "4")
   // CustomerStatus has 4 values: Open, Credit Hold, Past Due, Disputed.
-  const optionCount = await select.locator("option").count()
-  expect(optionCount).toBe(4)
+  const options = page.locator('[role="listbox"] [role="option"]')
+  await expect(options).toHaveCount(4)
 })
 
 test("editor pre-selects the existing cell value", async ({ page }) => {
   await page.goto(URL)
   await focusBodyCell(page, 0, SELECT_COLUMN)
   await page.keyboard.press("F2")
-  const select = page.locator('select[data-bc-grid-editor-input="true"]').first()
-  // Each customer has one of: Open / Credit Hold / Past Due / Disputed.
-  const selected = await select.evaluate((el) => (el as HTMLSelectElement).value)
-  expect(["Open", "Credit Hold", "Past Due", "Disputed"]).toContain(selected)
+  // Pre-selected option carries `data-selected="true"` and the label
+  // matches one of the four CustomerStatus values.
+  const selected = page.locator('[role="listbox"] [role="option"][data-selected="true"]').first()
+  const label = (await selected.textContent())?.trim() ?? ""
+  expect(["Open", "Credit Hold", "Past Due", "Disputed"]).toContain(label)
 })
 
 test("commit persists the new selection to the cell display", async ({ page }) => {
   await page.goto(URL)
   await focusBodyCell(page, 0, SELECT_COLUMN)
   await page.keyboard.press("F2")
-  const select = page.locator('select[data-bc-grid-editor-input="true"]').first()
-  await select.selectOption("Disputed")
+  // Click the "Disputed" option in the listbox (Combobox uses
+  // pointerdown to commit the pick; locator.click() fires both).
+  const disputed = page
+    .locator('[role="listbox"] [role="option"]')
+    .filter({ hasText: "Disputed" })
+    .first()
+  await disputed.click()
   await page.keyboard.press("Enter")
 
-  await expect(page.locator('select[data-bc-grid-editor-input="true"]')).toHaveCount(0)
+  // Trigger should unmount on commit (editor portal closes).
+  await expect(page.locator(TRIGGER_SELECTOR)).toHaveCount(0)
 
-  // The status cell renders via StatusBadge; the badge text reflects the
-  // committed value.
+  // The status cell renders via StatusBadge; the badge text reflects
+  // the committed value.
   const cell = page
     .locator(`.bc-grid-row[data-row-index="0"] .bc-grid-cell[data-column-id="${SELECT_COLUMN}"]`)
     .first()
