@@ -74,6 +74,37 @@ export interface BcGridLayoutState {
   sidebarPanel?: string | null
 }
 
+// Reserved for v0.6+. Kept so the v0.5 draft persistence shape can
+// accept column-scoped settings without a breaking type rename later.
+export type BcUserColumnSettings = Record<string, never>
+
+export interface BcUserSettings {
+  version: 1
+  /**
+   * TODO(vanilla-rfc): these draft `visible.*` field names mirror
+   * `docs/design/vanilla-and-context-menu-rfc.md`; coordinator owns the
+   * final naming sweep when the RFC is ratified.
+   */
+  visible?: {
+    columnMenu?: boolean
+    filterRow?: boolean
+    sidebar?: boolean
+    statusBar?: boolean
+    flashOnEdit?: boolean
+    checkboxSelection?: boolean
+  }
+  density?: BcGridDensity
+  layout?: BcGridLayoutState
+  sidebarPanel?: string | null
+  perColumn?: Record<ColumnId, BcUserColumnSettings>
+}
+
+export interface BcUserSettingsStore {
+  read(): BcUserSettings | undefined
+  write(next: BcUserSettings): void
+  subscribe?(listener: (next: BcUserSettings) => void): () => void
+}
+
 export interface BcGridMessages {
   noRowsLabel: string
   loadingLabel: string
@@ -316,6 +347,7 @@ export type BcContextMenuBuiltinItem =
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {
+  kind?: "item"
   id: string
   label: string
   onSelect: (ctx: BcContextMenuContext<TRow>) => void
@@ -332,9 +364,32 @@ export interface BcContextMenuCustomItem<TRow = unknown> {
   variant?: "default" | "destructive"
 }
 
+export interface BcContextMenuToggleItem<TRow = unknown> {
+  kind: "toggle"
+  id: string
+  label: string
+  checked: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+  onToggle: (ctx: BcContextMenuContext<TRow>, next: boolean) => void
+  disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+}
+
+export interface BcContextMenuSubmenuItem<TRow = unknown> {
+  kind: "submenu"
+  id: string
+  label: string
+  items:
+    | readonly (BcContextMenuItem<TRow> | false | null | undefined)[]
+    | ((
+        ctx: BcContextMenuContext<TRow>,
+      ) => readonly (BcContextMenuItem<TRow> | false | null | undefined)[])
+  disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+}
+
 export type BcContextMenuItem<TRow = unknown> =
   | BcContextMenuBuiltinItem
   | BcContextMenuCustomItem<TRow>
+  | BcContextMenuToggleItem<TRow>
+  | BcContextMenuSubmenuItem<TRow>
 
 export interface BcContextMenuContext<TRow = unknown> {
   cell: BcCellPosition | null
@@ -522,6 +577,12 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onSidebarPanelChange?: (next: string | null, prev: string | null) => void
   sidebarWidth?: number
   contextMenuItems?: BcContextMenuItems<TRow>
+  /**
+   * Draft v0.5 user-preference store for context-menu driven chrome
+   * toggles. TODO(vanilla-rfc): coordinator owns final field names and
+   * debounce/composition semantics when the RFC is ratified.
+   */
+  userSettings?: BcUserSettingsStore
 
   /**
    * Master-detail render hook. When supplied, the grid renders a pinned-left

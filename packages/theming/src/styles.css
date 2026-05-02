@@ -2105,6 +2105,47 @@ select.bc-grid-editor-input {
   white-space: nowrap;
 }
 
+.bc-grid-menu-item-trailing {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  color: var(--bc-grid-muted-fg);
+}
+
+.bc-grid-context-menu-chevron {
+  display: block;
+}
+
+.bc-grid-context-menu-submenu {
+  position: relative;
+}
+
+.bc-grid-context-menu-submenu-content {
+  position: absolute;
+  top: -0.25rem;
+  left: calc(100% + 0.25rem);
+  z-index: 71;
+  display: none;
+  min-width: 12rem;
+  width: max-content;
+  max-width: min(16rem, calc(100vw - 16px));
+  border: 1px solid var(--bc-grid-context-menu-border);
+  border-radius: var(--bc-grid-radius);
+  background: var(--bc-grid-context-menu-bg);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+  color: var(--bc-grid-context-menu-fg);
+  padding: 0.25rem;
+}
+
+.bc-grid-context-menu-submenu:hover > .bc-grid-context-menu-submenu-content,
+.bc-grid-context-menu-submenu:focus-within > .bc-grid-context-menu-submenu-content,
+.bc-grid-context-menu-submenu[data-open="true"] > .bc-grid-context-menu-submenu-content {
+  display: flex;
+  flex-direction: column;
+}
+
 .bc-grid-context-menu-separator {
   height: 1px;
   /* Full-bleed separator — negative horizontal margin pulls the
