@@ -12,7 +12,7 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 ## Active task — v0.5: `useServerPagedGrid` turnkey hook (updated 2026-05-02)
 
-PR #353 (`rowProcessingMode`) is approved by coordinator and being merged this turn. Bundle baseline bump landed. **Start v0.5 work now** — synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the v0.5 plan.
+**v0.4.0 published** (tag pushed; release workflow runs in CI). Your PR #353 (`rowProcessingMode`) shipped. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the v0.5 plan; PRs from here roll into the v0.5.0 candidate.
 
 ### Primary task — `useServerPagedGrid({ gridId, loadPage })`
 

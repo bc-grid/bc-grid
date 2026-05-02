@@ -10,23 +10,11 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 ---
 
-## Active task — Continue Task 2, then v0.5 (updated 2026-05-02)
+## Active task — v0.5 work (updated 2026-05-02)
 
-PR #354 (date/datetime/time `useLayoutEffect` fix — your audit P0 #4) is being merged by coordinator this turn. **Continue with Task 2 (visible validation surface)** as already in flight, then pivot to v0.5 work below.
+**v0.4.0 published** (tag pushed; release workflow runs in CI). Your PRs #354 (date/datetime/time `useLayoutEffect` fix) and #356 (visible validation surface) both shipped — that closed the v0.4 P0 hotfix train. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the v0.5 plan; PRs from here roll into the v0.5.0 candidate.
 
-### Currently in flight — Task 2: Visible validation surface
-
-Your audit **P0 #1** / synthesis P0-2. Sighted users currently see only a 3px red stripe and a red border; the validation message is screen-reader-only. Sales-estimating with 80 line items: the user types `qty=0`, sees a red border, has no way to learn *why* it was rejected.
-
-- Render the active editor's error inside the editor portal as a shadcn Popover/Tooltip anchored to the cell. The portal already exists and `data-bc-grid-editor-portal` is recognised by click-outside.
-- Pair with an inline below-cell message at minimum.
-- The state machine already carries `error` through `editing` and `validating` modes — only the visual layer is missing.
-- **Branch:** `agent/worker3/v04-validation-surface`
-- **Estimated:** 2-4 hours including tests.
-
-When the PR is open, comment to tag the coordinator. **Then start v0.5 work below in parallel** while coordinator reviews — you don't need to wait.
-
-### v0.5 work — pick up after Task 2 PR is open
+### v0.5 work — start now (in this order)
 
 Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified your v0.5 lane. Order:
 

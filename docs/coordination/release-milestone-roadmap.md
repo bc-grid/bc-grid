@@ -55,17 +55,19 @@ Goal: complete the day-to-day data finding workflow.
 
 Goal: make editable ERP grids viable.
 
-> **Alpha focus:** see `docs/coordination/v0.4-alpha-plan.md`. `v0.4-alpha` should prove the editing contract and server-backed edit contract before broad spreadsheet workflows. Range paste helper work may land in this train if it is internal/helper-only, but user-facing clipboard paste and fill handle remain `v0.6.0` gates (renumbered from `v0.5.0` after the 2026-05-02 audit-refactor pivot).
+> **Released (2026-05-02):** tag `v0.4.0` published. Local gates green: type-check, lint, unit tests, package builds, API-surface, bundle-size (`@bc-grid/react` baseline reset to 71500 B post-#353), tarball-smoke, release-preflight, bsncraft `check-types`, and Playwright (`test:e2e` over spike-chromium + examples-chromium). Audit synthesis at `docs/coordination/audit-2026-05/synthesis.md` drove two v0.4 P0 hotfixes (#354 date-editor focus fix, #356 visible validation surface). Other audit P0s scoped to v0.5 per the synthesis sprint plan; do not gate v0.4.
+>
+> **Alpha focus:** see `docs/coordination/v0.4-alpha-plan.md`. `v0.4-alpha` proved the editing contract and server-backed edit contract before broad spreadsheet workflows. User-facing clipboard paste and fill handle remain `v0.6.0` gates (renumbered from `v0.5.0` after the 2026-05-02 audit-refactor pivot).
 
-- [ ] `BcEditGrid` commit lifecycle is complete: prepare, validate, commit, optimistic update, rollback, and stale mutation handling.
-- [ ] Built-in editors are complete enough for ERP data entry: text, number, date, datetime, time, select, multi-select, autocomplete, and boolean/checkbox.
-- [ ] Lookup/select/autocomplete editors have clear typed-value, async-options, pending, and error contracts.
-- [ ] Dirty, pending, and error states render clearly and announce correctly.
-- [ ] Keyboard editing flows are covered: Enter, F2, Escape, Tab, Shift+Tab, click-outside, and portal-aware interactions.
-- [ ] Server-backed edit grids have documented and tested semantics for paged rows, total rows, sort/filter/search refetch, pending optimistic mutations, rollback, and stale responses.
-- [ ] Custom editor recipe is documented and uses the same contract as built-in editors.
-- [ ] Examples app exposes editing and grouping clearly enough that the maintainer can find and test the features without hidden knowledge.
-- [ ] `bsncraft` can wire at least one realistic editable server-backed grid without forking bc-grid.
+- [x] `BcEditGrid` commit lifecycle is complete: prepare, validate, commit, optimistic update, rollback, and stale mutation handling. (Hardened across the v0.4 train; editor state machine pinned by audit.)
+- [x] Built-in editors are complete enough for ERP data entry: text, number, date, datetime, time, select, multi-select, autocomplete, and boolean/checkbox. (date/datetime/time silent-commit bug closed in #354.)
+- [x] Lookup/select/autocomplete editors have clear typed-value, async-options, pending, and error contracts. (#340 + #346; shadcn Combobox migration deferred to v0.5 Colour Selection hero spike.)
+- [x] Dirty, pending, and error states render clearly and announce correctly. (#356 added the visible validation popover — sighted users can now see *why* a cell rejected.)
+- [x] Keyboard editing flows are covered: Enter, F2, Escape, Tab, Shift+Tab, click-outside, and portal-aware interactions. (Backspace/Delete clear deferred to v0.5 per audit P1-W3-1.)
+- [x] Server-backed edit grids have documented and tested semantics for paged rows, total rows, sort/filter/search refetch, pending optimistic mutations, rollback, and stale responses. (#343, #344, #353 `rowProcessingMode`, server-grid-flicker.md.)
+- [x] Custom editor recipe is documented and uses the same contract as built-in editors. (Custom-editor `getValue?` hook deferred to v0.5 per audit P1-W3-6.)
+- [x] Examples app exposes editing and grouping clearly enough that the maintainer can find and test the features without hidden knowledge. (#341, #346, #348.)
+- [x] `bsncraft` can wire at least one realistic editable server-backed grid without forking bc-grid. (Customers grid; AR data grids; bsncraft type-check passes against current main.)
 
 ## v0.5.0 - Audit-Driven Ergonomics Refactor
 

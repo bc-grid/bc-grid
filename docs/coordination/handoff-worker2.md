@@ -12,7 +12,7 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 ## Active task — v0.5 cleanup train (updated 2026-05-02)
 
-PR #355 (filters panel active summary) is being merged by coordinator this turn. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the v0.5 plan. **Pivot to v0.5 cleanup work now** — small, focused PRs in the order below. Each is a separate branch + PR.
+**v0.4.0 published** (tag pushed; release workflow runs in CI). Your PR #355 (filters panel active summary) shipped. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the v0.5 plan; PRs from here roll into the v0.5.0 candidate. **Pivot to v0.5 cleanup work** — small, focused PRs in the order below. Each is a separate branch + PR.
 
 ### Order of work (each one is a separate PR; ship in this order)
 
