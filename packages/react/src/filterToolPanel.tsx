@@ -35,8 +35,35 @@ export function BcFiltersToolPanel<TRow>({
 
   return (
     <section className="bc-grid-filters-panel">
-      <div className="bc-grid-sidebar-panel-header bc-grid-filters-panel-header">
-        <h2 className="bc-grid-sidebar-panel-title">Filters</h2>
+      <div
+        className="bc-grid-sidebar-panel-header bc-grid-filters-panel-header"
+        data-has-filters={hasFilters ? "true" : "false"}
+      >
+        <div className="bc-grid-filters-panel-heading">
+          <h2 className="bc-grid-sidebar-panel-title">Filters</h2>
+          {hasFilters ? (
+            <ul
+              aria-label={`${activeItems.length} active ${
+                activeItems.length === 1 ? "filter" : "filters"
+              }`}
+              className="bc-grid-filters-panel-summary"
+            >
+              {activeItems.map((item) => (
+                <li className="bc-grid-filters-panel-summary-chip" key={item.columnId}>
+                  <span className="bc-grid-filters-panel-summary-label">{item.label}</span>
+                  <button
+                    aria-label={`Clear filter on ${item.label}`}
+                    className="bc-grid-filters-panel-summary-remove"
+                    type="button"
+                    onClick={() => clearFilter(item.columnId)}
+                  >
+                    {XIcon}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
         <button
           className="bc-grid-filters-panel-clear"
           disabled={!hasFilters}
