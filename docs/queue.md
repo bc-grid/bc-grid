@@ -42,7 +42,7 @@ Read-only audits, one findings doc per author. See `docs/coordination/audit-2026
 
 ## v0.4 — Active Worker Lane Tasks
 
-- `[in-flight: worker2]` **v04-active-filter-summary** — filters panel toolbar chip summary for active filters, reusing per-column clear behavior and preserving the shadcn/Tailwind v4 chrome contract. **Branch:** `agent/worker2/v04-active-filter-summary`. **Effort:** XS.
+- `[review: worker2 #355]` **v04-active-filter-summary** — filters panel toolbar chip summary for active filters, reusing per-column clear behavior and preserving the shadcn/Tailwind v4 chrome contract. **Branch:** `agent/worker2/v04-active-filter-summary`. **Effort:** XS.
 
 ## v0.5 — Audit-Driven Ergonomics Refactor (DRAFT — pending audit synthesis)
 
