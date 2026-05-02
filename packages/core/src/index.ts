@@ -324,6 +324,76 @@ export interface BcGridApi<TRow = unknown> {
   expandAll(): void
   collapseAll(): void
 
+  /**
+   * Programmatically activate the cell editor on `(rowId, columnId)`.
+   *
+   * Mirrors what the user gets from F2 / Enter / printable seed, but
+   * with `activation: "api"` so consumer telemetry can distinguish
+   * programmatic edits from keyboard ones. Per
+   * `editing-rfc §Lifecycle`.
+   *
+   * No-op if any of:
+   *   - the row or column id is unknown to the current row/column model;
+   *   - the column has `editable: false` (or a row-aware `editable`
+   *     function that returned false for this row);
+   *   - the row is disabled via `rowIsDisabled`;
+   *   - the grid is already in edit mode on a different cell (the
+   *     existing edit takes precedence — call `cancelEdit()` first if
+   *     you want to switch).
+   *
+   * Audit P0-7. Pairs with `focusCell` (which only moves the active
+   * cell without entering edit mode).
+   */
+  startEdit(
+    rowId: RowId,
+    columnId: ColumnId,
+    opts?: {
+      /**
+       * Seed character for printable-style activation. If supplied,
+       * the editor mounts with this character pre-typed (matching the
+       * F2 / printable contract). Single-character only; longer
+       * strings are silently dropped.
+       */
+      seedKey?: string
+    },
+  ): void
+
+  /**
+   * Programmatically commit the active editor.
+   *
+   * Reads the current editor input's value from the DOM (matching the
+   * pointer / keyboard commit paths), runs `column.valueParser` and
+   * `column.validate` through the editing controller, then applies the
+   * overlay update and fires `onCellEditCommit`. Returns immediately
+   * — the validation/commit is async; consumers wanting to await the
+   * settle can listen on the editing announce hook or read
+   * `getCellEditEntry(...).pending` from the controller.
+   *
+   * `opts.value` overrides the DOM read (useful when the consumer
+   * computed the value programmatically).
+   * `opts.moveOnSettle` controls active-cell movement after commit
+   * (default `"stay"` for API path — pointer commits also use `"stay"`,
+   * keyboard commits use direction-of-key).
+   *
+   * No-op when the grid is not currently editing a cell.
+   *
+   * Audit P0-7.
+   */
+  commitEdit(opts?: {
+    value?: unknown
+    moveOnSettle?: "stay" | "down" | "up" | "right" | "left"
+  }): void
+
+  /**
+   * Programmatically cancel the active editor — overlay is unchanged,
+   * focus returns to the grid root. Mirrors Escape from the keyboard.
+   *
+   * No-op when the grid is not currently editing a cell.
+   *
+   * Audit P0-7.
+   */
+  cancelEdit(): void
+
   refresh(): void
 }
 
