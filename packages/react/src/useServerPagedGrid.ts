@@ -1,6 +1,7 @@
 import type {
   BcGridFilter,
   BcGridSort,
+  BcScrollOptions,
   BcServerGridApi,
   ColumnId,
   LoadServerPage,
@@ -97,6 +98,18 @@ export interface UseServerPagedGridActions {
    * `<BcServerGrid>` `onServerRowMutation` adapter.
    */
   applyOptimisticEdit: (input: { rowId: RowId; changes: Record<ColumnId, unknown> }) => string
+  /**
+   * Convenience wrapper around `apiRef.current?.scrollToServerCell`.
+   * Resolves `{ scrolled: false }` if the apiRef is not yet populated;
+   * otherwise delegates to the API (which handles the loaded /
+   * navigate-and-await paths). Use this from search → ArrowDown,
+   * save-and-next, and scroll-to-error workflows.
+   */
+  scrollToCell: (
+    rowId: RowId,
+    columnId: ColumnId,
+    opts?: BcScrollOptions & { pageIndex?: number },
+  ) => Promise<{ scrolled: boolean }>
 }
 
 /**
@@ -247,6 +260,17 @@ export function useServerPagedGrid<TRow>(
     [],
   )
 
+  const scrollToCell = useCallback(
+    (
+      cellRowId: RowId,
+      columnId: ColumnId,
+      opts?: BcScrollOptions & { pageIndex?: number },
+    ): Promise<{ scrolled: boolean }> =>
+      apiRef.current?.scrollToServerCell(cellRowId, columnId, opts) ??
+      Promise.resolve({ scrolled: false }),
+    [],
+  )
+
   const props = useMemo<UseServerPagedGridBoundProps<TRow>>(
     () => ({
       apiRef,
@@ -283,8 +307,8 @@ export function useServerPagedGrid<TRow>(
   )
 
   const actions = useMemo<UseServerPagedGridActions>(
-    () => ({ reload, setPage, setPageSize, applyOptimisticEdit }),
-    [reload, applyOptimisticEdit],
+    () => ({ reload, setPage, setPageSize, applyOptimisticEdit, scrollToCell }),
+    [reload, applyOptimisticEdit, scrollToCell],
   )
 
   return { props, state, actions }

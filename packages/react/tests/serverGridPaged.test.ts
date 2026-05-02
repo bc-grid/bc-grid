@@ -9,6 +9,7 @@ import type {
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import {
   isActiveServerPagedResponse,
+  resolveScrollToServerCellAction,
   resolveServerPagedGridShell,
   resolveServerPagedRequestPage,
   resolveServerVisibleColumns,
@@ -867,5 +868,102 @@ describe("server paged visible columns", () => {
         { columnId: "name", width: 240 },
       ]),
     ).toEqual(["id", "name"])
+  })
+})
+
+describe("resolveScrollToServerCellAction — scrollToServerCell decision matrix", () => {
+  test("returns 'sync' when the row is already loaded, regardless of mode or pageIndex", () => {
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: true,
+        mode: "paged",
+        currentPageIndex: 0,
+        requestedPageIndex: undefined,
+      }),
+    ).toBe("sync")
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: true,
+        mode: "paged",
+        currentPageIndex: 3,
+        requestedPageIndex: 7,
+      }),
+    ).toBe("sync")
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: true,
+        mode: "infinite",
+        currentPageIndex: 0,
+        requestedPageIndex: undefined,
+      }),
+    ).toBe("sync")
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: true,
+        mode: "tree",
+        currentPageIndex: 0,
+        requestedPageIndex: undefined,
+      }),
+    ).toBe("sync")
+  })
+
+  test("returns 'navigate' when the row is unloaded, mode is paged, and pageIndex differs from current", () => {
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: false,
+        mode: "paged",
+        currentPageIndex: 0,
+        requestedPageIndex: 5,
+      }),
+    ).toBe("navigate")
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: false,
+        mode: "paged",
+        currentPageIndex: 5,
+        requestedPageIndex: 0,
+      }),
+    ).toBe("navigate")
+  })
+
+  test("returns 'none' when the row is unloaded and no pageIndex is supplied", () => {
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: false,
+        mode: "paged",
+        currentPageIndex: 0,
+        requestedPageIndex: undefined,
+      }),
+    ).toBe("none")
+  })
+
+  test("returns 'none' when the requested pageIndex matches the current page (already there, row not present)", () => {
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: false,
+        mode: "paged",
+        currentPageIndex: 3,
+        requestedPageIndex: 3,
+      }),
+    ).toBe("none")
+  })
+
+  test("returns 'none' for infinite/tree modes even when pageIndex is supplied (no paged navigation)", () => {
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: false,
+        mode: "infinite",
+        currentPageIndex: 0,
+        requestedPageIndex: 5,
+      }),
+    ).toBe("none")
+    expect(
+      resolveScrollToServerCellAction({
+        rowLoaded: false,
+        mode: "tree",
+        currentPageIndex: 0,
+        requestedPageIndex: 5,
+      }),
+    ).toBe("none")
   })
 })

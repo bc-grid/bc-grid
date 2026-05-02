@@ -51,8 +51,27 @@ import type {
 const DEFAULT_SERVER_PAGE_SIZE = 100
 const DEFAULT_SERVER_BLOCK_SIZE = 100
 
+/**
+ * Settlement payload returned by `PagedServerState.awaitNextSettlement`.
+ * The `ok` flag distinguishes a successful loadPage settlement from a
+ * rejected one or component unmount; consumers can use it to short-
+ * circuit downstream actions like `scrollToServerCell`.
+ */
+export interface PagedServerSettlement<TRow> {
+  ok: boolean
+  result?: ServerPagedResult<TRow>
+  error?: unknown
+}
+
 interface PagedServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
+  /**
+   * Returns a Promise that resolves the next time the active paged
+   * loadPage request settles (success, error, or component unmount).
+   * Used by `scrollToServerCell` to await navigation to a different
+   * page before re-attempting the scroll.
+   */
+  awaitNextSettlement: () => Promise<PagedServerSettlement<TRow>>
   error: unknown
   getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
   gridShell: ServerPagedGridShell<TRow>
@@ -68,6 +87,8 @@ interface PagedServerState<TRow> {
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
   invalidate: (invalidation: ServerInvalidation) => void
   loading: boolean
+  pageIndex: number
+  pageSize: number
   queueMutation: (patch: ServerRowPatch) => void
   refresh: (opts?: { purge?: boolean }) => void
   retryBlock: (blockKey: ServerBlockKey) => void
@@ -199,6 +220,34 @@ export function isActiveServerPagedResponse(input: {
   responseBlockKey: ServerBlockKey
 }): boolean {
   return input.activeBlockKey === input.responseBlockKey
+}
+
+/**
+ * Pure decision helper for `BcServerGridApi.scrollToServerCell`. Given
+ * the current loaded-row check, the active rowModel + paged page, and
+ * the consumer-supplied `pageIndex` opt, decides which path to take:
+ *
+ * - `"sync"` — the row is already loaded; the caller scrolls
+ *   immediately and resolves `{ scrolled: true }`.
+ * - `"navigate"` — the row is not loaded but we should navigate to
+ *   `opts.pageIndex` and re-attempt the scroll after settlement.
+ * - `"none"` — the row is not loaded and we have no pageIndex (or the
+ *   provided pageIndex matches current); resolve `{ scrolled: false }`.
+ *
+ * Exported for unit testing; the apiRef construction inlines the
+ * runtime equivalent so we don't burn an extra closure per call.
+ */
+export function resolveScrollToServerCellAction(input: {
+  rowLoaded: boolean
+  mode: ServerRowModelMode
+  currentPageIndex: number
+  requestedPageIndex: number | undefined
+}): "sync" | "navigate" | "none" {
+  if (input.rowLoaded) return "sync"
+  if (input.mode !== "paged") return "none"
+  if (input.requestedPageIndex == null) return "none"
+  if (input.requestedPageIndex === input.currentPageIndex) return "none"
+  return "navigate"
 }
 
 export function resolveServerVisibleColumns<TRow>(
@@ -392,6 +441,38 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       },
       queueServerRowMutation,
       settleServerRowMutation,
+      async scrollToServerCell(rowId, columnId, opts) {
+        const gridApi = gridApiRef.current
+        if (!gridApi) return { scrolled: false }
+        const position = { rowId, columnId }
+        const scrollOptions = opts?.align ? { align: opts.align } : undefined
+        const action = resolveScrollToServerCellAction({
+          rowLoaded: gridApi.getRowById(rowId) !== undefined,
+          mode,
+          currentPageIndex: paged.pageIndex,
+          requestedPageIndex: opts?.pageIndex,
+        })
+        if (action === "sync") {
+          gridApi.scrollToCell(position, scrollOptions)
+          return { scrolled: true }
+        }
+        if (action === "none") return { scrolled: false }
+        // Async navigate-and-await path. `awaitNextSettlement` must be
+        // captured before triggering navigation so the resolver lands
+        // before the load fires.
+        const settlementPromise = paged.awaitNextSettlement()
+        paged.handlePaginationChange({
+          page: opts?.pageIndex ?? paged.pageIndex,
+          pageSize: paged.pageSize,
+        })
+        const settlement = await settlementPromise
+        if (!settlement.ok) return { scrolled: false }
+        if (gridApiRef.current?.getRowById(rowId) !== undefined) {
+          gridApiRef.current?.scrollToCell(position, scrollOptions)
+          return { scrolled: true }
+        }
+        return { scrolled: false }
+      },
       getServerRowModelState() {
         if (mode === "paged") {
           const state = paged.getModelState()
@@ -767,6 +848,24 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
     resetUncontrolledPage()
   }, [pageIndex, resetUncontrolledPage, viewKey])
 
+  // Settlement awaiters — `scrollToServerCell` registers a one-shot
+  // resolver before triggering page navigation, then awaits the next
+  // active load to settle. Resolvers are drained on success, rejection,
+  // and unmount so callers never see a hung Promise.
+  const settlementAwaitersRef = useRef<Array<(value: PagedServerSettlement<TRow>) => void>>([])
+  const drainAwaiters = useCallback((settlement: PagedServerSettlement<TRow>) => {
+    const awaiters = settlementAwaitersRef.current
+    settlementAwaitersRef.current = []
+    for (const resolve of awaiters) resolve(settlement)
+  }, [])
+  const awaitNextSettlement = useCallback(
+    () =>
+      new Promise<PagedServerSettlement<TRow>>((resolve) => {
+        settlementAwaitersRef.current.push(resolve)
+      }),
+    [],
+  )
+
   useEffect(() => {
     if (!loadPage) return
     void refreshVersion
@@ -794,6 +893,7 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
           return
         setResult(nextResult)
         setLoading(false)
+        drainAwaiters({ ok: true, result: nextResult })
       })
       .catch((nextError: unknown) => {
         if (
@@ -806,10 +906,17 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
           return
         setError(nextError)
         setLoading(false)
+        drainAwaiters({ ok: false, error: nextError })
       })
-  }, [loadPage, pageSize, refreshVersion, requestPageIndex, view, viewKey])
+  }, [drainAwaiters, loadPage, pageSize, refreshVersion, requestPageIndex, view, viewKey])
 
-  useEffect(() => () => modelRef.current.abortAll(), [])
+  useEffect(
+    () => () => {
+      modelRef.current.abortAll()
+      drainAwaiters({ ok: false })
+    },
+    [drainAwaiters],
+  )
 
   const rows = props.rowModel === "paged" ? (result?.rows ?? []) : []
   const rowCount = props.rowModel === "paged" ? (result?.totalRows ?? 0) : "unknown"
@@ -846,6 +953,7 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
 
   return {
     applyRowUpdate,
+    awaitNextSettlement,
     error,
     getDiagnostics,
     gridShell,
@@ -858,6 +966,8 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
     handleSortChange,
     invalidate,
     loading,
+    pageIndex,
+    pageSize,
     queueMutation,
     refresh,
     retryBlock,
