@@ -599,6 +599,22 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   showColumnMenu?: boolean
 
   /**
+   * Controls the built-in pagination footer chrome
+   * (`<BcGridPagination>`). Default `undefined` — chrome shows
+   * automatically when pagination is enabled. Set to `false` to hide
+   * the pager UI without disabling pagination semantics: page-window
+   * slicing, `paginationMode`, `aria-rowcount`, and the
+   * `onPaginationChange` callback all continue to work. Useful for
+   * vanilla / chromeless layouts and for the future right-click
+   * `View → Show pagination` toggle (vanilla-and-context-menu RFC
+   * §4 and §3 default-off proposal).
+   *
+   * Mirrors `showFilterRow` / `showColumnMenu` shape so consumer
+   * code reads consistently across visibility toggles.
+   */
+  showPagination?: boolean
+
+  /**
    * Flash the cell briefly when an edit commits, per
    * `editing-rfc §Edit-cell paint perf`. Off by default. Uses the
    * `flash` primitive from `@bc-grid/animations`, which already

@@ -377,10 +377,15 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   )
   const cellEditCommitHandler =
     props.onServerRowMutation || props.onCellEditCommit ? handleCellEditCommit : undefined
+  // `showPagination === false` hides the pager chrome — same contract
+  // as the inner `<BcGrid>`. `<BcServerGrid>` paged mode renders its
+  // own footer (because the inner grid is in `paginationMode="manual"`
+  // and never auto-renders a pager), so the gate has to live here too.
+  const showServerPaginationChrome = props.showPagination !== false
   const pagedFooter =
     props.rowModel === "paged"
       ? (props.footer ??
-        (paged.gridShell.paginationEnabled ? (
+        (paged.gridShell.paginationEnabled && showServerPaginationChrome ? (
           <BcGridPagination
             page={paged.gridShell.paginationWindow.page}
             pageCount={paged.gridShell.paginationWindow.pageCount}

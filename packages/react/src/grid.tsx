@@ -1926,9 +1926,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ],
   )
 
+  // `showPagination === false` hides the pager chrome but leaves
+  // page-window slicing / aria-rowcount / onPaginationChange intact.
+  // Vanilla-and-context-menu RFC §4 (View → Show pagination toggle).
+  const showPaginationChrome = props.showPagination !== false
   const renderedFooter =
     footer ??
-    (paginationEnabled ? (
+    (paginationEnabled && showPaginationChrome ? (
       <BcGridPagination
         page={paginationWindow.page}
         pageCount={paginationWindow.pageCount}

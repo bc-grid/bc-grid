@@ -189,6 +189,30 @@ export interface UseServerTreeGridActions {
    */
   collapseRow: (rowId: RowId) => void
   /**
+   * Expand every currently-rendered group row. Wraps
+   * `apiRef.current?.expandAll()`. Surfaced for the
+   * vanilla-and-context-menu RFC `Customize → Server: "Expand all
+   * visible groups"` action.
+   *
+   * **Lazy-load limitation:** only nodes the inner grid currently
+   * renders as group rows are expanded. Unloaded children (groups
+   * whose `loadChildren` hasn't fired yet) are added to the expansion
+   * set but their children won't render until a load fires for them.
+   * The user re-expanding a node, scrolling it into view, or calling
+   * `actions.reload()` will trigger the deferred load. Server-tree
+   * "expand the entire tree including unloaded subtrees" is out of
+   * scope for v0.5; queued as a v0.6 follow-up.
+   */
+  expandAllGroups: () => void
+  /**
+   * Collapse every group row. Wraps `apiRef.current?.collapseAll()`.
+   * Surfaced for the vanilla-and-context-menu RFC `Customize → Server:
+   * "Collapse all groups"` action. Children stay cached, so a later
+   * re-expand renders synchronously where the children were already
+   * loaded.
+   */
+  collapseAllGroups: () => void
+  /**
    * Queue an optimistic edit overlay against the server row model
    * cache. Returns the deterministic mutation ID
    * (`useServerTreeGrid:N`) so consumers can correlate hook-issued
@@ -377,6 +401,14 @@ export function useServerTreeGrid<TRow>(
     setExpansion((prev) => removeRowFromExpansion(prev, targetRowId))
   }, [])
 
+  const expandAllGroups = useCallback(() => {
+    apiRef.current?.expandAll()
+  }, [])
+
+  const collapseAllGroups = useCallback(() => {
+    apiRef.current?.collapseAll()
+  }, [])
+
   const handleExpansionChange = useCallback((next: ReadonlySet<RowId>) => {
     setExpansion(next)
   }, [])
@@ -439,8 +471,24 @@ export function useServerTreeGrid<TRow>(
   )
 
   const actions = useMemo<UseServerTreeGridActions>(
-    () => ({ reload, invalidate, expandRow, collapseRow, applyOptimisticEdit }),
-    [reload, invalidate, expandRow, collapseRow, applyOptimisticEdit],
+    () => ({
+      reload,
+      invalidate,
+      expandRow,
+      collapseRow,
+      expandAllGroups,
+      collapseAllGroups,
+      applyOptimisticEdit,
+    }),
+    [
+      reload,
+      invalidate,
+      expandRow,
+      collapseRow,
+      expandAllGroups,
+      collapseAllGroups,
+      applyOptimisticEdit,
+    ],
   )
 
   return { props, state, actions }
