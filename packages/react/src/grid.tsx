@@ -6,6 +6,10 @@ import type {
   BcColumnStateEntry,
   BcGridApi,
   BcGridFilter,
+  BcGridPasteTsvFailure,
+  BcGridPasteTsvParams,
+  BcGridPasteTsvResult,
+  BcGridPasteTsvSkippedCell,
   BcGridSort,
   BcPaginationState,
   BcPivotState,
@@ -17,6 +21,7 @@ import type {
 } from "@bc-grid/core"
 import { Virtualizer } from "@bc-grid/virtualizer"
 import {
+  type ClipboardEvent,
   type ComponentType,
   type FocusEvent,
   type KeyboardEvent,
@@ -144,7 +149,10 @@ import {
   useUrlPersistedGridStateWriter,
 } from "./persistence"
 import {
+  type RangeTsvPasteApplyFailure,
+  type RangeTsvPasteApplyPlan,
   buildRangeClipboard,
+  buildRangeTsvPasteApplyPlan,
   normaliseClipboardPayload,
   writeClipboardPayload,
 } from "./rangeClipboard"
@@ -1528,6 +1536,62 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     },
     [locale, onBeforeCopy, onCopy, rangeRowIds, rangeSelectionState, resolvedColumns, rowEntries],
   )
+  const pasteTsv = useCallback(
+    async (params: BcGridPasteTsvParams): Promise<BcGridPasteTsvResult<TRow>> => {
+      const activeRange = rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]
+      const targetRange =
+        params.range ??
+        activeRange ??
+        (activeCell ? { start: activeCell, end: activeCell } : undefined)
+
+      if (!targetRange) {
+        const error = pasteFailure("no-paste-target", "No active cell or range to paste into.")
+        announceAssertive(messages.pasteRejectedAnnounce({ error: error.message }))
+        return { ok: false, error }
+      }
+
+      if (editController.editState.mode !== "navigation") {
+        const error = pasteFailure(
+          "edit-in-progress",
+          "Finish the active cell edit before pasting.",
+        )
+        announceAssertive(messages.pasteRejectedAnnounce({ error: error.message }))
+        return { ok: false, range: targetRange, error }
+      }
+
+      const applyResult = await buildRangeTsvPasteApplyPlan({
+        range: targetRange,
+        tsv: params.tsv,
+        columns: resolvedColumns,
+        rowEntries,
+        rowIds: rangeRowIds,
+        ...(params.overflow ? { overflow: params.overflow } : {}),
+        ...(params.signal ? { signal: params.signal } : {}),
+      })
+
+      if (!applyResult.ok) {
+        const error = pasteFailureFromApplyFailure(applyResult.error)
+        announceAssertive(messages.pasteRejectedAnnounce({ error: error.message }))
+        return { ok: false, range: targetRange, error }
+      }
+
+      editController.commitFromPasteApplyPlan(applyResult.plan)
+      const result = pasteSuccessFromApplyPlan(applyResult.plan)
+      announcePolite(messages.pasteCommittedAnnounce({ count: result.appliedCount }))
+      return result
+    },
+    [
+      activeCell,
+      announceAssertive,
+      announcePolite,
+      editController,
+      messages,
+      rangeRowIds,
+      rangeSelectionState,
+      resolvedColumns,
+      rowEntries,
+    ],
+  )
 
   const api = useMemo<BcGridApi<TRow>>(() => {
     const nextApi: BcGridApi<TRow> = {
@@ -1610,6 +1674,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       copyRange(range) {
         return copyRangeToClipboard(range, nextApi)
       },
+      pasteTsv,
       clearRangeSelection() {
         setRangeSelectionState(rangeClear(rangeSelectionState))
       },
@@ -1705,6 +1770,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     focusCell,
     isRowDisabled,
     openFilter,
+    pasteTsv,
     rangeSelectionState,
     requestRender,
     resolvedColumns,
@@ -2084,6 +2150,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ],
   )
 
+  const handlePaste = useCallback(
+    (event: ClipboardEvent<HTMLDivElement>) => {
+      if (editController.editState.mode !== "navigation") return
+      if (isEditableKeyTarget(event.target)) return
+      const activeRange = rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]
+      const targetRange =
+        activeRange ?? (activeCell ? { start: activeCell, end: activeCell } : undefined)
+      if (!targetRange) return
+      const hasPlainText = Array.from(event.clipboardData.types).includes("text/plain")
+      if (!hasPlainText) return
+
+      event.preventDefault()
+      void pasteTsv({
+        range: targetRange,
+        tsv: event.clipboardData.getData("text/plain"),
+      }).catch(() => undefined)
+    },
+    [activeCell, editController.editState.mode, pasteTsv, rangeSelectionState],
+  )
+
   useFlipOnRowInsertion({
     rowEntries,
     scrollerRef,
@@ -2246,6 +2332,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       tabIndex={0}
       onFocus={handleFocus}
       onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
       style={rootStyle(isAutoHeight ? "auto" : rootHeight)}
       data-bc-grid-fit={fit}
       data-bc-grid-height-mode={isAutoHeight ? "auto" : "fixed"}
@@ -2777,6 +2864,67 @@ function BcGridDefaultLoadingOverlay({ label }: { label: string }): ReactNode {
       <span className="bc-grid-loading-label">{label}</span>
     </span>
   )
+}
+
+function pasteSuccessFromApplyPlan<TRow>(
+  plan: RangeTsvPasteApplyPlan<TRow>,
+): Extract<BcGridPasteTsvResult<TRow>, { ok: true }> {
+  return {
+    ok: true,
+    range: plan.range,
+    cells: plan.parsed.cells,
+    appliedCount: plan.commits.length,
+    commits: plan.commits.map((commit) => ({
+      sourceRowIndex: commit.sourceRowIndex,
+      sourceColumnIndex: commit.sourceColumnIndex,
+      targetRowIndex: commit.targetRowIndex,
+      targetColumnIndex: commit.targetColumnIndex,
+      rowId: commit.rowId,
+      row: commit.row,
+      columnId: commit.columnId,
+      previousValue: commit.previousValue,
+      nextValue: commit.nextValue,
+      rawValue: commit.rawValue,
+    })),
+    rowPatches: plan.rowPatches.map((patch) => ({
+      rowId: patch.rowId,
+      row: patch.row,
+      values: { ...patch.values },
+    })),
+    skippedCells: plan.skippedCells.map(publicPasteSkippedCell),
+  }
+}
+
+function pasteFailureFromApplyFailure(error: RangeTsvPasteApplyFailure): BcGridPasteTsvFailure {
+  const failure = pasteFailure(error.code, error.message)
+  if (error.sourceRowIndex !== undefined) failure.sourceRowIndex = error.sourceRowIndex
+  if (error.sourceColumnIndex !== undefined) failure.sourceColumnIndex = error.sourceColumnIndex
+  if (error.targetRowIndex !== undefined) failure.targetRowIndex = error.targetRowIndex
+  if (error.targetColumnIndex !== undefined) failure.targetColumnIndex = error.targetColumnIndex
+  if (error.rowId !== undefined) failure.rowId = error.rowId
+  if (error.columnId !== undefined) failure.columnId = error.columnId
+  if (error.rawValue !== undefined) failure.rawValue = error.rawValue
+  if (error.diagnostic) failure.diagnostic = { ...error.diagnostic }
+  if (error.skippedCell) failure.skippedCell = publicPasteSkippedCell(error.skippedCell)
+  if (error.validation) failure.validation = error.validation
+  return failure
+}
+
+function pasteFailure(code: BcGridPasteTsvFailure["code"], message: string): BcGridPasteTsvFailure {
+  return { code, message }
+}
+
+function publicPasteSkippedCell(cell: BcGridPasteTsvSkippedCell): BcGridPasteTsvSkippedCell {
+  return {
+    sourceRowIndex: cell.sourceRowIndex,
+    sourceColumnIndex: cell.sourceColumnIndex,
+    ...(cell.targetRowIndex !== undefined ? { targetRowIndex: cell.targetRowIndex } : {}),
+    ...(cell.targetColumnIndex !== undefined ? { targetColumnIndex: cell.targetColumnIndex } : {}),
+    ...(cell.rowId !== undefined ? { rowId: cell.rowId } : {}),
+    ...(cell.columnId !== undefined ? { columnId: cell.columnId } : {}),
+    value: cell.value,
+    reasons: [...cell.reasons],
+  }
 }
 
 function isEditableKeyTarget(target: EventTarget | null): boolean {

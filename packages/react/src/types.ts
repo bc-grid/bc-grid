@@ -8,6 +8,18 @@ import type {
   BcGridApi,
   BcGridFilter,
   BcGridIdentity,
+  BcGridPasteTsvCommit,
+  BcGridPasteTsvFailure,
+  BcGridPasteTsvFailureCode,
+  BcGridPasteTsvOverflowMode,
+  BcGridPasteTsvParams,
+  BcGridPasteTsvParseDiagnostic,
+  BcGridPasteTsvParseDiagnosticCode,
+  BcGridPasteTsvResult,
+  BcGridPasteTsvRowPatch,
+  BcGridPasteTsvSkipReason,
+  BcGridPasteTsvSkippedCell,
+  BcGridPasteTsvSuccess,
   BcGridSort,
   BcGridStateProps,
   BcPaginationState,
@@ -108,6 +120,8 @@ export interface BcGridMessages {
   }) => string
   editValidationErrorAnnounce: (params: { columnLabel: string; error: string }) => string
   editServerErrorAnnounce: (params: { columnLabel: string; error: string }) => string
+  pasteCommittedAnnounce: (params: { count: number }) => string
+  pasteRejectedAnnounce: (params: { error: string }) => string
 }
 
 export interface BcGridUrlStatePersistence {
@@ -757,7 +771,7 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   column: BcReactGridColumn<TRow, TValue>
   previousValue: TValue
   nextValue: TValue
-  source: "keyboard" | "pointer" | "api"
+  source: "keyboard" | "pointer" | "api" | "paste"
 }
 
 export interface BcFilterDefinition<TValue = unknown> {
@@ -785,6 +799,18 @@ export type {
   BcColumnStateEntry,
   BcGridApi,
   BcGridFilter,
+  BcGridPasteTsvCommit,
+  BcGridPasteTsvFailure,
+  BcGridPasteTsvFailureCode,
+  BcGridPasteTsvOverflowMode,
+  BcGridPasteTsvParams,
+  BcGridPasteTsvParseDiagnostic,
+  BcGridPasteTsvParseDiagnosticCode,
+  BcGridPasteTsvResult,
+  BcGridPasteTsvRowPatch,
+  BcGridPasteTsvSkipReason,
+  BcGridPasteTsvSkippedCell,
+  BcGridPasteTsvSuccess,
   BcGridSort,
   BcGridStateProps,
   BcPaginationState,

@@ -406,6 +406,18 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       copyRange(range) {
         return gridApiRef.current?.copyRange(range) ?? Promise.resolve()
       },
+      pasteTsv(params) {
+        return (
+          gridApiRef.current?.pasteTsv(params) ??
+          Promise.resolve({
+            ok: false,
+            error: {
+              code: "no-paste-target",
+              message: "No mounted grid is available to paste into.",
+            },
+          })
+        )
+      },
       clearRangeSelection() {
         gridApiRef.current?.clearRangeSelection()
       },
