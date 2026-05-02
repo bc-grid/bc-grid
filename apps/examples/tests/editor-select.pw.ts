@@ -20,7 +20,8 @@ import { type Page, expect, test } from "@playwright/test"
 
 const URL = "/?edit=1"
 const SELECT_COLUMN = "status"
-const TRIGGER_SELECTOR = 'button[data-bc-grid-editor-input="true"][data-bc-grid-editor-kind="select"]'
+const TRIGGER_SELECTOR =
+  'button[data-bc-grid-editor-input="true"][data-bc-grid-editor-kind="select"]'
 
 async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   // Status column is mid-grid — scroll partway to ensure rendered.
