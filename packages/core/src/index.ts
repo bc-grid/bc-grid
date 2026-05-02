@@ -406,6 +406,38 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   settleServerRowMutation(result: ServerMutationResult<TRow>): void
   getServerRowModelState(): ServerRowModelState<TRow>
   getServerDiagnostics(): ServerRowModelDiagnostics
+  /**
+   * Scroll to a cell whose row may not currently be loaded. Returns a
+   * Promise that resolves with `{ scrolled: true }` when the row was
+   * found and scrolled into view, or `{ scrolled: false }` when the
+   * row was not found in the loaded data after the optional navigation
+   * step.
+   *
+   * Behavior by row model:
+   *
+   * - **paged** — if the row is in the current loaded page, scrolls
+   *   synchronously and resolves true. If the row is not loaded and
+   *   `opts.pageIndex` is provided, navigates to that page, awaits the
+   *   next loadPage settlement, then re-attempts the scroll and
+   *   resolves based on whether the row appears in the new page. If
+   *   `opts.pageIndex` is omitted and the row is not loaded, resolves
+   *   `{ scrolled: false }` without navigating.
+   * - **infinite / tree** — best-effort sync: if the row is in the
+   *   currently loaded blocks, scrolls and resolves true; otherwise
+   *   resolves false. The hook does not automatically fetch additional
+   *   blocks for the target row.
+   *
+   * Use this from search → ArrowDown-into-grid, save-and-next, and
+   * scroll-to-error / validation-flash workflows where the consumer
+   * knows the global pageIndex of the row.
+   *
+   * Audit-2026-05 P0-7. v0.5 server-side imperative API surface.
+   */
+  scrollToServerCell(
+    rowId: RowId,
+    columnId: ColumnId,
+    opts?: BcScrollOptions & { pageIndex?: number },
+  ): Promise<{ scrolled: boolean }>
 }
 
 export type ServerRowModelMode = "paged" | "infinite" | "tree"

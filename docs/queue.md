@@ -50,7 +50,7 @@ Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `
 
 - `[done: worker3 #359]` **v05-use-bc-grid-state** (worker3) — `useBcGridState({ persistTo, columns })` turnkey state hook + `BcGridStateBindings`/`BcGridStateBoundProps`/`BcGridStateDispatch`/`BcGridStateValues`/`UseBcGridStateOptions` types. Coordinator pushed api-surface manifest update on the same branch.
 - `[done: worker1 #363]` **v05-use-server-paged-grid** (worker1) — `useServerPagedGrid({ gridId, loadPage })` owning request-id, stale rejection, debounce, page reset on filter, optimistic edits. Branch `agent/worker1/v05-use-server-paged-grid`.
-- `[ready]` **v05-api-ref-server** (worker1) — `BcGridApi.scrollToCell` for server-paged grids.
+- `[in-flight: worker1]` **v05-api-ref-server** (worker1) — `BcServerGridApi.scrollToServerCell(rowId, columnId, opts?)` returning `Promise<{ scrolled: boolean }>`. Sync if row is loaded; navigate-and-await if `opts.pageIndex` differs from current paged page. `useServerPagedGrid().actions.scrollToCell` wraps it. Branch `agent/worker1/v05-api-ref-scroll-to-cell`.
 - `[done: worker3 #361]` **v05-api-ref-editor** (worker3) — `BcGridApi.startEdit` / `commitEdit` / `cancelEdit` and editor portal methods. **Branch:** `agent/worker3/v05-api-ref-editor`.
 - `[ready]` **v05-spike-sales-estimating** (worker3) — hero spike at `apps/examples/src/sales-estimating.example.tsx`, <100 LOC consumer code. Depends on `useBcGridState` (#359) + worker2 paste integration.
 - `[done: worker3 #364]` **v05-spike-colour-selection** (worker3) — hero spike at `apps/examples/src/colour-selection.example.tsx` + shadcn Combobox migration of `select.tsx` + `EditorOption.swatch`/`icon` fields (audit P0-4 partial — multiSelect/autocomplete still pending).
