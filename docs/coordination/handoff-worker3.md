@@ -32,8 +32,38 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#370** autocomplete Combobox migration + `internal/combobox-search.tsx` (v0.5 P0-4 leg 2 of 3)
 - ✅ **#372** multi-select Combobox v2 (v0.5 P0-4 leg 3 of 3 — **closes audit P0-4 entirely**)
 - ✅ **#375** sales-estimating hero spike — closes audit **P0-9 hero set entirely** (all 4 spikes shipped: colour, doc-mgmt, production-estimating, sales-estimating)
+- ✅ **#378** Backspace/Delete clear semantics (audit P1-W3-1)
+- ✅ **#381** `editController.discardRowEdits` + `BcEditGrid` Discard action (audit P1-W3-3) — coordinator merge-resolved a test-file conflict from #378
+- ✅ **#382** `BcCellEditor.getValue?` hook for custom editors (audit P1-W3-6) + custom-editor recipe doc
+- ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 
-### Active now → cheap P1 cleanups (paste-editor binding blocked on worker2's contract)
+### Active now → `v05-editor-followups-planning-doc`
+
+Mirror worker1's #383 + worker2's grouping-followups pattern: convert your audit findings (#352) — the editor-lane items not yet shipped — into concrete v0.6 task entries. Output: read-only doc at `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`. No source changes; pure planning while your lane is otherwise clean.
+
+**Items to cover** (each as a v0.6 task proposal with file:line citations + fix shape + affected packages):
+
+1. **Validation visual flash + status-bar slot for latest error** (audit P1-W3-4). Today validation rejection paints a static red border that all looks the same after multiple invalid commits — no signal of which cell was just rejected. Pair the existing assertive announce with a transient pulse on the cell (`data-state="error-flash"` for ~600ms) and a status-bar segment showing the latest error string with cell coordinate ("Row 12 — Discount: must be ≤ 100"). Pairs with audit P1-W3 status-bar slot.
+
+2. **Locale-aware number parser** (audit P1-W3-5). Ship `numberEditor.parseLocaleNumber(value, locale)` helper using `Intl.NumberFormat`'s decimal separator. Document as the recommended `column.valueParser` for international ERP grids; `1,5` should parse as `1.5` for `de-DE`.
+
+3. **`prepareResult` preload across all lookup editors** (audit P1-W3-2). Currently autocomplete consumes `prepareResult` (#370 partial); the same preload pattern should work for select + multi-select. The state machine carries `prepareResult` through `Preparing → Editing`; just needs each editor to read it before falling through to `fetchOptions`.
+
+4. **Editor visual contract consolidation** (audit P1-W3-8). Error / pending / dirty / focused-edit visuals are split across the cell, the input, and the editor portal — three different selectors render the same logical state. Consolidate into a single CSS-variable-driven token system; document the four states and the one selector each.
+
+5. **Multi-mode Combobox `Enter` semantics fix** (surfaced fixing `editor-multi-select.pw.ts` at `a57a33f` / `8af914e`). `Enter` currently routes through `updateSelection` (toggling the active option) before bubbling to commit — undoing the user's last pick. In multi mode `Enter` should ONLY bubble to commit; `Space` stays as the toggle gesture. Test currently uses `Tab` as a workaround.
+
+6. **Clear-rejection feedback for sighted users** (surfaced in worker3 #378). When `clearCell` runs `column.validate("")` and validate rejects, no editor portal is mounted so the visible validation popover (#356) doesn't fire. Sighted users see nothing; AT users hear the assertive announce. Add a transient toast / status-bar slot. Pairs with item 1.
+
+For each item: where it manifests, what's wrong, suggested fix shape (1-3 paragraphs), affected packages, dependency on other items, capacity-aware priority order. Mirror worker1's #383 exactly.
+
+**Branch:** `agent/worker3/v05-editor-followups-planning-doc`. **Effort:** ~half day.
+
+### After this → bsncraft migration co-pilot (editor side)
+
+When bsncraft drafts the customers migration, your role is editor + lookup expertise. Walk through any rough edges they hit on the editor surface (especially Combobox migration, paste binding, validation surface); those become v0.6 inputs.
+
+### Deferred — earlier cheap P1 list (all DONE)
 
 P0-4 and P0-9 hero spikes both fully closed. Paste-editor binding (your half of audit P0-1) waits for worker2 to define their `pasteTsv` API surface. While they work that, pick up the cheap P1 cleanups in your lane — these are real audit findings that ship as standalone improvements, no inter-worker contract needed.
 

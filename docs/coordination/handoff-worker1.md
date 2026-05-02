@@ -28,8 +28,23 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#371** `useServerTreeGrid` companion hook — closes the server-hook trio (paged + infinite + tree)
 - ✅ **#376** `v05-server-loader-generics` deferral doc — TS variance trap; stretch deferred to v0.6 with rationale
 - ✅ **#379** `useServerTreeGrid` `groupRowId` override + `persistTo` (bsncraft polish)
+- ✅ **#383** v0.5 → v0.6 server-perf follow-ups planning doc — 11 v0.6 task proposals + 5 open questions for coordinator
 
-### Active now → audit P1 server-perf follow-ups doc
+### Active now → `v05-server-tree-grid-options-pull-forward`
+
+The 3 remaining `useServerTreeGrid` polish items (`rootChildCount?`, `pageSize?`, `cacheLimit?`) were deferred to v0.6 in `v06-server-tree-grid-options` because they were "nice-to-have" rather than v0.5 release-gate. With your lane otherwise clean and bsncraft about to consume `useServerTreeGrid` for the customers grouping migration, **pull these forward into v0.5** — they're small + additive + bsncraft flagged them.
+
+**Spec:**
+
+1. **`rootChildCount?: number`** — saves a round-trip when the consumer already knows the root count (e.g. from a separate `SELECT COUNT(*)` query). When provided, skip the initial `loadChildren({ parentRowId: null, ... })` count fetch and use the supplied value to seed the orchestration. The first viewport-driven page fetch still runs.
+2. **`pageSize?: number`** — promote the implicit child page size to an explicit hook option. Default 100. Forwards into the orchestration's per-page request shape.
+3. **`cacheLimit?: number`** — LRU cap on expanded-group caches for memory hygiene with deep trees. Default sensible (e.g. 64 expanded groups). When the user expands a 65th group, evict the LRU.
+
+Match `useBcGridState`'s naming patterns; document each option in `api.md` and `useServerTreeGrid` JSDoc; add unit tests for each.
+
+**Branch:** `agent/worker1/v05-server-tree-grid-options-pull-forward`. **Effort:** ~half day.
+
+### Earlier active task superseded
 
 Your v0.5 server-hook lane is essentially complete (server-hook trio + scrollToCell + groupRowId/persistTo polish all shipped; generic-`TRow` deferred to v0.6 with documented rationale; rest of the polish options `rootChildCount` / `pageSize` / `cacheLimit` queued in v0.6 backlog). The remaining v0.5 release-gate items for your involvement are bsncraft migration co-pilot (waits on the bsncraft team drafting their customers migration) and the alpha cut (coordinator-owned).
 

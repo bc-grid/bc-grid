@@ -30,14 +30,43 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#373** `<BcGrid fit>` prop (cleanup train task 4)
 - ✅ **#377** `BcGridApi.openFilter` / `closeFilter` / `getActiveFilter` (audit P0-7 filter side — closes the apiRef trio fully)
 - ✅ **#380** `BcGridApi.pasteTsv` + native paste-event listener + bulk edit overlay commit path (audit **P0-1 fully closed** — you also subsumed the editor-side binding worker3 was originally going to write)
+- ✅ **#384** `BcColumnFilter` discriminated union (per-type narrowing for text/number/number-range/date/date-range/set/boolean/custom)
 
-v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate. **All v0.5 P0 items are now closed** — your lane is done. Pivot to stretch + v0.6 prep.
+v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate. **All v0.5 P0 + cleanup-train + stretch items are now closed** — your lane is done.
 
-### Active now → `v05-filter-discriminated-union` (stretch)
+### Active now → `v05-grouping-followups-planning-doc`
 
-P0-1 paste integration shipped in #380, including the editor-side binding through `useEditingController` that was originally split with worker3. Net result: v0.5 P0-1 fully closed. Your lane has no remaining v0.5 P0 work.
+Mirror worker1's #383 pattern: convert your audit findings (#351) — specifically the grouping + filter items — into concrete v0.6 task entries. Output: read-only doc at `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`. No source changes. Pure planning pass while your lane is otherwise clean.
 
-Pick up the stretch task that was queued. Convert `BcColumnFilter` to a discriminated union per type:
+**Items to cover** (each as a v0.6 task proposal with file:line citations + fix shape + affected packages):
+
+1. **Group-before-paginate + group subtotals** (audit P0-8, two-spike-confirmed in #367 + #374). The biggest worker2 v0.6 piece. Today `leafRowEntries` paginates BEFORE `buildGroupedRowModel`, so client grouping operates on a single page slice. Group rows render label + count only; `aggregateGroups` exists but isn't wired into group-row rendering. Decide the contract: client grids group BEFORE pagination (the right answer per synthesis), then wire group aggregation into group-row cells.
+
+2. **Group selection algebra** (audit P1-W2-5). Selecting a group row should select its visible descendants (with extension paths for full server-view group selection in tree mode).
+
+3. **Filter registry implementation** (audit P1-W2-1). `@bc-grid/filters` is currently empty; React exposes the contract but no registry exists. Implement registration → predicate dispatch → editor lookup. Closes the "custom filter" extensibility advertised in `api.md`.
+
+4. **Set filter virtualization + async** (audit P1-W2-2). Today the set-filter menu eagerly scans all data and renders every option. Add an option-provider contract with counts, async search, virtualized list, and a "selected outside current search" preserved section.
+
+5. **Saved-view DTO + recipe** (audit P1-W2-3). Bc-grid publishes the canonical `BcSavedView` DTO; consumers own the actual UX (per the synthesis answer to your audit open-question).
+
+6. **ERP filter operator coverage** (audit P1-W2-4). Add: `blank` / `not blank` for every scalar type, `not equals` for text/date, relative dates (today / this week / last N days / this month), fiscal-period buckets, current user/team, `does not contain`. Land alongside #3 since the registry is the host.
+
+7. **Active filter chip strip in toolbar** (audit P2). Today the active-filter summary lives only inside the Filters panel. Add a small always-visible chip strip suitable for status bars / toolbars.
+
+8. **Range paste server-side support** (audit P2). Visible-window-only paste planning is good for v0.5; document the limit and propose a server-side paste-planning contract.
+
+For each item: where it manifests, what's wrong, suggested fix shape (1-3 paragraphs), affected packages, dependency on other items, capacity-aware priority order. Mirror worker1's #383 exactly.
+
+**Branch:** `agent/worker2/v05-grouping-followups-planning-doc`. **Effort:** ~half day.
+
+### After this → bsncraft migration co-pilot (filter side)
+
+When bsncraft drafts the customers migration, your role is filter-and-grouping expertise (similar to worker1's server-grid expertise). Walk through any rough edges they hit on filter/group surfaces; those become v0.6 inputs.
+
+### Deferred — earlier `v05-filter-discriminated-union` content (DONE)
+
+The stretch was shipped in #384:
    ```ts
    type BcColumnFilter =
      | { type: 'text'; caseSensitive?: boolean; regex?: boolean; variant?: 'popup' | 'inline' }
