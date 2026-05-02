@@ -14,9 +14,11 @@ This is binding (`docs/AGENTS.md §6`). Workers run focused unit tests + `bun ru
 
 You implement code; the coordinator reviews and runs the slow gates.
 
+**Note on CI:** GitHub Actions automatically runs `smoke`, `e2e (Playwright)`, and `smoke perf (Chromium)` jobs on every PR. **Those CI jobs are not "you running tests"** — they are the coordinator's CI infrastructure verifying your work. Seeing `e2e (Playwright) ✓` in the PR's checks panel is expected and good. Don't disable them, don't try to mirror them locally. Your PR description should say something like "Per worker handoff, I did not run local Playwright/e2e or smoke-perf; coordinator CI owns those gates" so reviewers know the local gates you ran (type-check, lint, focused unit tests) and understand the CI Playwright result is the coordinator's verification, not yours. **The PR you wrote in #380 already followed this exactly — keep doing that.**
+
 ---
 
-## Active task — v0.5 paste listener (the LAST v0.5 P0)
+## Active task — v0.5 stretch + v0.6 prep (LAST v0.5 P0 just shipped — paste integration done in #380)
 
 ### What's already shipped from your lane
 
@@ -27,26 +29,15 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#369** `<BcGrid searchHotkey>` prop (cleanup train task 3)
 - ✅ **#373** `<BcGrid fit>` prop (cleanup train task 4)
 - ✅ **#377** `BcGridApi.openFilter` / `closeFilter` / `getActiveFilter` (audit P0-7 filter side — closes the apiRef trio fully)
+- ✅ **#380** `BcGridApi.pasteTsv` + native paste-event listener + bulk edit overlay commit path (audit **P0-1 fully closed** — you also subsumed the editor-side binding worker3 was originally going to write)
 
-v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate.
+v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate. **All v0.5 P0 items are now closed** — your lane is done. Pivot to stretch + v0.6 prep.
 
-### Active now → `v05-paste-listener` (the LAST v0.5 P0)
+### Active now → `v05-filter-discriminated-union` (stretch)
 
-Excel paste integration (audit P0-1 / synthesis sprint plan) is the only unfinished v0.5 P0. Worker3 has alternatives queued (cheap P1s while waiting for your contract), so they're not blocked-blocked, but P0-1 is a v0.5 release-gate item. Your half is the listener + API surface; worker3 owns the editor-commit binding.
+P0-1 paste integration shipped in #380, including the editor-side binding through `useEditingController` that was originally split with worker3. Net result: v0.5 P0-1 fully closed. Your lane has no remaining v0.5 P0 work.
 
-**Spec:**
-- Add `paste` event listener on the grid root (or a hidden input that owns the active cell's focus context).
-- Expose a `pasteTsv({ range, tsv })` API on `BcGridApi`. Returns a Promise that resolves with per-cell apply diagnostics.
-- Use the existing `buildRangeTsvPasteApplyPlan` helper from `packages/react/src/rangeClipboard.ts`.
-- Call into worker3's editor-commit binding (`editController.commitFromPasteApplyPlan`) once they ship that side. **Define the contract first** in `docs/api.md` so worker3 can implement against a stable shape. Open a small RFC-style PR with just the API surface if it helps coordinate.
-
-Atomic semantics (per `editing-rfc` and audit synthesis): if any cell in the apply-plan fails parse/validate, abort all writes and surface diagnostics. Don't do partial paste.
-
-**Branch:** `agent/worker2/v05-paste-listener`. **Effort:** ~1 day including tests + API contract doc.
-
-### After paste listener ships
-
-Stretch: **`v05-filter-discriminated-union`** — Convert `BcColumnFilter` to a discriminated union per type:
+Pick up the stretch task that was queued. Convert `BcColumnFilter` to a discriminated union per type:
    ```ts
    type BcColumnFilter =
      | { type: 'text'; caseSensitive?: boolean; regex?: boolean; variant?: 'popup' | 'inline' }
