@@ -6,12 +6,19 @@ import { type Page, expect, test } from "@playwright/test"
  * `cellEditor: autocompleteEditor` + `fetchOptions: fetchCollectorOptions`
  * (async resolver against a 30-name roster).
  *
- * Tests assert the editor-specific behaviour:
+ * Updated 2026-05-02 after PR #370: autocomplete.tsx migrated from
+ * `<input list>` + `<datalist>` to the shadcn-native search Combobox
+ * primitive (`packages/editors/src/internal/combobox-search.tsx`).
+ * The trigger is still an `<input>` (free-text editing) but the
+ * suggestion list now lives in a sibling `[role="listbox"]` element
+ * with `[role="option"]` children — no datalist linking.
+ *
+ * Tests assert:
  *   - `data-bc-grid-editor-kind="autocomplete"` discriminator
- *   - native `<input type="text" list>` paired with a `<datalist>`
+ *   - `<input role="combobox" aria-haspopup="listbox">` shell
  *   - initial value + initial fetch produce options on first paint
  *   - typing fires debounced `fetchOptions(query, signal)` —
- *     the datalist updates with filtered results
+ *     the listbox updates with filtered results
  *   - commit returns the input value (string) — `valueParser` runs
  *     and the cell renderer reflects the trimmed value
  *   - validation rejection (empty string) keeps the editor open and
@@ -43,7 +50,7 @@ async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   return cell
 }
 
-test("autocompleteEditor mounts a native <input list> with the editor-kind data attribute", async ({
+test("autocompleteEditor mounts a Combobox-search input with the editor-kind data attribute", async ({
   page,
 }) => {
   await page.goto(URL)
@@ -53,11 +60,12 @@ test("autocompleteEditor mounts a native <input list> with the editor-kind data 
   await expect(input).toBeAttached()
   await expect(input).toHaveAttribute("data-bc-grid-editor-kind", "autocomplete")
   await expect(input).toHaveAttribute("type", "text")
-  // The `list` attr links the input to the sibling <datalist>; the
-  // browser uses this to draw the suggestion popover. autocomplete="off"
-  // suppresses the browser's history-based autofill so only fetchOptions
-  // results appear.
-  await expect(input).toHaveAttribute("list", /.+/)
+  // The shadcn-native search Combobox uses role="combobox" + aria-haspopup
+  // to expose the input as a popover trigger; the listbox is rendered
+  // separately. autocomplete="off" suppresses the browser's history-based
+  // autofill so only fetchOptions results appear.
+  await expect(input).toHaveAttribute("role", "combobox")
+  await expect(input).toHaveAttribute("aria-haspopup", "listbox")
   await expect(input).toHaveAttribute("autocomplete", "off")
 })
 
@@ -71,7 +79,7 @@ test("input pre-fills with the existing cell value", async ({ page }) => {
   expect(value.length).toBeGreaterThan(0)
 })
 
-test("typing fires fetchOptions and the datalist updates with filtered options", async ({
+test("typing fires fetchOptions and the listbox updates with filtered options", async ({
   page,
 }) => {
   await page.goto(URL)
@@ -81,16 +89,11 @@ test("typing fires fetchOptions and the datalist updates with filtered options",
   await input.fill("alex")
   // Wait for debounce (200ms) + fetch (50ms simulated) + a small buffer.
   await page.waitForTimeout(DEBOUNCE_PLUS_FETCH_MS)
-  const optionValues = await page.evaluate(() => {
-    const i = document.querySelector('input[data-bc-grid-editor-input="true"]')
-    const listId = i?.getAttribute("list")
-    const dl = listId ? document.getElementById(listId) : null
-    return Array.from(dl?.querySelectorAll("option") ?? []).map(
-      (o) => (o as HTMLOptionElement).value,
-    )
-  })
+  // Suggestions render inside `[role="listbox"]` as `[role="option"]`
+  // elements; their text content is the option label.
+  const optionLabels = await page.locator('[role="listbox"] [role="option"]').allTextContents()
   // Demo roster has exactly one "alex" — Alex Chen.
-  expect(optionValues).toEqual(["Alex Chen"])
+  expect(optionLabels.map((l) => l.trim())).toEqual(["Alex Chen"])
 })
 
 test("commit produces a string value (valueParser trims) reflected by the cell renderer", async ({
