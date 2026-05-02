@@ -23,43 +23,63 @@ import { fileURLToPath } from "node:url"
  * editor uses.
  */
 
+/**
+ * Editors that own their own focus handoff inline. `select` was on this
+ * list pre-v0.5; the v0.5 Combobox migration moved its focusRef
+ * plumbing into the shared `internal/combobox.tsx` primitive so the
+ * contract is enforced *there* (covered separately below). Adding
+ * `multiSelect` / `autocomplete` to that primitive is the next-PR
+ * follow-up — until then they keep their inline handoff and stay on
+ * this list.
+ */
 const editorsToCheck = [
   "text",
   "number",
   "date",
   "datetime",
   "time",
-  "select",
   "multiSelect",
   "autocomplete",
   "checkbox",
 ] as const
 
+const FOCUS_REF_BLOCK =
+  /(use(?:Layout)?Effect)\(\(\) => \{\s*if \(focusRef && [a-zA-Z]+Ref\.current\) \{\s*;?(?:\(focusRef as \{[^}]+\}\)|focusRef)\.current = [a-zA-Z]+Ref\.current/
+
 describe("editor focusRef contract", () => {
   for (const name of editorsToCheck) {
     test(`${name} editor assigns focusRef inside useLayoutEffect`, async () => {
-      const source = await readEditorSource(name)
-
-      // Locate the focusRef assignment block.
-      const focusRefBlockMatch = source.match(
-        /(use(?:Layout)?Effect)\(\(\) => \{\s*if \(focusRef && [a-zA-Z]+Ref\.current\) \{\s*;?\(focusRef as \{[^}]+\}\)\.current = [a-zA-Z]+Ref\.current/,
-      )
-
-      expect(
-        focusRefBlockMatch,
-        `${name}.tsx must contain a focusRef assignment block; pattern not found`,
-      ).not.toBeNull()
-      const effectKind = focusRefBlockMatch?.[1]
-
-      expect(
-        effectKind,
-        `${name}.tsx focusRef assignment uses ${effectKind}; must be useLayoutEffect (children's commit-phase effects fire before parents'; useEffect would leave focusRef.current null when the framework reads it).`,
-      ).toBe("useLayoutEffect")
+      const source = await readEditorSource(`src/${name}.tsx`)
+      assertFocusRefUsesLayoutEffect(source, `${name}.tsx`)
     })
   }
+
+  test("internal Combobox primitive (used by select) assigns focusRef inside useLayoutEffect", async () => {
+    // The v0.5 select editor delegates its focus handoff to the shared
+    // Combobox primitive. Pin the contract there so the click-outside
+    // / Tab path that reads `__bcGridComboboxValue` off the trigger
+    // button continues to see a non-null `focusRef.current`.
+    const source = await readEditorSource("src/internal/combobox.tsx")
+    assertFocusRefUsesLayoutEffect(source, "internal/combobox.tsx")
+  })
 })
 
-async function readEditorSource(name: string): Promise<string> {
+function assertFocusRefUsesLayoutEffect(source: string, label: string): void {
+  const focusRefBlockMatch = source.match(FOCUS_REF_BLOCK)
+
+  expect(
+    focusRefBlockMatch,
+    `${label} must contain a focusRef assignment block; pattern not found`,
+  ).not.toBeNull()
+  const effectKind = focusRefBlockMatch?.[1]
+
+  expect(
+    effectKind,
+    `${label} focusRef assignment uses ${effectKind}; must be useLayoutEffect (children's commit-phase effects fire before parents'; useEffect would leave focusRef.current null when the framework reads it).`,
+  ).toBe("useLayoutEffect")
+}
+
+async function readEditorSource(relPath: string): Promise<string> {
   const here = fileURLToPath(new URL(".", import.meta.url))
-  return readFile(`${here}../src/${name}.tsx`, "utf8")
+  return readFile(`${here}../${relPath}`, "utf8")
 }

@@ -116,6 +116,33 @@ describe("built-in editor chrome hooks", () => {
     expect(html).toContain('data-bc-grid-editor-option-count="2"')
   })
 
+  test("select editor renders option swatches when supplied (audit P0-4)", () => {
+    // Combobox-anchored lookup with colour-swatch chips. Validates the
+    // EditorOption.swatch surface ratified by the synthesis answer to
+    // worker3 open-question #2 — the BcCellEditor data plumbing
+    // already supported typed values, so swatches drop in as a pure
+    // rendering layer.
+    const html = renderEditor({
+      editor: selectEditor,
+      initialValue: "antique-walnut",
+      column: {
+        field: "finish",
+        header: "Finish",
+        options: [
+          { value: "antique-walnut", label: "Antique Walnut", swatch: "#5C3A21" },
+          { value: "honey-oak", label: "Honey Oak", swatch: "#C68642" },
+        ],
+      },
+    })
+
+    expect(html).toContain('data-bc-grid-editor-swatch="true"')
+    expect(html).toContain("background:#5C3A21")
+    expect(html).toContain("background:#C68642")
+    // Trigger button preserves the public selector contract.
+    expect(html).toContain('data-bc-grid-editor-kind="select"')
+    expect(html).toContain('aria-haspopup="listbox"')
+  })
+
   test("multi-select editor keeps typed options and exposes native listbox hooks", () => {
     const html = renderEditor(
       {
