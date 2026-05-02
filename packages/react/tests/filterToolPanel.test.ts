@@ -102,7 +102,28 @@ describe("filters sidebar slot", () => {
 
     expect(markup).toContain("bc-grid-sidebar-panel-header bc-grid-filters-panel-header")
     expect(markup).toContain("bc-grid-filters-panel-empty")
+    expect(markup).not.toContain("bc-grid-filters-panel-summary")
     expect(markup).toMatch(/<button[^>]*class="bc-grid-filters-panel-clear"[^>]*disabled/)
+  })
+
+  test("active filters render a compact removable summary before the editable list", () => {
+    const markup = renderToStaticMarkup(
+      createElement(BcFiltersToolPanel<Row>, {
+        context: sidebarContext({ account: "cash", balance: ">100" }),
+      }),
+    )
+
+    expect(markup).toContain('class="bc-grid-filters-panel-summary"')
+    expect(markup).toContain('aria-label="2 active filters"')
+    expect(markup).toContain("bc-grid-filters-panel-summary-chip")
+    expect(markup).toContain('<span class="bc-grid-filters-panel-summary-label">Account</span>')
+    expect(markup).toContain('<span class="bc-grid-filters-panel-summary-label">Balance</span>')
+    expect(markup).toMatch(
+      /<button[^>]*aria-label="Clear filter on Account"[^>]*class="bc-grid-filters-panel-summary-remove"/,
+    )
+    expect(markup.indexOf("bc-grid-filters-panel-summary")).toBeLessThan(
+      markup.indexOf("bc-grid-filters-panel-list"),
+    )
   })
 
   test("empty state renders the slashed-funnel SVG glyph + label inside the same card", () => {

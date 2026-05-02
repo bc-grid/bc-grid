@@ -2363,6 +2363,49 @@ select.bc-grid-editor-input {
   gap: 0.5rem;
 }
 
+.bc-grid-filters-panel-header[data-has-filters="true"] {
+  align-items: flex-start;
+}
+
+.bc-grid-filters-panel-heading {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 0.375rem;
+}
+
+.bc-grid-filters-panel-summary {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bc-grid-filters-panel-summary-chip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--bc-grid-border);
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: var(--bc-grid-muted);
+  color: var(--bc-grid-fg);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  padding: 0.125rem 0.1875rem 0.125rem 0.5rem;
+}
+
+.bc-grid-filters-panel-summary-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bc-grid-filters-panel-list {
   display: grid;
   gap: 0;
@@ -2427,7 +2470,8 @@ select.bc-grid-editor-input {
 }
 
 .bc-grid-filters-panel-clear,
-.bc-grid-filters-panel-remove {
+.bc-grid-filters-panel-remove,
+.bc-grid-filters-panel-summary-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2454,14 +2498,23 @@ select.bc-grid-editor-input {
   padding: 0;
 }
 
+.bc-grid-filters-panel-summary-remove {
+  width: 1.25rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  min-height: 1.25rem;
+  padding: 0;
+}
+
 .bc-grid-filters-panel-clear:hover:not(:disabled),
-.bc-grid-filters-panel-remove:hover {
+.bc-grid-filters-panel-remove:hover,
+.bc-grid-filters-panel-summary-remove:hover {
   background: var(--bc-grid-row-hover);
   color: var(--bc-grid-fg);
 }
 
 /*
- * Pressed state on both panel buttons. Mirrors shadcn `<Button
+ * Pressed state on panel text/icon buttons. Mirrors shadcn `<Button
  * variant="outline">` press feel — accent-soft surface flashes on
  * tap-down so the click registers visually before the column-filter
  * state updates. Also covers the keyboard Space / Enter activation
@@ -2469,6 +2522,12 @@ select.bc-grid-editor-input {
  */
 .bc-grid-filters-panel-clear:active:not(:disabled),
 .bc-grid-filters-panel-remove:active {
+  background: var(--bc-grid-accent-soft);
+  border-color: var(--bc-grid-input-border);
+  color: var(--bc-grid-fg);
+}
+
+.bc-grid-filters-panel-summary-remove:active {
   background: var(--bc-grid-accent-soft);
   border-color: var(--bc-grid-input-border);
   color: var(--bc-grid-fg);
@@ -2489,7 +2548,8 @@ select.bc-grid-editor-input {
 }
 
 .bc-grid-filters-panel-clear:focus-visible,
-.bc-grid-filters-panel-remove:focus-visible {
+.bc-grid-filters-panel-remove:focus-visible,
+.bc-grid-filters-panel-summary-remove:focus-visible {
   outline: 2px solid var(--bc-grid-focus-ring);
   outline-offset: 2px;
 }
@@ -3489,6 +3549,7 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-columns-panel-chip-remove,
   .bc-grid-filters-panel-clear,
   .bc-grid-filters-panel-remove,
+  .bc-grid-filters-panel-summary-remove,
   .bc-grid-filter-text-toggle,
   .bc-grid-filter-set-button,
   .bc-grid-pivot-panel-button,
@@ -3620,6 +3681,7 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-columns-panel-group-zone,
   .bc-grid-columns-panel-group-chip,
   .bc-grid-filters-panel-item,
+  .bc-grid-filters-panel-summary-chip,
   .bc-grid-pivot-panel-field,
   .bc-grid-pivot-panel-chip,
   .bc-grid-pivot-panel-zone,

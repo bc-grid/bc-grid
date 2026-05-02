@@ -40,6 +40,10 @@ Read-only audits, one findings doc per author. See `docs/coordination/audit-2026
 - `[done: coordinator ddd1f7a]` **audit-coordinator** — API ergonomics, package boundaries, type discipline, visual quality, bsncraft integration, ERP comparison. Findings: `docs/coordination/audit-2026-05/coordinator-audit.md`.
 - `[in-flight: coordinator]` **audit-synthesis** — synthesize all four findings into ranked P0/P1/P2 with author tags + sprint plan. Output: `docs/coordination/audit-2026-05/synthesis.md`.
 
+## v0.4 — Active Worker Lane Tasks
+
+- `[in-flight: worker2]` **v04-active-filter-summary** — filters panel toolbar chip summary for active filters, reusing per-column clear behavior and preserving the shadcn/Tailwind v4 chrome contract. **Branch:** `agent/worker2/v04-active-filter-summary`. **Effort:** XS.
+
 ## v0.5 — Audit-Driven Ergonomics Refactor (DRAFT — pending audit synthesis)
 
 Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. These task entries are draft and are not claimable until the audit synthesis ratifies the scope. Worker handoffs do not pivot to v0.5 work until the coordinator updates each handoff doc.

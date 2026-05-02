@@ -1290,6 +1290,48 @@ describe("@bc-grid/theming", () => {
     const rule = css.slice(idx, ruleEnd)
     expect(rule).toContain("background: var(--bc-grid-accent-soft)")
     expect(rule).toContain("color: var(--bc-grid-fg)")
+
+    const summaryIdx = css.indexOf(".bc-grid-filters-panel-summary-remove:active {")
+    expect(summaryIdx).toBeGreaterThan(-1)
+    const summaryRuleEnd = css.indexOf("}", summaryIdx)
+    const summaryRule = css.slice(summaryIdx, summaryRuleEnd)
+    expect(summaryRule).toContain("background: var(--bc-grid-accent-soft)")
+    expect(summaryRule).toContain("color: var(--bc-grid-fg)")
+  })
+
+  test("filters panel active summary renders as compact removable chips", () => {
+    // The header summary is a toolbar/status affordance, not a second
+    // editable form. It wraps compact chips, clips long labels, and
+    // keeps the per-filter clear affordance on the same shadcn icon
+    // button treatment as the editable filter cards.
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const summaryIdx = css.indexOf(".bc-grid-filters-panel-summary {")
+    expect(summaryIdx).toBeGreaterThan(-1)
+    const summaryRuleEnd = css.indexOf("}", summaryIdx)
+    const summaryRule = css.slice(summaryIdx, summaryRuleEnd)
+    expect(summaryRule).toContain("display: flex")
+    expect(summaryRule).toContain("flex-wrap: wrap")
+    expect(summaryRule).toContain("list-style: none")
+    expect(summaryRule).toContain("margin: 0")
+    expect(summaryRule).toContain("padding: 0")
+
+    const chipIdx = css.indexOf(".bc-grid-filters-panel-summary-chip {")
+    expect(chipIdx).toBeGreaterThan(-1)
+    const chipRuleEnd = css.indexOf("}", chipIdx)
+    const chipRule = css.slice(chipIdx, chipRuleEnd)
+    expect(chipRule).toContain("display: inline-flex")
+    expect(chipRule).toContain("min-width: 0")
+    expect(chipRule).toContain("max-width: 100%")
+    expect(chipRule).toContain("border: 1px solid var(--bc-grid-border)")
+    expect(chipRule).toContain("background: var(--bc-grid-muted)")
+
+    const labelIdx = css.indexOf(".bc-grid-filters-panel-summary-label {")
+    expect(labelIdx).toBeGreaterThan(-1)
+    const labelRuleEnd = css.indexOf("}", labelIdx)
+    const labelRule = css.slice(labelIdx, labelRuleEnd)
+    expect(labelRule).toContain("overflow: hidden")
+    expect(labelRule).toContain("text-overflow: ellipsis")
+    expect(labelRule).toContain("white-space: nowrap")
   })
 
   test("filters panel items render as list rows with an eased focus-within ring", () => {
