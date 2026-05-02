@@ -1,6 +1,6 @@
 import type { RowId } from "@bc-grid/core"
 import type { CSSProperties, ReactNode } from "react"
-import { domToken } from "./gridInternals"
+import { domToken, visuallyHiddenStyle } from "./gridInternals"
 import { DisclosureChevron } from "./internal/disclosure-icon"
 import type { BcReactGridColumn } from "./types"
 
@@ -41,12 +41,13 @@ export function createDetailToggleColumn<TRow>({
 }: CreateDetailToggleColumnArgs): BcReactGridColumn<TRow> {
   return {
     columnId: DETAIL_TOGGLE_COLUMN_ID,
-    header: (
-      <span className="bc-grid-detail-header">
-        <DisclosureChevron className="bc-grid-detail-header-icon" />
-        <span className="bc-grid-detail-header-label">Details</span>
-      </span>
-    ),
+    // Header is intentionally label-only (no chevron). The chevron in
+    // earlier v0.4 versions was decorative — clicking it didn't
+    // expand-all and there's no other action wired — so it created a
+    // misleading affordance. Removed 2026-05-03 per the bsncraft v0.4
+    // audit; if expand-all is added later it should be a deliberate
+    // header button with a real action handler.
+    header: <span style={visuallyHiddenStyle}>Details</span>,
     pinned: "left",
     width: 44,
     sortable: false,

@@ -25,31 +25,37 @@
   --bc-grid-loading-spinner-active: var(--bc-grid-focus-ring);
   --bc-grid-pinned-bg: var(--bc-grid-bg);
   --bc-grid-pinned-header-bg: var(--bc-grid-header-bg);
-  --bc-grid-pinned-row-hover-bg: color-mix(in srgb, var(--bc-grid-accent) 9%, var(--bc-grid-bg));
+  /* Pinned row-state tokens align with the body row-state composites so
+     pinned cells visually match the rest of the row in hover/selected/
+     focused states. The body's `--bc-grid-row-hover` is a transparent
+     accent overlay; pinned cells need an opaque bg (background-clip:
+     padding-box guards horizontally-scrolled content from showing
+     through). The opaque equivalents below are the visual composites
+     of the body's overlay over `--bc-grid-bg`. Earlier v0.4 mixes
+     (accent 9%, accent 88%) made pinned cells look distinctly darker
+     / washed-out vs the body, especially on saturated accents in
+     dark theme — surfaced by the bsncraft v0.4 audit (2026-05-03). */
+  --bc-grid-pinned-row-hover-bg: color-mix(in srgb, var(--bc-grid-accent) 70%, var(--bc-grid-bg));
   --bc-grid-pinned-row-focused-bg: color-mix(
     in srgb,
     var(--bc-grid-focus-ring) 7%,
     var(--bc-grid-bg)
   );
-  --bc-grid-pinned-row-selected-bg: color-mix(
-    in srgb,
-    var(--bc-grid-row-selected) 88%,
-    var(--bc-grid-bg)
-  );
+  --bc-grid-pinned-row-selected-bg: var(--bc-grid-row-selected);
   --bc-grid-pinned-row-selected-hover-bg: color-mix(
     in srgb,
-    var(--bc-grid-row-selected) 82%,
-    var(--bc-grid-bg)
+    var(--bc-grid-row-selected) 88%,
+    color-mix(in srgb, var(--bc-grid-accent) 70%, var(--bc-grid-bg))
   );
   --bc-grid-pinned-active-cell-bg: color-mix(
     in srgb,
-    var(--bc-grid-focus-ring) 10%,
+    var(--bc-grid-focus-ring) 8%,
     var(--bc-grid-bg)
   );
   --bc-grid-pinned-selected-active-cell-bg: color-mix(
     in srgb,
-    var(--bc-grid-focus-ring) 14%,
-    var(--bc-grid-pinned-row-selected-bg)
+    var(--bc-grid-focus-ring) 12%,
+    var(--bc-grid-row-selected)
   );
   --bc-grid-pinned-actions-bg: var(--bc-grid-pinned-bg);
   --bc-grid-pinned-actions-header-bg: var(--bc-grid-pinned-header-bg);
