@@ -19,31 +19,32 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#356** visible validation surface (popover under editor input) — went out in `v0.4.0`
 - ✅ **#359** `useBcGridState` turnkey state hook + types (v0.5 task 1)
 - ✅ **#361** `BcGridApi.startEdit/commitEdit/cancelEdit` + editor portal methods (v0.5 task 2)
-- ✅ **#364** shadcn Combobox migration for `select.tsx` + `EditorOption.swatch`/`icon` fields + `colour-selection` hero spike (v0.5 P0-4 partial — `multiSelect.tsx` and `autocomplete.tsx` still on native HTML)
+- ✅ **#364** shadcn Combobox migration for `select.tsx` + `EditorOption.swatch`/`icon` fields + `colour-selection` hero spike (v0.5 P0-4 part 1)
+- 🟡 **#365** multi-select Combobox migration (v0.5 P0-4 part 2) — in coordinator review
 
-v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate.
+### Active now → `autocomplete` Combobox migration (close P0-4 fully)
 
-### Active now → `v05-combobox-multiselect-autocomplete` (close P0-4 fully)
+Synthesis P0-4 listed all three lookup editors. With #364 (select) shipped and #365 (multi-select) in review, autocomplete is the last leg.
 
-Synthesis P0-4 listed all three lookup editors for the shadcn Combobox migration; #364 only migrated `select.tsx` (which is what the colour spike needed). To fully close P0-4 and let consumers use the new patterns everywhere:
-
-- Migrate `packages/editors/src/multiSelect.tsx` to the `internal/combobox.tsx` pattern, preserving multi-select semantics (chip rendering, removable chips, "select all" behavior). Reuse `EditorOption.swatch`/`icon` fields you already added.
-- Migrate `packages/editors/src/autocomplete.tsx` to the same Combobox shell, with debounced async option loading. Wire `prepareResult` consumption (audit P1-W3-2) — autocomplete is the natural place for this since it preloads options.
+- Migrate `packages/editors/src/autocomplete.tsx` to the `internal/combobox.tsx` shell. The base Combobox (#364) is your template; preserve autocomplete-specific behavior: free-text input, debounced async option loading, "no results" state, "still loading" state.
+- **Wire `prepareResult` consumption** (audit P1-W3-2) — autocomplete is the natural place. The state machine carries `prepareResult` through `Preparing` → `Editing`; the hook should preload the first page of options via `editor.prepare()` and hand them to the Combobox so the dropdown paints with options on first frame instead of a blank "loading" state.
 - Update `editorChrome.test.tsx` and any other affected tests to pin the new contract.
+- Don't break the `EditorOption.swatch`/`icon` fields — they should keep working on autocomplete options too (a vendor lookup with avatar icons is the natural ERP pattern).
 
-**Branch:** `agent/worker3/v05-combobox-multiselect-autocomplete`. **Effort:** ~1 day.
+**Branch:** `agent/worker3/v05-combobox-autocomplete`. **Effort:** ~half day (multi-select #365 already proved out the chip/list pattern; autocomplete is mostly the prepareResult wiring + free-text input).
 
 ### v0.5 lane — remaining pipeline
 
 1. ✅ **`v05-use-bc-grid-state`** — DONE (#359).
 2. ✅ **`v05-api-ref-editor`** — DONE (#361).
 3. ✅ **`v05-spike-colour-selection`** + select.tsx Combobox — DONE (#364).
-4. **🟢 `v05-combobox-multiselect-autocomplete` (ACTIVE)** — finish P0-4 across the remaining two lookup editors (above).
-5. **`v05-spike-sales-estimating` — Sales Estimating hero spike** (can ship without paste leg as "missing pattern" datapoint; or wait for worker2's paste PR)
+4. 🟡 **`v05-combobox-multi`** — multi-select Combobox migration in review (#365).
+5. **🟢 `v05-combobox-autocomplete` (ACTIVE)** — finish P0-4 with the autocomplete migration + prepareResult wiring (above).
+6. **`v05-spike-sales-estimating` — Sales Estimating hero spike** (can ship without paste leg as "missing pattern" datapoint; or wait for worker2's paste PR)
    `apps/examples/src/sales-estimating.example.tsx`. Demonstrates: money column type with currency-aware formatting, dependent cells (`extPrice = qty * price * (1 - discount)` recomputes on commit), Excel paste fidelity for line-item entry. **Goal: <100 LOC consumer code.** Anything that pushes over → surface in the spike's PR description as a missing pattern.
    - Audit P0-9 / synthesis hero-spike track.
    - **Branch:** `agent/worker3/v05-spike-sales-estimating`. **Effort:** half day.
-6. **`v05-paste-editor-binding` — Excel paste, your half (split with worker2)**
+7. **`v05-paste-editor-binding` — Excel paste, your half (split with worker2)**
    Coordinate with worker2 on the `pasteTsv` API surface they're defining. Your job: implement `editController.commitFromPasteApplyPlan(plan)` that takes the apply-plan from `buildRangeTsvPasteApplyPlan` and routes each commit through the existing edit controller (so `valueParser` + `validate` + optimistic update + rollback all work). Atomic: if any cell fails validation, abort all writes and surface diagnostics.
    - **Wait for worker2's `pasteTsv` API contract before starting this.**
    - **Branch:** `agent/worker3/v05-paste-editor-binding`. **Effort:** half day after contract is set.

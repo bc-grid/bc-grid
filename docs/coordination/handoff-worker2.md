@@ -23,7 +23,9 @@ v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candid
 
 ### Active now → `v05-search-hotkey-prop` (task 3 below)
 
-Pick up from task 3 in the ordered list. Each task is its own branch + PR; ship in order. The full pipeline:
+If you've already pushed task 3 (`v05-search-hotkey-prop`), there's no PR for it on origin yet — push when ready and the coordinator will review. If you've actually completed task 3 and another, also push that. Then continue down the list.
+
+Each task is its own branch + PR; ship in order. The full pipeline:
 
 1. ✅ **`v05-test-import-lint`** — DONE (#358).
 
@@ -53,16 +55,21 @@ Pick up from task 3 in the ordered list. Each task is its own branch + PR; ship 
 
 ### Cross-worker contract — Excel paste (split with worker3)
 
-After tasks 1-4, you may pick up the **Excel paste wiring** (audit P0-1 / synthesis sprint plan). Your half:
+After your cleanup train, **pick up the Excel paste wiring** (audit P0-1 / synthesis sprint plan). This is the last unfinished v0.5 P0. worker3 has alternatives unblocked of paste (autocomplete Combobox, sales-estimating sans-paste, cheap P1s) so paste is not their critical path, but the integration is still a v0.5 release-gate item. Your half:
 
 - Add `paste` event listener on the grid root (or a hidden input that owns the active cell's focus context).
 - Expose a `pasteTsv({ range, tsv })` API on `BcGridApi`.
 - Call into worker3's editor commit binding (worker3 owns `editController.commitFromPasteApplyPlan`).
 - Use the existing `buildRangeTsvPasteApplyPlan` helper.
 
-**Coordinate via the `pasteTsv` API surface** — define the contract in `docs/api.md` first; worker3 implements the editor side against the same contract.
+**Coordinate via the `pasteTsv` API surface** — define the contract in `docs/api.md` first (open a small RFC-style PR with just the API shape if it helps), then implement; worker3 implements the editor side against the same contract.
 
 Branch (when you reach it): `agent/worker2/v05-paste-listener`.
+
+### After v0.5 cleanup + paste
+
+- **Stretch:** filter discriminated union (`v05-filter-discriminated-union` task 6 above).
+- **v0.6 prep:** worker2 lane owns several v0.6 items per the audit synthesis: group-before-paginate + group subtotals (audit P0-8 — the biggest worker2 piece for v0.6), group selection algebra (P1-W2-5), filter registry implementation (P1-W2-1). Don't start v0.6 work until v0.5 ships, but it's queued for after.
 
 ### Rules reminder
 

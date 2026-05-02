@@ -16,28 +16,45 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 - ✅ **#353** `rowProcessingMode` — went out in `v0.4.0`
 - ✅ **#360** worker1 audit findings doc
-- ✅ **#363** `useServerPagedGrid` turnkey orchestration hook (audit P0-6) — biggest v0.5 P0 closed
+- ✅ **#363** `useServerPagedGrid` turnkey orchestration hook (audit P0-6)
+- ✅ **#366** `apiRef.scrollToCell` + `useServerPagedGrid.scrollToServerCell` action (audit P0-7 server-side)
 
-### Active now → `apiRef.scrollToCell` for server-paged grids
+### Active now → `useServerInfiniteGrid` companion hook
 
-Audit P0-7 / synthesis sprint plan, server-side half. Worker3 already shipped editor-side methods (#361, `startEdit`/`commitEdit`/`cancelEdit`); worker2 owns filter-side (`openFilter`/`closeFilter`); you own scroll.
+Same orchestration shape as `useServerPagedGrid` but for the infinite-scroll row model. Audit P0-6 follow-up; closes the v0.5 server-side parity story.
 
 **Spec:**
 ```ts
-apiRef.current.scrollToCell(rowId: RowId, colId: ColumnId, opts?: {
-  align?: 'start' | 'center' | 'end' | 'auto'
-  block?: 'start' | 'center' | 'end' | 'nearest'
-}): Promise<void>
+export function useServerInfiniteGrid<TRow>(opts: {
+  gridId: string
+  loadBlock: LoadServerBlock<TRow>
+  blockSize?: number     // default from ServerBlockCacheOptions
+  prefetchAhead?: number // viewport-driven prefetch budget
+  rowId: (row: TRow) => RowId
+}): {
+  props: BcServerGridProps<TRow>      // spread-ready, rowModel="infinite"
+  state: ServerInfiniteState<TRow>    // visible blocks, loading, error
+  actions: { reload, invalidateBlock, applyOptimisticEdit }
+}
 ```
 
-For server-paged grids, this returns a Promise that resolves once the cell is loaded + visible — the implementation should hand off to `useServerPagedGrid` to fetch the page containing `rowId` if not already loaded, then scroll the virtualizer once the row materializes.
+**The hook owns:**
+- Block-cache (use `ServerBlockCache` from `@bc-grid/core`; expose LRU eviction config)
+- Viewport-driven block fetching with prefetch ahead (Audit P1 — server-row-model perf in your lane)
+- Stale-response rejection (request-id flow per `useServerPagedGrid`)
+- Optimistic edits in flight, rollback on superseded
+- AbortSignal threading via `ServerLoadContext.signal`
 
-**Branch:** `agent/worker1/v05-api-ref-scroll-to-cell`. **Effort:** ~half day.
+**Reference implementation:** `useServerPagedGrid` (just shipped in #363) is the template. Many of the orchestration primitives are identical — extract anything generalisable into `packages/react/src/internal/useServerOrchestration.ts` so `useServerTreeGrid` (next task) doesn't re-roll them.
 
-### Follow-up tasks (after `scrollToCell` PR is open)
+**Tests:** unit-level for block cache integration, viewport-driven prefetch, stale rejection, optimistic edit flow. Don't write Playwright — coordinator runs that.
 
-1. **Companion hooks** if scope permits: `useServerInfiniteGrid`, `useServerTreeGrid`. Same orchestration shape as `useServerPagedGrid` but adapted for `LoadServerBlock` and `LoadServerTreeChildren` respectively. Defer to v0.6 if tight.
-2. **Stretch: Generic `TRow` propagation** into `LoadServerPage<TRow>` query type so `query.sort` / `query.filter` are typed against column ids (audit P1-C2). Branch: `agent/worker1/v05-server-loader-generics`. Only ship if low risk.
+**Branch:** `agent/worker1/v05-use-server-infinite-grid`. **Effort:** ~half-to-full day.
+
+### Follow-up tasks (after this hook PR is open)
+
+1. **`useServerTreeGrid`** companion hook for `rowModel="tree"`. Same shape, adapted for `LoadServerTreeChildren`. Branch: `agent/worker1/v05-use-server-tree-grid`. **Effort:** ~half day.
+2. **Stretch: Generic `TRow` propagation** into `LoadServerPage<TRow>` / `LoadServerBlock<TRow>` / `LoadServerTreeChildren<TRow>` query types so `query.sort` / `query.filter` are typed against column ids (audit P1-C2). Branch: `agent/worker1/v05-server-loader-generics`. Only ship if low risk; defer to v0.6 if it churns the public type surface.
 3. **Help on bsncraft migration proof** if the server-grid wrappers in bsncraft are the natural first target. Coordinator owns the migration but server-grid expertise is yours.
 
 ### Primary task — `useServerPagedGrid({ gridId, loadPage })`
