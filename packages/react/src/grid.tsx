@@ -532,8 +532,31 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.initialLayout?.searchText ??
     ""
   const aggregationScope = props.aggregationScope ?? "filtered"
+  // Manual row processing — the host (typically `<BcServerGrid>`) owns
+  // row order/membership; the grid renders `data` as-is. Skips client
+  // sort/filter/search/group transforms and row FLIP/enter animations.
+  const rowProcessingMode: "client" | "manual" = props.rowProcessingMode ?? "client"
+  const isManualRowProcessing = rowProcessingMode === "manual"
 
   const allRowEntries = useMemo<readonly DataRowEntry<TRow>[]>(() => {
+    // Manual row processing: render `data` as the host gave it, with
+    // no client-side sort/filter/search transforms. The active-filter
+    // check below is the chrome contract (filter editors stay
+    // controlled), but the row pass-through is what avoids stale rows
+    // re-sorting under a pending server query.
+    if (isManualRowProcessing) {
+      const passThroughRows: readonly TRow[] =
+        props.showInactive === false && rowIsInactive
+          ? data.filter((row) => !rowIsInactive(row))
+          : data
+      return passThroughRows.map((row, index) => ({
+        kind: "data" as const,
+        row,
+        index,
+        rowId: rowId(row, index),
+      }))
+    }
+
     let visibleRows: TRow[] =
       props.showInactive === false && rowIsInactive
         ? data.filter((row) => !rowIsInactive(row))
@@ -602,6 +625,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   }, [
     activeFilter,
     data,
+    isManualRowProcessing,
     locale,
     props.showInactive,
     consumerResolvedColumns,
@@ -779,11 +803,22 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       buildGroupedRowModel({
         rows: leafRowEntries,
         columns: consumerResolvedColumns,
-        groupBy: groupByState,
+        // Manual row processing skips client grouping so server-owned
+        // pages render in the order the host returned. Grouping
+        // controls (`groupByState`) stay current so the host can read
+        // them via `query.view.groupBy` and react in `loadPage`.
+        groupBy: isManualRowProcessing ? [] : groupByState,
         expansionState,
         locale,
       }),
-    [consumerResolvedColumns, expansionState, groupByState, leafRowEntries, locale],
+    [
+      consumerResolvedColumns,
+      expansionState,
+      groupByState,
+      isManualRowProcessing,
+      leafRowEntries,
+      locale,
+    ],
   )
   const rowEntries = groupedRowModel.rows
   const groupingActive = groupedRowModel.active
@@ -1797,7 +1832,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ],
   )
 
-  useFlipOnRowInsertion({ rowEntries, scrollerRef, virtualizer })
+  useFlipOnRowInsertion({
+    rowEntries,
+    scrollerRef,
+    virtualizer,
+    enabled: !isManualRowProcessing,
+  })
 
   const handleHeaderSort = useCallback(
     (
