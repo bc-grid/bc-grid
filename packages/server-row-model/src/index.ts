@@ -281,7 +281,12 @@ type ServerRowModelMetricsSnapshot = {
 const DEFAULT_BLOCK_CACHE_OPTIONS: ServerBlockCacheOptions = {
   blockLoadDebounceMs: 80,
   blockSize: 100,
-  maxBlocks: 20,
+  // Bumped from 20 to 50 (worker1 audit P1 §5, audit-2026-05/worker1-findings.md
+  // P2-W1-1). 20 × 100 = 2k rows in cache; 50 × 100 = 5k rows. ERP scroll
+  // workloads regularly traverse 5k+ rows; the prior default forced
+  // continuous evict-and-refetch cycles. Memory cost at 50 blocks × ~100 B
+  // per row × 30 columns ≈ 150 KB peak per grid — well within budget.
+  maxBlocks: 50,
   maxConcurrentRequests: 2,
   staleTimeMs: 30_000,
 }

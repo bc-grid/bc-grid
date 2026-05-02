@@ -73,6 +73,14 @@ export interface UseServerInfiniteGridOptions<TRow> {
   maxCachedBlocks?: number
   blockLoadDebounceMs?: number
   maxConcurrentRequests?: number
+  /**
+   * Number of blocks to fetch ahead of the visible viewport on each
+   * scroll-driven `onVisibleRowRangeChange`. Default 1. Higher values
+   * smooth scroll-cliff jank for fast scrollers at the cost of more
+   * bandwidth; `0` disables prefetch entirely. Forwarded to
+   * `BcServerInfiniteProps.prefetchAhead`.
+   */
+  prefetchAhead?: number
 }
 
 export interface UseServerInfiniteGridState {
@@ -174,6 +182,7 @@ export function useServerInfiniteGrid<TRow>(
     maxCachedBlocks,
     blockLoadDebounceMs,
     maxConcurrentRequests,
+    prefetchAhead,
   } = opts
 
   const apiRef = useRef<BcServerGridApi<TRow> | null>(null)
@@ -264,6 +273,7 @@ export function useServerInfiniteGrid<TRow>(
       ...(maxCachedBlocks !== undefined ? { maxCachedBlocks } : {}),
       ...(blockLoadDebounceMs !== undefined ? { blockLoadDebounceMs } : {}),
       ...(maxConcurrentRequests !== undefined ? { maxConcurrentRequests } : {}),
+      ...(prefetchAhead !== undefined ? { prefetchAhead } : {}),
     }),
     [
       gridId,
@@ -276,6 +286,7 @@ export function useServerInfiniteGrid<TRow>(
       maxCachedBlocks,
       blockLoadDebounceMs,
       maxConcurrentRequests,
+      prefetchAhead,
     ],
   )
 
