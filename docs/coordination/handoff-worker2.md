@@ -32,15 +32,15 @@ Each task is its own branch + PR; ship in order. The full pipeline:
 
 3. 🟡 **`v05-search-hotkey-prop`** — IN REVIEW (#369).
 
-4. **🟢 `v05-fit-prop` (ACTIVE)** — Add `fit="content" | "viewport" | "auto"` prop on `<BcGrid>` that owns viewport-fit height math currently duplicated in bsncraft `data-grid.tsx:296-310` (15 lines of header + filter row + body math). **Effort: 2-3 hours including tests.** Branch: `agent/worker2/v05-fit-prop`.
+4. ✅ **`v05-fit-prop`** — DONE (#373).
 
-5. **`v05-api-ref-filter` — `BcGridApi.openFilter` / `closeFilter`**
-   Add filter-side imperative methods to the public `BcGridApi` (audit P0-7 / synthesis sprint plan). Worker3 already shipped the editor side (`startEdit`/`commitEdit`/`cancelEdit`) in #361; worker1 owns server-side `scrollToCell` separately. Your half is the filter pair:
+5. **🟢 `v05-api-ref-filter` (ACTIVE) — `BcGridApi.openFilter` / `closeFilter`**
+   Add filter-side imperative methods to the public `BcGridApi` (audit P0-7 / synthesis sprint plan). Worker3 already shipped the editor side (`startEdit`/`commitEdit`/`cancelEdit`) in #361; worker1 owns server-side `scrollToCell` separately (#366). Your half is the filter pair:
    ```ts
    apiRef.current.openFilter(columnId, { variant?: 'popup' | 'inline' })
    apiRef.current.closeFilter(columnId)
    ```
-   Plus `getActiveFilter(columnId)` if natural. Document in `api.md`. **Effort: half day including tests.** Branch: `agent/worker2/v05-api-ref-filter`.
+   Plus `getActiveFilter(columnId)` if natural. Document in `api.md`. **This closes the v0.5 P0-7 lane fully.** **Effort: half day including tests.** Branch: `agent/worker2/v05-api-ref-filter`.
 
 6. **`v05-filter-discriminated-union` (STRETCH — only if 1-5 land cleanly)** — Convert `BcColumnFilter` to a discriminated union per type:
    ```ts

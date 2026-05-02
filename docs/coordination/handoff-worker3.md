@@ -20,25 +20,27 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#359** `useBcGridState` turnkey state hook + types (v0.5 task 1)
 - ✅ **#361** `BcGridApi.startEdit/commitEdit/cancelEdit` + editor portal methods (v0.5 task 2)
 - ✅ **#364** shadcn Combobox migration for `select.tsx` + `EditorOption.swatch`/`icon` fields + `colour-selection` hero spike (v0.5 P0-4 part 1)
-- ❌ **#365** multi-select Combobox migration — **CLOSED, must be re-attempted.** The branch was based on a commit before #353 and #363 merged; rebasing was unsafe (the diff carried 500+ lines of unintended reverts, including the entire `useServerPagedGrid` hook and `rowProcessingMode` server-grid contract). Multi-select work itself is good — the Combobox `mode: "single" | "multi"` design and multiSelect.tsx migration are sound — but they need to land on a fresh branch from current `main`.
-- 🟡 **#370** autocomplete Combobox migration + `internal/combobox-search.tsx` (v0.5 P0-4 leg 2 of 3) — in coordinator review
+- ❌ **#365** multi-select Combobox migration — closed (branch carried unintended reverts). Re-attempted as #372.
+- ✅ **#370** autocomplete Combobox migration + `internal/combobox-search.tsx` (v0.5 P0-4 leg 2 of 3)
+- ✅ **#372** multi-select Combobox v2 (v0.5 P0-4 leg 3 of 3 — **closes audit P0-4 entirely**)
 
-### Active now → `v05-combobox-multi-select-v2` (re-attempt on fresh main)
+### Active now → `v05-spike-sales-estimating` (P0-9 last hero spike)
 
-#370 (autocomplete) is in coordinator review and closes P0-4 leg 2 of 3. Pick up multi-select v2 now to close P0-4 leg 3.
+P0-4 is fully closed. The remaining v0.5 hero spike is sales-estimating. Worker2's paste listener PR isn't merged yet — but the spike can ship **without** the paste leg, surfacing "Excel paste not yet wired" as a missing-pattern finding (just like document-management came in at 140 LOC against the 100 LOC target with explicit findings).
 
-**Branch from current `main`** (which has #364 + the merged #370 once it lands; if #370 hasn't merged yet, branch from #370's branch and the coordinator will sort merge order).
+**Spec:**
+`apps/examples/src/sales-estimating.example.tsx`. Demonstrates:
+- Money column type with currency-aware formatting (use `Intl.NumberFormat` in `cellRenderer` + `valueParser`)
+- Dependent cells: `extPrice = qty * price * (1 - discount)` recomputes on commit (use `apiRef.startEdit/commitEdit` from #361 or wire via `onCellEditCommit`)
+- Excel paste fidelity for line-item entry — **leave this as a TODO finding** if paste-listener isn't merged
 
-The Combobox `mode: "single" | "multi"` extension you designed in #365 is still the right shape:
-- Extend `packages/editors/src/internal/combobox.tsx` with a `mode` prop
-- `mode: "multi"` keeps the listbox open after each pick (consumer commits via Tab/Enter/Escape)
-- `initialValue` is `readonly unknown[]` in multi-mode; `onSelect` fires with the next array
-- `EditorOption.swatch` / `icon` continue to work (chip rendering of selected values uses the same fields)
-- `multiSelect.tsx` migrates onto multi-mode Combobox; preserve chip rendering, removable chips, "select all" behavior
+Use `useBcGridState` (#359) as the consumer-state hook.
 
-**Branch:** `agent/worker3/v05-combobox-multi-select-v2`. **Effort:** ~half day (you already designed this in #365; redoing on fresh main with the simpler design).
+**Goal: <100 LOC consumer code.** Anything that pushes over → surface in the spike's `## Findings` JSDoc block (mirror format from `colour-selection.example.tsx` and `production-estimating.example.tsx`).
 
-### After multi-select-v2 ships
+**Branch:** `agent/worker3/v05-spike-sales-estimating`. **Effort:** half day.
+
+### After sales-estimating spike ships
 
 - Migrate `packages/editors/src/autocomplete.tsx` to the `internal/combobox.tsx` shell. The base Combobox (#364) is your template; preserve autocomplete-specific behavior: free-text input, debounced async option loading, "no results" state, "still loading" state.
 - **Wire `prepareResult` consumption** (audit P1-W3-2) — autocomplete is the natural place. The state machine carries `prepareResult` through `Preparing` → `Editing`; the hook should preload the first page of options via `editor.prepare()` and hand them to the Combobox so the dropdown paints with options on first frame instead of a blank "loading" state.
@@ -52,9 +54,10 @@ The Combobox `mode: "single" | "multi"` extension you designed in #365 is still 
 1. ✅ **`v05-use-bc-grid-state`** — DONE (#359).
 2. ✅ **`v05-api-ref-editor`** — DONE (#361).
 3. ✅ **`v05-spike-colour-selection`** + select.tsx Combobox — DONE (#364).
-4. ❌ **`v05-combobox-multi`** — closed (#365); re-attempted as task 5b below.
-5. 🟡 **`v05-combobox-autocomplete`** — IN REVIEW (#370).
-   **5b. 🟢 `v05-combobox-multi-select-v2` (ACTIVE)** — re-attempt of #365 on fresh main; closes P0-4 leg 3 (above).
+4. ❌ **`v05-combobox-multi`** — closed (#365); re-done as #372.
+5. ✅ **`v05-combobox-autocomplete`** — DONE (#370).
+6. ✅ **`v05-combobox-multi-select-v2`** — DONE (#372). P0-4 fully closed.
+7. **🟢 `v05-spike-sales-estimating` (ACTIVE)** — hero spike sans-paste (paste leg becomes a missing-pattern finding); see "Active now" above.
 6. **`v05-spike-sales-estimating` — Sales Estimating hero spike** (can ship without paste leg as "missing pattern" datapoint; or wait for worker2's paste PR)
    `apps/examples/src/sales-estimating.example.tsx`. Demonstrates: money column type with currency-aware formatting, dependent cells (`extPrice = qty * price * (1 - discount)` recomputes on commit), Excel paste fidelity for line-item entry. **Goal: <100 LOC consumer code.** Anything that pushes over → surface in the spike's PR description as a missing pattern.
    - Audit P0-9 / synthesis hero-spike track.
