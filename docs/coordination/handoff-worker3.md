@@ -8,6 +8,12 @@
 
 When the maintainer says **"review your handoff"**, read the **Active task** section below and proceed. This document is the source of truth for what worker3 should be doing right now. The Claude coordinator in `~/work/bc-grid` keeps it current.
 
+## Hard rule — workers do NOT run Playwright / e2e / smoke-perf / perf / broad benchmarks
+
+This is binding (`docs/AGENTS.md §6`). Workers run focused unit tests + `bun run type-check` + `bun run lint` + the affected package's build. **Never** run `bun run test:e2e`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark commands. The coordinator runs those during review/merge. If your change adds or modifies a `.pw.ts` file, note in the PR that it was not run locally — the coordinator will run it.
+
+You implement code; the coordinator reviews and runs the slow gates.
+
 ---
 
 ## Active task — v0.5 work (updated 2026-05-02 — re-ping)
@@ -23,24 +29,34 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ❌ **#365** multi-select Combobox migration — closed (branch carried unintended reverts). Re-attempted as #372.
 - ✅ **#370** autocomplete Combobox migration + `internal/combobox-search.tsx` (v0.5 P0-4 leg 2 of 3)
 - ✅ **#372** multi-select Combobox v2 (v0.5 P0-4 leg 3 of 3 — **closes audit P0-4 entirely**)
+- ✅ **#375** sales-estimating hero spike — closes audit **P0-9 hero set entirely** (all 4 spikes shipped: colour, doc-mgmt, production-estimating, sales-estimating)
 
-### Active now → `v05-spike-sales-estimating` (P0-9 last hero spike)
+### Active now → cheap P1 cleanups (paste-editor binding blocked on worker2's contract)
 
-P0-4 is fully closed. The remaining v0.5 hero spike is sales-estimating. Worker2's paste listener PR isn't merged yet — but the spike can ship **without** the paste leg, surfacing "Excel paste not yet wired" as a missing-pattern finding (just like document-management came in at 140 LOC against the 100 LOC target with explicit findings).
+P0-4 and P0-9 hero spikes both fully closed. Paste-editor binding (your half of audit P0-1) waits for worker2 to define their `pasteTsv` API surface. While they work that, pick up the cheap P1 cleanups in your lane — these are real audit findings that ship as standalone improvements, no inter-worker contract needed.
 
-**Spec:**
-`apps/examples/src/sales-estimating.example.tsx`. Demonstrates:
-- Money column type with currency-aware formatting (use `Intl.NumberFormat` in `cellRenderer` + `valueParser`)
-- Dependent cells: `extPrice = qty * price * (1 - discount)` recomputes on commit (use `apiRef.startEdit/commitEdit` from #361 or wire via `onCellEditCommit`)
-- Excel paste fidelity for line-item entry — **leave this as a TODO finding** if paste-listener isn't merged
+**Pick the next one in this order; each is its own branch + PR:**
 
-Use `useBcGridState` (#359) as the consumer-state hook.
+1. **`v05-backspace-delete-clear`** (audit P1-W3-1) — extend `EditorActivationIntent` with `{ type: "clear" }`. Excel-style semantics: Backspace clears + enters edit; Delete clears + stays in nav. The `editorKeyboard.ts` keymap is the entry point; you'll need to thread the new intent through the edit controller. **Effort: ~2 hours including tests.** Branch: `agent/worker3/v05-backspace-delete-clear`.
 
-**Goal: <100 LOC consumer code.** Anything that pushes over → surface in the spike's `## Findings` JSDoc block (mirror format from `colour-selection.example.tsx` and `production-estimating.example.tsx`).
+2. **`v05-discard-row-edits`** (audit P1-W3-3) — `editController.discardRowEdits(rowId)` for multi-cell row rollback. Surface as a button in `BcEditGrid`'s actions column when `rowState.isDirty`. **Effort: ~3 hours including tests + the action-column wiring.** Branch: `agent/worker3/v05-discard-row-edits`.
 
-**Branch:** `agent/worker3/v05-spike-sales-estimating`. **Effort:** half day.
+3. **`v05-custom-editor-getvalue-hook`** (audit P1-W3-6) — `BcCellEditor.getValue?: (focusEl) => unknown` hook. Today, custom editors that aren't `<input>` / `<select>` / `<textarea>` commit `undefined` on click-outside because `editorPortal.tsx`'s tag-dispatch helper doesn't know how to read them. The new optional override gets called first when present. **Effort: ~2 hours including a custom-editor recipe in docs.** Branch: `agent/worker3/v05-custom-editor-getvalue-hook`.
 
-### After sales-estimating spike ships
+4. **`v05-editor-aria-states`** (audit P1-W3-7) — thread `required` / `readOnly` / `disabled` props through `BcCellEditorProps`; default editors set `aria-required` / `aria-readonly` / `aria-disabled` on inputs. **Effort: ~2 hours including tests.** Branch: `agent/worker3/v05-editor-aria-states`.
+
+### When worker2's `pasteTsv` API surface lands → `v05-paste-editor-binding`
+
+After worker2 ships the listener + API contract (their PR #v05-paste-listener), pick up your half of audit P0-1. The contract worker2 defines in `docs/api.md` will tell you the exact shape; expected:
+- `editController.commitFromPasteApplyPlan(plan)` takes the apply-plan from `buildRangeTsvPasteApplyPlan`.
+- Routes each commit through the existing edit controller so `valueParser` + `validate` + optimistic update + rollback all fire.
+- Atomic: if any cell in the plan fails parse/validate, abort all writes and surface diagnostics.
+
+**Branch (when you reach it):** `agent/worker3/v05-paste-editor-binding`. **Effort:** half day after contract is set.
+
+This closes the LAST v0.5 P0 (P0-1).
+
+### v0.5 lane — remaining pipeline
 
 - Migrate `packages/editors/src/autocomplete.tsx` to the `internal/combobox.tsx` shell. The base Combobox (#364) is your template; preserve autocomplete-specific behavior: free-text input, debounced async option loading, "no results" state, "still loading" state.
 - **Wire `prepareResult` consumption** (audit P1-W3-2) — autocomplete is the natural place. The state machine carries `prepareResult` through `Preparing` → `Editing`; the hook should preload the first page of options via `editor.prepare()` and hand them to the Combobox so the dropdown paints with options on first frame instead of a blank "loading" state.
@@ -57,15 +73,9 @@ Use `useBcGridState` (#359) as the consumer-state hook.
 4. ❌ **`v05-combobox-multi`** — closed (#365); re-done as #372.
 5. ✅ **`v05-combobox-autocomplete`** — DONE (#370).
 6. ✅ **`v05-combobox-multi-select-v2`** — DONE (#372). P0-4 fully closed.
-7. **🟢 `v05-spike-sales-estimating` (ACTIVE)** — hero spike sans-paste (paste leg becomes a missing-pattern finding); see "Active now" above.
-6. **`v05-spike-sales-estimating` — Sales Estimating hero spike** (can ship without paste leg as "missing pattern" datapoint; or wait for worker2's paste PR)
-   `apps/examples/src/sales-estimating.example.tsx`. Demonstrates: money column type with currency-aware formatting, dependent cells (`extPrice = qty * price * (1 - discount)` recomputes on commit), Excel paste fidelity for line-item entry. **Goal: <100 LOC consumer code.** Anything that pushes over → surface in the spike's PR description as a missing pattern.
-   - Audit P0-9 / synthesis hero-spike track.
-   - **Branch:** `agent/worker3/v05-spike-sales-estimating`. **Effort:** half day.
-7. **`v05-paste-editor-binding` — Excel paste, your half (split with worker2)**
-   Coordinate with worker2 on the `pasteTsv` API surface they're defining. Your job: implement `editController.commitFromPasteApplyPlan(plan)` that takes the apply-plan from `buildRangeTsvPasteApplyPlan` and routes each commit through the existing edit controller (so `valueParser` + `validate` + optimistic update + rollback all work). Atomic: if any cell fails validation, abort all writes and surface diagnostics.
-   - **Wait for worker2's `pasteTsv` API contract before starting this.**
-   - **Branch:** `agent/worker3/v05-paste-editor-binding`. **Effort:** half day after contract is set.
+7. ✅ **`v05-spike-sales-estimating`** — DONE (#375). P0-9 hero set entirely closed (4 of 4 spikes).
+8. **🟢 Active P1 cleanups** — see "Active now" above (Backspace/Delete clear, discardRowEdits, getValue hook, ARIA states).
+9. **`v05-paste-editor-binding`** — your half of audit P0-1; waits on worker2's `pasteTsv` API contract.
 
 ### Cheap P1s to fold in opportunistically
 

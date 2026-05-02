@@ -8,9 +8,15 @@
 
 When the maintainer says **"review your handoff"**, read the **Active task** section below and proceed. This document is the source of truth for what worker1 should be doing right now. The Claude coordinator in `~/work/bc-grid` keeps it current.
 
+## Hard rule — workers do NOT run Playwright / e2e / smoke-perf / perf / broad benchmarks
+
+This is binding (`docs/AGENTS.md §6`). Workers run focused unit tests + `bun run type-check` + `bun run lint` + the affected package's build. **Never** run `bun run test:e2e`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark commands. The coordinator runs those during review/merge. If your change adds or modifies a `.pw.ts` file, note in the PR that it was not run locally — the coordinator will run it.
+
+You implement code; the coordinator reviews and runs the slow gates.
+
 ---
 
-## Active task — v0.5: `useServerPagedGrid` turnkey hook (updated 2026-05-02 — re-ping)
+## Active task — v0.5: server-tree polish + bsncraft migration co-pilot (updated 2026-05-02 evening)
 
 ### What's already shipped from your lane
 
@@ -20,14 +26,17 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#366** `apiRef.scrollToCell` + `useServerPagedGrid.scrollToServerCell` action (audit P0-7 server-side)
 - ✅ **#368** `useServerInfiniteGrid` + extracted `internal/useServerOrchestration.ts`
 - ✅ **#371** `useServerTreeGrid` companion hook — closes the server-hook trio (paged + infinite + tree)
+- ✅ **#376** `v05-server-loader-generics` deferral doc — TS variance trap; stretch deferred to v0.6 with rationale
 
-### Active now → `v05-server-loader-generics` (stretch P1-C2)
+### Active now → `v05-server-tree-grid-polish` (groupRowId + persistTo)
 
-The dual-output refactor task assigned earlier today was **cancelled**. The framing assumed bsncraft consumers needed a plain-`<BcGrid>` binding; the bsncraft team re-examined their architecture and concluded their hand-rolled `ServerEditGrid` wrapper is the actual problem (not a bc-grid gap). Their master tables should migrate to `<BcServerGrid rowModel="paged">` (already shipped in v0.4), and your `useServerTreeGrid` (#371) is the right fit for full-dataset grouping when consumed via `<BcServerGrid rowModel="tree">`. No bc-grid surface change needed.
+The bsncraft 2026-05-03 review surfaced two `useServerTreeGrid` polish items that are user-visible and worth shipping in v0.5 rather than deferring:
 
-**So the active task reverts to the stretch:** Generic `TRow` propagation into `LoadServerPage<TRow>` / `LoadServerBlock<TRow>` / `LoadServerTreeChildren<TRow>` query types so `query.sort` / `query.filter` are typed against column ids instead of `string`. The hook signatures already carry `<TRow>`; the gap is that the sort/filter shapes inside `ServerPagedQuery` / `ServerBlockQuery` / `ServerTreeQuery` use bare `string` for `columnId`. Tighten to `keyof TRow & string` (or a column-id phantom type) so a typo in a server loader's switch on `query.sort[0].columnId` becomes a compile error.
+1. **`groupRowId?: (key: ServerGroupKey, path: ServerGroupKey[]) => RowId`** — stable group-row identifiers. Required for selection algebra (selecting a group row needs a stable id), focus retention across re-render, and persisted expansion state. Today the hook synthesises group row ids internally from `groupKey + path`; expose the consumer override so user-defined ids can be used (often the natural choice is the path joined with a delimiter or a hash).
 
-**Branch:** `agent/worker1/v05-server-loader-generics`. **Effort:** ~half day. **Only ship if low risk** — this touches the public type surface in `@bc-grid/core` server query types. If the change ripples through bsncraft's wrapper unfavorably, defer to v0.6.
+2. **`persistTo?: "url" | "localStorage" | null`** — match `useBcGridState`'s persistence pattern. URL or localStorage backing for `groupBy` / `expansion` / `sort` / `filter` / `search` state. Same `gridId` keying convention.
+
+**Branch:** `agent/worker1/v05-server-tree-grid-polish`. **Effort:** ~half day for both options + tests. Don't bundle the dual-output refactor — that's still cancelled. The other polish options (`rootChildCount`, `pageSize`, `cacheLimit`) stay in v0.6 (`v06-server-tree-grid-options`).
 
 ### After stretch → bsncraft migration proof (coordinator-led)
 

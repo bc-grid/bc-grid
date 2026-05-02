@@ -8,41 +8,45 @@
 
 When the maintainer says **"review your handoff"**, read the **Active task** section below and proceed. This document is the source of truth for what worker2 should be doing right now. The Claude coordinator in `~/work/bc-grid` keeps it current.
 
+## Hard rule — workers do NOT run Playwright / e2e / smoke-perf / perf / broad benchmarks
+
+This is binding (`docs/AGENTS.md §6`). Workers run focused unit tests + `bun run type-check` + `bun run lint` + the affected package's build. **Never** run `bun run test:e2e`, `bun run test:smoke-perf`, `bun run test:perf`, `bunx playwright`, or broad benchmark commands. The coordinator runs those during review/merge. If your change adds or modifies a `.pw.ts` file, note in the PR that it was not run locally — the coordinator will run it.
+
+You implement code; the coordinator reviews and runs the slow gates.
+
 ---
 
-## Active task — v0.5 cleanup train (updated 2026-05-02 — re-ping)
+## Active task — v0.5 paste listener (the LAST v0.5 P0)
 
 ### What's already shipped from your lane
 
 - ✅ **#351** worker2 audit findings doc
 - ✅ **#355** filters panel active filter summary chip strip — went out in `v0.4.0`
-- ✅ **#358** test-import lint rule + `tools/lint-test-import-boundaries.ts` (cleanup train task 1)
+- ✅ **#358** test-import lint rule (cleanup train task 1)
 - ✅ **#362** optional `filter` / `onFilterChange` props (cleanup train task 2)
-- 🟡 **#369** `<BcGrid searchHotkey>` prop (cleanup train task 3) — in coordinator review
+- ✅ **#369** `<BcGrid searchHotkey>` prop (cleanup train task 3)
+- ✅ **#373** `<BcGrid fit>` prop (cleanup train task 4)
+- ✅ **#377** `BcGridApi.openFilter` / `closeFilter` / `getActiveFilter` (audit P0-7 filter side — closes the apiRef trio fully)
 
 v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate.
 
-### Active now → `v05-fit-prop` (task 4 below)
+### Active now → `v05-paste-listener` (the LAST v0.5 P0)
 
-Each task is its own branch + PR; ship in order. The full pipeline:
+Excel paste integration (audit P0-1 / synthesis sprint plan) is the only unfinished v0.5 P0. Worker3 has alternatives queued (cheap P1s while waiting for your contract), so they're not blocked-blocked, but P0-1 is a v0.5 release-gate item. Your half is the listener + API surface; worker3 owns the editor-commit binding.
 
-1. ✅ **`v05-test-import-lint`** — DONE (#358).
+**Spec:**
+- Add `paste` event listener on the grid root (or a hidden input that owns the active cell's focus context).
+- Expose a `pasteTsv({ range, tsv })` API on `BcGridApi`. Returns a Promise that resolves with per-cell apply diagnostics.
+- Use the existing `buildRangeTsvPasteApplyPlan` helper from `packages/react/src/rangeClipboard.ts`.
+- Call into worker3's editor-commit binding (`editController.commitFromPasteApplyPlan`) once they ship that side. **Define the contract first** in `docs/api.md` so worker3 can implement against a stable shape. Open a small RFC-style PR with just the API surface if it helps coordinate.
 
-2. ✅ **`v05-optional-filter-prop`** — DONE (#362).
+Atomic semantics (per `editing-rfc` and audit synthesis): if any cell in the apply-plan fails parse/validate, abort all writes and surface diagnostics. Don't do partial paste.
 
-3. 🟡 **`v05-search-hotkey-prop`** — IN REVIEW (#369).
+**Branch:** `agent/worker2/v05-paste-listener`. **Effort:** ~1 day including tests + API contract doc.
 
-4. ✅ **`v05-fit-prop`** — DONE (#373).
+### After paste listener ships
 
-5. **🟢 `v05-api-ref-filter` (ACTIVE) — `BcGridApi.openFilter` / `closeFilter`**
-   Add filter-side imperative methods to the public `BcGridApi` (audit P0-7 / synthesis sprint plan). Worker3 already shipped the editor side (`startEdit`/`commitEdit`/`cancelEdit`) in #361; worker1 owns server-side `scrollToCell` separately (#366). Your half is the filter pair:
-   ```ts
-   apiRef.current.openFilter(columnId, { variant?: 'popup' | 'inline' })
-   apiRef.current.closeFilter(columnId)
-   ```
-   Plus `getActiveFilter(columnId)` if natural. Document in `api.md`. **This closes the v0.5 P0-7 lane fully.** **Effort: half day including tests.** Branch: `agent/worker2/v05-api-ref-filter`.
-
-6. **`v05-filter-discriminated-union` (STRETCH — only if 1-5 land cleanly)** — Convert `BcColumnFilter` to a discriminated union per type:
+Stretch: **`v05-filter-discriminated-union`** — Convert `BcColumnFilter` to a discriminated union per type:
    ```ts
    type BcColumnFilter =
      | { type: 'text'; caseSensitive?: boolean; regex?: boolean; variant?: 'popup' | 'inline' }
