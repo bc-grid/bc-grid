@@ -21,16 +21,43 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#368** `useServerInfiniteGrid` + extracted `internal/useServerOrchestration.ts`
 - ✅ **#371** `useServerTreeGrid` companion hook — closes the server-hook trio (paged + infinite + tree)
 
-### Active now → `v05-server-loader-generics` (stretch P1-C2)
+### Active now → `v05-use-server-tree-grid-enhancements`
 
-Generic `TRow` propagation into `LoadServerPage<TRow>` / `LoadServerBlock<TRow>` / `LoadServerTreeChildren<TRow>` query types so `query.sort` / `query.filter` are typed against column ids instead of `string`. The hook signatures already carry `<TRow>`; the gap is that the sort/filter shapes inside `ServerPagedQuery` / `ServerBlockQuery` / `ServerTreeQuery` use bare `string` for `columnId`. Tighten to `keyof TRow & string` (or a column-id phantom type) so a typo in a server loader's switch on `query.sort[0].columnId` becomes a compile error.
+Bsncraft v0.4 audit (2026-05-03) reviewed `useServerTreeGrid` (your #371) for a real consumer scenario: full-dataset grouping on a 36k-row customers grid. The hook ships, but bsncraft consumes plain `<BcGrid>` with their own paged loader (`apps/web/components/server-edit-grid.tsx`) — using `useServerTreeGrid` as-is forces a `<BcGrid>` → `<BcServerGrid>` swap on a production grid mid-sprint. That's exactly the migration friction the audit flagged. **Pivoting from the stretch generic-`TRow` task** because this enhancement has an actual unblocked consumer and the stretch is a type-tightening with diminishing returns.
 
-**Branch:** `agent/worker1/v05-server-loader-generics`. **Effort:** ~half day. **Only ship if low risk** — this touches the public type surface in `@bc-grid/core` server query types. If the change ripples through bsncraft's wrapper unfavorably, defer to v0.6.
+**Spec:**
 
-### After stretch → bsncraft migration proof (coordinator-led)
+1. **Dual-output refactor (PRIORITY).**
+   ```ts
+   const { bound, serverProps, state, actions } = useServerTreeGrid({ ... })
 
-The coordinator owns the bsncraft migration proof but server-grid expertise is yours. When you finish the stretch (or defer it), pair with the coordinator on:
-- Migrating `~/work/bsncraft/apps/web/components/server-edit-grid.tsx` (the 9-`useState` orchestration) to `useServerPagedGrid`. Target diff: ≥-100 LOC of wrapper code.
+   // Plain <BcGrid> consumer (bsncraft pattern):
+   <BcGrid {...bound} columns={columns} />
+
+   // <BcServerGrid> consumer (still works):
+   <BcServerGrid {...serverProps} columns={columns} />
+   ```
+   `bound` is `BcGridProps`-compatible: `data: TRow[]` (the visible flattened tree rows), `groupBy`, `expansion`, `onExpansionChange`, sort/filter/search controlled props, `pagination` etc. The hook internally still drives the same `LoadServerTreeChildren` orchestration — it just exposes the unwrapped surface.
+
+2. **`groupRowId?: (key, path) => RowId` option (PRIORITY).** Stable group-row identifiers for selection algebra, focus retention, persisted expansion. Replace whatever the hook synthesises internally today with the consumer-supplied function when present.
+
+3. **`persistTo?: "url" | "localStorage" | null` option (PRIORITY).** Match `useBcGridState`'s persistence pattern — URL or localStorage backing for `groupBy` / `expansion` / `sort` / `filter` / `search` state. Same `gridId` keying.
+
+4. **Nice-to-have (defer if scope tightens):** `rootChildCount?` (saves a round-trip), `pageSize?` (default 100), `cacheLimit?` (LRU cap on expanded-group caches).
+
+**Branch:** `agent/worker1/v05-use-server-tree-grid-enhancements`. **Effort:** ~1 day for items 1-3, +half day for 4 if scope permits.
+
+**After this lands:** coordinator cuts `0.5.0-alpha.1` so bsncraft can pull from the registry. Then we pair on the bsncraft migration proof (your existing handoff item).
+
+### Deferred → `v05-server-loader-generics` (stretch P1-C2)
+
+Generic `TRow` propagation into `LoadServerPage<TRow>` / `LoadServerBlock<TRow>` / `LoadServerTreeChildren<TRow>` query types — defer to v0.6 unless you finish the enhancement above with time to spare. Type-tightening with no blocked consumer; lower priority than unblocking bsncraft's customers grid.
+
+### After enhancement → bsncraft migration proof (coordinator-led)
+
+The coordinator owns the bsncraft migration proof but server-grid expertise is yours. Pair on:
+- Migrating `~/work/bsncraft/apps/web/components/server-edit-grid.tsx` (the 9-`useState` orchestration) to `useServerPagedGrid` for the ungrouped flat view, then `useServerTreeGrid` (with the new dual-output `bound`) for the full-dataset grouping view. Hook swap based on whether a group column is selected.
+- Target diff: ≥-100 LOC of wrapper code.
 - Walking through any rough edges that surface — every "this is awkward" moment in the migration is a v0.6 input.
 
 ### Earlier follow-up tasks superseded (server-hook trio complete)

@@ -69,6 +69,15 @@ Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `
 - `[ready]` **v05-paste-listener** (worker2) — `paste` event + `pasteTsv` API on `BcGridApi`. Pairs with worker3 `v05-paste-editor-binding`.
 - `[ready]` **v05-paste-editor-binding** (worker3) — `editController.commitFromPasteApplyPlan` to route paste through commit. Waits for worker2's `pasteTsv` contract.
 - `[ready]` **v05-bsncraft-migration-proof** (coordinator) — migrate one bsncraft CRUD grid to the new hooks; target diff ≥-100 LOC wrapper code.
+- `[ready]` **v05-use-server-tree-grid-enhancements** (worker1) — bsncraft v0.4 audit follow-up (2026-05-03). Surfaced enhancement asks against worker1's #371 `useServerTreeGrid`:
+   1. **Dual-output refactor (priority).** Hook currently returns `props: BcServerTreeProps` (forces `<BcServerGrid rowModel="tree">`). Add a parallel `bound` output that spreads onto plain `<BcGrid>` (data array + controlled callbacks) so consumers with existing `<BcGrid>` wrappers can adopt the hook without an architecture flip. Keep the existing `props`/`serverProps` output for `<BcServerGrid>` consumers.
+   2. **`groupRowId?: (key, path) => RowId` option (priority).** Stable group-row identifiers — required for selection algebra, focus retention, persisted expansion state. Today the hook synthesises group row IDs internally; expose the override.
+   3. **`persistTo?: "url" | "localStorage" | null` option (priority).** Match `useBcGridState`'s persistence pattern — URL or localStorage backing for `groupBy` / `expansion` / `sort` / `filter` / `search` state. Same `gridId` keying convention.
+   4. **`rootChildCount?: number` (nice-to-have).** Saves a round-trip if the consumer already knows the root count.
+   5. **`pageSize?: number` default 100 (nice-to-have).** Promote the implicit block size to an explicit hook option.
+   6. **`cacheLimit?: number` (nice-to-have).** LRU cap on expanded-group caches for memory hygiene with deep trees.
+   Branch: `agent/worker1/v05-use-server-tree-grid-enhancements`. Effort: ~1 day for items 1-3, +half day for 4-6 if scope permits.
+- `[ready]` **v05-cut-0.5.0-alpha.1** (coordinator) — once `v05-use-server-tree-grid-enhancements` lands, cut `0.5.0-alpha.1` so bsncraft can pull the new server hooks (`useServerPagedGrid`, `useServerInfiniteGrid`, `useServerTreeGrid` with dual output) from GitHub Packages without waiting for full v0.5.0. Follows the alpha-cadence pattern from `v0.1.0-alpha.4` / `0.3.0-alpha.1`.
 - `[done: coordinator 7800361]` **v05-chrome-polish-pinned-and-detail-header** (coordinator) — bsncraft v0.4 audit findings (2026-05-03): align pinned row-state CSS tokens with body composites so pinned cells match the rest of the row in hover/selected states (was: noticeably darker/washed-out at saturated accents); remove decorative `<DisclosureChevron>` from the master-detail column header (it didn't toggle anything).
 
 ## v0.6 follow-ups (queued, do not start until v0.5 ships)
