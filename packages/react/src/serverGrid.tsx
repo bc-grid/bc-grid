@@ -370,6 +370,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       getFilter() {
         return gridApiRef.current?.getFilter() ?? null
       },
+      getActiveFilter(columnId) {
+        return gridApiRef.current?.getActiveFilter(columnId) ?? null
+      },
       setColumnState(state) {
         gridApiRef.current?.setColumnState(state)
       },
@@ -378,6 +381,12 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       },
       setFilter(filter) {
         gridApiRef.current?.setFilter(filter)
+      },
+      openFilter(columnId, opts) {
+        gridApiRef.current?.openFilter(columnId, opts)
+      },
+      closeFilter(columnId) {
+        gridApiRef.current?.closeFilter(columnId)
       },
       clearFilter(columnId) {
         gridApiRef.current?.clearFilter(columnId)

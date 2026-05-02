@@ -195,6 +195,14 @@ export function removeColumnFromFilter(
   return removeColumnFromServerFilter(filter, columnId)
 }
 
+export function filterForColumn(
+  filter: BcGridFilter | null | undefined,
+  columnId: ColumnId,
+): BcGridFilter | null {
+  if (!filter) return null
+  return pickColumnFromServerFilter(filter, columnId)
+}
+
 function removeColumnFromServerFilter(
   filter: ServerFilter,
   columnId: ColumnId,
@@ -204,6 +212,18 @@ function removeColumnFromServerFilter(
   }
   const next = filter.filters
     .map((child) => removeColumnFromServerFilter(child, columnId))
+    .filter((child): child is ServerFilter => child !== null)
+  if (next.length === 0) return null
+  if (next.length === 1 && next[0]) return next[0]
+  return { kind: "group", op: filter.op, filters: next }
+}
+
+function pickColumnFromServerFilter(filter: ServerFilter, columnId: ColumnId): ServerFilter | null {
+  if (filter.kind === "column") {
+    return filter.columnId === columnId ? filter : null
+  }
+  const next = filter.filters
+    .map((child) => pickColumnFromServerFilter(child, columnId))
     .filter((child): child is ServerFilter => child !== null)
   if (next.length === 0) return null
   if (next.length === 1 && next[0]) return next[0]

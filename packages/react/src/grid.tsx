@@ -61,6 +61,7 @@ import {
   buildGridFilter,
   columnFilterTextEqual,
   columnFilterTextFromGridFilter,
+  filterForColumn,
   matchesGridFilter,
   removeColumnFromFilter,
   setFilterValueKeys,
@@ -357,6 +358,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     columnId: ColumnId
     anchor: DOMRect
   } | null>(null)
+  const closeFilterPopup = useCallback((columnId?: ColumnId) => {
+    setFilterPopupState((prev) => {
+      if (!prev) return prev
+      if (columnId != null && prev.columnId !== columnId) return prev
+      return null
+    })
+  }, [])
   const [selectionState, setSelectionState] = useControlledState<BcSelection>(
     hasProp(props, "selection"),
     props.selection ?? createEmptySelection(),
@@ -1127,6 +1135,46 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       searchText,
     ],
   )
+  const findHeaderFilterAnchor = useCallback((columnId: ColumnId): DOMRect | null => {
+    const root = rootRef.current
+    if (!root) return null
+    const headers = Array.from(root.querySelectorAll<HTMLElement>(".bc-grid-header-cell"))
+    const header = headers.find((candidate) => candidate.dataset.columnId === columnId)
+    if (!header) return null
+    const trigger = header.querySelector<HTMLElement>('[data-bc-grid-filter-button="true"]')
+    return (trigger ?? header).getBoundingClientRect()
+  }, [])
+  const focusInlineFilter = useCallback(
+    (columnId: ColumnId) => {
+      if (typeof document === "undefined") return false
+      const control = document.getElementById(`${domBaseId}-filter-${domToken(columnId)}`)
+      if (!control || !rootRef.current?.contains(control)) return false
+      if (!("focus" in control) || typeof control.focus !== "function") return false
+      control.focus()
+      if ("select" in control && typeof control.select === "function") control.select()
+      return true
+    },
+    [domBaseId],
+  )
+  const openFilter = useCallback(
+    (columnId: ColumnId, opts?: { variant?: "popup" | "inline" }) => {
+      const column = resolvedColumns.find((candidate) => candidate.columnId === columnId)
+      const filterConfig = column?.source.filter
+      if (!column || !filterConfig) return
+
+      const variant = opts?.variant ?? filterConfig.variant ?? "inline"
+      if (variant === "inline") {
+        closeFilterPopup()
+        focusInlineFilter(columnId)
+        return
+      }
+
+      const anchor = findHeaderFilterAnchor(columnId)
+      if (!anchor) return
+      setFilterPopupState({ columnId, anchor })
+    },
+    [closeFilterPopup, findHeaderFilterAnchor, focusInlineFilter, resolvedColumns],
+  )
 
   const columnIndexById = useMemo(() => {
     const map = new Map<(typeof resolvedColumns)[number]["columnId"], number>()
@@ -1514,6 +1562,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       getFilter() {
         return filterState
       },
+      getActiveFilter(columnId) {
+        return filterForColumn(filterState, columnId)
+      },
       setColumnState(next) {
         setColumnState(next)
       },
@@ -1522,6 +1573,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       },
       setFilter(next) {
         applyFilterState(next)
+      },
+      openFilter,
+      closeFilter(columnId) {
+        closeFilterPopup(columnId)
       },
       clearFilter(columnId) {
         if (columnId == null) {
@@ -1646,8 +1701,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     copyRangeToClipboard,
     editController,
     filterState,
+    closeFilterPopup,
     focusCell,
     isRowDisabled,
+    openFilter,
     rangeSelectionState,
     requestRender,
     resolvedColumns,

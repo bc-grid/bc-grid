@@ -1,50 +1,51 @@
 import { describe, expect, test } from "bun:test"
-import type { BcGridApi, BcServerGridApi } from "@bc-grid/core"
+import type { BcGridApi, BcGridFilter, BcServerGridApi } from "@bc-grid/core"
 
 /**
- * Compile-time + runtime contract for the v0.5 imperative editor API
- * additions (audit P0-7). Ensures `startEdit` / `commitEdit` /
- * `cancelEdit` are present on both the client and server api
- * surfaces. The TS compiler enforces presence; this file pins it as
- * runtime-checkable so a refactor that drops one of the methods is
- * caught even if the consumer code happens not to reference it.
+ * Compile-time + runtime contract for the v0.5 imperative filter API
+ * additions (audit P0-7). The methods live on the public grid API and
+ * are inherited by the server grid API.
  */
 
-describe("BcGridApi imperative editor methods (v0.5 audit P0-7)", () => {
-  test("BcGridApi exposes startEdit, commitEdit, cancelEdit as functions", () => {
+describe("BcGridApi imperative filter methods (v0.5 audit P0-7)", () => {
+  test("BcGridApi exposes openFilter, closeFilter, getActiveFilter as functions", () => {
     const api: BcGridApi = stubApi()
 
-    expect(typeof api.startEdit).toBe("function")
-    expect(typeof api.commitEdit).toBe("function")
-    expect(typeof api.cancelEdit).toBe("function")
+    expect(typeof api.openFilter).toBe("function")
+    expect(typeof api.closeFilter).toBe("function")
+    expect(typeof api.getActiveFilter).toBe("function")
   })
 
   test("BcServerGridApi inherits the same methods", () => {
     const api: BcServerGridApi = stubServerApi()
 
-    expect(typeof api.startEdit).toBe("function")
-    expect(typeof api.commitEdit).toBe("function")
-    expect(typeof api.cancelEdit).toBe("function")
+    expect(typeof api.openFilter).toBe("function")
+    expect(typeof api.closeFilter).toBe("function")
+    expect(typeof api.getActiveFilter).toBe("function")
   })
 
-  test("startEdit signature accepts the optional seedKey hint", () => {
-    // Compile-time assertion that the optional `seedKey` opt is part of
-    // the public surface (a typo or accidental drop would fail tsc -b).
+  test("openFilter signature accepts default, popup, and inline variants", () => {
     const api: BcGridApi = stubApi()
-    api.startEdit("row-1", "name")
-    api.startEdit("row-1", "name", { seedKey: "A" })
+    api.openFilter("name")
+    api.openFilter("name", { variant: "popup" })
+    api.openFilter("name", { variant: "inline" })
 
     expect(true).toBe(true)
   })
 
-  test("commitEdit signature accepts value override + moveOnSettle hint", () => {
+  test("closeFilter accepts optional column id", () => {
     const api: BcGridApi = stubApi()
-    api.commitEdit()
-    api.commitEdit({ value: "Acme" })
-    api.commitEdit({ moveOnSettle: "right" })
-    api.commitEdit({ value: 42, moveOnSettle: "stay" })
+    api.closeFilter()
+    api.closeFilter("name")
 
     expect(true).toBe(true)
+  })
+
+  test("getActiveFilter returns a column-scoped filter tree", () => {
+    const api: BcGridApi = stubApi()
+    const filter: BcGridFilter | null = api.getActiveFilter("name")
+
+    expect(filter).toBeNull()
   })
 })
 
@@ -95,6 +96,7 @@ function stubServerApi(): BcServerGridApi {
     applyServerRowUpdate: noop,
     queueServerRowMutation: noop,
     settleServerRowMutation: noop,
+    scrollToServerCell: () => Promise.resolve({ scrolled: false }),
     getServerRowModelState: () => ({
       mode: "paged",
       rows: [],
