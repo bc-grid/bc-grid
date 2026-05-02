@@ -1,5 +1,5 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useEffect, useLayoutEffect, useRef } from "react"
+import { useLayoutEffect, useRef } from "react"
 import { editorControlState, editorInputClassName } from "./chrome"
 
 /**
@@ -37,9 +37,21 @@ function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
   const { initialValue, error, focusRef, seedKey, pending } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
 
-  useEffect(() => {
+  // Hand the input back to the framework via `focusRef`. Runs in
+  // useLayoutEffect so the assignment lands BEFORE the framework's
+  // parent useLayoutEffect calls focusRef.current?.focus() — children
+  // fire first in React's commit phase. With useEffect here, focusRef
+  // would be null when the framework reads it, and click-outside /
+  // Tab / Enter commit would route through `readEditorInputValue(null)`
+  // and silently commit `undefined`. Mirrors text.tsx / number.tsx.
+  useLayoutEffect(() => {
     if (focusRef && inputRef.current) {
       ;(focusRef as { current: HTMLElement | null }).current = inputRef.current
+    }
+    return () => {
+      if (focusRef) {
+        ;(focusRef as { current: HTMLElement | null }).current = null
+      }
     }
   }, [focusRef])
 
