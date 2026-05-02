@@ -1,0 +1,184 @@
+---
+import { Code } from "astro:components"
+import DocsLayout from "../layouts/DocsLayout.astro"
+
+const minimalSnippet = `import { BcGrid, useBcGridState, type BcGridColumn } from "@bc-grid/react"
+
+interface CustomerRow {
+  id: string
+  name: string
+  status: "Open" | "Past Due" | "Disputed"
+  balance: number
+}
+
+const columns: BcGridColumn<CustomerRow>[] = [
+  { field: "name", header: "Name", flex: 1 },
+  { field: "status", header: "Status", width: 140 },
+  { field: "balance", header: "Balance", width: 140, format: "currency" },
+]
+
+export function CustomersGrid({ rows }: { rows: readonly CustomerRow[] }) {
+  // ~13 controlled-state pairs in one call. Persisted to localStorage
+  // under \`bc-grid:customers:*\`. SSR-safe — no read happens when storage
+  // is unavailable.
+  const grid = useBcGridState({ persistTo: "local:customers" })
+
+  return (
+    <BcGrid
+      {...grid.props}
+      columns={columns}
+      data={rows}
+      rowId={(row) => row.id}
+    />
+  )
+}`
+
+const defaultsSnippet = `// Initial values. \`defaults\` apply when no value is persisted; persisted
+// values always win.
+const grid = useBcGridState({
+  persistTo: "local:customers",
+  defaults: {
+    sort: [{ columnId: "balance", direction: "desc" }],
+    pageSize: 50,
+    sidebarPanel: "filters",
+  },
+})`
+
+const dispatchSnippet = `// Programmatic updates from custom UI (toolbar buttons, search box, etc.).
+// \`dispatch\` is a stable object whose individual setters keep their identity
+// across renders, so it's safe in deps arrays.
+const grid = useBcGridState({ persistTo: "local:customers" })
+
+return (
+  <>
+    <button onClick={() => grid.dispatch.setFilter(null)}>
+      Clear filter
+    </button>
+    <button onClick={() => grid.dispatch.reset()}>
+      Reset to defaults
+    </button>
+
+    <BcGrid {...grid.props} columns={columns} data={rows} rowId={(row) => row.id} />
+  </>
+)`
+
+const stateSnippet = `// Read the current state for analytics, telemetry, deep links, etc.
+// \`state\` is one shape with all 13 dimensions; safe to JSON.stringify
+// (Sets and the empty range marker survive a round-trip via the existing
+// \`BcGridLayoutState\` helpers).
+useEffect(() => {
+  analytics.track("grid:state", {
+    sort: grid.state.sort,
+    filter: grid.state.filter,
+    page: grid.state.page,
+    pageSize: grid.state.pageSize,
+  })
+}, [grid.state])`
+
+const interopSnippet = `// Hand-rolled controlled props win when supplied. The hook gives you
+// spread-ready props but you can override any dimension. Useful for
+// migrating an existing controlled grid one prop at a time.
+const grid = useBcGridState({ persistTo: "local:customers" })
+const [externalFilter, setExternalFilter] = useState<BcGridFilter | null>(null)
+
+return (
+  <BcGrid
+    {...grid.props}
+    columns={columns}
+    data={rows}
+    rowId={(row) => row.id}
+    // External filter state owned by a different component:
+    filter={externalFilter}
+    onFilterChange={setExternalFilter}
+  />
+)`
+
+const checklist = [
+  "Use `useBcGridState({ persistTo: 'local:<gridId>' })` as the default-controlled path; reach for hand-rolled props only when you need split ownership.",
+  "Persisted values always win over `defaults`. To force a specific initial value regardless of persisted state, pass it as a controlled prop instead.",
+  "`dispatch.reset()` re-applies the same precedence ladder (built-in empty < defaults < persisted) used at mount.",
+  "`gridId` flows through `props.gridId`; the grid writes via the existing `usePersistedGridStateWriter`. Don't add a second writer on the consumer side.",
+  "The hook does not own row data, columns, or `rowId` — you still pass those to `<BcGrid>`.",
+  "SSR-safe: `localStorage` access is guarded; node renders fall through to defaults.",
+]
+---
+
+<DocsLayout
+  title="useBcGridState recipe"
+  description="Turnkey state hook that owns the ~13 controlled-state dimensions a typical ERP grid needs. Use this when you don't need split ownership."
+  active="use-bc-grid-state"
+>
+  <section class="section">
+    <h2>What you're getting</h2>
+    <p>
+      Instead of declaring 13 <code>useState</code> pairs and wiring 13
+      <code>onChange</code> callbacks, call <code>useBcGridState</code> once and
+      spread its <code>props</code> into <code>&lt;BcGrid&gt;</code>. Persistence
+      to <code>localStorage</code> is opt-in via <code>persistTo:
+      "local:&lt;gridId&gt;"</code>.
+    </p>
+    <p>
+      The hook is the <em>default-controlled</em> path — your existing
+      controlled-prop API still works exactly as before, and you can override any
+      dimension by passing the matching prop alongside the spread.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>1. Minimal wiring</h2>
+    <p>
+      One hook call, one spread, persistence enabled. This is the shape we
+      expect most ERP grids to land at.
+    </p>
+    <Code code={minimalSnippet} lang="tsx" />
+  </section>
+
+  <section class="section">
+    <h2>2. Defaults</h2>
+    <p>
+      <code>defaults</code> seed dimensions that have no persisted value.
+      Persisted values always win — that's the user's last interaction, and
+      stomping on it is exactly the bug a state hook should prevent.
+    </p>
+    <Code code={defaultsSnippet} lang="tsx" />
+  </section>
+
+  <section class="section">
+    <h2>3. Programmatic dispatch</h2>
+    <p>
+      <code>dispatch</code> exposes a stable setter per dimension plus a
+      <code>reset</code>. Identity is stable across renders, so the setters are
+      safe to drop into <code>useEffect</code>/<code>useMemo</code> deps.
+    </p>
+    <Code code={dispatchSnippet} lang="tsx" />
+  </section>
+
+  <section class="section">
+    <h2>4. Reading current state</h2>
+    <p>
+      <code>state</code> is one snapshot containing all 13 dimensions. JSON-safe
+      apart from the <code>Set</code>s (selection, expansion) and the
+      <code>BcRangeSelection</code> marker — use <code>BcGridLayoutState</code>
+      helpers for round-tripping if you need to serialize.
+    </p>
+    <Code code={stateSnippet} lang="tsx" />
+  </section>
+
+  <section class="section">
+    <h2>5. Interop with hand-rolled controlled state</h2>
+    <p>
+      Override any dimension by passing the controlled prop after the spread.
+      Useful when you migrate one screen at a time, or when one piece of state
+      lives in a different component (a sticky search bar, a global filter
+      panel).
+    </p>
+    <Code code={interopSnippet} lang="tsx" />
+  </section>
+
+  <section class="section">
+    <h2>Checklist</h2>
+    <ul>
+      {checklist.map((item) => <li>{item}</li>)}
+    </ul>
+  </section>
+</DocsLayout>
