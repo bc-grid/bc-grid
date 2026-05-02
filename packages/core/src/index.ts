@@ -283,10 +283,27 @@ export interface BcGridApi<TRow = unknown> {
    * `docs/design/context-menu-command-map.md §2.3`.
    */
   getFilter(): BcGridFilter | null
+  /**
+   * Read the active filter entries for a single column. Returns `null`
+   * when that column has no active filter.
+   */
+  getActiveFilter(columnId: ColumnId): BcGridFilter | null
 
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter | null): void
+  /**
+   * Open the filter UI for a column. The default variant follows the
+   * column definition: popup-variant filters open their popup, otherwise
+   * the inline filter editor is focused when it is currently rendered.
+   */
+  openFilter(columnId: ColumnId, opts?: { variant?: "popup" | "inline" }): void
+  /**
+   * Close the open popup filter. When `columnId` is supplied, only closes
+   * if that column's popup is currently open. Inline filters are a
+   * persistent row surface, so there is nothing to unmount for them.
+   */
+  closeFilter(columnId?: ColumnId): void
   /**
    * Clear the grid filter. With no `columnId` this is equivalent to
    * `setFilter(null)`. With a `columnId`, removes only that column's

@@ -15,6 +15,7 @@ import {
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
   encodeTextFilterInput,
+  filterForColumn,
   filterHasColumn,
   filterSetFilterOptions,
   matchesGridFilter,
@@ -1480,6 +1481,85 @@ describe("removeColumnFromFilter", () => {
     const afterFirst = removeColumnFromFilter(filter, "name")
     const afterSecond = removeColumnFromFilter(afterFirst, "email")
     expect(afterSecond).toBeNull()
+  })
+})
+
+describe("filterForColumn", () => {
+  test("returns null when input is null/undefined", () => {
+    expect(filterForColumn(null, "name")).toBeNull()
+    expect(filterForColumn(undefined, "name")).toBeNull()
+  })
+
+  test("returns the matching bare column filter", () => {
+    const filter = buildGridFilter({ name: "John" })
+    if (!filter) throw new Error("expected filter")
+
+    expect(filterForColumn(filter, "name")).toEqual(filter)
+    expect(filterForColumn(filter, "email")).toBeNull()
+  })
+
+  test("collapses to the matching child when one leaf matches", () => {
+    const filter = buildGridFilter({ name: "John", email: "@acme" })
+    if (!filter) throw new Error("expected filter")
+
+    expect(filterForColumn(filter, "name")).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "contains",
+      value: "John",
+    })
+  })
+
+  test("preserves group op when multiple leaves match", () => {
+    const filter = {
+      kind: "group" as const,
+      op: "or" as const,
+      filters: [
+        {
+          kind: "column" as const,
+          columnId: "name",
+          type: "text" as const,
+          op: "contains",
+          value: "John",
+        },
+        {
+          kind: "column" as const,
+          columnId: "status",
+          type: "set" as const,
+          op: "in",
+          values: ["open"],
+        },
+        {
+          kind: "column" as const,
+          columnId: "name",
+          type: "text" as const,
+          op: "startsWith",
+          value: "J",
+        },
+      ],
+    }
+
+    expect(filterForColumn(filter, "name")).toEqual({
+      kind: "group",
+      op: "or",
+      filters: [
+        {
+          kind: "column",
+          columnId: "name",
+          type: "text",
+          op: "contains",
+          value: "John",
+        },
+        {
+          kind: "column",
+          columnId: "name",
+          type: "text",
+          op: "startsWith",
+          value: "J",
+        },
+      ],
+    })
   })
 })
 

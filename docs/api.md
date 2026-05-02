@@ -1783,11 +1783,14 @@ export interface BcGridApi<TRow = unknown> {
   getRangeSelection(): BcRangeSelection
   getColumnState(): BcColumnStateEntry[]
   getFilter(): BcGridFilter | null
+  getActiveFilter(columnId: ColumnId): BcGridFilter | null
 
   // Mutations (controlled-state shortcuts; only effective in uncontrolled mode)
   setColumnState(state: BcColumnStateEntry[]): void
   setSort(sort: BcGridSort[]): void
   setFilter(filter: BcGridFilter | null): void
+  openFilter(columnId: ColumnId, opts?: { variant?: "popup" | "inline" }): void
+  closeFilter(columnId?: ColumnId): void
   clearFilter(columnId?: ColumnId): void
   setColumnPinned(columnId: ColumnId, pinned: "left" | "right" | null): void
   setColumnHidden(columnId: ColumnId, hidden: boolean): void
@@ -1815,6 +1818,27 @@ export interface BcGridApi<TRow = unknown> {
 active). It is the read counterpart to `setFilter` and is the way the
 `clear-column-filter` / `clear-all-filters` context-menu built-ins decide whether
 they should be enabled.
+
+`getActiveFilter(columnId)` returns the active filter subtree for one column, or
+`null` when that column has no active filter. A single matching leaf is returned
+as-is; multiple matching leaves preserve their surrounding `and` / `or` group.
+This is the column-scoped read counterpart to `getFilter()` for toolbar badges,
+header menus, and external filter summaries. Audit-2026-05 P0-7.
+
+`openFilter(columnId, opts?)` opens or focuses the filter UI for one filterable
+column. Without `opts.variant`, it follows the column definition: popup-variant
+filters open the header-anchored popup; inline/default filters focus the inline
+filter editor when the filter row is currently rendered. Passing
+`{ variant: "popup" }` opens the popup surface for the column, anchored to its
+header. Passing `{ variant: "inline" }` closes any open filter popup and focuses
+the inline editor if it exists. No-op when the column id is unknown, the column
+has `filter: false`, the grid is unmounted, or the requested inline editor is
+not rendered. Audit-2026-05 P0-7.
+
+`closeFilter(columnId?)` closes the open popup filter. With a `columnId`, it only
+closes when that column's popup is currently open; without one, it closes
+whatever popup is open. Inline filters are a persistent row surface, so
+`closeFilter` does not hide or unmount the filter row. Audit-2026-05 P0-7.
 
 `clearFilter(columnId?)` is a convenience wrapper around `setFilter`. With no
 argument it clears the entire filter tree (same as `setFilter(null)`). With a
