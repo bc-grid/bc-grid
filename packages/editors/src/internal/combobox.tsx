@@ -11,31 +11,45 @@ import { type EditorOption, editorOptionToString, visuallyHiddenStyle } from "..
 
 /**
  * shadcn-native Combobox primitive used by the v0.5 lookup editor
- * migrations (`select`, follow-up: `multi-select` + `autocomplete`).
+ * migrations (`select`, `multi-select`; `autocomplete` lives in
+ * `combobox-search.tsx` since its trigger is a text input rather than
+ * a button).
  *
- * Replaces the native `<select>` / `<datalist>` shells the editing-rfc
- * originally specified. Audit P0-4 / synthesis P0-4. Built on the
- * repo's own popup conventions (data-state / data-side / data-align +
+ * Replaces the native `<select>` shells the editing-rfc originally
+ * specified. Audit P0-4 / synthesis P0-4. Built on the repo's own
+ * popup conventions (data-state / data-side / data-align +
  * data-bc-grid-editor-portal marker for portal-aware click-outside)
- * — no Radix / shadcn runtime dep, since `CLAUDE.md §9` requires
+ * — no Radix / shadcn runtime dep, since `CLAUDE.md §10` requires
  * architect approval for new deps and the visual chrome can match
  * shadcn purely through CSS and ARIA conventions.
  *
- * Capabilities:
+ * Modes:
+ *   - `mode: "single"` (default) — single-value combobox. `initialValue`
+ *     is the typed value, `onSelect` fires with the picked typed value.
+ *     Used by `selectEditor`.
+ *   - `mode: "multi"` — multi-value combobox. `initialValue` is a
+ *     `readonly unknown[]`, `onSelect` fires with the next array on
+ *     every toggle. Used by `multiSelectEditor`. The listbox stays
+ *     open until the editor portal commits via Tab/Enter/Escape.
+ *
+ * Capabilities (both modes):
  *   - 16×16 colour swatch chip beside the option label (`option.swatch`).
  *   - Optional rich icon (`option.icon`) for status pills, avatars, etc.
- *   - Keyboard parity with mouse: Up/Down navigates, Enter commits the
- *     highlighted option, Escape cancels (the editor portal wrapper's
- *     keydown handler routes both up to the controller).
- *   - Type-ahead by single-key prefix match (parity with native `<select>`).
+ *   - Keyboard parity with mouse: Up/Down navigates, Enter/Space picks,
+ *     Escape cancels (the editor portal wrapper's keydown handler
+ *     routes Tab/Enter/Escape up to the controller).
+ *   - Type-ahead by single-key prefix match. Single mode auto-selects
+ *     (mirrors native `<select>`); multi mode just navigates — Space
+ *     toggles.
  *   - Headless-by-default — no library popover; absolute-positioned
  *     dropdown anchored below the trigger. Position-flip / collision
  *     handling is deferred to v0.7+ (see synthesis P1-W3 backlog).
  *
- * Typed values: the typed `option.value` is stashed on the trigger
- * element via a stable JS property key, so the editor portal's
- * `readEditorInputValue` can return the typed value on click-outside
- * /  Tab without going through `column.valueParser`. Mirrors the
+ * Typed values: the typed `option.value` (single) or
+ * `readonly unknown[]` (multi) is stashed on the trigger button via
+ * `__bcGridComboboxValue`, so the editor portal's
+ * `readEditorInputValue` returns the typed value on click-outside /
+ * Tab without going through `column.valueParser`. Mirrors the
  * existing `__bcGridSelectOptionValues` contract on native `<select>`.
  */
 
@@ -45,14 +59,12 @@ type BcGridComboboxButton = HTMLButtonElement & {
   [bcGridComboboxValueKey]?: unknown
 }
 
-export interface ComboboxProps {
+interface ComboboxBaseProps {
   /**
    * Available options. Editor types resolve these via
    * `resolveEditorOptions(column.options, row)`.
    */
   options: readonly EditorOption[]
-  /** Initial selected value (from the cell's row data). */
-  initialValue: unknown
   /** Printable seed key from the activation event, if any. Same semantics as native editors. */
   seedKey?: string | undefined
   /** Validation error string. Triggers error-state chrome. */
@@ -68,35 +80,52 @@ export interface ComboboxProps {
    */
   focusRef?: { current: HTMLElement | null } | undefined
   /**
-   * Called with the typed value when the user picks an option (mouse
-   * click, Enter, or Tab). The editor portal's wrapper keydown handler
-   * intercepts Tab/Enter/Escape and routes through its own commit/cancel
-   * — but mouse clicks and inline "create new" actions need this hook.
-   */
-  onSelect: (next: unknown) => void
-  /**
    * Optional consumer hook to render a "create new" footer inside the
-   * popover (e.g. inline "Create new colour"). Receives the current
-   * search query when type-ahead is active. Returning `null` skips
+   * popover (e.g. inline "Create new colour"). Returning `null` skips
    * the slot.
    */
   renderCreateOption?: (query: string) => ReactNode
   /**
    * Discriminator surfaced as `data-bc-grid-editor-kind` on the trigger.
    * Defaults to `"combobox"`. Editors composing this primitive (select,
-   * multi-select, autocomplete) override with their own logical kind so
-   * downstream selectors and tests can target the editor without
-   * knowing the primitive lives underneath.
+   * multi-select) override with their own logical kind so downstream
+   * selectors and tests can target the editor without knowing the
+   * primitive lives underneath.
    */
   kind?: string
 }
 
+interface ComboboxSingleProps extends ComboboxBaseProps {
+  mode?: "single"
+  /** Initial selected value (from the cell's row data). */
+  initialValue: unknown
+  /**
+   * Called with the typed value when the user picks an option (mouse
+   * click, Enter, type-ahead). The editor portal wrapper's keydown
+   * handler intercepts Tab/Enter/Escape and routes through its own
+   * commit/cancel — we update the typed value first so the wrapper's
+   * `readEditorInputValue` sees the new pick.
+   */
+  onSelect: (next: unknown) => void
+}
+
+interface ComboboxMultiProps extends ComboboxBaseProps {
+  mode: "multi"
+  /** Initial array of selected values. Order is preserved. */
+  initialValue: readonly unknown[]
+  /**
+   * Called with the next array on every toggle. The trigger's typed
+   * value is updated in lockstep so click-outside / Tab commit reads
+   * the latest selection.
+   */
+  onSelect: (next: readonly unknown[]) => void
+}
+
+export type ComboboxProps = ComboboxSingleProps | ComboboxMultiProps
+
 /**
  * Public hook for stashing the typed value on the trigger button so
- * `readEditorInputValue` can pluck it on click-outside / Tab. Exported
- * so editors composing the combobox (with extra rendering on the
- * trigger, etc.) can drive the same plumbing without re-rendering the
- * primitive.
+ * `readEditorInputValue` can pluck it on click-outside / Tab.
  */
 export function attachComboboxTypedValue(button: HTMLButtonElement | null, value: unknown): void {
   if (!button) return
@@ -109,30 +138,46 @@ export function readComboboxTypedValue(element: HTMLElement | null): unknown {
   return (element as BcGridComboboxButton)[bcGridComboboxValueKey]
 }
 
-export function Combobox({
-  options,
-  initialValue,
-  seedKey,
-  error,
-  pending,
-  accessibleName,
-  focusRef,
-  onSelect,
-  renderCreateOption,
-  kind = "combobox",
-}: ComboboxProps): ReactNode {
+export function Combobox(props: ComboboxProps): ReactNode {
+  const {
+    options,
+    seedKey,
+    error,
+    pending,
+    accessibleName,
+    focusRef,
+    renderCreateOption,
+    kind = "combobox",
+  } = props
+  const isMulti = props.mode === "multi"
+
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const listboxRef = useRef<HTMLDivElement | null>(null)
   const listboxId = useId()
   const errorId = useId()
 
-  const initialIndex = findOptionIndexByValue(options, initialValue)
+  // Resolve initial selection. Single mode: one index or -1. Multi:
+  // the set of indices whose option values appear in `initialValue`.
+  const initialIndices = isMulti
+    ? selectedIndicesFromValues(options, toReadonlyArray(props.initialValue as readonly unknown[]))
+    : findOptionIndexByValue(options, props.initialValue as unknown)
   const seedIndex = findOptionIndexBySeed(options, seedKey)
-  const startIndex = seedIndex >= 0 ? seedIndex : initialIndex >= 0 ? initialIndex : -1
-  const startValue = startIndex >= 0 ? options[startIndex]?.value : initialValue
 
-  const [selectedIndex, setSelectedIndex] = useState(startIndex)
-  const [activeIndex, setActiveIndex] = useState(() => (startIndex >= 0 ? startIndex : 0))
+  const [selectedIndices, setSelectedIndices] = useState<ReadonlySet<number>>(() => {
+    if (isMulti) return new Set(initialIndices as readonly number[])
+    const idx = initialIndices as number
+    return idx >= 0 ? new Set([idx]) : new Set()
+  })
+  const [activeIndex, setActiveIndex] = useState(() => {
+    if (seedIndex >= 0) return seedIndex
+    if (isMulti) {
+      const first = (initialIndices as readonly number[])[0]
+      return first ?? 0
+    }
+    const single = initialIndices as number
+    return single >= 0 ? single : 0
+  })
+
   // Open by default so the user lands in the dropdown (matches native
   // `<select>` focus behavior + shadcn Combobox-on-edit pattern).
   const [open, setOpen] = useState(true)
@@ -150,22 +195,40 @@ export function Combobox({
   }, [focusRef])
 
   // Stash the typed value on the trigger so click-outside commit can
-  // read it via `readComboboxTypedValue`. Re-runs whenever the user
-  // picks a new value.
+  // read it via `readComboboxTypedValue`. In multi mode the typed
+  // value is the array of selected option values, in option order.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: options identity matters; selectedIndices is the trigger
   useLayoutEffect(() => {
-    attachComboboxTypedValue(buttonRef.current, startValue)
-  }, [startValue])
+    if (isMulti) {
+      const arr = options.filter((_, idx) => selectedIndices.has(idx)).map((option) => option.value)
+      attachComboboxTypedValue(buttonRef.current, arr)
+    } else {
+      const idx = firstSelectedIndex(selectedIndices)
+      const value = idx >= 0 ? options[idx]?.value : (props as ComboboxSingleProps).initialValue
+      attachComboboxTypedValue(buttonRef.current, value)
+    }
+  }, [isMulti, options, selectedIndices])
 
   const updateSelection = useCallback(
     (index: number) => {
       const opt = options[index]
       if (!opt) return
-      setSelectedIndex(index)
       setActiveIndex(index)
-      attachComboboxTypedValue(buttonRef.current, opt.value)
-      onSelect(opt.value)
+      if (isMulti) {
+        const next = new Set(selectedIndices)
+        if (next.has(index)) next.delete(index)
+        else next.add(index)
+        setSelectedIndices(next)
+        const arr = options.filter((_, idx) => next.has(idx)).map((option) => option.value)
+        attachComboboxTypedValue(buttonRef.current, arr)
+        ;(props.onSelect as (next: readonly unknown[]) => void)(arr)
+      } else {
+        setSelectedIndices(new Set([index]))
+        attachComboboxTypedValue(buttonRef.current, opt.value)
+        ;(props.onSelect as (next: unknown) => void)(opt.value)
+      }
     },
-    [onSelect, options],
+    [isMulti, options, props.onSelect, selectedIndices],
   )
 
   // Keyboard handler scoped to the button. Tab/Enter/Escape escape
@@ -199,10 +262,10 @@ export function Combobox({
         return
       }
       if (event.key === "Enter") {
-        // Commit the highlighted option, then let the editor portal
-        // wrapper's keydown receive the same Enter to advance the
-        // active cell. We update the typed value first so the
-        // wrapper's `readEditorInputValue` sees the new pick.
+        // Single: commit the highlighted option, then let the editor
+        // portal wrapper's keydown receive the same Enter to advance
+        // the active cell. Multi: toggle the highlighted option;
+        // Enter also bubbles up so the wrapper commits the array.
         if (open && activeIndex >= 0) {
           updateSelection(activeIndex)
         }
@@ -217,9 +280,8 @@ export function Combobox({
         }
         return
       }
-      // Type-ahead: a printable single-character key jumps to the
-      // first option whose label/value starts with that character.
-      // Mirrors native `<select>` typeahead semantics.
+      // Type-ahead. Single: prefix-match auto-selects (mirrors native
+      // `<select>`). Multi: just navigates — Space toggles.
       if (
         event.key.length === 1 &&
         !event.ctrlKey &&
@@ -231,32 +293,34 @@ export function Combobox({
         if (idx >= 0) {
           setOpen(true)
           setActiveIndex(idx)
-          updateSelection(idx)
+          if (!isMulti) {
+            updateSelection(idx)
+          }
         }
       }
     },
-    [activeIndex, open, options, pending, updateSelection],
+    [activeIndex, isMulti, open, options, pending, updateSelection],
   )
 
-  // Sync DOM scroll so the active option stays in view. Mirrors the
-  // shadcn Combobox active-descendant scrolling behavior.
+  // Sync DOM scroll so the active option stays in view.
   useEffect(() => {
     if (!open || activeIndex < 0) return
     const listbox = listboxRef.current
     if (!listbox) return
-    const active = listbox.querySelector<HTMLLIElement>(`[data-option-index="${activeIndex}"]`)
+    const active = listbox.querySelector<HTMLDivElement>(`[data-option-index="${activeIndex}"]`)
     active?.scrollIntoView({ block: "nearest" })
   }, [activeIndex, open])
 
-  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : undefined
-  const placeholderLabel = "Select…"
-  const triggerLabel = selectedOption?.label ?? placeholderLabel
-  const triggerSwatch = selectedOption?.swatch
+  const summary = describeSelectedSummary(options, selectedIndices, isMulti)
   const activeOption = activeIndex >= 0 ? options[activeIndex] : undefined
   const activeOptionId = activeOption ? `${listboxId}-opt-${activeIndex}` : undefined
 
   return (
-    <div className="bc-grid-editor-combobox" data-bc-grid-editor-combobox="true">
+    <div
+      className="bc-grid-editor-combobox"
+      data-bc-grid-editor-combobox="true"
+      data-bc-grid-editor-multi={isMulti ? "true" : undefined}
+    >
       <button
         ref={buttonRef}
         type="button"
@@ -274,26 +338,55 @@ export function Combobox({
         aria-describedby={error ? errorId : undefined}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-multiselectable={isMulti ? true : undefined}
         aria-controls={open ? listboxId : undefined}
         aria-activedescendant={activeOptionId}
         disabled={pending}
         onKeyDown={handleKeyDown}
         onClick={() => setOpen((prev) => !prev)}
       >
-        {triggerSwatch ? (
+        {summary.singleSwatch ? (
           <span
             className="bc-grid-editor-combobox-swatch"
             data-bc-grid-editor-swatch="true"
-            style={{ background: triggerSwatch }}
+            style={{ background: summary.singleSwatch }}
             aria-hidden="true"
           />
         ) : null}
-        {selectedOption?.icon ? (
+        {summary.singleIcon ? (
           <span className="bc-grid-editor-combobox-icon" aria-hidden="true">
-            {selectedOption.icon}
+            {summary.singleIcon}
           </span>
         ) : null}
-        <span className="bc-grid-editor-combobox-label">{triggerLabel}</span>
+        {isMulti ? (
+          <span className="bc-grid-editor-combobox-chips" data-bc-grid-editor-combobox-chips="true">
+            {summary.chips.length === 0 ? (
+              <span className="bc-grid-editor-combobox-label bc-grid-editor-combobox-placeholder">
+                {summary.label}
+              </span>
+            ) : (
+              summary.chips.map((chip) => (
+                <span
+                  key={chip.key}
+                  className="bc-grid-editor-combobox-chip"
+                  data-bc-grid-editor-combobox-chip="true"
+                >
+                  {chip.swatch ? (
+                    <span
+                      className="bc-grid-editor-combobox-chip-swatch"
+                      data-bc-grid-editor-swatch="true"
+                      style={{ background: chip.swatch }}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  <span>{chip.label}</span>
+                </span>
+              ))
+            )}
+          </span>
+        ) : (
+          <span className="bc-grid-editor-combobox-label">{summary.label}</span>
+        )}
         <span className="bc-grid-editor-combobox-caret" aria-hidden="true">
           ▾
         </span>
@@ -303,10 +396,11 @@ export function Combobox({
         <div
           ref={listboxRef}
           id={listboxId}
-          // biome-ignore lint/a11y/useSemanticElements: <select> cannot render rich option content (swatch/icon)
+          // biome-ignore lint/a11y/useSemanticElements: <select> cannot render rich option content (swatch/icon/multi-chip)
           role="listbox"
           tabIndex={-1}
           aria-label={accessibleName}
+          aria-multiselectable={isMulti ? true : undefined}
           className="bc-grid-editor-combobox-listbox"
           // Marks this subtree as part of the editor portal so the
           // document-level pointerdown click-outside handler in
@@ -319,7 +413,7 @@ export function Combobox({
           {options.map((option, index) => {
             const optionId = `${listboxId}-opt-${index}`
             const isActive = index === activeIndex
-            const isSelected = index === selectedIndex
+            const isSelected = selectedIndices.has(index)
             return (
               <div
                 key={editorOptionToString(option.value)}
@@ -341,6 +435,15 @@ export function Combobox({
                 }}
                 onMouseEnter={() => setActiveIndex(index)}
               >
+                {isMulti ? (
+                  <span
+                    className="bc-grid-editor-combobox-option-check"
+                    data-checked={isSelected ? "true" : undefined}
+                    aria-hidden="true"
+                  >
+                    {isSelected ? "✓" : ""}
+                  </span>
+                ) : null}
                 {option.swatch ? (
                   <span
                     className="bc-grid-editor-combobox-option-swatch"
@@ -392,6 +495,24 @@ export function findOptionIndexByValue(options: readonly EditorOption[], target:
 }
 
 /**
+ * Multi-select mode: map an array of typed values to the indices of
+ * their matching options. Drops values that don't appear in the
+ * options list (consistent with the v0.1 native `<select multiple>`
+ * behaviour). Exported for unit testing.
+ */
+export function selectedIndicesFromValues(
+  options: readonly EditorOption[],
+  values: readonly unknown[],
+): readonly number[] {
+  const result: number[] = []
+  for (const value of values) {
+    const idx = findOptionIndexByValue(options, value)
+    if (idx >= 0) result.push(idx)
+  }
+  return result
+}
+
+/**
  * Find the option whose label or value starts with `seedKey`
  * (case-folded). Mirrors the existing
  * `chrome.ts::findOptionIndexBySeed` semantics — kept here as a
@@ -409,4 +530,54 @@ function findOptionIndexBySeed(
     const value = editorOptionToString(option.value).toLocaleLowerCase()
     return label.startsWith(query) || value.startsWith(query)
   })
+}
+
+function toReadonlyArray(value: unknown): readonly unknown[] {
+  if (Array.isArray(value)) return value
+  return []
+}
+
+function firstSelectedIndex(selected: ReadonlySet<number>): number {
+  for (const idx of selected) return idx
+  return -1
+}
+
+interface SelectedSummary {
+  /** Trigger label string for single mode / placeholder for multi. */
+  label: string
+  /** Single-mode swatch (the picked option's swatch). Multi: undefined. */
+  singleSwatch?: string | undefined
+  /** Single-mode icon. Multi: undefined. */
+  singleIcon?: ReactNode
+  /** Multi-mode chip strip (one entry per selected option, in option order). */
+  chips: readonly { key: string; label: string; swatch?: string }[]
+}
+
+function describeSelectedSummary(
+  options: readonly EditorOption[],
+  selected: ReadonlySet<number>,
+  isMulti: boolean,
+): SelectedSummary {
+  if (isMulti) {
+    const chips: { key: string; label: string; swatch?: string }[] = []
+    options.forEach((option, idx) => {
+      if (!selected.has(idx)) return
+      const chip: { key: string; label: string; swatch?: string } = {
+        key: editorOptionToString(option.value),
+        label: option.label,
+      }
+      if (option.swatch) chip.swatch = option.swatch
+      chips.push(chip)
+    })
+    return { label: chips.length === 0 ? "Select…" : "", chips }
+  }
+  const idx = firstSelectedIndex(selected)
+  const option = idx >= 0 ? options[idx] : undefined
+  const summary: SelectedSummary = {
+    label: option?.label ?? "Select…",
+    chips: [],
+  }
+  if (option?.swatch) summary.singleSwatch = option.swatch
+  if (option?.icon) summary.singleIcon = option.icon
+  return summary
 }
