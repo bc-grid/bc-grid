@@ -102,6 +102,13 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     { mode: "navigation" } satisfies EditState<unknown>,
   )
 
+  // Mirror of `editState` for callbacks that need the latest value
+  // without a deps-array rebuild on every state transition. Callbacks
+  // that DO want to re-bind on state change keep using `editState`
+  // directly via their captured closure.
+  const editStateRef = useRef<EditState<unknown>>(editState)
+  editStateRef.current = editState
+
   // Mutable refs hold per-cell entries + overlay patches. Mutating them
   // directly avoids the cost of cloning a nested Map on every keystroke;
   // the hook bumps a render counter when it needs the JSX to re-read.
@@ -423,6 +430,49 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     [],
   )
 
+  /**
+   * Discard every uncommitted edit on a row — the multi-cell rollback
+   * the user reaches for after Tab-driven entry into 4 cells then
+   * "actually, never mind, revert this row." Audit P1-W3-3.
+   *
+   * Walks the row's overlay patches + edit entries and drops every
+   * non-pending one. Pending entries (in-flight server commits) are
+   * preserved — the overlay is still load-bearing for those, and
+   * dropping them mid-flight would race the server reject's
+   * rollback. Error entries (server-rejected, awaiting retry /
+   * dismiss) are also preserved so the user sees the failure
+   * surface; consumers that want a true "discard everything"
+   * (including errored cells) can call `discardRowEdits` after
+   * clearing the error via re-edit.
+   *
+   * If the active editor is on this row, cancels it first (mirrors
+   * Escape — the editor unmounts cleanly through the state machine).
+   *
+   * Returns `{ discarded }` so callers can announce "Reverted N
+   * changes" or skip the toast when nothing actually rolled back.
+   */
+  const discardRowEdits = useCallback((rowId: RowId): { discarded: number } => {
+    // If the active edit is on the same row, cancel it first.
+    // The state machine's cancel event is absorbed in non-editing
+    // modes so this is safe to call unconditionally.
+    if (
+      (editStateRef.current.mode === "preparing" ||
+        editStateRef.current.mode === "mounting" ||
+        editStateRef.current.mode === "editing" ||
+        editStateRef.current.mode === "validating") &&
+      editStateRef.current.cell.rowId === rowId
+    ) {
+      validateAbortRef.current?.abort()
+      validateAbortRef.current = null
+      prepareTokenRef.current++
+      dispatch({ type: "cancel" })
+    }
+
+    const result = discardRowOverlayEdits(overlayRef.current.patches, editEntriesRef.current, rowId)
+    if (result.discarded > 0) forceRender()
+    return result
+  }, [])
+
   return {
     editState,
     getOverlayValue,
@@ -433,6 +483,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     start,
     commit,
     cancel,
+    discardRowEdits,
     dispatchMounted,
     dispatchUnmounted,
   }
@@ -497,6 +548,41 @@ export function summariseRowEditState(
     if (!error && entry.error) error = entry.error
   }
   return error ? { pending, error } : { pending }
+}
+
+/**
+ * Drop every non-pending overlay patch + edit entry for a single row.
+ * Pending entries (in-flight server commits) and error entries
+ * (server-rejected, awaiting consumer dismissal) are preserved — both
+ * are still load-bearing per `editing-rfc §Concurrency` (rolling them
+ * back would race the server reject's own rollback for pending,
+ * and would silently swallow the surface for errored).
+ *
+ * Mutates the maps in place; returns `{ discarded }` so callers can
+ * skip the announce when nothing actually rolled back. Pure so the
+ * concurrency semantics can be unit-tested without React.
+ *
+ * Audit P1-W3-3.
+ */
+export function discardRowOverlayEdits(
+  patches: Map<RowId, Map<ColumnId, unknown>>,
+  entries: Map<RowId, Map<ColumnId, BcCellEditEntry>>,
+  rowId: RowId,
+): { discarded: number } {
+  const rowPatches = patches.get(rowId)
+  const rowEntries = entries.get(rowId)
+  if (!rowPatches || !rowEntries) return { discarded: 0 }
+
+  let discarded = 0
+  for (const [columnId, entry] of [...rowEntries]) {
+    if (entry.pending || entry.error) continue
+    rowPatches.delete(columnId)
+    rowEntries.delete(columnId)
+    discarded++
+  }
+  if (rowPatches.size === 0) patches.delete(rowId)
+  if (rowEntries.size === 0) entries.delete(rowId)
+  return { discarded }
 }
 
 export type EditingController<TRow> = ReturnType<typeof useEditingController<TRow>>

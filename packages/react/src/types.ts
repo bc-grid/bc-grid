@@ -67,6 +67,8 @@ export interface BcGridMessages {
   actionColumnLabel: string
   editLabel: string
   deleteLabel: string
+  /** BcEditGrid action label for the row-level discard action. */
+  discardLabel: string
   statusBarLabel: string
 
   /**
@@ -579,11 +581,29 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
   canEdit?: (row: TRow) => boolean
   canDelete?: (row: TRow) => boolean
 
+  /**
+   * Multi-cell row rollback handler — surfaced as a "Discard" action
+   * in the action column **only when the row is dirty** (any cell has
+   * uncommitted edits). Audit P1-W3-3.
+   *
+   * The typical wiring is `onDiscardRowEdits={(rowId) =>
+   * apiRef.current?.discardRowEdits(rowId)}` which routes the rollback
+   * through `editController.discardRowEdits` — pending and errored
+   * cells are preserved per `editing-rfc §Concurrency`. Consumers that
+   * need to also clear server-mirror state (an upstream draft store,
+   * etc.) can extend the handler.
+   *
+   * Omit to skip the Discard action entirely.
+   */
+  onDiscardRowEdits?: (rowId: RowId, row: TRow) => void
+
   extraActions?: BcEditGridAction<TRow>[] | ((row: TRow) => BcEditGridAction<TRow>[])
   hideActions?: boolean
 
   editLabel?: string
   deleteLabel?: string
+  /** Discard-action label. Defaults to "Discard". */
+  discardLabel?: string
   DeleteIcon?: ComponentType<{ className?: string }>
 }
 

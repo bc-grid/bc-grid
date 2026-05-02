@@ -46,6 +46,21 @@ describe("BcGridApi imperative editor methods (v0.5 audit P0-7)", () => {
 
     expect(true).toBe(true)
   })
+
+  test("BcGridApi exposes discardRowEdits returning { discarded } (audit P1-W3-3)", () => {
+    // Multi-cell row rollback. Returns the discarded count so
+    // consumers can announce "Reverted N changes" or skip the
+    // toast. BcServerGridApi inherits the method through the type
+    // hierarchy.
+    const api: BcGridApi = stubApi()
+    expect(typeof api.discardRowEdits).toBe("function")
+    expect(api.discardRowEdits("row-1")).toEqual({ discarded: 0 })
+  })
+
+  test("BcServerGridApi inherits discardRowEdits", () => {
+    const api: BcServerGridApi = stubServerApi()
+    expect(typeof api.discardRowEdits).toBe("function")
+  })
 })
 
 function stubApi(): BcGridApi {
@@ -80,6 +95,7 @@ function stubApi(): BcGridApi {
     startEdit: noop,
     commitEdit: noop,
     cancelEdit: noop,
+    discardRowEdits: () => ({ discarded: 0 }),
     refresh: noop,
   }
 }

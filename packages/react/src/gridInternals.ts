@@ -58,6 +58,7 @@ export const defaultMessages: BcGridMessages = {
   actionColumnLabel: "Actions",
   editLabel: "Edit",
   deleteLabel: "Delete",
+  discardLabel: "Discard",
   statusBarLabel: "Grid status",
   filterPlaceholder: "Filter",
   filterAriaLabel: ({ columnLabel }) => `Filter ${columnLabel}`,
