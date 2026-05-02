@@ -368,6 +368,19 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   density?: BcGridDensity
   height?: "auto" | number
+  /**
+   * Convenience layout policy for host apps that do not want to duplicate
+   * grid-height math.
+   *
+   * - `"content"` — page-flow mode, equivalent to `height="auto"`.
+   * - `"viewport"` — fixed height from the grid's top edge to the viewport
+   *   bottom, with the body owning vertical scroll.
+   * - `"auto"` — page-flow while content fits, viewport-fit once content
+   *   would exceed the available viewport height.
+   *
+   * Explicit `height` wins when both are supplied.
+   */
+  fit?: "content" | "viewport" | "auto"
   rowHeight?: number
 
   pagination?: boolean

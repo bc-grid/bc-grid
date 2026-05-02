@@ -5,7 +5,10 @@ import {
   headerScrollTransform,
   headerViewportStyle,
   pinnedLaneStyle,
+  resolveContentFitHeight,
   resolveFallbackBodyHeight,
+  resolveGridFitHeight,
+  resolveViewportFitHeight,
   rootStyle,
   scrollerStyle,
 } from "../src/gridInternals"
@@ -126,5 +129,110 @@ describe("resolveFallbackBodyHeight", () => {
 
   test("undefined falls back to DEFAULT_BODY_HEIGHT", () => {
     expect(resolveFallbackBodyHeight(undefined, 36, 40)).toBe(DEFAULT_BODY_HEIGHT)
+  })
+})
+
+describe("resolveViewportFitHeight", () => {
+  test("measures from the grid top to the viewport bottom", () => {
+    expect(resolveViewportFitHeight({ viewportHeight: 900, elementTop: 140, minHeight: 400 })).toBe(
+      760,
+    )
+  })
+
+  test("floors the measured height at the minimum", () => {
+    expect(resolveViewportFitHeight({ viewportHeight: 500, elementTop: 420, minHeight: 360 })).toBe(
+      360,
+    )
+  })
+})
+
+describe("resolveContentFitHeight", () => {
+  test("adds header chrome, body rows, trailing chrome, and the border allowance", () => {
+    expect(
+      resolveContentFitHeight({
+        headerChromeHeight: 80,
+        bodyHeight: 5 * 36,
+        minBodyHeight: 36,
+        trailingChromeHeight: 36,
+      }),
+    ).toBe(298)
+  })
+
+  test("keeps one row of body height for empty row sets", () => {
+    expect(
+      resolveContentFitHeight({
+        headerChromeHeight: 40,
+        bodyHeight: 0,
+        minBodyHeight: 36,
+      }),
+    ).toBe(78)
+  })
+})
+
+describe("resolveGridFitHeight", () => {
+  test("explicit height wins over fit", () => {
+    expect(
+      resolveGridFitHeight({
+        explicitHeight: 480,
+        fit: "content",
+        contentHeight: 200,
+        viewportHeight: 600,
+        minViewportHeight: 400,
+      }),
+    ).toBe(480)
+  })
+
+  test("content fit maps to page-flow height", () => {
+    expect(
+      resolveGridFitHeight({
+        explicitHeight: undefined,
+        fit: "content",
+        contentHeight: 800,
+        viewportHeight: 600,
+        minViewportHeight: 400,
+      }),
+    ).toBe("auto")
+  })
+
+  test("viewport fit uses the measured viewport height with a fallback", () => {
+    expect(
+      resolveGridFitHeight({
+        explicitHeight: undefined,
+        fit: "viewport",
+        contentHeight: 200,
+        viewportHeight: 620,
+        minViewportHeight: 400,
+      }),
+    ).toBe(620)
+    expect(
+      resolveGridFitHeight({
+        explicitHeight: undefined,
+        fit: "viewport",
+        contentHeight: 200,
+        viewportHeight: null,
+        minViewportHeight: 400,
+      }),
+    ).toBe(400)
+  })
+
+  test("auto fit stays page-flow until content exceeds the viewport", () => {
+    expect(
+      resolveGridFitHeight({
+        explicitHeight: undefined,
+        fit: "auto",
+        contentHeight: 360,
+        viewportHeight: 620,
+        minViewportHeight: 400,
+      }),
+    ).toBe("auto")
+    expect(
+      resolveGridFitHeight({
+        explicitHeight: undefined,
+        fit: "auto",
+        contentHeight: 900,
+        viewportHeight: 620,
+        minViewportHeight: 400,
+      }),
+    ).toBe(620)
   })
 })
