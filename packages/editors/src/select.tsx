@@ -36,7 +36,18 @@ export const selectEditor: BcCellEditor<unknown, unknown> = {
 }
 
 function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, column, row } = props
+  const {
+    initialValue,
+    error,
+    focusRef,
+    seedKey,
+    pending,
+    required,
+    readOnly,
+    disabled,
+    column,
+    row,
+  } = props
   const optionsSource = (column as { options?: unknown }).options
   const options = resolveEditorOptions(optionsSource, row)
   const accessibleName = editorAccessibleName(column, "Select value")
@@ -57,6 +68,9 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
       seedKey={seedKey}
       error={error}
       pending={pending}
+      required={required}
+      readOnly={readOnly}
+      disabled={disabled}
       accessibleName={accessibleName}
       focusRef={focusRef as { current: HTMLElement | null } | undefined}
       onSelect={handleSelect}

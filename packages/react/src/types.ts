@@ -782,6 +782,36 @@ export interface BcCellEditorProps<TRow, TValue = unknown> {
    * spinner / disabled state.
    */
   pending?: boolean
+
+  /**
+   * Resolved column-level required-ness for this cell. Default editors
+   * surface as `aria-required` on their input element. Audit P1-W3-7.
+   *
+   * The framework resolves `column.required` (boolean or row-fn)
+   * before passing to the editor — custom editors don't need to read
+   * the column themselves, just honor the prop.
+   */
+  required?: boolean
+
+  /**
+   * Resolved column-level read-only state. Today the framework only
+   * mounts editors on cells where `column.editable` resolves to true,
+   * so this is currently always `false` — the prop is part of the
+   * contract for future "edit a cell with read-only sub-fields" use
+   * cases (a date+time editor where the date is locked, etc.).
+   * Default editors surface as `aria-readonly`. Audit P1-W3-7.
+   */
+  readOnly?: boolean
+
+  /**
+   * Resolved column-level disabled state. Mirrors `pending` today
+   * (the framework computes this and forwards) but stays a separate
+   * prop so editors can distinguish "the server is settling my
+   * commit" (pending) from "this cell can't be edited right now"
+   * (disabled). Default editors surface as `aria-disabled` on the
+   * input element. Audit P1-W3-7.
+   */
+  disabled?: boolean
 }
 
 export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
