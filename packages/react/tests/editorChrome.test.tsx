@@ -1,15 +1,17 @@
 import { describe, expect, test } from "bun:test"
+import {
+  autocompleteEditor,
+  checkboxEditor,
+  dateEditor,
+  datetimeEditor,
+  multiSelectEditor,
+  numberEditor,
+  selectEditor,
+  textEditor,
+  timeEditor,
+} from "@bc-grid/editors"
 import { type ComponentType, createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import { autocompleteEditor } from "../../editors/src/autocomplete"
-import { checkboxEditor } from "../../editors/src/checkbox"
-import { dateEditor } from "../../editors/src/date"
-import { datetimeEditor } from "../../editors/src/datetime"
-import { multiSelectEditor } from "../../editors/src/multiSelect"
-import { numberEditor } from "../../editors/src/number"
-import { selectEditor } from "../../editors/src/select"
-import { textEditor } from "../../editors/src/text"
-import { timeEditor } from "../../editors/src/time"
 import type { BcCellEditor } from "../src/types"
 
 const optionColumn = {

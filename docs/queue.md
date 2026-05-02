@@ -42,7 +42,7 @@ Read-only audits, one findings doc per author. See `docs/coordination/audit-2026
 
 ## v0.4 — Active Worker Lane Tasks
 
-- `[review: worker2 #355]` **v04-active-filter-summary** — filters panel toolbar chip summary for active filters, reusing per-column clear behavior and preserving the shadcn/Tailwind v4 chrome contract. **Branch:** `agent/worker2/v04-active-filter-summary`. **Effort:** XS.
+- `[done: worker2 #355]` **v04-active-filter-summary** — filters panel toolbar chip summary for active filters, reusing per-column clear behavior and preserving the shadcn/Tailwind v4 chrome contract. **Branch:** `agent/worker2/v04-active-filter-summary`. **Effort:** XS.
 
 ## v0.5 — Audit-Driven Ergonomics Refactor (DRAFT — pending audit synthesis)
 
@@ -56,7 +56,7 @@ Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. These task ent
 - `[draft]` **v05-spike-colour-selection** (worker3) — hero spike at `apps/examples/src/colour-selection.example.tsx`, <100 LOC consumer code.
 - `[draft]` **v05-spike-production-estimating** (coordinator) — hero spike at `apps/examples/src/production-estimating.example.tsx`, <100 LOC consumer code.
 - `[draft]` **v05-spike-document-management** (coordinator) — hero spike at `apps/examples/src/document-management.example.tsx`, <100 LOC consumer code.
-- `[draft]` **v05-test-import-lint** (worker2) — replace 10 internal-path test imports with `@bc-grid/editors` and add a lint rule.
+- `[review: worker2 #358]` **v05-test-import-lint** (worker2) — replace 10 internal-path test imports with `@bc-grid/editors` and add a lint rule. **Branch:** `agent/worker2/v05-test-import-lint`.
 - `[draft]` **v05-search-hotkey-prop** (worker2) — `<BcGrid searchHotkey>` prop owning Cmd+F.
 - `[draft]` **v05-fit-prop** (worker2) — `fit="content" | "viewport" | "auto"` prop owning viewport-fit height math.
 - `[draft]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional.

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { checkboxEditor } from "@bc-grid/editors"
 import { renderToStaticMarkup } from "react-dom/server"
-import { checkboxEditor } from "../../editors/src/checkbox"
 import type { BcCellEditorProps } from "../src/types"
 
 const Component = checkboxEditor.Component

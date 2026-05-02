@@ -44,6 +44,31 @@
           }
         }
       }
+    },
+    {
+      "include": ["packages/*/tests/**/*.ts", "packages/*/tests/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "../../editors/src/autocomplete": "Tests must import built-in editors from @bc-grid/editors so the public package surface is covered.",
+                  "../../editors/src/checkbox": "Tests must import built-in editors from @bc-grid/editors so the public package surface is covered.",
+                  "../../editors/src/date": "Tests must import built-in editors from @bc-grid/editors so the public package surface is covered.",
+                  "../../editors/src/datetime": "Tests must import built-in editors from @bc-grid/editors so the public package surface is covered.",
+                  "../../editors/src/multiSelect": "Tests must import built-in editors from @bc-grid/editors so the public package surface is covered.",
+                  "../../editors/src/number": "Tests must import built-in editors from @bc-grid/editors so the public package surface is covered.",
+                  "../../editors/src/select": "Tests must import built-in editors from @bc-grid/editors so the public package surface is covered.",
+                  "../../editors/src/text": "Tests must import built-in editors from @bc-grid/editors so the public package surface is covered.",
+                  "../../editors/src/time": "Tests must import built-in editors from @bc-grid/editors so the public package surface is covered."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "javascript": {
