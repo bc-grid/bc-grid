@@ -12,6 +12,15 @@ export type {
   BcGridStateValues,
   UseBcGridStateOptions,
 } from "./useBcGridState"
+export { useServerInfiniteGrid } from "./useServerInfiniteGrid"
+export type {
+  UseServerInfiniteGridActions,
+  UseServerInfiniteGridBoundProps,
+  UseServerInfiniteGridInitial,
+  UseServerInfiniteGridOptions,
+  UseServerInfiniteGridResult,
+  UseServerInfiniteGridState,
+} from "./useServerInfiniteGrid"
 export { useServerPagedGrid } from "./useServerPagedGrid"
 export type {
   UseServerPagedGridActions,
