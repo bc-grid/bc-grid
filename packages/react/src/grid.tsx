@@ -237,6 +237,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     onVisibleRowRangeChange,
   } = props
 
+  // Editor toggles forward-compatible with the v0.5
+  // vanilla-and-context-menu RFC. Defaults preserve current
+  // behaviour; the right-click menu's "Edit mode" / "Show
+  // validation messages" / "Show keyboard hints" toggles will
+  // write through these props once the RFC ratifies + the
+  // `BcUserSettings` persistence layer lands.
+  const editingEnabled = props.editingEnabled !== false
+  const showValidationMessages = props.showValidationMessages !== false
+  const showEditorKeyboardHints = props.showEditorKeyboardHints === true
+
   // The spread preserves all defaultMessages required fields; cast back
   // to the full BcGridMessages shape since `Partial<>` overrides widen
   // each function to `string | undefined` in the inferred result.
@@ -1753,6 +1763,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         // event when the grid is already editing a different cell —
         // we don't try to "switch" implicitly, since that races with
         // an in-flight async commit.
+        if (!editingEnabled) return
         if (editController.editState.mode !== "navigation") return
         const rowEntry = rowsById.get(targetRowId)
         if (!rowEntry || rowEntry.kind !== "data") return
@@ -1841,6 +1852,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     closeFilterPopup,
     focusCell,
     isRowDisabled,
+    editingEnabled,
     openFilter,
     pasteTsv,
     rangeSelectionState,
@@ -2098,6 +2110,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       }
 
       if (
+        editingEnabled &&
         cellTarget &&
         cellRow &&
         isDataRowEntry(cellRow) &&
@@ -2226,6 +2239,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       columnIndexById,
       copyRangeToClipboard,
       editController,
+      editingEnabled,
       focusGroupRow,
       focusCell,
       isRowDisabled,
@@ -2674,7 +2688,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         "[data-column-id]",
                       )
                       const columnId = target?.dataset.columnId
-                      if (!disabled && columnId) {
+                      if (editingEnabled && !disabled && columnId) {
                         const column = resolvedColumns.find((c) => c.columnId === columnId)
                         if (column && isCellEditable(column, entry.row)) {
                           const editor = (column.source.cellEditor ?? defaultTextEditor) as never
@@ -2836,6 +2850,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               rowIndexById={rowIndexById}
               columnIndexById={columnIndexById}
               defaultEditor={defaultTextEditor as never}
+              showValidationMessages={showValidationMessages}
+              showKeyboardHints={showEditorKeyboardHints}
             />
 
             {loading ? (

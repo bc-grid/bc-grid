@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { type ComponentType, createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import {
+  EditorKeyboardHints,
   EditorValidationPopover,
   defaultTextEditor,
   findActiveEditorInput,
@@ -201,6 +202,55 @@ describe("EditorValidationPopover", () => {
     // popover element to live inside it.
     const wrapperBlock = source.match(/data-bc-grid-editor-root="true"[\s\S]*?<\/div>\s*\)\s*\}/)
     expect(wrapperBlock?.[0] ?? "").toContain("<EditorValidationPopover")
+  })
+})
+
+describe("EditorKeyboardHints (BcGridProps.showEditorKeyboardHints)", () => {
+  test("renders the F2 / Enter / Esc / Tab caption with kbd elements", () => {
+    const html = renderToStaticMarkup(createElement(EditorKeyboardHints))
+
+    expect(html).toContain('class="bc-grid-editor-keyboard-hints"')
+    expect(html).toContain('data-bc-grid-editor-keyboard-hints="true"')
+    expect(html).toContain("<kbd>F2</kbd>")
+    expect(html).toContain("<kbd>Enter</kbd>")
+    expect(html).toContain("<kbd>Esc</kbd>")
+    expect(html).toContain("<kbd>Tab</kbd>")
+  })
+
+  test("aria-hidden because the AT contract is on the input itself", () => {
+    // The caption is sighted-discovery only; AT users get the
+    // editor input's role + behavior, not a duplicated description.
+    const html = renderToStaticMarkup(createElement(EditorKeyboardHints))
+
+    expect(html).toContain('aria-hidden="true"')
+  })
+})
+
+describe("EditorPortal — showValidationMessages prop (vanilla RFC View → 'Show validation messages')", () => {
+  // The portal mounts a real React tree only at runtime; here we
+  // pin the source-shape contract that the popover render is gated
+  // by `showValidationMessages` and the hints render is gated by
+  // `showKeyboardHints`. Mirrors the EditorValidationPopover-inside-
+  // wrapper source-shape test above.
+  const here = fileURLToPath(new URL(".", import.meta.url))
+  const source = readFileSync(`${here}../src/editorPortal.tsx`, "utf8")
+
+  test("popover render is wrapped in showValidationMessages ternary", () => {
+    expect(source).toMatch(
+      /\{showValidationMessages\s*\?\s*<EditorValidationPopover\s+error=\{error\}\s*\/>\s*:\s*null\}/,
+    )
+  })
+
+  test("keyboard hints render is wrapped in showKeyboardHints ternary", () => {
+    expect(source).toMatch(/\{showKeyboardHints\s*\?\s*<EditorKeyboardHints\s*\/>\s*:\s*null\}/)
+  })
+
+  test("EditorPortal accepts showValidationMessages + showKeyboardHints props with sensible defaults", () => {
+    // Defaults: showValidationMessages = true (preserve current
+    // behaviour), showKeyboardHints = false (off until consumers
+    // opt in via the new prop).
+    expect(source).toMatch(/showValidationMessages\s*=\s*true,/)
+    expect(source).toMatch(/showKeyboardHints\s*=\s*false,/)
   })
 })
 
