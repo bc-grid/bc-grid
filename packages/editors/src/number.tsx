@@ -54,7 +54,8 @@ export function acceptNumericSeed(seedKey: string | undefined): string | undefin
 const SEED_ACCEPT = /^[\d.,\-]$/
 
 function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, column } = props
+  const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled, column } =
+    props
   const inputRef = useRef<HTMLInputElement | null>(null)
   // Stable id per-editor-instance for aria-describedby → hidden error
   // span. Pairs with the cell-level error span the framework renders
@@ -113,6 +114,9 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
         aria-invalid={error ? true : undefined}
         aria-label={accessibleName || undefined}
         aria-describedby={error ? errorId : undefined}
+        aria-required={required ? true : undefined}
+        aria-readonly={readOnly ? true : undefined}
+        aria-disabled={disabled || pending ? true : undefined}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="number"
         data-bc-grid-editor-state={editorControlState({ error, pending })}

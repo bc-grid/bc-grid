@@ -34,7 +34,7 @@ export const dateEditor: BcCellEditor<unknown, unknown> = {
 }
 
 function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending } = props
+  const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   // Hand the input back to the framework via `focusRef`. Runs in
@@ -79,6 +79,9 @@ function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
       defaultValue={seeded}
       disabled={pending}
       aria-invalid={error ? true : undefined}
+      aria-required={required ? true : undefined}
+      aria-readonly={readOnly ? true : undefined}
+      aria-disabled={disabled || pending ? true : undefined}
       data-bc-grid-editor-input="true"
       data-bc-grid-editor-kind="date"
       data-bc-grid-editor-state={editorControlState({ error, pending })}

@@ -269,7 +269,20 @@ function EditorMount<TRow>({
     pointerHint?: { x: number; y: number }
     prepareResult?: unknown
     pending?: boolean
+    required?: boolean
+    readOnly?: boolean
+    disabled?: boolean
   }>
+
+  // Resolve column-level ARIA states once per render so default
+  // editors can stamp `aria-required` / `aria-readonly` /
+  // `aria-disabled` without re-reading the column themselves.
+  // Audit P1-W3-7. `readOnly` is currently always false here — the
+  // grid only mounts editors on cells where `editable` resolves to
+  // true. The prop stays in the contract for future "edit a cell
+  // with read-only sub-fields" use cases.
+  const requiredFlag = resolveColumnRequired(column.source.required, rowEntry.row)
+  const disabledFlag = pending
 
   return (
     <div
@@ -293,10 +306,25 @@ function EditorMount<TRow>({
         {...(prepareResult !== undefined ? { prepareResult } : {})}
         {...(error != null ? { error } : {})}
         {...(pending ? { pending } : {})}
+        {...(requiredFlag ? { required: true } : {})}
+        {...(disabledFlag ? { disabled: true } : {})}
       />
       <EditorValidationPopover error={error} />
     </div>
   )
+}
+
+/**
+ * Resolve `column.required` (boolean | row-fn) against the row.
+ * Defaults to `false` so editors don't stamp `aria-required` on
+ * inputs whose column never declared it. Audit P1-W3-7.
+ */
+function resolveColumnRequired<TRow>(
+  required: boolean | ((row: TRow) => boolean) | undefined,
+  row: TRow,
+): boolean {
+  if (typeof required === "function") return required(row)
+  return required === true
 }
 
 /**

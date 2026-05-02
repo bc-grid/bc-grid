@@ -71,6 +71,12 @@ interface ComboboxBaseProps {
   error?: string | undefined
   /** True while async validation / commit is in flight. Disables interactions. */
   pending?: boolean | undefined
+  /** Column-level required marker. Surfaced as `aria-required` on the trigger. Audit P1-W3-7. */
+  required?: boolean | undefined
+  /** Column-level read-only marker. Surfaced as `aria-readonly`. Audit P1-W3-7. */
+  readOnly?: boolean | undefined
+  /** Column-level disabled marker. Surfaced as `aria-disabled` (additive to `pending`). Audit P1-W3-7. */
+  disabled?: boolean | undefined
   /** Accessible name for the trigger button. Falls through to AT. */
   accessibleName?: string | undefined
   /**
@@ -144,6 +150,9 @@ export function Combobox(props: ComboboxProps): ReactNode {
     seedKey,
     error,
     pending,
+    required,
+    readOnly,
+    disabled,
     accessibleName,
     focusRef,
     renderCreateOption,
@@ -334,6 +343,9 @@ export function Combobox(props: ComboboxProps): ReactNode {
         data-bc-grid-editor-state={pending ? "pending" : error ? "error" : "idle"}
         data-state={open ? "open" : "closed"}
         aria-invalid={error ? true : undefined}
+        aria-required={required ? true : undefined}
+        aria-readonly={readOnly ? true : undefined}
+        aria-disabled={disabled || pending ? true : undefined}
         aria-label={accessibleName}
         aria-describedby={error ? errorId : undefined}
         aria-haspopup="listbox"

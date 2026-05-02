@@ -48,7 +48,8 @@ export const autocompleteEditor: BcCellEditor<unknown, unknown> = {
 }
 
 function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, column } = props
+  const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled, column } =
+    props
   const fetchOptions = (column as { fetchOptions?: SearchComboboxFetchOptions }).fetchOptions
   const accessibleName = editorAccessibleName(column, "Autocomplete value")
   const handleSelect = useCallback(() => {
@@ -63,6 +64,9 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
       seedKey={seedKey}
       error={error}
       pending={pending}
+      required={required}
+      readOnly={readOnly}
+      disabled={disabled}
       accessibleName={accessibleName}
       focusRef={focusRef as { current: HTMLElement | null } | undefined}
       onSelect={handleSelect}

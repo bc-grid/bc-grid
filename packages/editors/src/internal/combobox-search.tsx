@@ -119,6 +119,12 @@ export interface SearchComboboxProps {
   error?: string | undefined
   /** True while async validation / commit is in flight. Disables input. */
   pending?: boolean | undefined
+  /** Column-level required marker. Surfaced as `aria-required`. Audit P1-W3-7. */
+  required?: boolean | undefined
+  /** Column-level read-only marker. Surfaced as `aria-readonly`. Audit P1-W3-7. */
+  readOnly?: boolean | undefined
+  /** Column-level disabled marker. Surfaced as `aria-disabled` (additive to `pending`). Audit P1-W3-7. */
+  disabled?: boolean | undefined
   /** Accessible name for the input. */
   accessibleName?: string | undefined
   /** Handed back to the framework. The portal calls `focusRef.current?.focus()` on mount. */
@@ -156,6 +162,9 @@ export function SearchCombobox({
   seedKey,
   error,
   pending,
+  required,
+  readOnly,
+  disabled,
   accessibleName,
   focusRef,
   onSelect,
@@ -335,6 +344,9 @@ export function SearchCombobox({
         spellCheck={false}
         role="combobox"
         aria-invalid={error ? true : undefined}
+        aria-required={required ? true : undefined}
+        aria-readonly={readOnly ? true : undefined}
+        aria-disabled={disabled || pending ? true : undefined}
         aria-label={accessibleName}
         aria-describedby={error ? `${errorId} ${statusId}` : statusId}
         aria-haspopup="listbox"

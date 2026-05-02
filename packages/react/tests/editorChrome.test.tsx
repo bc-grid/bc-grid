@@ -84,6 +84,56 @@ describe("built-in editor chrome hooks", () => {
     }
   })
 
+  test("required prop surfaces aria-required on every built-in editor (audit P1-W3-7)", () => {
+    // Threading column-level `required` through `BcCellEditorProps`
+    // so AT announces "required" alongside the column label. The
+    // framework resolves `column.required` (boolean | row-fn) at
+    // mount and forwards as the `required` prop; default editors
+    // stamp `aria-required` on their input element.
+    for (const entry of editorCases) {
+      const html = renderEditor(entry, { required: true })
+      expect(html, `editor=${entry.kind}`).toContain('aria-required="true"')
+    }
+  })
+
+  test("disabled prop surfaces aria-disabled on every built-in editor (audit P1-W3-7)", () => {
+    // Distinct from the `pending` (async-commit-in-flight) signal —
+    // `disabled` is the column-level "this cell can't be edited
+    // right now" state. Default editors stamp `aria-disabled` on
+    // their input element so AT users hear the disabled-ness.
+    // Pending-state editors also get aria-disabled (additive to
+    // the existing native `disabled` HTML attribute).
+    for (const entry of editorCases) {
+      const html = renderEditor(entry, { disabled: true })
+      expect(html, `editor=${entry.kind}`).toContain('aria-disabled="true"')
+    }
+  })
+
+  test("readOnly prop surfaces aria-readonly on every built-in editor (audit P1-W3-7)", () => {
+    // Today the framework only mounts editors on cells where
+    // `column.editable` is true, so `readOnly` is always false in
+    // production — but the prop is part of the contract for future
+    // "edit a cell with read-only sub-fields" use cases (a
+    // date+time editor where the date is locked). Default editors
+    // stamp `aria-readonly` when the prop is set.
+    for (const entry of editorCases) {
+      const html = renderEditor(entry, { readOnly: true })
+      expect(html, `editor=${entry.kind}`).toContain('aria-readonly="true"')
+    }
+  })
+
+  test("required/readOnly/disabled default to absent (no ARIA leakage)", () => {
+    // Without the props set, editors must NOT stamp the ARIA
+    // attributes — undefined / false leaves them off so AT doesn't
+    // announce "required" on every cell.
+    for (const entry of editorCases) {
+      const html = renderEditor(entry)
+      expect(html, `editor=${entry.kind}`).not.toContain('aria-required="true"')
+      expect(html, `editor=${entry.kind}`).not.toContain('aria-readonly="true"')
+      expect(html, `editor=${entry.kind}`).not.toContain('aria-disabled="true"')
+    }
+  })
+
   test("lookup-style editors expose accessible names and option-count hooks", () => {
     for (const entry of editorCases.filter((item) =>
       ["select", "multi-select", "autocomplete"].includes(item.kind),

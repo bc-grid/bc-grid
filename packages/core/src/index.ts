@@ -30,6 +30,18 @@ export interface BcGridColumn<TRow, TValue = unknown> {
   cellClass?: string | ((value: TValue, row: TRow) => string | undefined)
 
   editable?: boolean | ((row: TRow) => boolean)
+  /**
+   * Mark cells in this column as required for the user. Surfaced as
+   * `aria-required` on the editor input so AT announces the
+   * required-ness alongside the column label. Audit P1-W3-7.
+   *
+   * Boolean form applies grid-wide; row-fn form lets the consumer
+   * compute requiredness per-row (e.g. "qty is required when status
+   * is 'open'"). Has no effect on the grid's internal validate
+   * pipeline — that's still owned by `column.validate`. This flag is
+   * purely the AT contract for "user must fill this in."
+   */
+  required?: boolean | ((row: TRow) => boolean)
   validate?: (
     newValue: TValue,
     row: TRow,
