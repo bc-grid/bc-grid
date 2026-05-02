@@ -17,33 +17,33 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#352** worker3 audit findings doc
 - ✅ **#354** date/datetime/time `useLayoutEffect` focusRef fix — went out in `v0.4.0`
 - ✅ **#356** visible validation surface (popover under editor input) — went out in `v0.4.0`
-- ✅ **#359** `useBcGridState` turnkey state hook + `BcGridStateBindings` / `BcGridStateBoundProps` / `BcGridStateDispatch` / `BcGridStateValues` / `UseBcGridStateOptions` types (v0.5 task 1)
+- ✅ **#359** `useBcGridState` turnkey state hook + types (v0.5 task 1)
 - ✅ **#361** `BcGridApi.startEdit/commitEdit/cancelEdit` + editor portal methods (v0.5 task 2)
+- ✅ **#364** shadcn Combobox migration for `select.tsx` + `EditorOption.swatch`/`icon` fields + `colour-selection` hero spike (v0.5 P0-4 partial — `multiSelect.tsx` and `autocomplete.tsx` still on native HTML)
 
 v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate.
 
-### Active now → `v05-spike-colour-selection` (recommended next; task 4 below)
+### Active now → `v05-combobox-multiselect-autocomplete` (close P0-4 fully)
 
-**Recommendation: start with task 4 (colour-selection) ahead of task 3 (sales-estimating).** Sales-estimating's "Excel paste fidelity" leg depends on worker2's paste-listener PR landing first; colour-selection is fully independent and includes the shadcn Combobox migration that the synthesis ratified for the lookup editors. Task 3 can land later, with the paste leg, once worker2's `pasteTsv` is in.
+Synthesis P0-4 listed all three lookup editors for the shadcn Combobox migration; #364 only migrated `select.tsx` (which is what the colour spike needed). To fully close P0-4 and let consumers use the new patterns everywhere:
 
-### v0.5 lane — full pipeline
+- Migrate `packages/editors/src/multiSelect.tsx` to the `internal/combobox.tsx` pattern, preserving multi-select semantics (chip rendering, removable chips, "select all" behavior). Reuse `EditorOption.swatch`/`icon` fields you already added.
+- Migrate `packages/editors/src/autocomplete.tsx` to the same Combobox shell, with debounced async option loading. Wire `prepareResult` consumption (audit P1-W3-2) — autocomplete is the natural place for this since it preloads options.
+- Update `editorChrome.test.tsx` and any other affected tests to pin the new contract.
+
+**Branch:** `agent/worker3/v05-combobox-multiselect-autocomplete`. **Effort:** ~1 day.
+
+### v0.5 lane — remaining pipeline
 
 1. ✅ **`v05-use-bc-grid-state`** — DONE (#359).
-
 2. ✅ **`v05-api-ref-editor`** — DONE (#361).
-
-3. **`v05-spike-sales-estimating` — Sales Estimating hero spike** (BLOCKED on worker2 paste PR if you want the paste leg; can land WITHOUT paste first as a "missing pattern" datapoint)
+3. ✅ **`v05-spike-colour-selection`** + select.tsx Combobox — DONE (#364).
+4. **🟢 `v05-combobox-multiselect-autocomplete` (ACTIVE)** — finish P0-4 across the remaining two lookup editors (above).
+5. **`v05-spike-sales-estimating` — Sales Estimating hero spike** (can ship without paste leg as "missing pattern" datapoint; or wait for worker2's paste PR)
    `apps/examples/src/sales-estimating.example.tsx`. Demonstrates: money column type with currency-aware formatting, dependent cells (`extPrice = qty * price * (1 - discount)` recomputes on commit), Excel paste fidelity for line-item entry. **Goal: <100 LOC consumer code.** Anything that pushes over → surface in the spike's PR description as a missing pattern.
    - Audit P0-9 / synthesis hero-spike track.
-   - Uses `useBcGridState` (task 1, done) + worker2's paste integration (task 5).
    - **Branch:** `agent/worker3/v05-spike-sales-estimating`. **Effort:** half day.
-
-4. **🟢 `v05-spike-colour-selection` — Colour Selection hero spike (ACTIVE — recommended next)**
-   `apps/examples/src/colour-selection.example.tsx`. Demonstrates: shadcn-Combobox-anchored lookup with 16×16 colored swatch chips beside option labels, recently-used section, "create new colour" inline. **Goal: <100 LOC consumer code.**
-   - **Includes the shadcn Combobox migration for the lookup editors** (audit P0-4 / synthesis P0-4) — replace native `<select>` / `<datalist>` shells in `packages/editors/src/{select,multiSelect,autocomplete}.tsx` with shadcn Popover-anchored Combobox/Listbox. Extend `EditorOption` with `swatch?: string` (CSS color) and `icon?: ReactNode` per the synthesis answer to your open-question #2.
-   - **Branch:** `agent/worker3/v05-spike-colour-selection`. **Effort:** 1-1.5 days (Combobox migration is the bulk).
-
-5. **`v05-paste-editor-binding` — Excel paste, your half (split with worker2)**
+6. **`v05-paste-editor-binding` — Excel paste, your half (split with worker2)**
    Coordinate with worker2 on the `pasteTsv` API surface they're defining. Your job: implement `editController.commitFromPasteApplyPlan(plan)` that takes the apply-plan from `buildRangeTsvPasteApplyPlan` and routes each commit through the existing edit controller (so `valueParser` + `validate` + optimistic update + rollback all work). Atomic: if any cell fails validation, abort all writes and surface diagnostics.
    - **Wait for worker2's `pasteTsv` API contract before starting this.**
    - **Branch:** `agent/worker3/v05-paste-editor-binding`. **Effort:** half day after contract is set.

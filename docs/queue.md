@@ -49,15 +49,16 @@ Read-only audits, one findings doc per author. See `docs/coordination/audit-2026
 Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the scope. Workers actively claiming. v0.4.0 is published; v0.5 PRs land into the v0.5.0 candidate.
 
 - `[done: worker3 #359]` **v05-use-bc-grid-state** (worker3) — `useBcGridState({ persistTo, columns })` turnkey state hook + `BcGridStateBindings`/`BcGridStateBoundProps`/`BcGridStateDispatch`/`BcGridStateValues`/`UseBcGridStateOptions` types. Coordinator pushed api-surface manifest update on the same branch.
-- `[review: worker1 #363]` **v05-use-server-paged-grid** (worker1) — `useServerPagedGrid({ gridId, loadPage })` owning request-id, stale rejection, debounce, page reset on filter, optimistic edits. Branch `agent/worker1/v05-use-server-paged-grid`.
+- `[done: worker1 #363]` **v05-use-server-paged-grid** (worker1) — `useServerPagedGrid({ gridId, loadPage })` owning request-id, stale rejection, debounce, page reset on filter, optimistic edits. Branch `agent/worker1/v05-use-server-paged-grid`.
 - `[ready]` **v05-api-ref-server** (worker1) — `BcGridApi.scrollToCell` for server-paged grids.
 - `[done: worker3 #361]` **v05-api-ref-editor** (worker3) — `BcGridApi.startEdit` / `commitEdit` / `cancelEdit` and editor portal methods. **Branch:** `agent/worker3/v05-api-ref-editor`.
 - `[ready]` **v05-spike-sales-estimating** (worker3) — hero spike at `apps/examples/src/sales-estimating.example.tsx`, <100 LOC consumer code. Depends on `useBcGridState` (#359) + worker2 paste integration.
-- `[ready]` **v05-spike-colour-selection** (worker3) — hero spike at `apps/examples/src/colour-selection.example.tsx`, <100 LOC consumer code. Includes shadcn Combobox migration with `EditorOption.swatch` (audit P0-4).
+- `[done: worker3 #364]` **v05-spike-colour-selection** (worker3) — hero spike at `apps/examples/src/colour-selection.example.tsx` + shadcn Combobox migration of `select.tsx` + `EditorOption.swatch`/`icon` fields (audit P0-4 partial — multiSelect/autocomplete still pending).
+- `[ready]` **v05-combobox-multiselect-autocomplete** (worker3) — extend Combobox migration to `multiSelect.tsx` and `autocomplete.tsx` to close audit P0-4 fully (synthesis P0-4 listed all three lookup editors).
 - `[ready]` **v05-spike-production-estimating** (coordinator) — hero spike at `apps/examples/src/production-estimating.example.tsx`, <100 LOC consumer code.
 - `[ready]` **v05-spike-document-management** (coordinator) — hero spike at `apps/examples/src/document-management.example.tsx`, <100 LOC consumer code.
 - `[done: worker2 #358]` **v05-test-import-lint** (worker2) — replaced 10 internal-path test imports with `@bc-grid/editors`; added `tools/lint-test-import-boundaries.ts`. **Branch:** `agent/worker2/v05-test-import-lint`.
-- `[review: worker2 #362]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional. **Branch:** `agent/worker2/v05-optional-filter-prop`.
+- `[done: worker2 #362]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional. **Branch:** `agent/worker2/v05-optional-filter-prop`.
 - `[ready]` **v05-search-hotkey-prop** (worker2) — `<BcGrid searchHotkey>` prop owning Cmd+F.
 - `[ready]` **v05-fit-prop** (worker2) — `fit="content" | "viewport" | "auto"` prop owning viewport-fit height math.
 - `[ready]` **v05-api-ref-filter** (worker2) — `BcGridApi.openFilter` / `closeFilter` / `getActiveFilter` filter-side imperative methods (synthesis P0-7 split: worker3 editor side done in #361, worker1 owns server-side `scrollToCell`, worker2 owns filter side).

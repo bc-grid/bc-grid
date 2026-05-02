@@ -17,18 +17,19 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#351** worker2 audit findings doc
 - ✅ **#355** filters panel active filter summary chip strip — went out in `v0.4.0`
 - ✅ **#358** test-import lint rule + `tools/lint-test-import-boundaries.ts` (cleanup train task 1)
+- ✅ **#362** optional `filter` / `onFilterChange` props (cleanup train task 2)
 
 v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate.
 
-### Active now → `v05-optional-filter-prop` (task 2 below)
+### Active now → `v05-search-hotkey-prop` (task 3 below)
 
-Pick up from task 2 in the ordered list. Each task is its own branch + PR; ship in order. The full pipeline:
+Pick up from task 3 in the ordered list. Each task is its own branch + PR; ship in order. The full pipeline:
 
 1. ✅ **`v05-test-import-lint`** — DONE (#358).
 
-2. **🟢 `v05-optional-filter-prop` (ACTIVE)** — Make `filter` and `onFilterChange` truly optional on `BcGridProps`. Today bsncraft uses `...{onFilterChange ? { filter, onFilterChange } : {}}` to work around the type (see `~/work/bsncraft/apps/web/components/data-grid.tsx:573`). Tests pin the optional path. **Effort: ~30 min.** Branch: `agent/worker2/v05-optional-filter-prop`.
+2. ✅ **`v05-optional-filter-prop`** — DONE (#362).
 
-3. **`v05-search-hotkey-prop`** — Add `<BcGrid searchHotkey>` prop that owns Cmd/Ctrl+F. Exposes a `searchInputRef` so consumers can wire focus. Removes the duplicate listeners in `~/work/bsncraft/apps/web/components/data-grid.tsx:179-215` and `~/work/bsncraft/packages/ui/src/components/data-table.tsx:1-25`. **Effort: 1-2 hours.** Branch: `agent/worker2/v05-search-hotkey-prop`.
+3. **🟢 `v05-search-hotkey-prop` (ACTIVE)** — Add `<BcGrid searchHotkey>` prop that owns Cmd/Ctrl+F. Exposes a `searchInputRef` so consumers can wire focus. Removes the duplicate listeners in `~/work/bsncraft/apps/web/components/data-grid.tsx:179-215` and `~/work/bsncraft/packages/ui/src/components/data-table.tsx:1-25`. **Effort: 1-2 hours.** Branch: `agent/worker2/v05-search-hotkey-prop`.
 
 4. **`v05-fit-prop`** — Add `fit="content" | "viewport" | "auto"` prop on `<BcGrid>` that owns viewport-fit height math currently duplicated in bsncraft `data-grid.tsx:296-310` (15 lines of header + filter row + body math). **Effort: 2-3 hours including tests.** Branch: `agent/worker2/v05-fit-prop`.
 
