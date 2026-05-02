@@ -805,6 +805,44 @@ export function hasDefinedProp(object: object, key: PropertyKey): boolean {
   return hasProp(object, key) && (object as Record<PropertyKey, unknown>)[key] !== undefined
 }
 
+export interface SearchHotkeyEventLike {
+  key: string
+  ctrlKey?: boolean
+  metaKey?: boolean
+  altKey?: boolean
+  shiftKey?: boolean
+  defaultPrevented?: boolean
+  target?: EventTarget | null
+}
+
+function isEditableSearchHotkeyTarget(target: EventTarget | null | undefined): boolean {
+  const node = target as
+    | {
+        tagName?: string
+        isContentEditable?: boolean
+      }
+    | null
+    | undefined
+  const tagName = typeof node?.tagName === "string" ? node.tagName.toLowerCase() : ""
+  return (
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    node?.isContentEditable === true
+  )
+}
+
+export function shouldHandleSearchHotkey(event: SearchHotkeyEventLike): boolean {
+  return (
+    event.key.toLowerCase() === "f" &&
+    (event.ctrlKey === true || event.metaKey === true) &&
+    event.altKey !== true &&
+    event.shiftKey !== true &&
+    event.defaultPrevented !== true &&
+    !isEditableSearchHotkeyTarget(event.target)
+  )
+}
+
 export function clamp(value: number, min: number, max: number): number {
   if (max < min) return min
   return Math.min(max, Math.max(min, value))

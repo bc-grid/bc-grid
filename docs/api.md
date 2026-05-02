@@ -39,7 +39,7 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Sort, resize, pin | Available | AR Customers headers | `sortable`, `resizable`, `pinned` |
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
-| Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
+| Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText`, `searchHotkey` |
 | Row grouping (client / server-page-window) | Available | Columns panel "Group by" zone, header menu, controlled `groupBy` | `groupBy`, `defaultGroupBy`, `onGroupByChange`, `groupableColumns`, `groupsExpandedByDefault` |
 | Columns panel | Available | Tool panels control or `?toolPanel=columns` | `sidebar={["columns"]}` |
 | Filters panel | Available | Tool panels control or `?toolPanel=filters` | `sidebar={["filters"]}` |
@@ -777,6 +777,7 @@ and pass its value into the grid:
 
 ```tsx
 function CustomerGrid() {
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [searchText, setSearchText] = useState("")
 
   return (
@@ -784,6 +785,7 @@ function CustomerGrid() {
       <label>
         <span>Global search</span>
         <input
+          ref={searchInputRef}
           type="search"
           value={searchText}
           onChange={(event) => setSearchText(event.currentTarget.value)}
@@ -795,6 +797,8 @@ function CustomerGrid() {
         columns={columns}
         rowId={(row) => row.id}
         searchText={searchText}
+        searchHotkey
+        searchInputRef={searchInputRef}
       />
     </>
   )
@@ -803,7 +807,9 @@ function CustomerGrid() {
 
 Use `defaultSearchText` only for an uncontrolled initial query. For a host-owned
 search input, prefer controlling the query with `searchText` as shown above. Do
-not pass `searchText` and `defaultSearchText` to the same grid.
+not pass `searchText` and `defaultSearchText` to the same grid. Enable
+`searchHotkey` with `searchInputRef` when the grid should focus and select the
+host search input on Cmd/Ctrl+F.
 
 ### 4.4 Filter shape (frozen at v0.1)
 
@@ -1131,6 +1137,10 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   // Grouping
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
   groupsExpandedByDefault?: boolean
+
+  // Host-owned global search chrome
+  searchHotkey?: boolean
+  searchInputRef?: React.RefObject<HTMLInputElement | null>
 
   // Active filter convention
   showInactive?: boolean
