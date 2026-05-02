@@ -52,23 +52,35 @@ Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `
 - `[done: worker1 #363]` **v05-use-server-paged-grid** (worker1) — `useServerPagedGrid({ gridId, loadPage })` owning request-id, stale rejection, debounce, page reset on filter, optimistic edits. Branch `agent/worker1/v05-use-server-paged-grid`.
 - `[done: worker1 #366]` **v05-api-ref-server** (worker1) — `BcServerGridApi.scrollToServerCell(rowId, columnId, opts?)` returning `Promise<{ scrolled: boolean }>`. Sync if row is loaded; navigate-and-await if `opts.pageIndex` differs from current paged page. `useServerPagedGrid().actions.scrollToCell` wraps it. Branch `agent/worker1/v05-api-ref-scroll-to-cell`.
 - `[done: worker1 #368]` **v05-use-server-infinite-grid** (worker1) — companion `useServerInfiniteGrid({ gridId, loadBlock, rowId })` turnkey hook + extracted `internal/useServerOrchestration.ts` shared primitives. Branch `agent/worker1/v05-use-server-infinite-grid`.
-- `[review: worker1 #371]` **v05-use-server-tree-grid** (worker1) — companion `useServerTreeGrid({ gridId, loadChildren, rowId })` turnkey hook for `<BcServerGrid rowModel="tree">`. Same `{ props, state, actions }` shape with expansion controlled-state + `expandRow` / `collapseRow` actions. Reuses the `internal/useServerOrchestration` primitives extracted in #368. Branch `agent/worker1/v05-use-server-tree-grid`.
+- `[done: worker1 #371]` **v05-use-server-tree-grid** (worker1) — `useServerTreeGrid` companion hook for `<BcServerGrid rowModel="tree">`. Closes the server-hook trio (paged + infinite + tree). Reuses `internal/useServerOrchestration` primitives. Branch `agent/worker1/v05-use-server-tree-grid`.
 - `[done: worker3 #361]` **v05-api-ref-editor** (worker3) — `BcGridApi.startEdit` / `commitEdit` / `cancelEdit` and editor portal methods. **Branch:** `agent/worker3/v05-api-ref-editor`.
 - `[ready]` **v05-spike-sales-estimating** (worker3) — hero spike at `apps/examples/src/sales-estimating.example.tsx`, <100 LOC consumer code. Depends on `useBcGridState` (#359) + worker2 paste integration.
 - `[done: worker3 #364]` **v05-spike-colour-selection** (worker3) — hero spike at `apps/examples/src/colour-selection.example.tsx` + shadcn Combobox migration of `select.tsx` + `EditorOption.swatch`/`icon` fields (audit P0-4 partial — multiSelect/autocomplete still pending).
 - `[done: worker3 #370]` **v05-combobox-autocomplete** (worker3) — autocomplete.tsx migrated to new `internal/combobox-search.tsx` primitive (search Combobox: async fetchOptions, debounce, AbortSignal race-handling, visible Loading/empty rows). prepareResult preload deferred (BcCellEditorPrepareParams API change needed). Coordinator landed editor-autocomplete.pw.ts spec update at `0c09530`.
-- `[ready]` **v05-combobox-multi-select-v2** (worker3) — re-attempt multi-select Combobox migration on a fresh branch from current main. PR #365 was closed because its branch carried unintended reverts of #353/#363. Closes P0-4 leg 3 of 3.
-- `[ready]` **v05-spike-production-estimating** (coordinator) — hero spike at `apps/examples/src/production-estimating.example.tsx`, <100 LOC consumer code.
+- `[done: worker3 #372]` **v05-combobox-multi-select-v2** (worker3) — multiSelect.tsx migrated to multi-mode Combobox; closes audit P0-4 fully (all three lookup editors on shadcn primitives). Coordinator landed `editor-multi-select.pw.ts` spec update at `a57a33f` + scroll/checkmark follow-up `8af914e`. Surfaced a v0.6 follow-up: multi-mode Combobox `Enter` toggles + bubbles, undoing user's last pick.
+- `[done: coordinator #374]` **v05-spike-production-estimating** (coordinator) — hero spike at `apps/examples/src/production-estimating.example.tsx`, ~132 LOC. 6 findings; 3 reinforce doc-mgmt findings (row-level drag/drop hooks, BcSelection narrowing, bulk patch primitive — strong v0.6 P0 signals).
 - `[done: coordinator #367]` **v05-spike-document-management** (coordinator) — hero spike at `apps/examples/src/document-management.example.tsx`, ~140 LOC. 6 findings flagged (row-level drag/drop hooks, bulk-action toolbar primitive, per-cell hover ergonomics, BcSelection variant narrowing, file-cell formatter, useBcGridState row-data awareness).
 - `[done: worker2 #358]` **v05-test-import-lint** (worker2) — replaced 10 internal-path test imports with `@bc-grid/editors`; added `tools/lint-test-import-boundaries.ts`. **Branch:** `agent/worker2/v05-test-import-lint`.
 - `[done: worker2 #362]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional. **Branch:** `agent/worker2/v05-optional-filter-prop`.
 - `[done: worker2 #369]` **v05-search-hotkey-prop** (worker2) — `<BcGrid searchHotkey>` prop owning Cmd+F. **Branch:** `agent/worker2/v05-search-hotkey-prop`.
-- `[review: worker2 #373]` **v05-fit-prop** (worker2) — `fit="content" | "viewport" | "auto"` prop owning viewport-fit height math. **Branch:** `agent/worker2/v05-fit-prop`.
+- `[done: worker2 #373]` **v05-fit-prop** (worker2) — `fit="content" | "viewport" | "auto"` prop owning viewport-fit height math. **Branch:** `agent/worker2/v05-fit-prop`.
 - `[ready]` **v05-api-ref-filter** (worker2) — `BcGridApi.openFilter` / `closeFilter` / `getActiveFilter` filter-side imperative methods (synthesis P0-7 split: worker3 editor side done in #361, worker1 owns server-side `scrollToCell`, worker2 owns filter side).
 - `[ready, stretch]` **v05-filter-discriminated-union** (worker2) — `BcColumnFilter` becomes a tagged union per type.
 - `[ready]` **v05-paste-listener** (worker2) — `paste` event + `pasteTsv` API on `BcGridApi`. Pairs with worker3 `v05-paste-editor-binding`.
 - `[ready]` **v05-paste-editor-binding** (worker3) — `editController.commitFromPasteApplyPlan` to route paste through commit. Waits for worker2's `pasteTsv` contract.
 - `[ready]` **v05-bsncraft-migration-proof** (coordinator) — migrate one bsncraft CRUD grid to the new hooks; target diff ≥-100 LOC wrapper code.
+
+## v0.6 follow-ups (queued, do not start until v0.5 ships)
+
+Sourced from spike findings (#367 + #374) and Combobox migration aftermath (a57a33f / 8af914e). Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both document-management and production-estimating spikes flagged the same gap.
+
+- `[deferred]` **v06-row-drag-drop-hooks** — `BcGridProps.onRowDragOver` / `onRowDrop` callbacks for row-level drag-and-drop. **Two-spike-confirmed** (doc-mgmt #1, production-estimating #5).
+- `[deferred]` **v06-bulk-row-patch-primitive** — `apiRef.applyRowPatches(patches[])` as the primitive every "fill down" / "shift dates" / "set status" toolbar wants. **Two-spike-confirmed** (doc-mgmt #6, production-estimating #4).
+- `[deferred]` **v06-bcselection-narrowing** — `BcSelection` discriminated-union variant narrowing ergonomics. **Two-spike-confirmed** (doc-mgmt #3, production-estimating #6).
+- `[deferred]` **v06-combobox-enter-semantics** — multi-mode Combobox's `Enter` keydown routes through `updateSelection` (toggling the active option) before bubbling to the editor portal commit, undoing the user's last pick. Workaround in `editor-multi-select.pw.ts`: use `Tab`. Real fix: in multi mode, `Enter` should ONLY bubble to commit; `Space` stays as the toggle gesture.
+- `[deferred]` **v06-bulk-action-toolbar-primitive** — `<BcGridBulkActions>` slot or `bulkActions` prop on `BcGridProps`. Doc-mgmt spike finding #2.
+- `[deferred]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant. Production-estimating finding #1 (only `BcServerTreeProps` exists today; client tree forces parentId/expansion plumbing in consumer).
+- `[deferred]` **v06-cell-hover-ergonomics** — `BcCellRendererParams` carries no hover state and no shadcn `Tooltip` / `HoverCard` integration. Doc-mgmt spike finding #3.
 
 ## Q1 — Foundation + Vertical Slice
 
