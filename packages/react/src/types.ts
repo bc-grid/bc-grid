@@ -50,6 +50,7 @@ import type {
   ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
+  ServerTreeRow,
   ServerViewDiagnostics,
 } from "@bc-grid/core"
 import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
@@ -963,6 +964,7 @@ export type {
   ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
+  ServerTreeRow,
   ServerViewDiagnostics,
 }
 

@@ -133,6 +133,7 @@ export type {
   ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
+  ServerTreeRow,
   ServerViewDiagnostics,
 } from "./types"
 export type { UseAggregationsOptions } from "./aggregations"

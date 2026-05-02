@@ -261,6 +261,7 @@ export const apiSurfaceManifest = [
       "ServerRowUpdate",
       "ServerTreeQuery",
       "ServerTreeResult",
+      "ServerTreeRow",
       "ServerViewDiagnostics",
       "UseAggregationsOptions",
       "UseBcGridStateOptions",

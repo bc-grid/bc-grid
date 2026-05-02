@@ -719,6 +719,7 @@ class ServerRowModelController<TRow> {
           })
           this.emit({ type: "blockError", blockKey, error })
           this.setLastLoad({ blockKey, error, query, status: "error" })
+          logServerError("paged", error)
         }
         throw error
       })
@@ -910,6 +911,7 @@ class ServerRowModelController<TRow> {
             viewKey,
           })
           this.setLastLoad({ blockKey, error, query, status: "error" })
+          logServerError("tree", error)
         }
         throw error
       })
@@ -1597,6 +1599,7 @@ class ServerRowModelController<TRow> {
             query: input.query,
             status: "error",
           })
+          logServerError("infinite", error)
         }
         input.deferred.reject(error)
       })
@@ -1892,6 +1895,20 @@ class ServerRowModelController<TRow> {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError"
+}
+
+// In dev, surface server-row validator throws (e.g. ServerTreeResult
+// childCount mismatch) so they don't dissolve into a blank grid. The
+// promise is still rejected; production hosts get the error via
+// state.error and the `blockError` event. Surfaced 2026-05-03 by
+// bsncraft v0.5 alpha consumer review — a tree childCount mismatch
+// burned ~30 min before the contract was understood.
+function logServerError(scope: "paged" | "infinite" | "tree", error: unknown): void {
+  if (typeof process === "undefined" || process.env.NODE_ENV === "production") return
+  if (isAbortError(error)) return
+  const message = serverLoadErrorMessage(error)
+  // eslint-disable-next-line no-console
+  console.error(`[bc-grid] ${scope} block rejected: ${message}`, error)
 }
 
 function createAbortError(): DOMException {
