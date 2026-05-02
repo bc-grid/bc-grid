@@ -429,6 +429,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   groupsExpandedByDefault?: boolean
 
   /**
+   * When true, `<BcGrid>` handles Cmd/Ctrl+F while mounted and focuses the
+   * host-owned global search input supplied via `searchInputRef`.
+   */
+  searchHotkey?: boolean
+  searchInputRef?: RefObject<HTMLInputElement | null>
+
+  /**
    * Initial JSON-safe layout snapshot to restore when the grid mounts.
    * Consumers own storage; the grid only applies the supplied state to the
    * existing controlled/uncontrolled state paths.

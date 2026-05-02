@@ -103,6 +103,7 @@ import {
   rootStyle,
   rowStyle,
   scrollerStyle,
+  shouldHandleSearchHotkey,
   syncHeaderRowsScroll,
   useColumnReorder,
   useColumnResize,
@@ -537,6 +538,23 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultSearchText ??
     props.initialLayout?.searchText ??
     ""
+  useEffect(() => {
+    if (!props.searchHotkey || typeof document === "undefined") return
+
+    const handleSearchHotkey = (event: globalThis.KeyboardEvent) => {
+      if (!shouldHandleSearchHotkey(event)) return
+
+      const searchInput = props.searchInputRef?.current ?? null
+      if (!searchInput) return
+
+      event.preventDefault()
+      searchInput.focus()
+      searchInput.select()
+    }
+
+    document.addEventListener("keydown", handleSearchHotkey)
+    return () => document.removeEventListener("keydown", handleSearchHotkey)
+  }, [props.searchHotkey, props.searchInputRef])
   const aggregationScope = props.aggregationScope ?? "filtered"
   // Manual row processing — the host (typically `<BcServerGrid>`) owns
   // row order/membership; the grid renders `data` as-is. Skips client

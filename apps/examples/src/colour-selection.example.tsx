@@ -1,5 +1,11 @@
 import { selectEditor } from "@bc-grid/editors"
-import { type BcCellEditor, BcGrid, type BcGridColumn, useBcGridState } from "@bc-grid/react"
+import {
+  type BcCellEditCommitEvent,
+  type BcCellEditor,
+  BcGrid,
+  type BcGridColumn,
+  useBcGridState,
+} from "@bc-grid/react"
 import { useState } from "react"
 
 /**
@@ -92,9 +98,9 @@ export function ColourSelectionExample() {
       columns={columns}
       data={rows}
       rowId={(row) => row.id}
-      onCellEditCommit={(event) => {
+      onCellEditCommit={(event: BcCellEditCommitEvent<FinishRow>) => {
         setRows((prev) =>
-          prev.map((row) =>
+          prev.map((row: FinishRow) =>
             row.id === event.rowId
               ? { ...row, [event.column.field as string]: event.nextValue }
               : row,

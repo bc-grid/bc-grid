@@ -72,7 +72,7 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Sort, resize, pin | Available | AR Customers headers | `sortable`, `resizable`, `pinned` |
 | Inline filters | Available | AR Customers filter row | `filter`, `showFilterRow` |
 | Popup filters | Available | `?filterPopup=1` | `filter.variant = "popup"` |
-| Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText` |
+| Global search | Available | AR Customers toolbar | `searchText`, `defaultSearchText`, `searchHotkey` |
 | Row grouping (client / server-page-window) | Available | Columns panel "Group by" zone, header menu, controlled `groupBy` | `groupBy`, `defaultGroupBy`, `onGroupByChange`, `groupableColumns`, `groupsExpandedByDefault` |
 | Columns, filters, and pivot panels | Available | Tool panels control or `?toolPanel=columns` / `?toolPanel=filters` / `?toolPanel=pivot` | `sidebar={["columns", "filters", "pivot"]}`, `pivotState` |
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
@@ -94,11 +94,13 @@ bc-grid leaves the global search input to the host application. Keep the input
 next to your app toolbar controls and pass the value through `searchText`:
 
 ```tsx
+const searchInputRef = useRef<HTMLInputElement>(null)
 const [searchText, setSearchText] = useState("")
 
 return (
   <>
     <input
+      ref={searchInputRef}
       type="search"
       aria-label="Global search"
       value={searchText}
@@ -109,6 +111,8 @@ return (
       data={rows}
       rowId={(row) => row.id}
       searchText={searchText}
+      searchHotkey
+      searchInputRef={searchInputRef}
     />
   </>
 )
@@ -116,7 +120,9 @@ return (
 
 Use `defaultSearchText` for an uncontrolled initial query. For a host-owned
 search input, prefer controlling the query with `searchText` as shown above. Do
-not combine `defaultSearchText` with `searchText` on the same grid.
+not combine `defaultSearchText` with `searchText` on the same grid. Enable
+`searchHotkey` with `searchInputRef` when the grid should focus and select the
+host search input on Cmd/Ctrl+F.
 
 ## Row grouping
 
