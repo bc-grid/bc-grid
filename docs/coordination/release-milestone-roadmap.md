@@ -75,13 +75,15 @@ Goal: every CRUD grid in the BusinessCraft ERP becomes ~30 lines of consumer cod
 
 > **Pivot context (2026-05-02):** the original `v0.5.0` plan (Range, Clipboard, Spreadsheet Flows) is bumped to `v0.6.0`. This milestone replaces it as a response to the bc-grid audit at `docs/coordination/audit-2026-05/`. The audit found exceptional engineering discipline (zero `any` across 11 packages, clean DAG, type-check green) but a severe API ergonomics gap: every consumer grid wires ~30 controlled-state props plus a hand-rolled server pagination state machine, and `apiRef` is missing imperative methods that ERP UX patterns need. bsncraft already carries 2,142 LOC of wrapper code across 5 wrappers, and zero of the four hero use cases are built yet — fixing ergonomics now (before the migration scales) is dramatically cheaper than retrofitting later. **Detailed scope:** `docs/coordination/v0.5-audit-refactor-plan.md`.
 
-- [ ] `useBcGridState({ persistTo, columns, server? })` turnkey hook owns the ~30 controlled-state pairs and exposes a single discriminated `onChange` event for consumers that need to observe state. Existing controlled-prop API stays for advanced users; opinionated path becomes the default.
-- [ ] `useServerPagedGrid({ gridId, loadPage })` owns request-id flow, stale-response rejection, debounce, page reset on filter change, optimistic edits in flight. Companion: `useServerInfiniteGrid`, `useServerTreeGrid`.
-- [ ] `BcGridApi` expands with `focusCell`, `scrollToCell`, `startEdit`, `commitEdit`, `cancelEdit`, `openFilter`, `closeFilter`, `getActiveCell`, `getSelection`. Documented in `api.md`.
-- [ ] Four hero-use-case spike grids land in `apps/examples/`, each <100 LOC of consumer code: sales estimating (money column + dependent cells + Excel paste), production estimating (outline rendering + drag-to-reorder + multi-row edit), colour selection (swatch-aware lookup), document management (file/thumbnail column + drag-drop upload + bulk action).
-- [ ] Cheap-but-real cleanups land alongside: 10 internal-path test imports replaced with `@bc-grid/<pkg>` imports plus a lint rule, `filter` prop becomes optional, `<BcGrid searchHotkey>` prop owns Cmd+F, `fit="content" | "viewport" | "auto"` prop owns viewport-fit height math.
-- [ ] `bsncraft` migrates at least one CRUD grid to the new turnkey hooks and the diff is at least -100 LOC of wrapper code.
-- [ ] Audit synthesis at `docs/coordination/audit-2026-05/synthesis.md` is published with ranked P0/P1/P2 + author tags + sprint plan, and this milestone closes the P0 items.
+- [x] `useBcGridState({ persistTo, columns, server? })` turnkey hook (#359 worker3).
+- [x] `useServerPagedGrid({ gridId, loadPage })` + companions: `useServerInfiniteGrid` (#368) and `useServerTreeGrid` (#371). Shared orchestration extracted to `internal/useServerOrchestration.ts`. (#363/#368/#371 worker1.)
+- [x] `BcGridApi` expanded: editor side (`startEdit`/`commitEdit`/`cancelEdit` #361 worker3), server side (`scrollToCell` #366 worker1), filter side (`openFilter`/`closeFilter`/`getActiveFilter` #377 worker2). Documented in `api.md`.
+- [x] Four hero-use-case spike grids landed in `apps/examples/`: colour-selection (#364 worker3), document-management (#367 coordinator), production-estimating (#374 coordinator), sales-estimating (#375 worker3). All four ship missing-pattern findings that feed v0.6 backlog.
+- [x] Cheap cleanups: test-import lint rule (#358), optional `filter` props (#362), `searchHotkey` prop (#369), `fit` prop (#373). All worker2.
+- [ ] **`bsncraft` migrates at least one CRUD grid** to the new turnkey hooks and the diff is at least -100 LOC of wrapper code. **In progress** — bsncraft team drafting the customers migration to `<BcServerGrid rowModel="paged">` per the 2026-05-03 architecture review (their `ServerEditGrid` wrapper duplicates ~325 LOC of `useServerPagedGrid` orchestration; replaces with thin adapter). Coordinator pairs on review.
+- [ ] **Excel paste integration (audit P0-1)** — the LAST P0 still open. worker2 owns the paste listener + `pasteTsv` API; worker3 owns the editor-side `commitFromPasteApplyPlan` binding. Active.
+- [x] Audit synthesis at `docs/coordination/audit-2026-05/synthesis.md` published (ranked P0/P1/P2 + author tags + sprint plan).
+- [x] Coordinator chrome polish from bsncraft v0.4 review: pinned row-state CSS tokens aligned with body composites + decorative master-detail header chevron removed (#7800361).
 
 ## v0.6.0 - Range, Clipboard, and Spreadsheet Flows
 

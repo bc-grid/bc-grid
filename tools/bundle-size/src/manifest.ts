@@ -38,13 +38,16 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
-      // Reset 2026-05-02 after accepting #353 (server-grid rowProcessingMode
-      // API addition). Prior baseline 63572 was set early in the parity
-      // sprint and predates the editor / server-edit / grouping / filter
-      // popup surface that has since shipped. Reset to the post-#353 size
-      // so v0.5 audit-refactor PRs get clean drift signal again. 100 KiB
-      // hard cap unchanged.
-      baselineGzipBytes: 71500,
+      // Reset 2026-05-02 evening after the v0.5 audit-refactor train
+      // landed: useBcGridState (#359), apiRef expansion (#361/#366/#377),
+      // server-hook trio (#363/#368/#371), Combobox migrations (#364/
+      // #370/#372), four hero spike grids (#364/#367/#374/#375), and
+      // cleanup train (#358/#362/#369/#373). All the planned v0.5 P0
+      // surface except paste integration is now in. Bumping the soft
+      // drift marker to current so the remaining v0.5 PRs (paste +
+      // cheap P1s) get clean signal. 100 KiB hard cap unchanged
+      // (currently at 86.56 KiB total — 13.4 KiB headroom).
+      baselineGzipBytes: 77824,
     },
   ],
 }
