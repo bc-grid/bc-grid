@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { XIcon } from "./internal/panel-icons"
 import type { BcStatusBarContext, BcStatusBarCustomSegment, BcStatusBarSegment } from "./types"
 
 interface BcStatusBarProps<TRow> {
@@ -52,6 +53,7 @@ interface ResolvedSegment {
  * - `filtered` — only when a filter is active (filteredRowCount differs
  *   from totalRowCount; with an `"unknown"` total we still show it
  *   because the consumer asked for the segment)
+ * - `activeFilters` — only when at least one column filter is active
  * - `selected` — only when `selectedRowCount > 0`
  * - `aggregations` — only when the array is non-empty
  * - custom — always renders; consumer controls visibility
@@ -81,7 +83,7 @@ export function resolveVisibleSegments<TRow>(
 }
 
 function renderBuiltInSegment<TRow>(
-  id: "total" | "filtered" | "selected" | "aggregations",
+  id: "total" | "filtered" | "activeFilters" | "selected" | "aggregations",
   ctx: BcStatusBarContext<TRow>,
   index: number,
 ): ResolvedSegment | null {
@@ -102,6 +104,15 @@ function renderBuiltInSegment<TRow>(
       content: <FilteredSegment ctx={ctx} />,
     }
   }
+  if (id === "activeFilters") {
+    if (ctx.activeFilters.length === 0) return null
+    return {
+      key: `activeFilters-${index}`,
+      id: "activeFilters",
+      align: "left",
+      content: <ActiveFiltersSegment ctx={ctx} />,
+    }
+  }
   if (id === "selected") {
     if (ctx.selectedRowCount <= 0) return null
     return {
@@ -118,6 +129,34 @@ function renderBuiltInSegment<TRow>(
     align: "right",
     content: <AggregationsSegment ctx={ctx} />,
   }
+}
+
+function ActiveFiltersSegment<TRow>({ ctx }: { ctx: BcStatusBarContext<TRow> }): ReactNode {
+  return (
+    <ul
+      className="bc-grid-statusbar-filter-list"
+      aria-label={`${ctx.activeFilters.length} active ${
+        ctx.activeFilters.length === 1 ? "filter" : "filters"
+      }`}
+    >
+      {ctx.activeFilters.map((item) => (
+        <li className="bc-grid-statusbar-filter-chip" key={item.columnId}>
+          <span className="bc-grid-statusbar-filter-label">{item.label}</span>
+          {item.summary ? (
+            <span className="bc-grid-statusbar-filter-value">{item.summary}</span>
+          ) : null}
+          <button
+            aria-label={`Clear filter on ${item.label}`}
+            className="bc-grid-statusbar-filter-remove"
+            type="button"
+            onClick={() => ctx.clearColumnFilter(item.columnId)}
+          >
+            {XIcon}
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 function isFilterActive<TRow>(ctx: BcStatusBarContext<TRow>): boolean {

@@ -16,9 +16,18 @@ import type {
  */
 export type ColumnFilterText = Readonly<Record<ColumnId, string>>
 export type ColumnFilterTypeByColumnId = Readonly<Record<ColumnId, BcColumnFilter["type"]>>
-export type DateFilterOperator = "is" | "before" | "after" | "between"
-export type NumberFilterOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "between"
-export type SetFilterOperator = "in" | "not-in" | "blank"
+export type DateFilterOperator = "is" | "before" | "after" | "between" | "blank" | "not-blank"
+export type NumberFilterOperator =
+  | "="
+  | "!="
+  | "<"
+  | "<="
+  | ">"
+  | ">="
+  | "between"
+  | "blank"
+  | "not-blank"
+export type SetFilterOperator = "in" | "not-in" | "blank" | "not-blank"
 /**
  * Operator surface for `BcColumnFilter.type === "text"` per
  * `filter-registry-rfc §text`. The `regex` modifier is a separate
@@ -26,7 +35,13 @@ export type SetFilterOperator = "in" | "not-in" | "blank"
  * `value` as a `RegExp` pattern (operator-agnostic — `op` is ignored
  * for matching because regex patterns describe their own anchoring).
  */
-export type TextFilterOperator = "contains" | "starts-with" | "ends-with" | "equals"
+export type TextFilterOperator =
+  | "contains"
+  | "starts-with"
+  | "ends-with"
+  | "equals"
+  | "blank"
+  | "not-blank"
 
 export interface TextFilterInput {
   op: TextFilterOperator
@@ -268,6 +283,9 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
 
   if (filter.type === "number") {
     if (!isNumberFilterOperator(filter.op)) return undefined
+    if (filter.op === "blank" || filter.op === "not-blank") {
+      return encodeNumberFilterInput({ op: filter.op, value: "" })
+    }
     if (filter.op === "between") {
       const values = numberFilterValuePair(filter.values)
       return values ? encodeNumberFilterInput({ op: "between", ...values }) : undefined
@@ -284,6 +302,9 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
 
   if (filter.type === "date") {
     if (!isDateFilterOperator(filter.op)) return undefined
+    if (filter.op === "blank" || filter.op === "not-blank") {
+      return encodeDateFilterInput({ op: filter.op, value: "" })
+    }
     if (filter.op === "between") {
       const values = dateFilterValuePair(filter.values)
       return values ? encodeDateFilterInput({ op: "between", ...values }) : undefined
@@ -299,7 +320,9 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
   }
 
   if (filter.type === "set") {
-    if (filter.op === "blank") return encodeSetFilterInput({ op: "blank", values: [] })
+    if (filter.op === "blank" || filter.op === "not-blank") {
+      return encodeSetFilterInput({ op: filter.op, values: [] })
+    }
     if (filter.op !== "in" && filter.op !== "not-in") return undefined
     const values = Array.isArray(filter.values)
       ? filter.values.filter((value): value is string => typeof value === "string")
@@ -308,13 +331,14 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
   }
 
   if (filter.type !== "text") return undefined
-  const value = scalarFilterInputValue(filter.value)
-  if (!value || value.trim().length === 0) return undefined
   // Default `contains` filter with no modifier flags serialises as a
   // plain string for legacy round-trip. Anything non-default emits the
   // JSON-encoded TextFilterInput so the editor restores op + modifier
   // flags faithfully.
   const op = isTextFilterOperator(filter.op) ? filter.op : "contains"
+  if (op === "blank" || op === "not-blank") return encodeTextFilterInput({ op, value: "" })
+  const value = scalarFilterInputValue(filter.value)
+  if (!value || value.trim().length === 0) return undefined
   const caseSensitive = filter.caseSensitive === true
   const regex = filter.regex === true
   if (op === "contains" && !caseSensitive && !regex) return value
@@ -339,12 +363,12 @@ function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFil
     return actual != null && actual === Boolean(filter.value)
   }
   if (filter.type === "number") {
-    return matchesNumberFilter(value.formattedValue, filter)
+    return matchesNumberFilter(value, filter)
   }
   if (filter.type === "number-range") {
     // The number-range filter always emits op="between"; the predicate
     // path is identical to `number`'s between branch.
-    return matchesNumberFilter(value.formattedValue, filter)
+    return matchesNumberFilter(value, filter)
   }
   if (filter.type === "date") {
     return matchesDateFilter(value, filter)
@@ -358,7 +382,7 @@ function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFil
     return matchesSetFilter(value, filter)
   }
   if (filter.type !== "text") return false
-  return matchesTextFilter(value.formattedValue, filter)
+  return matchesTextFilter(value, filter)
 }
 
 /**
@@ -371,7 +395,13 @@ function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFil
  * to compile drops the filter (no match) — defense-in-depth alongside
  * the build-time guard in parseTextFilterInput.
  */
-function matchesTextFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
+function matchesTextFilter(
+  cellValue: { formattedValue: string; rawValue?: unknown },
+  filter: ServerColumnFilter,
+): boolean {
+  if (filter.op === "blank") return isBlankFilterCellValue(cellValue)
+  if (filter.op === "not-blank") return !isBlankFilterCellValue(cellValue)
+  const formattedValue = cellValue.formattedValue
   const needleRaw = String(filter.value ?? "")
   if (needleRaw.length === 0) return true
 
@@ -583,6 +613,13 @@ export function nextSetFilterValuesOnToggleAll(
  */
 function parseTextFilterInput(raw: string): TextColumnFilterDraft | null {
   const input = decodeTextFilterInput(raw)
+  if (input.op === "blank" || input.op === "not-blank") {
+    return {
+      kind: "column",
+      type: "text",
+      op: input.op,
+    }
+  }
   const value = input.value.trim()
   if (!value) return null
 
@@ -607,6 +644,13 @@ function parseTextFilterInput(raw: string): TextColumnFilterDraft | null {
 
 function parseDateFilterInput(raw: string): DateColumnFilterDraft | null {
   const input = decodeDateFilterInput(raw)
+  if (input.op === "blank" || input.op === "not-blank") {
+    return {
+      kind: "column",
+      type: "date",
+      op: input.op,
+    }
+  }
   const value = parseFilterDate(input.value)
   if (!value) return null
 
@@ -633,6 +677,13 @@ function parseDateFilterInput(raw: string): DateColumnFilterDraft | null {
 
 function parseNumberFilterInput(raw: string): NumberColumnFilterDraft | null {
   const input = decodeNumberFilterInput(raw)
+  if (input.op === "blank" || input.op === "not-blank") {
+    return {
+      kind: "column",
+      type: "number",
+      op: input.op,
+    }
+  }
   const value = parseFilterNumber(input.value)
   if (value == null) return null
 
@@ -707,11 +758,11 @@ function parseDateRangeFilterInput(raw: string): DateRangeColumnFilterDraft | nu
 function parseSetFilterInput(raw: string): SetColumnFilterDraft | null {
   const input = decodeSetFilterInput(raw)
 
-  if (input.op === "blank") {
+  if (input.op === "blank" || input.op === "not-blank") {
     return {
       kind: "column",
       type: "set",
-      op: "blank",
+      op: input.op,
     }
   }
 
@@ -786,6 +837,8 @@ function matchesDateFilter(
   cellValue: { formattedValue: string; rawValue?: unknown },
   filter: ServerColumnFilter,
 ): boolean {
+  if (filter.op === "blank") return isBlankFilterCellValue(cellValue)
+  if (filter.op === "not-blank") return !isBlankFilterCellValue(cellValue)
   const actual = parseFilterDate(cellValue.rawValue) ?? parseFilterDate(cellValue.formattedValue)
   if (!actual) return false
 
@@ -812,6 +865,7 @@ function matchesSetFilter(
   filter: ServerColumnFilter,
 ): boolean {
   if (filter.op === "blank") return isBlankSetFilterCellValue(cellValue)
+  if (filter.op === "not-blank") return !isBlankSetFilterCellValue(cellValue)
 
   const selected = new Set((filter.values ?? []).flatMap(setFilterValueKeys))
   if (selected.size === 0) return true
@@ -823,8 +877,17 @@ function matchesSetFilter(
   return false
 }
 
-function matchesNumberFilter(formattedValue: string, filter: ServerColumnFilter): boolean {
-  const actual = parseFormattedNumber(formattedValue)
+function matchesNumberFilter(
+  cellValue: { formattedValue: string; rawValue?: unknown } | string,
+  filter: ServerColumnFilter,
+): boolean {
+  const value =
+    typeof cellValue === "string"
+      ? ({ formattedValue: cellValue } as { formattedValue: string; rawValue?: unknown })
+      : cellValue
+  if (filter.op === "blank") return isBlankFilterCellValue(value)
+  if (filter.op === "not-blank") return !isBlankFilterCellValue(value)
+  const actual = parseFormattedNumber(value.formattedValue)
   if (actual == null) return false
 
   if (filter.op === "between") {
@@ -876,8 +939,18 @@ export function isBlankSetFilterValue(value: unknown): boolean {
   return false
 }
 
+function isBlankFilterCellValue(value: { formattedValue: string; rawValue?: unknown }): boolean {
+  if ("rawValue" in value) {
+    const raw = value.rawValue
+    if (raw == null) return true
+    if (typeof raw === "string") return raw.trim().length === 0
+    return false
+  }
+  return value.formattedValue.trim().length === 0
+}
+
 function isBlankSetFilterCellValue(value: { formattedValue: string; rawValue?: unknown }): boolean {
-  if ("rawValue" in value && isBlankSetFilterValue(value.rawValue)) return true
+  if ("rawValue" in value) return isBlankSetFilterValue(value.rawValue)
   return value.formattedValue.trim().length === 0
 }
 
@@ -951,7 +1024,14 @@ function toDateInputValue(date: Date): string {
 }
 
 function isDateFilterOperator(value: unknown): value is DateFilterOperator {
-  return value === "is" || value === "before" || value === "after" || value === "between"
+  return (
+    value === "is" ||
+    value === "before" ||
+    value === "after" ||
+    value === "between" ||
+    value === "blank" ||
+    value === "not-blank"
+  )
 }
 
 function isNumberFilterOperator(value: unknown): value is NumberFilterOperator {
@@ -962,16 +1042,23 @@ function isNumberFilterOperator(value: unknown): value is NumberFilterOperator {
     value === "<=" ||
     value === ">" ||
     value === ">=" ||
-    value === "between"
+    value === "between" ||
+    value === "blank" ||
+    value === "not-blank"
   )
 }
 
 function isTextFilterOperator(value: unknown): value is TextFilterOperator {
   return (
-    value === "contains" || value === "starts-with" || value === "ends-with" || value === "equals"
+    value === "contains" ||
+    value === "starts-with" ||
+    value === "ends-with" ||
+    value === "equals" ||
+    value === "blank" ||
+    value === "not-blank"
   )
 }
 
 function isSetFilterOperator(value: unknown): value is SetFilterOperator {
-  return value === "in" || value === "not-in" || value === "blank"
+  return value === "in" || value === "not-in" || value === "blank" || value === "not-blank"
 }

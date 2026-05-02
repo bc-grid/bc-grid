@@ -31,7 +31,13 @@ function makeGroupEntry(expanded: boolean): GroupRowEntry {
   }
 }
 
-function renderGroupCell(expanded: boolean): string {
+function renderGroupCell(
+  expanded: boolean,
+  selection?: {
+    disabled?: boolean
+    state: "all" | "some" | "none"
+  },
+): string {
   return renderToStaticMarkup(
     renderGroupRowCell({
       activeCell: null,
@@ -39,6 +45,13 @@ function renderGroupCell(expanded: boolean): string {
       column: groupColumn,
       domBaseId: "bc-grid",
       entry: makeGroupEntry(expanded),
+      ...(selection
+        ? {
+            groupSelectionDisabled: selection.disabled === true,
+            groupSelectionState: selection.state,
+            onToggleSelection: () => {},
+          }
+        : {}),
       onToggle: () => {},
       totalWidth: 800,
       virtualRow: { height: 36 },
@@ -107,5 +120,18 @@ describe("renderGroupRowCell — disclosure affordance (no text-glyph chevron)",
     // applying after refactors.
     const html = renderGroupCell(false)
     expect(html).toContain('class="bc-grid-group-toggle"')
+  })
+
+  test("optional group selection checkbox renders beside the disclosure", () => {
+    const html = renderGroupCell(true, { state: "some" })
+
+    expect(html).toContain('class="bc-grid-group-selection"')
+    expect(html).toContain('data-bc-grid-group-selection-state="some"')
+    expect(html).toMatch(/<input[^>]*type="checkbox"[^>]*class="bc-grid-cell-checkbox"/)
+    expect(html).toContain('aria-label="Select rows in EMEA"')
+    expect(html).toContain('class="bc-grid-group-toggle"')
+    expect(html.indexOf("bc-grid-group-selection")).toBeLessThan(
+      html.indexOf("bc-grid-group-toggle"),
+    )
   })
 })

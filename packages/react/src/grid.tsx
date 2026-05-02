@@ -71,6 +71,7 @@ import {
   removeColumnFromFilter,
   setFilterValueKeys,
 } from "./filter"
+import { buildActiveFilterSummaryItems } from "./filterSummary"
 import {
   DEFAULT_BODY_HEIGHT,
   DEFAULT_COL_WIDTH,
@@ -163,7 +164,14 @@ import {
 import { applyKeyboardRangeExtension } from "./rangeNavigation"
 import { BcRangeOverlay } from "./rangeOverlay"
 import { matchesSearchText } from "./search"
-import { isRowSelected, selectOnly, selectRange, toggleRow } from "./selection"
+import {
+  headerCheckboxState,
+  isRowSelected,
+  selectOnly,
+  selectRange,
+  toggleRow,
+  toggleRows,
+} from "./selection"
 import { createSelectionCheckboxColumn } from "./selectionColumn"
 import {
   BcGridSidebar,
@@ -361,6 +369,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       return rest
     })
   }, [])
+  const clearAllColumnFilters = useCallback(() => {
+    clearColumnFilterText()
+  }, [clearColumnFilterText])
   // Filter-popup anchor + columnId for `column.filter.variant === "popup"`
   // columns per `filter-popup-variant`. Null when no popup is open.
   const [filterPopupState, setFilterPopupState] = useState<{
@@ -549,6 +560,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     }
     return next
   }, [consumerResolvedColumns])
+  const activeFilterSummaryItems = useMemo(
+    () => buildActiveFilterSummaryItems(columns, columnFilterText),
+    [columnFilterText, columns],
+  )
 
   const inlineFilter = useMemo(
     () => buildGridFilter(columnFilterText, columnFilterTypes),
@@ -922,6 +937,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         .map((entry) => entry.rowId),
     [isRowDisabled, visibleDataRowEntries],
   )
+  const selectableLeafRowIds = useMemo(() => {
+    const ids = new Set<RowId>()
+    for (const entry of leafRowEntries) {
+      if (!isRowDisabled(entry.row)) ids.add(entry.rowId)
+    }
+    return ids
+  }, [isRowDisabled, leafRowEntries])
 
   // Layout-resolved columns including the synthetic pinned-left checkbox
   // column when `checkboxSelection` is on. The synthetic column is rebuilt
@@ -1813,9 +1835,29 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       filteredRowCount: allRowEntries.length,
       selectedRowCount: computeSelectedRowCount(selectionState, data.length, allRowEntries.length),
       aggregations: aggregationResults,
+      activeFilters: activeFilterSummaryItems,
+      clearColumnFilter: clearColumnFilterText,
+      clearAllFilters: clearAllColumnFilters,
     }),
-    [api, aggregationResults, allRowEntries.length, data.length, selectionState],
+    [
+      activeFilterSummaryItems,
+      api,
+      aggregationResults,
+      allRowEntries.length,
+      clearAllColumnFilters,
+      clearColumnFilterText,
+      data.length,
+      selectionState,
+    ],
   )
+  const statusBarSegments = useMemo<
+    readonly NonNullable<BcGridProps<TRow>["statusBar"]>[number][]
+  >(() => {
+    const base = props.statusBar ?? []
+    if (props.activeFilterSummary === "off") return base
+    if (base.includes("activeFilters")) return base
+    return ["activeFilters", ...base]
+  }, [props.activeFilterSummary, props.statusBar])
 
   const handlePaginationChange = useCallback(
     (next: BcPaginationState) => {
@@ -2474,6 +2516,27 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 const entry = rowEntries[virtualRow.index]
                 if (!entry) return null
                 if (!isDataRowEntry(entry)) {
+                  const groupSelectableRowIds = entry.childRowIds.filter((rowId) =>
+                    selectableLeafRowIds.has(rowId),
+                  )
+                  const toggleGroupSelection = () => {
+                    if (groupSelectableRowIds.length === 0) return false
+                    setSelectionState(toggleRows(selectionState, groupSelectableRowIds))
+                    selectionAnchorRef.current = groupSelectableRowIds[0] ?? entry.rowId
+                    return true
+                  }
+                  const groupSelectionProps = props.checkboxSelection
+                    ? {
+                        groupSelectionDisabled: groupSelectableRowIds.length === 0,
+                        groupSelectionState: headerCheckboxState(
+                          selectionState,
+                          groupSelectableRowIds,
+                        ),
+                        onToggleSelection: () => {
+                          toggleGroupSelection()
+                        },
+                      }
+                    : {}
                   return (
                     <div
                       key={entry.rowId}
@@ -2486,8 +2549,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                       data-row-index={virtualRow.index}
                       data-bc-grid-row-kind="group"
                       style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
-                      onClick={() => {
+                      onClick={(event) => {
                         focusGroupRow(entry)
+                        if (
+                          (event.shiftKey || event.ctrlKey || event.metaKey) &&
+                          toggleGroupSelection()
+                        ) {
+                          return
+                        }
                         toggleGroupRow(entry)
                       }}
                     >
@@ -2497,6 +2566,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         column: resolvedColumns[0],
                         domBaseId,
                         entry,
+                        ...groupSelectionProps,
                         onToggle: (groupEntry) => {
                           focusGroupRow(groupEntry)
                           toggleGroupRow(groupEntry)
@@ -2757,9 +2827,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             />
           ) : null}
 
-          {props.statusBar && props.statusBar.length > 0 ? (
+          {statusBarSegments.length > 0 ? (
             <BcStatusBar
-              segments={props.statusBar}
+              segments={statusBarSegments}
               ctx={statusBarContext}
               ariaLabel={messages.statusBarLabel}
             />

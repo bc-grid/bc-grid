@@ -4,6 +4,7 @@ import {
   buildGridFilter,
   columnFilterTextEqual,
   columnFilterTextFromGridFilter,
+  decodeDateFilterInput,
   decodeDateRangeFilterInput,
   decodeNumberFilterInput,
   decodeNumberRangeFilterInput,
@@ -325,6 +326,51 @@ describe("buildGridFilter", () => {
     })
   })
 
+  test("not-blank set input produces a value-less ServerColumnFilter", () => {
+    expect(
+      buildGridFilter(
+        { status: encodeSetFilterInput({ op: "not-blank", values: [] }) },
+        { status: "set" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "status",
+      type: "set",
+      op: "not-blank",
+    })
+  })
+
+  test("blank/not-blank scalar operators produce value-less ServerColumnFilters", () => {
+    expect(buildGridFilter({ name: encodeTextFilterInput({ op: "blank", value: "" }) })).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "blank",
+    })
+    expect(
+      buildGridFilter(
+        { balance: encodeNumberFilterInput({ op: "not-blank", value: "" }) },
+        { balance: "number" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "balance",
+      type: "number",
+      op: "not-blank",
+    })
+    expect(
+      buildGridFilter(
+        { lastInvoice: encodeDateFilterInput({ op: "blank", value: "" }) },
+        { lastInvoice: "date" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "lastInvoice",
+      type: "date",
+      op: "blank",
+    })
+  })
+
   test("empty set selections do not activate a filter", () => {
     expect(
       buildGridFilter(
@@ -508,6 +554,40 @@ describe("columnFilterTextFromGridFilter — per-type round-trip", () => {
     expect(buildGridFilter({ name: "Acme" })).toEqual(filter)
   })
 
+  test("text — `blank` and `not-blank` project as structured payloads", () => {
+    const blankFilter = {
+      kind: "column" as const,
+      columnId: "name",
+      type: "text" as const,
+      op: "blank",
+    }
+    const notBlankFilter = {
+      kind: "column" as const,
+      columnId: "notes",
+      type: "text" as const,
+      op: "not-blank",
+    }
+    const text = columnFilterTextFromGridFilter({
+      kind: "group",
+      op: "and",
+      filters: [blankFilter, notBlankFilter],
+    })
+
+    expect(text.name ? decodeTextFilterInput(text.name) : null).toEqual({
+      op: "blank",
+      value: "",
+    })
+    expect(text.notes ? decodeTextFilterInput(text.notes) : null).toEqual({
+      op: "not-blank",
+      value: "",
+    })
+    expect(buildGridFilter(text)).toEqual({
+      kind: "group",
+      op: "and",
+      filters: [blankFilter, notBlankFilter],
+    })
+  })
+
   test("number — single-op `>=`", () => {
     const filter = {
       kind: "column" as const,
@@ -524,6 +604,21 @@ describe("columnFilterTextFromGridFilter — per-type round-trip", () => {
     expect(buildGridFilter(text, { balance: "number" })).toEqual(filter)
   })
 
+  test("number — `blank` projects without a value", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "balance",
+      type: "number" as const,
+      op: "blank",
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.balance ? decodeNumberFilterInput(text.balance) : null).toEqual({
+      op: "blank",
+      value: "",
+    })
+    expect(buildGridFilter(text, { balance: "number" })).toEqual(filter)
+  })
+
   test("date — single-op `before`", () => {
     const filter = {
       kind: "column" as const,
@@ -534,6 +629,21 @@ describe("columnFilterTextFromGridFilter — per-type round-trip", () => {
     }
     const text = columnFilterTextFromGridFilter(filter)
     expect(text.lastInvoice).toBe(encodeDateFilterInput({ op: "before", value: "2026-03-01" }))
+    expect(buildGridFilter(text, { lastInvoice: "date" })).toEqual(filter)
+  })
+
+  test("date — `not-blank` projects without a value", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "lastInvoice",
+      type: "date" as const,
+      op: "not-blank",
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.lastInvoice ? decodeDateFilterInput(text.lastInvoice) : null).toEqual({
+      op: "not-blank",
+      value: "",
+    })
     expect(buildGridFilter(text, { lastInvoice: "date" })).toEqual(filter)
   })
 
@@ -582,6 +692,18 @@ describe("columnFilterTextFromGridFilter — per-type round-trip", () => {
     }
     const text = columnFilterTextFromGridFilter(filter)
     expect(text.status).toBe(encodeSetFilterInput({ op: "blank", values: [] }))
+    expect(buildGridFilter(text, { status: "set" })).toEqual(filter)
+  })
+
+  test("set — `not-blank` projects without a values entry", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "status",
+      type: "set" as const,
+      op: "not-blank",
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.status).toBe(encodeSetFilterInput({ op: "not-blank", values: [] }))
     expect(buildGridFilter(text, { status: "set" })).toEqual(filter)
   })
 
@@ -892,6 +1014,83 @@ describe("matchesGridFilter — column", () => {
     ).toBe(true)
     expect(matchesGridFilter(filter, lookup({ status: "" }))).toBe(true)
     expect(matchesGridFilter(filter, lookup({ status: "Open" }))).toBe(false)
+  })
+
+  test("not-blank set filters reject empty raw or formatted values", () => {
+    const filter = buildGridFilter(
+      { status: encodeSetFilterInput({ op: "not-blank", values: [] }) },
+      { status: "set" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, () => ({
+        formattedValue: "Fallback",
+        rawValue: null,
+      })),
+    ).toBe(false)
+    expect(matchesGridFilter(filter, lookup({ status: "" }))).toBe(false)
+    expect(matchesGridFilter(filter, lookup({ status: "Open" }))).toBe(true)
+  })
+
+  test("blank/not-blank predicates prefer non-empty raw values over empty formatting", () => {
+    const textBlank = buildGridFilter({ name: encodeTextFilterInput({ op: "blank", value: "" }) })
+    const textNotBlank = buildGridFilter({
+      name: encodeTextFilterInput({ op: "not-blank", value: "" }),
+    })
+    const numberBlank = buildGridFilter(
+      { balance: encodeNumberFilterInput({ op: "blank", value: "" }) },
+      { balance: "number" },
+    )
+    const dateNotBlank = buildGridFilter(
+      { postedOn: encodeDateFilterInput({ op: "not-blank", value: "" }) },
+      { postedOn: "date" },
+    )
+    const setBlank = buildGridFilter(
+      { tags: encodeSetFilterInput({ op: "blank", values: [] }) },
+      { tags: "set" },
+    )
+    if (!textBlank || !textNotBlank || !numberBlank || !dateNotBlank || !setBlank) {
+      throw new Error("expected filters")
+    }
+
+    expect(
+      matchesGridFilter(textBlank, () => ({
+        formattedValue: "Fallback",
+        rawValue: null,
+      })),
+    ).toBe(true)
+    expect(matchesGridFilter(textNotBlank, lookup({ name: "  " }))).toBe(false)
+    expect(
+      matchesGridFilter(textBlank, () => ({
+        formattedValue: "",
+        rawValue: 0,
+      })),
+    ).toBe(false)
+    expect(
+      matchesGridFilter(textNotBlank, () => ({
+        formattedValue: "",
+        rawValue: 0,
+      })),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(numberBlank, () => ({
+        formattedValue: "",
+        rawValue: 0,
+      })),
+    ).toBe(false)
+    expect(
+      matchesGridFilter(dateNotBlank, () => ({
+        formattedValue: "",
+        rawValue: "2026-03-01",
+      })),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(setBlank, () => ({
+        formattedValue: "",
+        rawValue: ["erp"],
+      })),
+    ).toBe(false)
   })
 
   test("set filters match any raw array item for multi-value columns", () => {

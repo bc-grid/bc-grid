@@ -3,6 +3,13 @@ import { emptyBcPivotState } from "@bc-grid/core"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import {
+  encodeDateFilterInput,
+  encodeNumberFilterInput,
+  encodeSetFilterInput,
+  encodeTextFilterInput,
+} from "../src/filter"
+import { buildActiveFilterSummaryItems } from "../src/filterSummary"
+import {
   BcFiltersToolPanel,
   activeFilterToolPanelItems,
   buildFilterToolPanelItems,
@@ -83,6 +90,47 @@ describe("buildFilterToolPanelItems", () => {
     expect(activeFilterToolPanelItems(items).map((item) => item.columnId)).toEqual(["account"])
     expect(isFilterToolPanelDraftActive("  ")).toBe(false)
     expect(isFilterToolPanelDraftActive("  settled  ")).toBe(true)
+  })
+})
+
+describe("buildActiveFilterSummaryItems", () => {
+  test("builds status-chip summaries from active column filter drafts", () => {
+    const items = buildActiveFilterSummaryItems(columns, {
+      account: encodeTextFilterInput({ op: "not-blank", value: "" }),
+      balance: encodeNumberFilterInput({ op: ">=", value: "1000" }),
+      postedOn: encodeDateFilterInput({ op: "blank", value: "" }),
+      approved: "true",
+      notes: "hidden",
+    })
+
+    expect(items.map((item) => [item.columnId, item.label, item.summary, item.type])).toEqual([
+      ["account", "Account", "Not blank", "text"],
+      ["balance", "Balance", ">= 1000", "number"],
+      ["postedOn", "Posted", "Blank", "date"],
+      ["approved", "Approved", "Yes", "boolean"],
+    ])
+  })
+
+  test("summarizes set filters and ignores inactive drafts", () => {
+    const items = buildActiveFilterSummaryItems(columns, {
+      account: "   ",
+      balance: "",
+      postedOn: encodeDateFilterInput({ op: "not-blank", value: "" }),
+      approved: "false",
+    })
+    const setItems = buildActiveFilterSummaryItems(
+      [{ columnId: "status", field: "account", header: "Status", filter: { type: "set" } }],
+      {
+        status: encodeSetFilterInput({ op: "not-in", values: ["Closed", "Blocked"] }),
+      },
+    )
+
+    expect(items.map((item) => [item.columnId, item.summary])).toEqual([
+      ["postedOn", "Not blank"],
+      ["approved", "No"],
+    ])
+    expect(setItems).toHaveLength(1)
+    expect(setItems[0]?.summary).toBe("Not Closed, Blocked")
   })
 })
 

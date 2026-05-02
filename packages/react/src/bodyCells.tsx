@@ -83,6 +83,9 @@ interface RenderGroupRowCellParams<TRow> {
   column: ResolvedColumn<TRow> | undefined
   domBaseId: string
   entry: GroupRowEntry
+  groupSelectionDisabled?: boolean
+  groupSelectionState?: "all" | "some" | "none"
+  onToggleSelection?: (entry: GroupRowEntry) => void
   onToggle: (entry: GroupRowEntry) => void
   totalWidth: number
   virtualRow: { height: number }
@@ -265,6 +268,9 @@ export function renderGroupRowCell<TRow>({
   column,
   domBaseId,
   entry,
+  groupSelectionDisabled,
+  groupSelectionState,
+  onToggleSelection,
   onToggle,
   totalWidth,
   virtualRow,
@@ -290,6 +296,27 @@ export function renderGroupRowCell<TRow>({
       data-bc-grid-active-cell={active || undefined}
       style={groupCellStyle(entry.level, virtualRow.height, totalWidth)}
     >
+      {onToggleSelection && groupSelectionState ? (
+        <span
+          className="bc-grid-group-selection"
+          data-bc-grid-group-selection-state={groupSelectionState}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={stopGridKeyboardNav}
+        >
+          <input
+            ref={(el) => {
+              if (el) el.indeterminate = groupSelectionState === "some"
+            }}
+            type="checkbox"
+            className="bc-grid-cell-checkbox"
+            aria-label={`Select rows in ${label}`}
+            checked={groupSelectionState === "all"}
+            disabled={groupSelectionDisabled}
+            onChange={() => onToggleSelection(entry)}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </span>
+      ) : null}
       <button
         type="button"
         className="bc-grid-group-toggle"

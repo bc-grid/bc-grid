@@ -533,6 +533,46 @@ export function renderFilterCell<TRow>({
 
 type FilterFocusElement = HTMLInputElement | HTMLSelectElement | HTMLButtonElement
 type FilterKeyDownHandler = (event: KeyboardEvent<HTMLElement>) => void
+type BlankFilterOperator = "blank" | "not-blank"
+
+function isBlankFilterOperator(value: unknown): value is BlankFilterOperator {
+  return value === "blank" || value === "not-blank"
+}
+
+function BlankFilterToggle({
+  filterLabel,
+  op,
+  onChange,
+  onKeyDown,
+}: {
+  filterLabel: string
+  op: BlankFilterOperator
+  onChange: (op: BlankFilterOperator) => void
+  onKeyDown: FilterKeyDownHandler
+}): ReactNode {
+  return (
+    <div className="bc-grid-filter-blank-toggle" role="group" aria-label={`${filterLabel} blank`}>
+      <button
+        type="button"
+        className="bc-grid-filter-text-toggle"
+        aria-pressed={op === "blank"}
+        onClick={() => onChange("blank")}
+        onKeyDown={onKeyDown}
+      >
+        Blank
+      </button>
+      <button
+        type="button"
+        className="bc-grid-filter-text-toggle"
+        aria-pressed={op === "not-blank"}
+        onClick={() => onChange("not-blank")}
+        onKeyDown={onKeyDown}
+      >
+        Not blank
+      </button>
+    </div>
+  )
+}
 
 function TextFilterControl({
   filterId,
@@ -580,6 +620,10 @@ function TextFilterControl({
     caseSensitive: boolean
     regex: boolean
   }) => {
+    if (isBlankFilterOperator(next.op)) {
+      onFilterChange(encodeTextFilterInput({ op: next.op, value: "" }))
+      return
+    }
     if (next.op === "contains" && !next.caseSensitive && !next.regex) {
       // Preserve the legacy plain-string contract for the default case so
       // pre-existing persisted state and consumers reading filterText keep
@@ -599,6 +643,7 @@ function TextFilterControl({
     regex: input.regex === true,
   }
   const update = (next: Partial<typeof flat>) => emit({ ...flat, ...next })
+  const blankOp = isBlankFilterOperator(input.op) ? input.op : null
 
   return (
     <div className="bc-grid-filter-text">
@@ -613,44 +658,57 @@ function TextFilterControl({
         <option value="equals">Equals</option>
         <option value="starts-with">Starts with</option>
         <option value="ends-with">Ends with</option>
+        <option value="blank">Blank</option>
+        <option value="not-blank">Not blank</option>
       </select>
-      <input
-        ref={(el) => {
-          if (primaryRef) primaryRef.current = el
-        }}
-        aria-label={filterLabel}
-        className="bc-grid-filter-input"
-        id={filterId}
-        type="text"
-        value={input.value}
-        onChange={(event) => update({ value: event.currentTarget.value })}
-        onKeyDown={onFilterKeyDown}
-        placeholder={flat.regex ? "Regex pattern" : placeholder}
-        spellCheck={flat.regex ? false : undefined}
-        autoComplete={flat.regex ? "off" : undefined}
-      />
-      <button
-        type="button"
-        aria-label={`${filterLabel} case sensitive`}
-        aria-pressed={flat.caseSensitive}
-        className="bc-grid-filter-text-toggle"
-        title="Case sensitive"
-        onClick={() => update({ caseSensitive: !flat.caseSensitive })}
-        onKeyDown={onFilterKeyDown}
-      >
-        Aa
-      </button>
-      <button
-        type="button"
-        aria-label={`${filterLabel} regex`}
-        aria-pressed={flat.regex}
-        className="bc-grid-filter-text-toggle"
-        title="Regular expression"
-        onClick={() => update({ regex: !flat.regex })}
-        onKeyDown={onFilterKeyDown}
-      >
-        .*
-      </button>
+      {blankOp ? (
+        <BlankFilterToggle
+          filterLabel={filterLabel}
+          op={blankOp}
+          onChange={(op) => update({ op, value: "", caseSensitive: false, regex: false })}
+          onKeyDown={onFilterKeyDown}
+        />
+      ) : (
+        <>
+          <input
+            ref={(el) => {
+              if (primaryRef) primaryRef.current = el
+            }}
+            aria-label={filterLabel}
+            className="bc-grid-filter-input"
+            id={filterId}
+            type="text"
+            value={input.value}
+            onChange={(event) => update({ value: event.currentTarget.value })}
+            onKeyDown={onFilterKeyDown}
+            placeholder={flat.regex ? "Regex pattern" : placeholder}
+            spellCheck={flat.regex ? false : undefined}
+            autoComplete={flat.regex ? "off" : undefined}
+          />
+          <button
+            type="button"
+            aria-label={`${filterLabel} case sensitive`}
+            aria-pressed={flat.caseSensitive}
+            className="bc-grid-filter-text-toggle"
+            title="Case sensitive"
+            onClick={() => update({ caseSensitive: !flat.caseSensitive })}
+            onKeyDown={onFilterKeyDown}
+          >
+            Aa
+          </button>
+          <button
+            type="button"
+            aria-label={`${filterLabel} regex`}
+            aria-pressed={flat.regex}
+            className="bc-grid-filter-text-toggle"
+            title="Regular expression"
+            onClick={() => update({ regex: !flat.regex })}
+            onKeyDown={onFilterKeyDown}
+          >
+            .*
+          </button>
+        </>
+      )}
     </div>
   )
 }
@@ -675,6 +733,7 @@ function DateFilterControl({
     const merged = { ...input, ...next }
     onFilterChange(encodeDateFilterInput(merged))
   }
+  const blankOp = isBlankFilterOperator(input.op) ? input.op : null
 
   return (
     <div className="bc-grid-filter-date">
@@ -689,29 +748,42 @@ function DateFilterControl({
         <option value="before">Before</option>
         <option value="after">After</option>
         <option value="between">Between</option>
+        <option value="blank">Blank</option>
+        <option value="not-blank">Not blank</option>
       </select>
-      <input
-        ref={(el) => {
-          if (primaryRef) primaryRef.current = el
-        }}
-        aria-label={filterLabel}
-        className="bc-grid-filter-input"
-        id={filterId}
-        type="date"
-        value={input.value}
-        onChange={(event) => update({ value: event.currentTarget.value })}
-        onKeyDown={onFilterKeyDown}
-      />
-      {input.op === "between" ? (
-        <input
-          aria-label={`${filterLabel} end date`}
-          className="bc-grid-filter-input"
-          type="date"
-          value={input.valueTo ?? ""}
-          onChange={(event) => update({ valueTo: event.currentTarget.value })}
+      {blankOp ? (
+        <BlankFilterToggle
+          filterLabel={filterLabel}
+          op={blankOp}
+          onChange={(op) => update({ op, value: "", valueTo: "" })}
           onKeyDown={onFilterKeyDown}
         />
-      ) : null}
+      ) : (
+        <>
+          <input
+            ref={(el) => {
+              if (primaryRef) primaryRef.current = el
+            }}
+            aria-label={filterLabel}
+            className="bc-grid-filter-input"
+            id={filterId}
+            type="date"
+            value={input.value}
+            onChange={(event) => update({ value: event.currentTarget.value })}
+            onKeyDown={onFilterKeyDown}
+          />
+          {input.op === "between" ? (
+            <input
+              aria-label={`${filterLabel} end date`}
+              className="bc-grid-filter-input"
+              type="date"
+              value={input.valueTo ?? ""}
+              onChange={(event) => update({ valueTo: event.currentTarget.value })}
+              onKeyDown={onFilterKeyDown}
+            />
+          ) : null}
+        </>
+      )}
     </div>
   )
 }
@@ -800,8 +872,8 @@ function SetFilterControl({
   const commit = (next: { op: SetFilterOperator; values: readonly string[] }) => {
     setDraftOp(next.op)
     const values = Array.from(new Set(next.values.filter((value) => value.length > 0)))
-    if (next.op === "blank") {
-      onFilterChange(encodeSetFilterInput({ op: "blank", values: [] }))
+    if (isBlankFilterOperator(next.op)) {
+      onFilterChange(encodeSetFilterInput({ op: next.op, values: [] }))
       return
     }
     if (values.length === 0) {
@@ -868,13 +940,15 @@ function SetFilterControl({
   const summary =
     op === "blank"
       ? "Blank rows"
-      : input.values.length === 0
-        ? "Select values"
-        : `${input.values.length} selected`
-  const isActive = op === "blank" || input.values.length > 0
+      : op === "not-blank"
+        ? "Not blank rows"
+        : input.values.length === 0
+          ? "Select values"
+          : `${input.values.length} selected`
+  const isActive = isBlankFilterOperator(op) || input.values.length > 0
   const menuId = `${filterId}-set-menu`
   const searchId = `${filterId}-set-search`
-  const pickerDisabled = op === "blank"
+  const pickerDisabled = isBlankFilterOperator(op)
 
   return (
     <div ref={rootRef} className="bc-grid-filter-set">
@@ -890,6 +964,7 @@ function SetFilterControl({
         <option value="in">In</option>
         <option value="not-in">Not in</option>
         <option value="blank">Blank</option>
+        <option value="not-blank">Not blank</option>
       </select>
       <button
         ref={(el) => {
@@ -1417,6 +1492,7 @@ function NumberFilterControl({
     const merged = { ...input, ...next }
     onFilterChange(encodeNumberFilterInput(merged))
   }
+  const blankOp = isBlankFilterOperator(input.op) ? input.op : null
 
   return (
     <div className="bc-grid-filter-number">
@@ -1434,33 +1510,46 @@ function NumberFilterControl({
         <option value=">">&gt;</option>
         <option value=">=">&gt;=</option>
         <option value="between">Between</option>
+        <option value="blank">Blank</option>
+        <option value="not-blank">Not blank</option>
       </select>
-      <input
-        ref={(el) => {
-          if (primaryRef) primaryRef.current = el
-        }}
-        aria-label={filterLabel}
-        className="bc-grid-filter-input"
-        id={filterId}
-        type="number"
-        inputMode="decimal"
-        value={input.value}
-        onChange={(event) => update({ value: event.currentTarget.value })}
-        onKeyDown={onFilterKeyDown}
-        placeholder={input.op === "between" ? minPlaceholder : ""}
-      />
-      {input.op === "between" ? (
-        <input
-          aria-label={`${filterLabel} maximum`}
-          className="bc-grid-filter-input"
-          type="number"
-          inputMode="decimal"
-          value={input.valueTo ?? ""}
-          onChange={(event) => update({ valueTo: event.currentTarget.value })}
+      {blankOp ? (
+        <BlankFilterToggle
+          filterLabel={filterLabel}
+          op={blankOp}
+          onChange={(op) => update({ op, value: "", valueTo: "" })}
           onKeyDown={onFilterKeyDown}
-          placeholder={maxPlaceholder}
         />
-      ) : null}
+      ) : (
+        <>
+          <input
+            ref={(el) => {
+              if (primaryRef) primaryRef.current = el
+            }}
+            aria-label={filterLabel}
+            className="bc-grid-filter-input"
+            id={filterId}
+            type="number"
+            inputMode="decimal"
+            value={input.value}
+            onChange={(event) => update({ value: event.currentTarget.value })}
+            onKeyDown={onFilterKeyDown}
+            placeholder={input.op === "between" ? minPlaceholder : ""}
+          />
+          {input.op === "between" ? (
+            <input
+              aria-label={`${filterLabel} maximum`}
+              className="bc-grid-filter-input"
+              type="number"
+              inputMode="decimal"
+              value={input.valueTo ?? ""}
+              onChange={(event) => update({ valueTo: event.currentTarget.value })}
+              onKeyDown={onFilterKeyDown}
+              placeholder={maxPlaceholder}
+            />
+          ) : null}
+        </>
+      )}
     </div>
   )
 }

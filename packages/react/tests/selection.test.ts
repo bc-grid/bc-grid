@@ -9,6 +9,7 @@ import {
   selectRange,
   selectionSize,
   toggleRow,
+  toggleRows,
 } from "../src/selection"
 
 const empty: BcSelection = { mode: "explicit", rowIds: new Set() }
@@ -93,6 +94,46 @@ describe("toggleRow", () => {
     }
     const next = toggleRow(sel, "a" as RowId)
     if (next.mode === "filtered") expect(next.viewKey).toBe("view-1")
+  })
+})
+
+describe("toggleRows", () => {
+  const ids = ["a", "b", "c"] as RowId[]
+
+  test("explicit: adds every missing row when the group is not fully selected", () => {
+    const sel: BcSelection = { mode: "explicit", rowIds: new Set(["a" as RowId, "x" as RowId]) }
+    const next = toggleRows(sel, ids)
+
+    expect(next.mode).toBe("explicit")
+    if (next.mode === "explicit") {
+      expect(Array.from(next.rowIds).sort()).toEqual(["a", "b", "c", "x"])
+    }
+  })
+
+  test("explicit: removes every row when the group is fully selected", () => {
+    const sel: BcSelection = { mode: "explicit", rowIds: new Set([...ids, "x" as RowId]) }
+    const next = toggleRows(sel, ids)
+
+    expect(next.mode).toBe("explicit")
+    if (next.mode === "explicit") {
+      expect(Array.from(next.rowIds)).toEqual(["x"])
+    }
+  })
+
+  test("all/filtered: toggles descendant ids through the except set", () => {
+    const allNext = toggleRows({ mode: "all", except: new Set() }, ids)
+    expect(allNext.mode).toBe("all")
+    if (allNext.mode === "all") expect(Array.from(allNext.except).sort()).toEqual(ids)
+
+    const filteredNext = toggleRows(
+      { mode: "filtered", except: new Set(ids), viewKey: "view-1" },
+      ids,
+    )
+    expect(filteredNext.mode).toBe("filtered")
+    if (filteredNext.mode === "filtered") {
+      expect(filteredNext.viewKey).toBe("view-1")
+      expect(filteredNext.except.size).toBe(0)
+    }
   })
 })
 

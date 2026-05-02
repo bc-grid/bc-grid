@@ -249,6 +249,15 @@
   background: var(--bc-grid-muted);
 }
 
+.bc-grid-group-selection {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.5rem;
+}
+
 .bc-grid-group-toggle {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1479,7 +1488,8 @@ select.bc-grid-editor-input {
 .bc-grid-filter-set > .bc-grid-filter-set-button,
 .bc-grid-filter-text > .bc-grid-filter-input,
 .bc-grid-filter-text > .bc-grid-filter-select,
-.bc-grid-filter-text > .bc-grid-filter-text-toggle {
+.bc-grid-filter-text > .bc-grid-filter-text-toggle,
+.bc-grid-filter-blank-toggle > .bc-grid-filter-text-toggle {
   height: 100%;
   padding: 0 0.25rem;
 }
@@ -1511,6 +1521,20 @@ select.bc-grid-editor-input {
 .bc-grid-filter-text.bc-grid-filter-text-compact > .bc-grid-filter-input {
   min-width: 0;
   flex: 1 1 auto;
+  padding-inline: 0.5rem;
+}
+
+.bc-grid-filter-blank-toggle {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  min-width: 7rem;
+}
+
+.bc-grid-filter-blank-toggle > .bc-grid-filter-text-toggle {
+  min-width: max-content;
   padding-inline: 0.5rem;
 }
 
@@ -2671,7 +2695,8 @@ select.bc-grid-editor-input {
 
 .bc-grid-filters-panel-clear,
 .bc-grid-filters-panel-remove,
-.bc-grid-filters-panel-summary-remove {
+.bc-grid-filters-panel-summary-remove,
+.bc-grid-statusbar-filter-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2698,7 +2723,8 @@ select.bc-grid-editor-input {
   padding: 0;
 }
 
-.bc-grid-filters-panel-summary-remove {
+.bc-grid-filters-panel-summary-remove,
+.bc-grid-statusbar-filter-remove {
   width: 1.25rem;
   min-width: 1.25rem;
   height: 1.25rem;
@@ -2708,7 +2734,8 @@ select.bc-grid-editor-input {
 
 .bc-grid-filters-panel-clear:hover:not(:disabled),
 .bc-grid-filters-panel-remove:hover,
-.bc-grid-filters-panel-summary-remove:hover {
+.bc-grid-filters-panel-summary-remove:hover,
+.bc-grid-statusbar-filter-remove:hover {
   background: var(--bc-grid-row-hover);
   color: var(--bc-grid-fg);
 }
@@ -2727,7 +2754,8 @@ select.bc-grid-editor-input {
   color: var(--bc-grid-fg);
 }
 
-.bc-grid-filters-panel-summary-remove:active {
+.bc-grid-filters-panel-summary-remove:active,
+.bc-grid-statusbar-filter-remove:active {
   background: var(--bc-grid-accent-soft);
   border-color: var(--bc-grid-input-border);
   color: var(--bc-grid-fg);
@@ -2749,7 +2777,8 @@ select.bc-grid-editor-input {
 
 .bc-grid-filters-panel-clear:focus-visible,
 .bc-grid-filters-panel-remove:focus-visible,
-.bc-grid-filters-panel-summary-remove:focus-visible {
+.bc-grid-filters-panel-summary-remove:focus-visible,
+.bc-grid-statusbar-filter-remove:focus-visible {
   outline: 2px solid var(--bc-grid-focus-ring);
   outline-offset: 2px;
 }
@@ -3702,6 +3731,7 @@ table.bc-grid-detail-nested-grid {
 .bc-grid-sidebar-tab,
 .bc-grid-filter-text-toggle,
 .bc-grid-filter-set-button,
+.bc-grid-statusbar-filter-remove,
 .bc-grid-editor-input {
   touch-action: manipulation;
 }
@@ -3750,6 +3780,7 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-filters-panel-clear,
   .bc-grid-filters-panel-remove,
   .bc-grid-filters-panel-summary-remove,
+  .bc-grid-statusbar-filter-remove,
   .bc-grid-filter-text-toggle,
   .bc-grid-filter-set-button,
   .bc-grid-pivot-panel-button,
@@ -4014,6 +4045,48 @@ table.bc-grid-detail-nested-grid {
   display: inline-flex;
   align-items: baseline;
   gap: 0.25rem;
+}
+
+.bc-grid-statusbar-filter-list {
+  display: inline-flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bc-grid-statusbar-filter-chip {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 20rem;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--bc-grid-border);
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: var(--bc-grid-bg);
+  color: var(--bc-grid-fg);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  padding: 0.125rem 0.1875rem 0.125rem 0.5rem;
+}
+
+.bc-grid-statusbar-filter-label,
+.bc-grid-statusbar-filter-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bc-grid-statusbar-filter-label {
+  font-weight: 700;
+}
+
+.bc-grid-statusbar-filter-value {
+  color: var(--bc-grid-muted-fg);
 }
 
 .bc-grid-statusbar-aggregation + .bc-grid-statusbar-aggregation {
