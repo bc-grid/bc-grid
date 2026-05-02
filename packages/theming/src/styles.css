@@ -1170,6 +1170,115 @@ select.bc-grid-editor-input {
   z-index: 1;
 }
 
+/*
+ * shadcn-native Combobox primitive used by the v0.5 lookup editor
+ * migrations (audit P0-4). Trigger inherits the editor-input chrome,
+ * dropdown lives inside the editor portal so click-outside doesn't
+ * dismiss it on option clicks.
+ */
+.bc-grid-editor-combobox {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.bc-grid-editor-combobox-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bc-grid-editor-combobox-trigger[disabled] {
+  cursor: not-allowed;
+}
+
+.bc-grid-editor-combobox-trigger[data-state="open"] {
+  border-color: var(--bc-grid-focus-ring);
+}
+
+.bc-grid-editor-combobox-swatch,
+.bc-grid-editor-combobox-option-swatch {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  border-radius: calc(var(--bc-grid-radius) - 4px);
+  border: 1px solid color-mix(in srgb, var(--bc-grid-fg) 12%, transparent);
+}
+
+.bc-grid-editor-combobox-icon,
+.bc-grid-editor-combobox-option-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.bc-grid-editor-combobox-label,
+.bc-grid-editor-combobox-option-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bc-grid-editor-combobox-caret {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  color: var(--bc-grid-muted-fg);
+}
+
+.bc-grid-editor-combobox-listbox {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin: 0.25rem 0 0;
+  padding: 0.25rem;
+  list-style: none;
+  min-width: 100%;
+  max-width: max(20rem, 100%);
+  max-height: 16rem;
+  overflow-y: auto;
+  border: 1px solid var(--bc-grid-input-border);
+  border-radius: var(--bc-grid-radius);
+  background: var(--bc-grid-bg);
+  color: var(--bc-grid-fg);
+  box-shadow: 0 12px 24px -8px color-mix(in srgb, var(--bc-grid-fg) 14%, transparent);
+  z-index: 2;
+}
+
+.bc-grid-editor-combobox-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  cursor: pointer;
+  user-select: none;
+}
+
+.bc-grid-editor-combobox-option[data-active="true"] {
+  background: color-mix(in srgb, var(--bc-grid-focus-ring) 14%, transparent);
+}
+
+.bc-grid-editor-combobox-option[data-selected="true"] {
+  font-weight: 600;
+}
+
+.bc-grid-editor-combobox-empty {
+  padding: 0.5rem;
+  color: var(--bc-grid-muted-fg);
+  font-style: italic;
+  text-align: center;
+}
+
+.bc-grid-editor-combobox-create {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--bc-grid-input-border) 70%, transparent);
+}
+
 .bc-grid-cell-right {
   justify-content: flex-end;
   text-align: right;

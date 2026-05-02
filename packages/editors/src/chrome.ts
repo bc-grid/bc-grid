@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react"
+import type { CSSProperties, ReactNode } from "react"
 
 export const editorInputClassName = "bc-grid-editor-input"
 
@@ -30,20 +30,46 @@ export function editorAccessibleName(
 export interface EditorOption {
   value: unknown
   label: string
+  /**
+   * CSS color string for a 16×16 swatch chip rendered next to the option
+   * label in lookup editors. Hex / rgb / hsl / named colors all work —
+   * passed through verbatim to `style.background`. Audit P0-4 / synthesis
+   * answer to worker3 open-question #2.
+   */
+  swatch?: string
+  /**
+   * Custom adornment rendered next to the option label (e.g., a status
+   * icon, employee avatar). Mutually exclusive with `swatch` in practice,
+   * but both can be supplied — the editor renders swatch first, icon
+   * second, label last. Audit P0-4.
+   */
+  icon?: ReactNode
 }
 
 export function resolveEditorOptions(source: unknown, row: unknown): readonly EditorOption[] {
   const resolved = resolveEditorOptionsSource(source, row)
   if (!Array.isArray(resolved)) return []
   return resolved.map((option) => {
-    const candidate = option as { value?: unknown; label?: unknown }
-    return {
+    const candidate = option as {
+      value?: unknown
+      label?: unknown
+      swatch?: unknown
+      icon?: unknown
+    }
+    const next: EditorOption = {
       value: candidate.value,
       label:
         typeof candidate.label === "string"
           ? candidate.label
           : editorOptionToString(candidate.value),
     }
+    if (typeof candidate.swatch === "string" && candidate.swatch.length > 0) {
+      next.swatch = candidate.swatch
+    }
+    if (candidate.icon !== undefined && candidate.icon !== null) {
+      next.icon = candidate.icon as ReactNode
+    }
+    return next
   })
 }
 

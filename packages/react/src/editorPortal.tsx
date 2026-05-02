@@ -461,6 +461,15 @@ export function readEditorInputValue(focusRefCurrent: HTMLElement | null): unkno
     }
     return select.value
   }
+  if (tagName === "BUTTON") {
+    // shadcn-native Combobox primitive (audit P0-4 / synthesis P0-4).
+    // The combobox stashes its typed value on the trigger button via
+    // `__bcGridComboboxValue` so click-outside / Tab commit can read
+    // it without going through `column.valueParser`. Mirrors the
+    // `__bcGridSelectOptionValues` contract above.
+    const button = focusRefCurrent as BcGridComboboxButton
+    return button[bcGridComboboxValueKey]
+  }
   return undefined
 }
 
@@ -468,4 +477,10 @@ const bcGridSelectOptionValuesKey = "__bcGridSelectOptionValues" as const
 
 type BcGridSelectElement = HTMLSelectElement & {
   [bcGridSelectOptionValuesKey]?: readonly unknown[]
+}
+
+const bcGridComboboxValueKey = "__bcGridComboboxValue" as const
+
+type BcGridComboboxButton = HTMLButtonElement & {
+  [bcGridComboboxValueKey]?: unknown
 }

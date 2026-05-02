@@ -77,6 +77,41 @@ describe("select-style editor helpers", () => {
     expect(state.selectOptionValues).toEqual(["open", "closed", 3])
   })
 
+  test("preserves swatch and icon-presence on resolved options (audit P0-4)", () => {
+    // EditorOption.swatch carries a CSS color string; the Combobox
+    // primitive renders it as a 16×16 chip beside the label. icon is
+    // a ReactNode escape hatch (status pill, avatar, etc.). The
+    // resolver passes both through verbatim — no validation, no
+    // coercion — so consumer customisation survives.
+    const swatchOption = { value: "antique-walnut", label: "Antique Walnut", swatch: "#5C3A21" }
+    const iconNode = { type: "span", props: { children: "★" } }
+    const iconOption = { value: "vip", label: "VIP", icon: iconNode }
+
+    const resolved = resolveEditorOptions(
+      [swatchOption, iconOption, { value: "plain", label: "Plain" }],
+      {},
+    )
+
+    expect(resolved[0]).toEqual(swatchOption)
+    expect(resolved[1]).toEqual(iconOption)
+    expect(resolved[2]).toEqual({ value: "plain", label: "Plain" })
+  })
+
+  test("drops empty / non-string swatches without leaking them to the option", () => {
+    const resolved = resolveEditorOptions(
+      [
+        { value: "a", label: "A", swatch: "" },
+        { value: "b", label: "B", swatch: 5 },
+        { value: "c", label: "C", swatch: null },
+      ],
+      {},
+    )
+
+    for (const opt of resolved) {
+      expect(opt.swatch).toBeUndefined()
+    }
+  })
+
   test("missing initial value keeps the placeholder mapped to undefined", () => {
     const state = resolveSelectEditorState({
       initialValue: "missing",
