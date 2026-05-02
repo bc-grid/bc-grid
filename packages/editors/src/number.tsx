@@ -53,6 +53,90 @@ export function acceptNumericSeed(seedKey: string | undefined): string | undefin
 
 const SEED_ACCEPT = /^[\d.,\-]$/
 
+/**
+ * Locale-aware number parser, ready to drop into `column.valueParser`
+ * for international ERP grids. Audit P1-W3-5 / v0.5 → v0.6 §2.
+ *
+ * Reads the locale's group + decimal separators via
+ * `Intl.NumberFormat(locale).formatToParts(...)` (cached per locale),
+ * strips group separators, normalises the decimal to `.`, then runs
+ * `Number.parseFloat`. Negative parentheses (`(1,234.56)` →
+ * `-1234.56`) are honoured so consumers don't reinvent the strip
+ * logic in every grid.
+ *
+ * Rejects nonsense gracefully: returns `Number.NaN` rather than
+ * throwing, so consumers can guard with `Number.isFinite` before
+ * committing. The framework's `valueParser` runs before `validate`,
+ * so a `NaN` candidate flows into the consumer's validator the same
+ * way any other unparseable input does.
+ *
+ * Examples (with `locale: "de-DE"`):
+ *   `"1,5"`        → `1.5`   // comma is the decimal separator
+ *   `"1.234,56"`   → `1234.56` // dot is the group separator
+ *   `"€1.234,56"`  → `1234.56` // currency strips
+ *   `"(1.234,56)"` → `-1234.56` // accounting-negative
+ *
+ * Examples (with `locale: "en-US"`):
+ *   `"1,234.56"`   → `1234.56`
+ *   `"$1,234.56"`  → `1234.56`
+ *   `"(1,234.56)"` → `-1234.56`
+ */
+export function parseLocaleNumber(value: string, locale = "en-US"): number {
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return Number.NaN
+
+  const parts = getLocaleParts(locale)
+  // Detect accounting-style negatives BEFORE stripping non-digits so
+  // we don't lose the sign. `(1,234.56)` → flip sign + strip parens.
+  const isParenNegative = trimmed.startsWith("(") && trimmed.endsWith(")")
+  const inner = isParenNegative ? trimmed.slice(1, -1) : trimmed
+
+  // Strip the locale's group separators, then swap the decimal
+  // separator for `.`. Non-digit characters (currency symbols,
+  // whitespace, +) are stripped at the end so the order of operations
+  // doesn't lose the decimal that happens to share a glyph with
+  // a stripped char (e.g. Swiss `1’234.56` uses U+2019 as group).
+  let normalised = inner
+  if (parts.group) {
+    // Replace all instances of the group separator. Iterate via split/
+    // join so the regex escape isn't load-bearing for non-ASCII chars.
+    normalised = normalised.split(parts.group).join("")
+  }
+  if (parts.decimal && parts.decimal !== ".") {
+    normalised = normalised.split(parts.decimal).join(".")
+  }
+  // Strip everything that's not a digit, decimal point, or sign.
+  normalised = normalised.replace(/[^\d.\-+]/g, "")
+
+  const parsed = Number.parseFloat(normalised)
+  if (!Number.isFinite(parsed)) return Number.NaN
+  return isParenNegative ? -Math.abs(parsed) : parsed
+}
+
+const LOCALE_PARTS_CACHE = new Map<string, { group: string; decimal: string }>()
+
+function getLocaleParts(locale: string): { group: string; decimal: string } {
+  const cached = LOCALE_PARTS_CACHE.get(locale)
+  if (cached) return cached
+  // Parse a number with both a group and a decimal so both parts surface.
+  let group = ""
+  let decimal = "."
+  try {
+    const parts = new Intl.NumberFormat(locale).formatToParts(1234567.89)
+    for (const part of parts) {
+      if (part.type === "group") group = part.value
+      if (part.type === "decimal") decimal = part.value
+    }
+  } catch {
+    // Locale unrecognised by the runtime — fall through to the
+    // ASCII default. Consumers that need a stricter contract can
+    // pass a known-supported BCP 47 tag.
+  }
+  const result = { group, decimal }
+  LOCALE_PARTS_CACHE.set(locale, result)
+  return result
+}
+
 function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
   const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled, column } =
     props

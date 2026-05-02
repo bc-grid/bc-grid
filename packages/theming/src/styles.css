@@ -1177,6 +1177,31 @@ select.bc-grid-editor-input {
 }
 
 /*
+ * Visible validation toast — sighted-user companion to the assertive
+ * live region (which is screen-reader-only). Anchored to the bottom
+ * of the grid root, auto-clears after 3s via React state. The
+ * popover from the editor portal still fires for keyboard rejections
+ * inside an editor; this toast covers the clear-cell case where no
+ * editor portal mounts. Audit P1-W3 / v0.5 → v0.6 §6.
+ */
+.bc-grid-validation-toast {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  max-width: max(20rem, 50%);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--bc-grid-invalid);
+  border-radius: var(--bc-grid-radius);
+  background: color-mix(in srgb, var(--bc-grid-invalid) 14%, var(--bc-grid-bg));
+  color: var(--bc-grid-invalid);
+  font-size: 0.875rem;
+  line-height: 1.3;
+  box-shadow: 0 8px 16px -4px color-mix(in srgb, var(--bc-grid-fg) 18%, transparent);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/*
  * shadcn-native Combobox primitive used by the v0.5 lookup editor
  * migrations (audit P0-4). Trigger inherits the editor-input chrome,
  * dropdown lives inside the editor portal so click-outside doesn't

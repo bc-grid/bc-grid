@@ -290,6 +290,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [viewportFitHeight, setViewportFitHeight] = useState<number | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
+  // Transient visible toast for clear-rejection feedback (audit
+  // P1-W3 / v0.5 → v0.6 §6). When `editController.clearCell` /
+  // `commit` rejects validation, the assertive live region tells AT
+  // users — sighted users get the inline popover (#356) when an
+  // editor is mounted, but **nothing** for the clear-cell path
+  // (Backspace/Delete on a required cell). The toast surfaces the
+  // message at the grid root for ~3s so sighted users see why
+  // their gesture was rejected.
+  const [validationToast, setValidationToast] = useState<{
+    message: string
+    key: number
+  } | null>(null)
+  const validationToastKeyRef = useRef(0)
 
   const requestRender = useCallback(() => {
     setRenderVersion((version) => (version + 1) % Number.MAX_SAFE_INTEGER)
@@ -1353,11 +1366,35 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       }
       if (event.kind === "validationError") {
         announceAssertive(messages.editValidationErrorAnnounce({ columnLabel, error: event.error }))
+        // Sighted-user toast (audit P1-W3 §6). Fires alongside the
+        // popover when an editor is mounted (mild duplication is fine
+        // — popover stays inline, toast confirms transiently); fires
+        // ALONE when the clear path rejects validation, since no
+        // editor portal mounts there. The toast is the only visible
+        // signal for that case.
+        const message = messages.editValidationErrorAnnounce({ columnLabel, error: event.error })
+        const key = ++validationToastKeyRef.current
+        setValidationToast({ message, key })
         return
       }
       announceAssertive(messages.editServerErrorAnnounce({ columnLabel, error: event.error }))
+      const serverMessage = messages.editServerErrorAnnounce({ columnLabel, error: event.error })
+      const serverKey = ++validationToastKeyRef.current
+      setValidationToast({ message: serverMessage, key: serverKey })
     },
   })
+
+  // Auto-clear the validation toast after a short hold. Tied to
+  // `key` so a fresh rejection during the hold restarts the timer
+  // cleanly. 3 seconds matches typical screen-reader announce timing
+  // and the sales-estimating Tab-driven entry rhythm.
+  useEffect(() => {
+    if (!validationToast) return
+    const handle = setTimeout(() => {
+      setValidationToast((current) => (current?.key === validationToast.key ? null : current))
+    }, 3000)
+    return () => clearTimeout(handle)
+  }, [validationToast])
 
   // Overlay cleanup per `editing-rfc §Row-model ownership`: when the
   // consumer's `data` prop catches up to a patched value, drop the
@@ -2833,6 +2870,23 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       >
         {assertiveMessage}
       </div>
+      {/*
+       * Visible validation toast (audit P1-W3 §6) — sighted-user
+       * companion to the assertive live region above. Fires on
+       * `validationError` / `serverError` from the editing
+       * controller's announce hook. Auto-clears after 3s; aria-hidden
+       * because the assertive region above already covers AT.
+       */}
+      {validationToast ? (
+        <div
+          key={validationToast.key}
+          className="bc-grid-validation-toast"
+          data-bc-grid-validation-toast="true"
+          aria-hidden="true"
+        >
+          {validationToast.message}
+        </div>
+      ) : null}
       {filterPopupState
         ? (() => {
             const popupColumn = resolvedColumns.find(

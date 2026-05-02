@@ -108,10 +108,11 @@ test("commit produces an array of typed values and the cell renderer reflects ev
     .filter({ hasText: "International" })
     .first()
     .click()
-  // Commit via Tab — Enter would toggle the last-active option back off
-  // because the multi-mode Combobox routes Enter through `updateSelection`
-  // before bubbling commit (sharp edge logged in synthesis P1 backlog).
-  await page.keyboard.press("Tab")
+  // Commit via Enter. Multi-mode Combobox no longer toggles on Enter
+  // (audit P1-W3-5b — fixed in v0.5 editor bundle PR); Enter bubbles
+  // straight through to the editor portal commit so the chip set the
+  // user has built survives. Space remains the toggle gesture.
+  await page.keyboard.press("Enter")
 
   // Trigger should unmount on commit.
   await expect(page.locator(TRIGGER_SELECTOR)).toHaveCount(0)
@@ -146,8 +147,9 @@ test("validation rejection keeps the editor open and announces via assertive reg
     .filter({ hasText: "Manual Review" })
     .first()
     .click()
-  // Commit via Tab (see commit-test note re: Enter sharp edge).
-  await page.keyboard.press("Tab")
+  // Commit via Enter — multi-mode Combobox now bubbles Enter cleanly
+  // (audit P1-W3-5b fix).
+  await page.keyboard.press("Enter")
 
   const trigger = page.locator(TRIGGER_SELECTOR).first()
   await expect(trigger).toBeAttached()
