@@ -13,6 +13,8 @@ import {
   resolveServerPagedGridShell,
   resolveServerPagedRequestPage,
   resolveServerVisibleColumns,
+  resolveTreeChildCount,
+  resolveTreeRowCount,
   shouldResetServerPagedPage,
 } from "../src/serverGrid"
 import type { BcReactGridColumn } from "../src/types"
@@ -965,5 +967,122 @@ describe("resolveScrollToServerCellAction — scrollToServerCell decision matrix
         requestedPageIndex: 5,
       }),
     ).toBe("none")
+  })
+})
+
+describe("resolveTreeChildCount", () => {
+  test("defaults to 100 when undefined", () => {
+    expect(resolveTreeChildCount(undefined)).toBe(100)
+  })
+
+  test("passes through finite positive integers", () => {
+    expect(resolveTreeChildCount(50)).toBe(50)
+    expect(resolveTreeChildCount(500)).toBe(500)
+    expect(resolveTreeChildCount(1)).toBe(1)
+  })
+
+  test("clamps zero to 1 (defensive against misconfiguration)", () => {
+    expect(resolveTreeChildCount(0)).toBe(1)
+  })
+
+  test("clamps negative values to 1", () => {
+    expect(resolveTreeChildCount(-10)).toBe(1)
+  })
+
+  test("rounds non-integer values down", () => {
+    expect(resolveTreeChildCount(75.7)).toBe(75)
+    expect(resolveTreeChildCount(1.4)).toBe(1)
+  })
+
+  test("falls back to default for NaN / Infinity", () => {
+    expect(resolveTreeChildCount(Number.NaN)).toBe(100)
+    expect(resolveTreeChildCount(Number.POSITIVE_INFINITY)).toBe(100)
+  })
+})
+
+describe("resolveTreeRowCount", () => {
+  test("returns 'unknown' for non-tree row models regardless of inputs", () => {
+    expect(
+      resolveTreeRowCount({
+        mode: "paged",
+        visibleRowCount: 10,
+        initialRootChildCount: 500,
+        rootLoading: true,
+      }),
+    ).toBe("unknown")
+    expect(
+      resolveTreeRowCount({
+        mode: "infinite",
+        visibleRowCount: 10,
+        initialRootChildCount: 500,
+        rootLoading: false,
+      }),
+    ).toBe("unknown")
+  })
+
+  test("returns the visible row count once any tree rows have rendered", () => {
+    expect(
+      resolveTreeRowCount({
+        mode: "tree",
+        visibleRowCount: 25,
+        initialRootChildCount: 500,
+        rootLoading: false,
+      }),
+    ).toBe(25)
+  })
+
+  test("uses initialRootChildCount as a chrome pre-seed during the initial root load", () => {
+    expect(
+      resolveTreeRowCount({
+        mode: "tree",
+        visibleRowCount: 0,
+        initialRootChildCount: 500,
+        rootLoading: true,
+      }),
+    ).toBe(500)
+  })
+
+  test("falls back to 0 when no rows are visible and no pre-seed is supplied", () => {
+    expect(
+      resolveTreeRowCount({
+        mode: "tree",
+        visibleRowCount: 0,
+        initialRootChildCount: undefined,
+        rootLoading: true,
+      }),
+    ).toBe(0)
+  })
+
+  test("ignores initialRootChildCount once visible rows have rendered (real count wins)", () => {
+    expect(
+      resolveTreeRowCount({
+        mode: "tree",
+        visibleRowCount: 7,
+        initialRootChildCount: 500,
+        rootLoading: false,
+      }),
+    ).toBe(7)
+  })
+
+  test("ignores a non-finite initialRootChildCount (defensive)", () => {
+    expect(
+      resolveTreeRowCount({
+        mode: "tree",
+        visibleRowCount: 0,
+        initialRootChildCount: Number.NaN,
+        rootLoading: true,
+      }),
+    ).toBe(0)
+  })
+
+  test("rounds a fractional initialRootChildCount down", () => {
+    expect(
+      resolveTreeRowCount({
+        mode: "tree",
+        visibleRowCount: 0,
+        initialRootChildCount: 12.7,
+        rootLoading: true,
+      }),
+    ).toBe(12)
   })
 })
