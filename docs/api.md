@@ -586,6 +586,107 @@ export interface BcRangeCopyEvent {
 
 export type BcRangeCopyHook = (event: BcRangeCopyEvent) => void
 
+export interface BcGridPasteTsvParams {
+  /** Defaults to the active range, then the active cell as a 1x1 range. */
+  range?: BcRange
+  tsv: string
+  /** Default "reject" keeps the paste atomic when it would exceed visible bounds. */
+  overflow?: "reject" | "clip"
+  signal?: AbortSignal
+}
+
+export type BcGridPasteTsvResult<TRow = unknown> =
+  | {
+      ok: true
+      range: BcRange
+      cells: readonly (readonly string[])[]
+      appliedCount: number
+      commits: readonly BcGridPasteTsvCommit<TRow>[]
+      rowPatches: readonly BcGridPasteTsvRowPatch<TRow>[]
+      skippedCells: readonly BcGridPasteTsvSkippedCell[]
+    }
+  | {
+      ok: false
+      range?: BcRange
+      error: BcGridPasteTsvFailure
+    }
+
+export interface BcGridPasteTsvCommit<TRow = unknown> {
+  sourceRowIndex: number
+  sourceColumnIndex: number
+  targetRowIndex: number
+  targetColumnIndex: number
+  rowId: RowId
+  row: TRow
+  columnId: ColumnId
+  previousValue: unknown
+  nextValue: unknown
+  rawValue: string
+}
+
+export interface BcGridPasteTsvRowPatch<TRow = unknown> {
+  rowId: RowId
+  row: TRow
+  values: Record<string, unknown>
+}
+
+export interface BcGridPasteTsvFailure {
+  code:
+    | "no-paste-target"
+    | "edit-in-progress"
+    | "parse-error"
+    | "anchor-not-found"
+    | "paste-out-of-bounds"
+    | "row-not-found"
+    | "row-not-editable"
+    | "column-not-found"
+    | "cell-readonly"
+    | "value-parser-error"
+    | "validation-error"
+  message: string
+  rowId?: RowId
+  columnId?: ColumnId
+  rawValue?: string
+  diagnostic?: BcGridPasteTsvParseDiagnostic
+  skippedCell?: BcGridPasteTsvSkippedCell
+  validation?: BcValidationResult
+}
+
+export interface BcGridPasteTsvSkippedCell {
+  sourceRowIndex: number
+  sourceColumnIndex: number
+  targetRowIndex?: number
+  targetColumnIndex?: number
+  rowId?: RowId
+  columnId?: ColumnId
+  value: string
+  reasons: Array<
+    | "anchor-row-not-found"
+    | "anchor-column-not-found"
+    | "row-out-of-bounds"
+    | "column-out-of-bounds"
+    | "row-not-editable"
+    | "cell-readonly"
+  >
+}
+
+export interface BcGridPasteTsvParseDiagnostic {
+  code:
+    | "empty-paste"
+    | "max-cell-limit-exceeded"
+    | "ragged-row"
+    | "unexpected-quote"
+    | "unexpected-character-after-closing-quote"
+    | "unterminated-quoted-cell"
+  rowIndex: number
+  columnIndex: number
+  charIndex: number
+  actualColumnCount?: number
+  expectedColumnCount?: number
+  cellCount?: number
+  maxCells?: number
+}
+
 export interface BcPaginationState {
   page: number
   pageSize: number
@@ -1797,6 +1898,7 @@ export interface BcGridApi<TRow = unknown> {
   autoSizeColumn(columnId: ColumnId): void
   setRangeSelection(selection: BcRangeSelection): void
   copyRange(range?: BcRange): Promise<void>
+  pasteTsv(params: BcGridPasteTsvParams): Promise<BcGridPasteTsvResult<TRow>>
   clearRangeSelection(): void
   expandAll(): void
   collapseAll(): void
@@ -1839,6 +1941,16 @@ not rendered. Audit-2026-05 P0-7.
 closes when that column's popup is currently open; without one, it closes
 whatever popup is open. Inline filters are a persistent row surface, so
 `closeFilter` does not hide or unmount the filter row. Audit-2026-05 P0-7.
+
+`pasteTsv({ range, tsv, overflow, signal })` parses Excel / Google Sheets TSV,
+runs per-cell `valueParser` + `validate`, and applies the resulting edit overlay
+atomically. If `range` is omitted, React grids paste at the active range, or the
+active cell as a 1x1 range. Default `overflow: "reject"` rejects out-of-bounds
+pastes before writing anything; `overflow: "clip"` applies only in-bounds cells
+and reports skipped cells. The grid root also listens for native `paste` events
+and routes `text/plain` clipboard data through this API when focus is on the
+grid, not inside an input/editor. `onCellEditCommit` fires once per applied
+cell with `source: "paste"`. Audit-2026-05 P0-1.
 
 `clearFilter(columnId?)` is a convenience wrapper around `setFilter`. With no
 argument it clears the entire filter tree (same as `setFilter(null)`). With a
@@ -1979,7 +2091,7 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   column: BcReactGridColumn<TRow, TValue>
   previousValue: TValue
   nextValue: TValue
-  source: "keyboard" | "pointer" | "api"
+  source: "keyboard" | "pointer" | "api" | "paste"
 }
 ```
 
@@ -2216,6 +2328,11 @@ export type {
   BcServerEditMutationProps, BcServerEditPatchFactory,
   BcEditGridAction,
   BcRangeBeforeCopyEvent, BcRangeBeforeCopyHook, BcRangeCopyEvent, BcRangeCopyHook,
+  BcGridPasteTsvCommit, BcGridPasteTsvFailure, BcGridPasteTsvFailureCode,
+  BcGridPasteTsvOverflowMode, BcGridPasteTsvParams,
+  BcGridPasteTsvParseDiagnostic, BcGridPasteTsvParseDiagnosticCode,
+  BcGridPasteTsvResult, BcGridPasteTsvRowPatch, BcGridPasteTsvSkipReason,
+  BcGridPasteTsvSkippedCell, BcGridPasteTsvSuccess,
   BcServerRowUpdateHandler, BcServerRowUpdateSubscribe, BcServerRowUpdateUnsubscribe,
   BcContextMenuBuiltinItem, BcContextMenuContext, BcContextMenuCustomItem,
   BcContextMenuItem, BcContextMenuItems,

@@ -7,6 +7,7 @@ import {
   type MoveOnSettle,
   reduceEditState,
 } from "./editingStateMachine"
+import type { RangeTsvPasteApplyPlan } from "./rangeClipboard"
 import type { BcCellEditCommitEvent, BcCellEditor, BcReactGridColumn } from "./types"
 
 /**
@@ -526,6 +527,107 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     [options.validate, options.onCellEditCommit, options.announce],
   )
 
+  const rollbackPasteCommit = useCallback(
+    (
+      commitEntry: RangeTsvPasteApplyPlan<TRow>["commits"][number],
+      mutationId: string,
+      err: unknown,
+    ) => {
+      const rollbackEntry = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
+      if (!rollbackEntry || rollbackEntry.mutationId !== mutationId) return
+
+      const patches = overlayRef.current.patches.get(commitEntry.rowId)
+      patches?.delete(commitEntry.columnId)
+      if (patches && patches.size === 0) overlayRef.current.patches.delete(commitEntry.rowId)
+
+      const rollbackError = err instanceof Error ? err.message : "Server rejected the edit."
+      rollbackEntry.pending = false
+      rollbackEntry.error = rollbackError
+      forceRender()
+      options.announce?.({
+        kind: "serverError",
+        column: commitEntry.column,
+        error: rollbackError,
+      })
+    },
+    [options.announce],
+  )
+
+  const commitFromPasteApplyPlan = useCallback(
+    (plan: RangeTsvPasteApplyPlan<TRow>): void => {
+      validateAbortRef.current?.abort()
+      validateAbortRef.current = null
+
+      const appliedCommits: Array<{
+        commit: (typeof plan.commits)[number]
+        mutationId: string
+      }> = []
+
+      for (const commitEntry of plan.commits) {
+        const rowPatch = overlayRef.current.patches.get(commitEntry.rowId) ?? new Map()
+        rowPatch.set(commitEntry.columnId, commitEntry.nextValue)
+        overlayRef.current.patches.set(commitEntry.rowId, rowPatch)
+
+        const mutationId = `m-${++mutationCounterRef.current}`
+        const rowEntries = editEntriesRef.current.get(commitEntry.rowId) ?? new Map()
+        rowEntries.set(commitEntry.columnId, {
+          pending: false,
+          previousValue: commitEntry.previousValue,
+          mutationId,
+        })
+        editEntriesRef.current.set(commitEntry.rowId, rowEntries)
+        appliedCommits.push({ commit: commitEntry, mutationId })
+      }
+
+      forceRender()
+
+      const consumerHook = options.onCellEditCommit
+      if (!consumerHook) return
+
+      let pendingChanged = false
+      for (const { commit: commitEntry, mutationId } of appliedCommits) {
+        const event: BcCellEditCommitEvent<TRow> = {
+          rowId: commitEntry.rowId,
+          row: commitEntry.row,
+          columnId: commitEntry.columnId,
+          column: commitEntry.column,
+          previousValue: commitEntry.previousValue as never,
+          nextValue: commitEntry.nextValue as never,
+          source: "paste",
+        }
+
+        let settle: void | Promise<void>
+        try {
+          settle = consumerHook(event)
+        } catch (err) {
+          rollbackPasteCommit(commitEntry, mutationId, err)
+          continue
+        }
+
+        if (!settle || typeof (settle as Promise<void>).then !== "function") continue
+
+        const entry = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
+        if (entry) {
+          entry.pending = true
+          pendingChanged = true
+        }
+
+        void (settle as Promise<void>)
+          .then(() => {
+            const after = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
+            if (after && after.mutationId === mutationId) {
+              after.pending = false
+              forceRender()
+            }
+          })
+          .catch((err) => rollbackPasteCommit(commitEntry, mutationId, err))
+      }
+
+      if (pendingChanged) forceRender()
+    },
+    [options.onCellEditCommit, rollbackPasteCommit],
+  )
+
   // ------- Lifecycle dispatch shortcuts (called from editor portal) --------
 
   const dispatchMounted = useCallback(() => dispatch({ type: "mounted" }), [])
@@ -581,6 +683,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     start,
     commit,
     clearCell,
+    commitFromPasteApplyPlan,
     cancel,
     dispatchMounted,
     dispatchUnmounted,
