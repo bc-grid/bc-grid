@@ -1,0 +1,65 @@
+import { describe, expect, test } from "bun:test"
+import { readFile } from "node:fs/promises"
+import { fileURLToPath } from "node:url"
+
+/**
+ * Contract regression: every built-in editor that hands `inputRef.current`
+ * back to the framework via `focusRef` must do so inside a `useLayoutEffect`
+ * (not a `useEffect`).
+ *
+ * Why: `EditorMount` (in `@bc-grid/react`) calls `focusRef.current?.focus()`
+ * inside its own `useLayoutEffect`, and React fires children's
+ * `useLayoutEffect` callbacks BEFORE parents' in the commit phase. A child
+ * editor that assigns `focusRef.current` inside `useEffect` (which runs
+ * after paint) will be observed by the parent as `null`, and click-outside
+ * commit (`readEditorInputValue(focusRef.current)`) silently commits
+ * `undefined`. PR #155 fixed this for `text` and `number`. The audit-2026-05
+ * found `date` / `datetime` / `time` had regressed to `useEffect`; this test
+ * pins the contract so they cannot drift back without breaking CI.
+ *
+ * Pure source-text assertion — the repo's test runner is bun:test with no
+ * DOM, so a true commit-phase ordering test would require new infra. This
+ * test catches the exact regression class against the same line each
+ * editor uses.
+ */
+
+const editorsToCheck = [
+  "text",
+  "number",
+  "date",
+  "datetime",
+  "time",
+  "select",
+  "multiSelect",
+  "autocomplete",
+  "checkbox",
+] as const
+
+describe("editor focusRef contract", () => {
+  for (const name of editorsToCheck) {
+    test(`${name} editor assigns focusRef inside useLayoutEffect`, async () => {
+      const source = await readEditorSource(name)
+
+      // Locate the focusRef assignment block.
+      const focusRefBlockMatch = source.match(
+        /(use(?:Layout)?Effect)\(\(\) => \{\s*if \(focusRef && [a-zA-Z]+Ref\.current\) \{\s*;?\(focusRef as \{[^}]+\}\)\.current = [a-zA-Z]+Ref\.current/,
+      )
+
+      expect(
+        focusRefBlockMatch,
+        `${name}.tsx must contain a focusRef assignment block; pattern not found`,
+      ).not.toBeNull()
+      const effectKind = focusRefBlockMatch?.[1]
+
+      expect(
+        effectKind,
+        `${name}.tsx focusRef assignment uses ${effectKind}; must be useLayoutEffect (children's commit-phase effects fire before parents'; useEffect would leave focusRef.current null when the framework reads it).`,
+      ).toBe("useLayoutEffect")
+    })
+  }
+})
+
+async function readEditorSource(name: string): Promise<string> {
+  const here = fileURLToPath(new URL(".", import.meta.url))
+  return readFile(`${here}../src/${name}.tsx`, "utf8")
+}
