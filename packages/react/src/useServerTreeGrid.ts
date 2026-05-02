@@ -114,6 +114,36 @@ export interface UseServerTreeGridOptions<TRow> {
    * `"url"` is reserved for v0.6.
    */
   persistTo?: "localStorage" | null
+  /**
+   * Children fetched per `loadChildren` / `loadRoots` request. Default
+   * 100. Forwarded to `<BcServerGrid rowModel="tree">` as
+   * `childCount`. Lower values reduce per-fetch payload at the cost
+   * of more round-trips for groups with many children.
+   */
+  pageSize?: number
+  /**
+   * LRU cap on loaded tree blocks. Forwarded to `<BcServerGrid>` as
+   * `maxCachedBlocks`. The model evicts the least-recently-used
+   * loaded blocks after each successful tree fetch when this is set,
+   * so memory stays bounded for users who expand many groups across
+   * deep trees. Omit (default) for unbounded retention — appropriate
+   * when the tree fits comfortably in memory.
+   */
+  cacheLimit?: number
+  /**
+   * Optional pre-seed for the chrome's known root child count.
+   * Forwarded to `<BcServerGrid>` as `initialRootChildCount`. The
+   * scrollbar / status-bar / "Loading X rows" affordances render at
+   * the right size before the first `loadChildren` resolves; once
+   * the first fetch settles, the actual `result.totalChildCount` (or
+   * visible row count) takes over.
+   *
+   * **Does not skip the first fetch** — the model still needs the
+   * actual root rows. The "saves a round-trip" framing applies only
+   * when the consumer's server architecture splits count from rows;
+   * `bc-grid` does not assume that split.
+   */
+  rootChildCount?: number
 }
 
 export interface UseServerTreeGridState {
@@ -229,6 +259,9 @@ export function useServerTreeGrid<TRow>(
     debounceMs = DEFAULT_DEBOUNCE_MS,
     groupRowId,
     persistTo,
+    pageSize,
+    cacheLimit,
+    rootChildCount,
   } = opts
 
   // Hydrate sort / filter from `bc-grid:<gridId>:*` localStorage on
@@ -379,6 +412,9 @@ export function useServerTreeGrid<TRow>(
       onSearchTextChange: (next) => setSearchText(next),
       expansion,
       onExpansionChange: handleExpansionChange,
+      ...(pageSize !== undefined ? { childCount: pageSize } : {}),
+      ...(cacheLimit !== undefined ? { maxCachedBlocks: cacheLimit } : {}),
+      ...(rootChildCount !== undefined ? { initialRootChildCount: rootChildCount } : {}),
     }),
     [
       gridId,
@@ -391,6 +427,9 @@ export function useServerTreeGrid<TRow>(
       debouncedSearchText,
       expansion,
       handleExpansionChange,
+      pageSize,
+      cacheLimit,
+      rootChildCount,
     ],
   )
 

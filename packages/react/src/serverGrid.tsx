@@ -263,6 +263,49 @@ export function resolveServerVisibleColumns<TRow>(
   })
 }
 
+/**
+ * Pure helper exported for unit testing. Resolves the per-tree-fetch
+ * `childCount` from the consumer-supplied `BcServerTreeProps.childCount`,
+ * defaulting to `DEFAULT_SERVER_BLOCK_SIZE` (100) and clamping to a
+ * minimum of 1 so a misconfigured `0` does not cause the model to
+ * spin on empty fetches.
+ */
+export function resolveTreeChildCount(childCount: number | undefined): number {
+  if (typeof childCount !== "number" || !Number.isFinite(childCount)) {
+    return DEFAULT_SERVER_BLOCK_SIZE
+  }
+  return Math.max(1, Math.floor(childCount))
+}
+
+/**
+ * Pure helper exported for unit testing. Resolves the `rowCount` the
+ * tree path returns through `TreeServerState`. Mirrors the existing
+ * "visible-rows-only" convention but adds an `initialRootChildCount`
+ * pre-seed window: while the initial root load is in flight and no
+ * rows have rendered yet, the consumer-supplied count is reported so
+ * the chrome (scrollbar, status bar) can render at the right size
+ * before the first fetch resolves. After the first fetch settles,
+ * `visibleRowCount` takes over.
+ */
+export function resolveTreeRowCount(input: {
+  mode: ServerRowModelMode
+  visibleRowCount: number
+  initialRootChildCount: number | undefined
+  rootLoading: boolean
+}): number | "unknown" {
+  if (input.mode !== "tree") return "unknown"
+  if (input.visibleRowCount > 0) return input.visibleRowCount
+  if (
+    input.rootLoading &&
+    typeof input.initialRootChildCount === "number" &&
+    Number.isFinite(input.initialRootChildCount) &&
+    input.initialRootChildCount >= 0
+  ) {
+    return Math.floor(input.initialRootChildCount)
+  }
+  return input.visibleRowCount
+}
+
 function sameColumnIds(left: readonly ColumnId[], right: readonly ColumnId[]): boolean {
   if (left.length !== right.length) return false
   return left.every((columnId, index) => columnId === right[index])
@@ -1288,7 +1331,10 @@ function useTreeServerState<TRow>(
     ? (props.expansion ?? new Set<RowId>())
     : uncontrolledExpansion
 
-  const childCount = DEFAULT_SERVER_BLOCK_SIZE
+  const childCount =
+    props.rowModel === "tree" ? resolveTreeChildCount(props.childCount) : DEFAULT_SERVER_BLOCK_SIZE
+  const maxCachedTreeBlocks = props.rowModel === "tree" ? props.maxCachedBlocks : undefined
+  const initialRootChildCount = props.rowModel === "tree" ? props.initialRootChildCount : undefined
   const loadChildRows = props.rowModel === "tree" ? props.loadChildren : undefined
   const loadRootRows = props.rowModel === "tree" ? props.loadRoots : undefined
   const searchText = props.searchText ?? props.defaultSearchText
@@ -1362,6 +1408,14 @@ function useTreeServerState<TRow>(
             }),
           )
           setError(null)
+          // Tree-block LRU eviction. Tree mode has no built-in
+          // cacheOptions on `loadTreeChildren` (paged + infinite drive
+          // eviction through the model directly), so we trigger it
+          // explicitly after each successful tree fetch when the
+          // consumer opted into a cap.
+          if (typeof maxCachedTreeBlocks === "number" && maxCachedTreeBlocks > 0) {
+            modelRef.current.cache.evictLoadedBlocks(maxCachedTreeBlocks)
+          }
         })
         .catch((nextError: unknown) => {
           if (modelRef.current.isAbortError(nextError)) return
@@ -1381,7 +1435,7 @@ function useTreeServerState<TRow>(
           }
         })
     },
-    [childCount, loadChildRows, loadRootRows, props.rowId, view, viewKey],
+    [childCount, loadChildRows, loadRootRows, maxCachedTreeBlocks, props.rowId, view, viewKey],
   )
 
   useEffect(() => {
@@ -1548,7 +1602,12 @@ function useTreeServerState<TRow>(
     queueMutation,
     refresh,
     retryBlock,
-    rowCount: props.rowModel === "tree" ? rows.length : "unknown",
+    rowCount: resolveTreeRowCount({
+      mode: props.rowModel,
+      visibleRowCount: rows.length,
+      initialRootChildCount,
+      rootLoading,
+    }),
     rowId,
     rows,
     settleMutation,

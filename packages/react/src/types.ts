@@ -702,6 +702,32 @@ export interface BcServerTreeProps<TRow>
   loadChildren: LoadServerTreeChildren<TRow>
   loadRoots?: LoadServerTreeChildren<TRow>
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
+  /**
+   * Children fetched per `loadChildren` / `loadRoots` request. Default
+   * 100. Promotes the implicit block size to an explicit prop so
+   * consumers with deep trees can tune fetch granularity. Lower values
+   * reduce per-fetch payload at the cost of more round-trips when a
+   * group has many children.
+   */
+  childCount?: number
+  /**
+   * LRU cap on loaded tree blocks. When set, the model evicts the
+   * least-recently-used loaded blocks after each successful tree
+   * fetch so memory stays bounded for users who expand many groups
+   * across deep trees. Omit (default) for unbounded retention —
+   * appropriate when the tree fits comfortably in memory.
+   */
+  maxCachedBlocks?: number
+  /**
+   * Optional pre-seed for the chrome's known root child count. When
+   * supplied, `<BcServerGrid>` reports `rowCount` as this value before
+   * the first `loadChildren({ parentRowId: null, ... })` resolves so
+   * the scrollbar / status-bar / "Loading X rows" affordances can
+   * render immediately. Replaced by `result.totalChildCount` once the
+   * first fetch settles. Does not skip the fetch — the model still
+   * needs the actual root rows.
+   */
+  initialRootChildCount?: number
 }
 
 export interface BcCellEditor<TRow, TValue = unknown> {
