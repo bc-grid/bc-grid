@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import { type ComponentType, createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import { defaultTextEditor, readEditorInputValue } from "../src/editorPortal"
+import {
+  EditorValidationPopover,
+  defaultTextEditor,
+  readEditorInputValue,
+} from "../src/editorPortal"
 
 describe("default editor chrome", () => {
   test("emits the shared editor input class and state hooks", () => {
@@ -77,6 +83,53 @@ describe("readEditorInputValue", () => {
     } as unknown as HTMLElement
 
     expect(readEditorInputValue(select)).toEqual(["open", 3])
+  })
+})
+
+describe("EditorValidationPopover", () => {
+  test("renders nothing when there is no error", () => {
+    const html = renderToStaticMarkup(createElement(EditorValidationPopover, { error: undefined }))
+
+    expect(html).toBe("")
+  })
+
+  test("renders the error string visibly with the popover hook", () => {
+    const html = renderToStaticMarkup(
+      createElement(EditorValidationPopover, { error: "Quantity must be > 0" }),
+    )
+
+    expect(html).toContain('class="bc-grid-editor-error-popover"')
+    expect(html).toContain('data-bc-grid-editor-error-popover="true"')
+    expect(html).toContain("Quantity must be &gt; 0")
+  })
+
+  test("marks the popover aria-hidden so it does not double-announce", () => {
+    // The editor's existing visually-hidden span (linked via
+    // `aria-describedby` on the input) plus the controller's assertive
+    // live-region announce already cover AT. The visible popover is for
+    // sighted users only; AT must not announce it again on every render.
+    const html = renderToStaticMarkup(createElement(EditorValidationPopover, { error: "Required" }))
+
+    expect(html).toContain('aria-hidden="true"')
+  })
+
+  test("EditorMount renders the popover inside the editor-root wrapper", () => {
+    // The document-level click-outside handler in `EditorMount` ignores
+    // events whose target has an ancestor matching
+    // `[data-bc-grid-editor-root]` or `[data-bc-grid-editor-portal]`.
+    // The visible validation popover MUST be a descendant of the
+    // editor-root wrapper so a sighted user clicking on it doesn't
+    // commit-and-dismiss the editor mid-edit. Source-shape check; the
+    // structural property is hard to assert without rendering EditorMount
+    // with a real controller.
+    const here = fileURLToPath(new URL(".", import.meta.url))
+    const source = readFileSync(`${here}../src/editorPortal.tsx`, "utf8")
+
+    // Capture the JSX subtree of the wrapper element (from
+    // `data-bc-grid-editor-root="true"` to its `</div>`) and require the
+    // popover element to live inside it.
+    const wrapperBlock = source.match(/data-bc-grid-editor-root="true"[\s\S]*?<\/div>\s*\)\s*\}/)
+    expect(wrapperBlock?.[0] ?? "").toContain("<EditorValidationPopover")
   })
 })
 
