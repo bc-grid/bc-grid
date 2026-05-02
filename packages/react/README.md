@@ -83,10 +83,17 @@ The examples app keeps advanced chrome closed by default. Use these controls, UR
 | Pagination | Available | `?pagination=1` | `pagination`, `pageSizeOptions` |
 | Aggregations | Available | `?aggregations=1` | `aggregation`, `statusBar` |
 | Master detail | Available | `?masterDetail=1` | `renderDetailPanel` |
-| Auto height | Available | `?autoHeight=1` | `height="auto"` |
+| Auto / viewport fit | Available | `?autoHeight=1` | `height="auto"`, `fit` |
 | Server row model | Available | Package API | `<BcServerGrid>` |
 | Pivot grid rendering | Planned | Not exposed in examples | Pivot row/column rendering integration |
 | Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
+
+## Layout sizing
+
+Use `fit` when the host wants bc-grid to choose the root height. `fit="content"`
+uses page-flow sizing, `fit="viewport"` measures from the grid's top edge to the
+viewport bottom, and `fit="auto"` stays page-flow until the rendered content
+would exceed the available viewport height. Explicit `height` still wins.
 
 ## Global search
 

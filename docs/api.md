@@ -50,7 +50,7 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Pagination | Available | `?pagination=1` | `pagination`, `pageSizeOptions` |
 | Aggregations | Available | `?aggregations=1` | `aggregation`, `statusBar` |
 | Master detail | Available | `?masterDetail=1` | `renderDetailPanel` |
-| Auto height | Available | `?autoHeight=1` | `height = "auto"` |
+| Auto / viewport fit | Available | `?autoHeight=1` | `height = "auto"`, `fit` |
 | Server row model | Available | Package API | `<BcServerGrid>` |
 | Pivot panel | Available | Tool panels control or `?toolPanel=pivot` | `sidebar={["pivot"]}`, `pivotState` |
 | Charts | Post-1.0 | Not exposed in examples | Future charts adapter |
@@ -857,7 +857,8 @@ export interface BcFilterEditorProps<TValue = unknown> {
 
   // Layout
   density="normal"   // "compact" | "normal" | "comfortable"
-  height="auto"      // "auto" → page-flow; number → fixed scroller; undefined → fills parent flex
+  fit="auto"         // "content" | "viewport" | "auto"
+  // height="auto"   // explicit override: "auto" page-flow, number fixed scroller
 
   // State (controlled)
   sort={sort} onSortChange={setSort}
@@ -1118,6 +1119,19 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    *   parent gives it, with internal vertical scroll.
    */
   height?: "auto" | number
+  /**
+   * Layout policy when `height` is not supplied.
+   *
+   * `"content"` — page-flow mode, equivalent to `height="auto"`.
+   * `"viewport"` — the grid measures from its top edge to the viewport
+   *   bottom and gives the body an internal vertical scrollbar.
+   * `"auto"` — page-flow while rendered content fits; switches to
+   *   viewport-fit height once content would exceed the available
+   *   viewport.
+   *
+   * Explicit `height` wins over `fit`.
+   */
+  fit?: "content" | "viewport" | "auto"
   rowHeight?: number   // override the density default
 
   // Pagination

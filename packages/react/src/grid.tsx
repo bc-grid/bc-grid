@@ -66,6 +66,7 @@ import {
   setFilterValueKeys,
 } from "./filter"
 import {
+  DEFAULT_BODY_HEIGHT,
   DEFAULT_COL_WIDTH,
   type DataRowEntry,
   type GroupRowEntry,
@@ -96,10 +97,13 @@ import {
   pruneLayoutGroupByForColumns,
   pruneLayoutSortForColumns,
   resolveColumns,
+  resolveContentFitHeight,
   resolveFallbackBodyHeight,
   resolveFilterRowVisibility,
+  resolveGridFitHeight,
   resolveHeaderHeight,
   resolveRowHeight,
+  resolveViewportFitHeight,
   rootStyle,
   rowStyle,
   scrollerStyle,
@@ -194,6 +198,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     rowId,
     apiRef,
     height,
+    fit,
     rowHeight,
     rowIsInactive,
     rowIsDisabled,
@@ -273,6 +278,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const cellFlashBudget = useMemo(() => new AnimationBudget(), [])
   const [, setRenderVersion] = useState(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const [viewportFitHeight, setViewportFitHeight] = useState<number | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
 
   const requestRender = useCallback(() => {
@@ -984,7 +990,69 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   )
   const columnHeaderRowCount = columnGroupHeaderRows.length + 1
   const headerChromeHeight = headerHeight * (columnHeaderRowCount + (hasInlineFilters ? 1 : 0))
-  const fallbackBodyHeight = resolveFallbackBodyHeight(height, defaultRowHeight, headerChromeHeight)
+  const contentFitBodyHeight = useMemo(() => {
+    let total = 0
+    for (const entry of rowEntries) {
+      if (isDataRowEntry(entry) && hasDetail && expansionState.has(entry.rowId)) {
+        total += detailRowHeight(defaultRowHeight, getDetailHeight(entry))
+      } else {
+        total += defaultRowHeight
+      }
+    }
+    return total
+  }, [defaultRowHeight, expansionState, getDetailHeight, hasDetail, rowEntries])
+  const contentFitHeight = resolveContentFitHeight({
+    headerChromeHeight,
+    bodyHeight: contentFitBodyHeight,
+    minBodyHeight: defaultRowHeight,
+    trailingChromeHeight: hasAggregationFooter ? defaultRowHeight : 0,
+  })
+  const minViewportFitHeight = headerChromeHeight + defaultRowHeight
+  const viewportFitFallbackHeight = headerChromeHeight + DEFAULT_BODY_HEIGHT
+  const resolvedHeight = resolveGridFitHeight({
+    explicitHeight: height,
+    fit,
+    contentHeight: contentFitHeight,
+    viewportHeight: viewportFitHeight,
+    minViewportHeight: viewportFitFallbackHeight,
+  })
+  const fallbackBodyHeight = resolveFallbackBodyHeight(
+    resolvedHeight,
+    defaultRowHeight,
+    headerChromeHeight,
+  )
+
+  useEffect(() => {
+    const viewportFitEnabled = height === undefined && (fit === "viewport" || fit === "auto")
+    if (!viewportFitEnabled || typeof window === "undefined") {
+      setViewportFitHeight(null)
+      return
+    }
+
+    let frame: number | null = null
+    const updateHeight = () => {
+      frame = null
+      const rect = rootRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const next = resolveViewportFitHeight({
+        viewportHeight: window.innerHeight,
+        elementTop: rect.top,
+        minHeight: minViewportFitHeight,
+      })
+      setViewportFitHeight((prev) => (prev === next ? prev : next))
+    }
+    const scheduleHeightUpdate = () => {
+      if (frame != null) return
+      frame = window.requestAnimationFrame(updateHeight)
+    }
+
+    scheduleHeightUpdate()
+    window.addEventListener("resize", scheduleHeightUpdate)
+    return () => {
+      if (frame != null) window.cancelAnimationFrame(frame)
+      window.removeEventListener("resize", scheduleHeightUpdate)
+    }
+  }, [fit, height, minViewportFitHeight])
 
   const loadSetFilterOptions = useCallback(
     (columnId: ColumnId): readonly SetFilterOption[] => {
@@ -1703,10 +1771,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       ? cellDomId(domBaseId, activeDescendantCell.rowId, activeDescendantCell.columnId)
       : undefined
 
-  const isAutoHeight = height === "auto"
+  const isAutoHeight = resolvedHeight === "auto"
   // Numeric height takes the root; "auto" lets the grid grow to its
   // canvas height; undefined falls through to the parent's flex space.
-  const rootHeight = typeof height === "number" ? height : undefined
+  const rootHeight = typeof resolvedHeight === "number" ? resolvedHeight : undefined
   // Auto-height & undefined both leave the scroller height to layout
   // (page-flow vs. parent-flex respectively, controlled by `pageFlow`
   // below). Only numeric height paths could benefit from a clamp here,
@@ -2088,6 +2156,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       onFocus={handleFocus}
       onKeyDown={handleKeyDown}
       style={rootStyle(isAutoHeight ? "auto" : rootHeight)}
+      data-bc-grid-fit={fit}
       data-bc-grid-height-mode={isAutoHeight ? "auto" : "fixed"}
     >
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}

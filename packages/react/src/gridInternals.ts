@@ -627,6 +627,56 @@ export function rootStyle(height: number | "auto" | undefined): CSSProperties {
   }
 }
 
+export type GridFitMode = "content" | "viewport" | "auto"
+
+export interface GridFitHeightInput {
+  explicitHeight: number | "auto" | undefined
+  fit: GridFitMode | undefined
+  contentHeight: number
+  viewportHeight: number | null
+  minViewportHeight: number
+}
+
+export function resolveGridFitHeight({
+  explicitHeight,
+  fit,
+  contentHeight,
+  viewportHeight,
+  minViewportHeight,
+}: GridFitHeightInput): number | "auto" | undefined {
+  if (explicitHeight !== undefined) return explicitHeight
+  if (fit === "content") return "auto"
+  if (fit === "viewport") return viewportHeight ?? minViewportHeight
+  if (fit === "auto") {
+    if (viewportHeight == null) return "auto"
+    return contentHeight <= viewportHeight ? "auto" : viewportHeight
+  }
+  return undefined
+}
+
+export function resolveViewportFitHeight(params: {
+  viewportHeight: number
+  elementTop: number
+  minHeight: number
+}): number {
+  const availableHeight = params.viewportHeight - Math.max(0, params.elementTop)
+  return Math.max(params.minHeight, Math.floor(availableHeight))
+}
+
+export function resolveContentFitHeight(params: {
+  headerChromeHeight: number
+  bodyHeight: number
+  minBodyHeight: number
+  trailingChromeHeight?: number
+}): number {
+  return (
+    params.headerChromeHeight +
+    Math.max(params.minBodyHeight, params.bodyHeight) +
+    (params.trailingChromeHeight ?? 0) +
+    2
+  )
+}
+
 export const headerViewportStyle: CSSProperties = {
   flex: "0 0 auto",
   overflow: "hidden",
