@@ -24,21 +24,12 @@ import { fileURLToPath } from "node:url"
  */
 
 /**
- * Editors that own their own focus handoff inline. `select` and
- * `autocomplete` delegated to shared Combobox primitives in v0.5
- * (audit P0-4); the contract there is enforced separately below.
- * `multiSelect` migration to `internal/combobox.tsx` is in flight
- * via PR #365 and will move there once that lands.
+ * Editors that own their own focus handoff inline. `select`,
+ * `multiSelect`, and `autocomplete` delegated to shared Combobox
+ * primitives in v0.5 (audit P0-4); the contract there is enforced
+ * separately below.
  */
-const editorsToCheck = [
-  "text",
-  "number",
-  "date",
-  "datetime",
-  "time",
-  "multiSelect",
-  "checkbox",
-] as const
+const editorsToCheck = ["text", "number", "date", "datetime", "time", "checkbox"] as const
 
 const FOCUS_REF_BLOCK =
   /(use(?:Layout)?Effect)\(\(\) => \{\s*if \(focusRef && [a-zA-Z]+Ref\.current\) \{\s*;?(?:\(focusRef as \{[^}]+\}\)|focusRef)\.current = [a-zA-Z]+Ref\.current/
@@ -51,11 +42,12 @@ describe("editor focusRef contract", () => {
     })
   }
 
-  test("internal Combobox primitive (used by select) assigns focusRef inside useLayoutEffect", async () => {
-    // The v0.5 select editor delegates its focus handoff to the shared
-    // Combobox primitive. Pin the contract there so the click-outside
-    // / Tab path that reads `__bcGridComboboxValue` off the trigger
-    // button continues to see a non-null `focusRef.current`.
+  test("internal Combobox primitive (used by select + multiSelect) assigns focusRef inside useLayoutEffect", async () => {
+    // The v0.5 select + multiSelect editors delegate their focus
+    // handoff to the shared Combobox primitive. Pin the contract
+    // there so the click-outside / Tab path that reads
+    // `__bcGridComboboxValue` off the trigger button continues to see
+    // a non-null `focusRef.current`.
     const source = await readEditorSource("src/internal/combobox.tsx")
     assertFocusRefUsesLayoutEffect(source, "internal/combobox.tsx")
   })

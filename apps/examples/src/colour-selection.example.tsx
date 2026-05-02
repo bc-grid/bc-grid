@@ -97,7 +97,7 @@ export function ColourSelectionExample() {
       {...grid.props}
       columns={columns}
       data={rows}
-      rowId={(row) => row.id}
+      rowId={(row: FinishRow) => row.id}
       onCellEditCommit={(event: BcCellEditCommitEvent<FinishRow>) => {
         setRows((prev) =>
           prev.map((row: FinishRow) =>
