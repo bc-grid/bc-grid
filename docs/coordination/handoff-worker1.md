@@ -29,8 +29,25 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#376** `v05-server-loader-generics` deferral doc — TS variance trap; stretch deferred to v0.6 with rationale
 - ✅ **#379** `useServerTreeGrid` `groupRowId` override + `persistTo` (bsncraft polish)
 - ✅ **#383** v0.5 → v0.6 server-perf follow-ups planning doc — 11 v0.6 task proposals + 5 open questions for coordinator
+- ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
 
-### Active now → `v05-server-tree-grid-options-pull-forward`
+### Active now → `v05-server-perf-bundle-1` (4 server-perf items in one PR, ~30-40 min)
+
+bsncraft is consuming `0.5.0-alpha.1` from the registry now; they'll surface migration findings on their schedule. Until they do, work through these 4 server-perf items from your own #383 doc as a single coherent PR. They're related (all about request orchestration under load), share infrastructure, and bundle cleanly.
+
+**Items:**
+
+1. **`§5 — block-cache LRU eviction tuning`** — verify the default `maxBlocks: 20` against realistic ERP scroll patterns (5k+ rows with rapid up/down scrolling). Either confirm the default is right with a unit test pinning the eviction order, or expose a `maxBlocks?: number` option on `useServerInfiniteGrid` so consumers can tune.
+
+2. **`§8 — prefetch-ahead budget knob on useServerInfiniteGrid`** — the hook spec didn't expose `prefetchAhead?: number` because there was no underlying knob; wire it through the orchestration model. Default sensible (e.g. 1 block ahead).
+
+3. **`§9 — stale-response handling under requestId floods`** — extend existing tests from "one late response" to "10 keystrokes in <1s typing." The orchestration's `requestId` flow should still drop all 9 stale responses correctly. If a race-window bug surfaces, fix it.
+
+4. **`§10 — per-row request-id supersedure in useServerTreeGrid`** — `loadTreeChildren` doesn't currently call `abortExcept` the way paged does. Tree fetches under viewKey K1 can resolve and merge into a K2 snapshot. Either add per-row `abortExcept` (preferred) OR a viewKey gate at result-merge time. Pick the cleaner approach; document in JSDoc.
+
+**Branch:** `agent/worker1/v05-server-perf-bundle-1`. **Effort:** ~30-40 min for the bundle.
+
+### Earlier task superseded
 
 The 3 remaining `useServerTreeGrid` polish items (`rootChildCount?`, `pageSize?`, `cacheLimit?`) were deferred to v0.6 in `v06-server-tree-grid-options` because they were "nice-to-have" rather than v0.5 release-gate. With your lane otherwise clean and bsncraft about to consume `useServerTreeGrid` for the customers grouping migration, **pull these forward into v0.5** — they're small + additive + bsncraft flagged them.
 

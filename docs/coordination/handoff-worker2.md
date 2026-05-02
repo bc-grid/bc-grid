@@ -34,7 +34,21 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate. **All v0.5 P0 + cleanup-train + stretch items are now closed** — your lane is done.
 
-### Active now → `v05-grouping-followups-planning-doc`
+### Active now → `v05-chrome-and-filter-bundle-1` (3 polish items in one PR, ~30-40 min)
+
+bsncraft is on `0.5.0-alpha.1`. Until they surface migration findings, bundle these 3 chrome/filter polish items from your own #388 planning doc into one PR. They're independent + small + visible to ERP users today.
+
+**Items:**
+
+1. **Active filter chip strip in toolbar** (audit P2 from #351) — today the active-filter summary lives only inside the Filters panel. Add a small always-visible chip strip suitable for status bars / toolbars; reuse `clearFilter(columnId)`. Each chip shows column header + condensed value + dismiss `×`. Goes into the existing `<BcStatusBar>` slot (or a new `BcGridProps.activeFilterSummary?: "status-bar" | "off"` toggle).
+
+2. **Group selection algebra (basic)** (audit P1-W2-5 from #351 + #388 §2) — selecting a group row should select its visible descendants. Today click on a group row toggles expand only. Add a checkbox or modifier-click that selects the descendants. Scope: visible descendants (loaded rows on the current page). Full server-view group selection stays in v0.6.
+
+3. **Filter operators: `blank` / `not blank`** (audit P1-W2-4 partial from #351 + #388 §6) — add `blank` and `not blank` to the operator list for `text`, `number`, `date`, `set`. The predicate side is trivial (`value == null || value === ""`); the editor side rendered as a no-input variant (just a 2-button toggle group). Don't bundle all the relative-date / fiscal-period operators here — those need the filter registry, which is v0.6.
+
+**Branch:** `agent/worker2/v05-chrome-and-filter-bundle-1`. **Effort:** ~30-40 min for the bundle.
+
+### Previously active → `v05-grouping-followups-planning-doc` (DONE)
 
 Mirror worker1's #383 pattern: convert your audit findings (#351) — specifically the grouping + filter items — into concrete v0.6 task entries. Output: read-only doc at `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`. No source changes. Pure planning pass while your lane is otherwise clean.
 
