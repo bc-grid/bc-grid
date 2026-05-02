@@ -86,7 +86,7 @@ test("editor pre-selects every value present in the row's flags array", async ({
   // FLAG_OPTIONS labels: "high-volume" → "High Volume", "tax-exempt" → "Tax Exempt".
   const selectedLabels = (
     await page.locator('[role="listbox"] [role="option"][data-selected="true"]').allTextContents()
-  ).map((s) => s.trim())
+  ).map((s) => s.replace(/^✓\s*/, "").trim())
   expect(selectedLabels.sort()).toEqual(["High Volume", "Tax Exempt"].sort())
 })
 
@@ -108,10 +108,21 @@ test("commit produces an array of typed values and the cell renderer reflects ev
     .filter({ hasText: "International" })
     .first()
     .click()
-  await page.keyboard.press("Enter")
+  // Commit via Tab — Enter would toggle the last-active option back off
+  // because the multi-mode Combobox routes Enter through `updateSelection`
+  // before bubbling commit (sharp edge logged in synthesis P1 backlog).
+  await page.keyboard.press("Tab")
 
   // Trigger should unmount on commit.
   await expect(page.locator(TRIGGER_SELECTOR)).toHaveCount(0)
+
+  // Tab moves focus to the next cell; flags is the rightmost column so
+  // the grid auto-scrolls. Re-scroll back to make row 0's flags cell
+  // visible in the virtualizer's render window.
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    if (scroller) scroller.scrollLeft = scroller.scrollWidth
+  })
 
   const cell = page
     .locator(
@@ -135,7 +146,8 @@ test("validation rejection keeps the editor open and announces via assertive reg
     .filter({ hasText: "Manual Review" })
     .first()
     .click()
-  await page.keyboard.press("Enter")
+  // Commit via Tab (see commit-test note re: Enter sharp edge).
+  await page.keyboard.press("Tab")
 
   const trigger = page.locator(TRIGGER_SELECTOR).first()
   await expect(trigger).toBeAttached()
