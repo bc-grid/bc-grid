@@ -271,11 +271,15 @@ export function Combobox(props: ComboboxProps): ReactNode {
         return
       }
       if (event.key === "Enter") {
-        // Single: commit the highlighted option, then let the editor
+        // Single: pick the highlighted option, then let the editor
         // portal wrapper's keydown receive the same Enter to advance
-        // the active cell. Multi: toggle the highlighted option;
-        // Enter also bubbles up so the wrapper commits the array.
-        if (open && activeIndex >= 0) {
+        // the active cell. Multi: do NOT toggle — bubble straight
+        // through so the wrapper commits the chip set the user has
+        // already built. Toggling on Enter undoes the most-recently
+        // active chip immediately before commit, dropping the user's
+        // last pick (audit P1-W3-5b — surfaced fixing #372 e2e).
+        // Space remains the toggle gesture in multi mode.
+        if (!isMulti && open && activeIndex >= 0) {
           updateSelection(activeIndex)
         }
         return
