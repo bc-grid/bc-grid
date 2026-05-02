@@ -4,6 +4,14 @@ export { BcEditGrid } from "./editGrid"
 export { BcGrid, useBcGridApi } from "./grid"
 export { BcServerGrid } from "./serverGrid"
 export { BcStatusBar, resolveVisibleSegments } from "./statusBar"
+export { useBcGridState } from "./useBcGridState"
+export type {
+  BcGridStateBindings,
+  BcGridStateBoundProps,
+  BcGridStateDispatch,
+  BcGridStateValues,
+  UseBcGridStateOptions,
+} from "./useBcGridState"
 export { useServerRowUpdates } from "./useServerRowUpdates"
 
 export type {
