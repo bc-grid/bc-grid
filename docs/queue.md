@@ -70,6 +70,7 @@ Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `
 - `[ready]` **v05-paste-editor-binding** (worker3) — `editController.commitFromPasteApplyPlan` to route paste through commit. Waits for worker2's `pasteTsv` contract.
 - `[ready]` **v05-bsncraft-migration-proof** (coordinator) — migrate one bsncraft CRUD grid to the new hooks; target diff ≥-100 LOC wrapper code.
 - `[done: coordinator 7800361]` **v05-chrome-polish-pinned-and-detail-header** (coordinator) — bsncraft v0.4 audit findings (2026-05-03): align pinned row-state CSS tokens with body composites so pinned cells match the rest of the row in hover/selected states (was: noticeably darker/washed-out at saturated accents); remove decorative `<DisclosureChevron>` from the master-detail column header (it didn't toggle anything).
+- `[deferred-v0.6: worker1]` **v05-server-loader-generics** (worker1) — generic `TRow` propagation into `LoadServerPage<TRow>` / `LoadServerBlock<TRow>` / `LoadServerTreeChildren<TRow>` query types (audit P1-C2). **Defer reason:** the natural `<TRow>` parameterization puts TRow in contravariant position for the loader callbacks, breaking strict-function-type variance for every existing call site that passes a typed loader through a non-generic helper. Documented at `docs/design/server-loader-generics-deferral.md` with two recommended v0.6 paths (breaking change to method-style loader, or consumer-side opt-in narrowing helper).
 
 ## v0.6 follow-ups (queued, do not start until v0.5 ships)
 
