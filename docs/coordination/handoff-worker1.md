@@ -18,44 +18,44 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#360** worker1 audit findings doc
 - ✅ **#363** `useServerPagedGrid` turnkey orchestration hook (audit P0-6)
 - ✅ **#366** `apiRef.scrollToCell` + `useServerPagedGrid.scrollToServerCell` action (audit P0-7 server-side)
+- 🟡 **#368** `useServerInfiniteGrid` + extracted `internal/useServerOrchestration.ts` — in coordinator review
 
-### Active now → `useServerInfiniteGrid` companion hook
+### Active now → `useServerTreeGrid` companion hook
 
-Same orchestration shape as `useServerPagedGrid` but for the infinite-scroll row model. Audit P0-6 follow-up; closes the v0.5 server-side parity story.
+Same orchestration shape as `useServerPagedGrid` and `useServerInfiniteGrid`, adapted for `LoadServerTreeChildren`. Reuses the `internal/useServerOrchestration.ts` primitives you extracted in #368. **Recommendation: branch from `agent/worker1/v05-use-server-infinite-grid`** (your #368 branch) so you get the orchestration extraction without waiting for #368 to merge — coordinator will sort the merge order.
 
 **Spec:**
 ```ts
-export function useServerInfiniteGrid<TRow>(opts: {
+export function useServerTreeGrid<TRow>(opts: {
   gridId: string
-  loadBlock: LoadServerBlock<TRow>
-  blockSize?: number     // default from ServerBlockCacheOptions
-  prefetchAhead?: number // viewport-driven prefetch budget
+  loadChildren: LoadServerTreeChildren<TRow>
   rowId: (row: TRow) => RowId
+  initialExpansion?: ReadonlySet<RowId>
 }): {
-  props: BcServerGridProps<TRow>      // spread-ready, rowModel="infinite"
-  state: ServerInfiniteState<TRow>    // visible blocks, loading, error
-  actions: { reload, invalidateBlock, applyOptimisticEdit }
+  props: BcServerGridProps<TRow>      // spread-ready, rowModel="tree"
+  state: ServerTreeState<TRow>        // expansion map, loading set, error
+  actions: { reload, expandRow, collapseRow, applyOptimisticEdit }
 }
 ```
 
 **The hook owns:**
-- Block-cache (use `ServerBlockCache` from `@bc-grid/core`; expose LRU eviction config)
-- Viewport-driven block fetching with prefetch ahead (Audit P1 — server-row-model perf in your lane)
-- Stale-response rejection (request-id flow per `useServerPagedGrid`)
-- Optimistic edits in flight, rollback on superseded
-- AbortSignal threading via `ServerLoadContext.signal`
+- Lazy-children fetching when a row's expansion state flips
+- Per-row request-id flow (children of row A don't cancel children of row B)
+- Stale-response rejection per row
+- Recursive optimistic edit / rollback (parent + descendants)
+- AbortSignal threading
 
-**Reference implementation:** `useServerPagedGrid` (just shipped in #363) is the template. Many of the orchestration primitives are identical — extract anything generalisable into `packages/react/src/internal/useServerOrchestration.ts` so `useServerTreeGrid` (next task) doesn't re-roll them.
+**Reference:** `useServerPagedGrid` + `useServerInfiniteGrid` are templates. The hook should compose `useServerOrchestration` (single-stream request management) or extend it for the per-row case if needed.
 
-**Tests:** unit-level for block cache integration, viewport-driven prefetch, stale rejection, optimistic edit flow. Don't write Playwright — coordinator runs that.
+**Tests:** unit-level for expansion → lazy fetch flow, per-row request-id supersedure (expand row A, expand row B, collapse row A, fetch row B should still complete), optimistic edit on a deeply nested child.
 
-**Branch:** `agent/worker1/v05-use-server-infinite-grid`. **Effort:** ~half-to-full day.
+**Branch:** `agent/worker1/v05-use-server-tree-grid`. **Effort:** ~half day.
 
-### Follow-up tasks (after this hook PR is open)
+### Follow-up tasks (after `useServerTreeGrid` PR is open)
 
-1. **`useServerTreeGrid`** companion hook for `rowModel="tree"`. Same shape, adapted for `LoadServerTreeChildren`. Branch: `agent/worker1/v05-use-server-tree-grid`. **Effort:** ~half day.
-2. **Stretch: Generic `TRow` propagation** into `LoadServerPage<TRow>` / `LoadServerBlock<TRow>` / `LoadServerTreeChildren<TRow>` query types so `query.sort` / `query.filter` are typed against column ids (audit P1-C2). Branch: `agent/worker1/v05-server-loader-generics`. Only ship if low risk; defer to v0.6 if it churns the public type surface.
-3. **Help on bsncraft migration proof** if the server-grid wrappers in bsncraft are the natural first target. Coordinator owns the migration but server-grid expertise is yours.
+1. **Stretch: Generic `TRow` propagation** into `LoadServerPage<TRow>` / `LoadServerBlock<TRow>` / `LoadServerTreeChildren<TRow>` query types so `query.sort` / `query.filter` are typed against column ids (audit P1-C2). Branch: `agent/worker1/v05-server-loader-generics`. Only ship if low risk; defer to v0.6 if it churns the public type surface.
+2. **Help on bsncraft migration proof** — bsncraft's `ServerEditGrid` wrapper (`~/work/bsncraft/apps/web/components/server-edit-grid.tsx:74-163`) is the textbook customer for `useServerPagedGrid`. Coordinator owns the migration but you'd be the natural co-owner since you wrote the hook. Branch: `coordinator/bsncraft-migration-proof` (joint coordinator + worker1).
+3. **Audit P1 server-perf items.** Your audit findings doc (#360) flagged a few server-perf items (cache eviction tuning, prefetch budget calibration). Convert anything that's still relevant against the now-shipped `useServerPagedGrid` / `useServerInfiniteGrid` into v0.6 tasks. Branch: `agent/worker1/v05-server-perf-audit-followups` (read-only audit-style PR; produce a follow-up tasks doc rather than implementation).
 
 ### Primary task — `useServerPagedGrid({ gridId, loadPage })`
 

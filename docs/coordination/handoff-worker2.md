@@ -18,12 +18,11 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#355** filters panel active filter summary chip strip — went out in `v0.4.0`
 - ✅ **#358** test-import lint rule + `tools/lint-test-import-boundaries.ts` (cleanup train task 1)
 - ✅ **#362** optional `filter` / `onFilterChange` props (cleanup train task 2)
+- 🟡 **#369** `<BcGrid searchHotkey>` prop (cleanup train task 3) — in coordinator review
 
 v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate.
 
-### Active now → `v05-search-hotkey-prop` (task 3 below)
-
-If you've already pushed task 3 (`v05-search-hotkey-prop`), there's no PR for it on origin yet — push when ready and the coordinator will review. If you've actually completed task 3 and another, also push that. Then continue down the list.
+### Active now → `v05-fit-prop` (task 4 below)
 
 Each task is its own branch + PR; ship in order. The full pipeline:
 
@@ -31,9 +30,9 @@ Each task is its own branch + PR; ship in order. The full pipeline:
 
 2. ✅ **`v05-optional-filter-prop`** — DONE (#362).
 
-3. **🟢 `v05-search-hotkey-prop` (ACTIVE)** — Add `<BcGrid searchHotkey>` prop that owns Cmd/Ctrl+F. Exposes a `searchInputRef` so consumers can wire focus. Removes the duplicate listeners in `~/work/bsncraft/apps/web/components/data-grid.tsx:179-215` and `~/work/bsncraft/packages/ui/src/components/data-table.tsx:1-25`. **Effort: 1-2 hours.** Branch: `agent/worker2/v05-search-hotkey-prop`.
+3. 🟡 **`v05-search-hotkey-prop`** — IN REVIEW (#369).
 
-4. **`v05-fit-prop`** — Add `fit="content" | "viewport" | "auto"` prop on `<BcGrid>` that owns viewport-fit height math currently duplicated in bsncraft `data-grid.tsx:296-310` (15 lines of header + filter row + body math). **Effort: 2-3 hours including tests.** Branch: `agent/worker2/v05-fit-prop`.
+4. **🟢 `v05-fit-prop` (ACTIVE)** — Add `fit="content" | "viewport" | "auto"` prop on `<BcGrid>` that owns viewport-fit height math currently duplicated in bsncraft `data-grid.tsx:296-310` (15 lines of header + filter row + body math). **Effort: 2-3 hours including tests.** Branch: `agent/worker2/v05-fit-prop`.
 
 5. **`v05-api-ref-filter` — `BcGridApi.openFilter` / `closeFilter`**
    Add filter-side imperative methods to the public `BcGridApi` (audit P0-7 / synthesis sprint plan). Worker3 already shipped the editor side (`startEdit`/`commitEdit`/`cancelEdit`) in #361; worker1 owns server-side `scrollToCell` separately. Your half is the filter pair:

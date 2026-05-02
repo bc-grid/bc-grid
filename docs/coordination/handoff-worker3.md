@@ -21,14 +21,24 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#361** `BcGridApi.startEdit/commitEdit/cancelEdit` + editor portal methods (v0.5 task 2)
 - ✅ **#364** shadcn Combobox migration for `select.tsx` + `EditorOption.swatch`/`icon` fields + `colour-selection` hero spike (v0.5 P0-4 part 1)
 - ❌ **#365** multi-select Combobox migration — **CLOSED, must be re-attempted.** The branch was based on a commit before #353 and #363 merged; rebasing was unsafe (the diff carried 500+ lines of unintended reverts, including the entire `useServerPagedGrid` hook and `rowProcessingMode` server-grid contract). Multi-select work itself is good — the Combobox `mode: "single" | "multi"` design and multiSelect.tsx migration are sound — but they need to land on a fresh branch from current `main`.
+- 🟡 **#370** autocomplete Combobox migration + `internal/combobox-search.tsx` (v0.5 P0-4 leg 2 of 3) — in coordinator review
 
-### Active now → `autocomplete` Combobox migration
+### Active now → `v05-combobox-multi-select-v2` (re-attempt on fresh main)
 
-If you've already started autocomplete locally, continue and ship that PR — it's the last unfinished leg of P0-4.
+#370 (autocomplete) is in coordinator review and closes P0-4 leg 2 of 3. Pick up multi-select v2 now to close P0-4 leg 3.
 
-After autocomplete, **re-attempt multi-select on a fresh branch** (closed #365 cannot be rebased safely; see "What's already shipped" above for the rationale). Branch name: `agent/worker3/v05-combobox-multi-select-v2`. The Combobox `mode: "single" | "multi"` extension you designed in #365 is still the right shape.
+**Branch from current `main`** (which has #364 + the merged #370 once it lands; if #370 hasn't merged yet, branch from #370's branch and the coordinator will sort merge order).
 
-Synthesis P0-4 listed all three lookup editors. With #364 (select) shipped, autocomplete next, and multi-select-v2 after, that closes P0-4 cleanly.
+The Combobox `mode: "single" | "multi"` extension you designed in #365 is still the right shape:
+- Extend `packages/editors/src/internal/combobox.tsx` with a `mode` prop
+- `mode: "multi"` keeps the listbox open after each pick (consumer commits via Tab/Enter/Escape)
+- `initialValue` is `readonly unknown[]` in multi-mode; `onSelect` fires with the next array
+- `EditorOption.swatch` / `icon` continue to work (chip rendering of selected values uses the same fields)
+- `multiSelect.tsx` migrates onto multi-mode Combobox; preserve chip rendering, removable chips, "select all" behavior
+
+**Branch:** `agent/worker3/v05-combobox-multi-select-v2`. **Effort:** ~half day (you already designed this in #365; redoing on fresh main with the simpler design).
+
+### After multi-select-v2 ships
 
 - Migrate `packages/editors/src/autocomplete.tsx` to the `internal/combobox.tsx` shell. The base Combobox (#364) is your template; preserve autocomplete-specific behavior: free-text input, debounced async option loading, "no results" state, "still loading" state.
 - **Wire `prepareResult` consumption** (audit P1-W3-2) — autocomplete is the natural place. The state machine carries `prepareResult` through `Preparing` → `Editing`; the hook should preload the first page of options via `editor.prepare()` and hand them to the Combobox so the dropdown paints with options on first frame instead of a blank "loading" state.
@@ -42,8 +52,9 @@ Synthesis P0-4 listed all three lookup editors. With #364 (select) shipped, auto
 1. ✅ **`v05-use-bc-grid-state`** — DONE (#359).
 2. ✅ **`v05-api-ref-editor`** — DONE (#361).
 3. ✅ **`v05-spike-colour-selection`** + select.tsx Combobox — DONE (#364).
-4. ❌ **`v05-combobox-multi`** — closed (#365); must be re-attempted on fresh branch (`v05-combobox-multi-select-v2`) **after** autocomplete migrates so the Combobox primitive is fully exercised by all three editors.
-5. **🟢 `v05-combobox-autocomplete` (ACTIVE)** — finish P0-4 with the autocomplete migration + prepareResult wiring (above).
+4. ❌ **`v05-combobox-multi`** — closed (#365); re-attempted as task 5b below.
+5. 🟡 **`v05-combobox-autocomplete`** — IN REVIEW (#370).
+   **5b. 🟢 `v05-combobox-multi-select-v2` (ACTIVE)** — re-attempt of #365 on fresh main; closes P0-4 leg 3 (above).
 6. **`v05-spike-sales-estimating` — Sales Estimating hero spike** (can ship without paste leg as "missing pattern" datapoint; or wait for worker2's paste PR)
    `apps/examples/src/sales-estimating.example.tsx`. Demonstrates: money column type with currency-aware formatting, dependent cells (`extPrice = qty * price * (1 - discount)` recomputes on commit), Excel paste fidelity for line-item entry. **Goal: <100 LOC consumer code.** Anything that pushes over → surface in the spike's PR description as a missing pattern.
    - Audit P0-9 / synthesis hero-spike track.
