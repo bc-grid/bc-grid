@@ -12,7 +12,16 @@ import type {
   ServerRowPatch,
 } from "@bc-grid/core"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  buildOptimisticEditPatch as buildOptimisticEditPatchInternal,
+  createServerLoadAbortError,
+  isLoadAborted,
+  useDebouncedValue as useDebouncedValueInternal,
+  useMutationIdStream,
+} from "./internal/useServerOrchestration"
 import type { BcServerPagedProps } from "./types"
+
+const HOOK_MUTATION_PREFIX = "useServerPagedGrid"
 
 /**
  * Initial values the hook seeds into its controlled-state surface. All
@@ -206,14 +215,14 @@ export function useServerPagedGrid<TRow>(
         // not aborted by a newer query. The model's blockKey gate
         // drops stale results from the cache; the abort signal is the
         // signal we should also drop the loading=false update.
-        if (ctx.signal.aborted) {
-          throw createAbortError()
+        if (isLoadAborted(ctx.signal)) {
+          throw createServerLoadAbortError()
         }
         setLastResult(result)
         setLoading(false)
         return result
       } catch (e) {
-        if (ctx.signal.aborted) {
+        if (isLoadAborted(ctx.signal)) {
           // A newer request superseded this one. The newer request
           // owns the loading transition; do not clear loading here.
           throw e
@@ -244,11 +253,10 @@ export function useServerPagedGrid<TRow>(
     apiRef.current?.refreshServerRows()
   }, [])
 
-  const mutationCounterRef = useRef(0)
+  const nextMutationId = useMutationIdStream(HOOK_MUTATION_PREFIX)
   const applyOptimisticEdit = useCallback(
     (input: { rowId: RowId; changes: Record<ColumnId, unknown> }) => {
-      mutationCounterRef.current += 1
-      const mutationId = `useServerPagedGrid:${mutationCounterRef.current}`
+      const mutationId = nextMutationId()
       const patch: ServerRowPatch = {
         mutationId,
         rowId: input.rowId,
@@ -257,7 +265,7 @@ export function useServerPagedGrid<TRow>(
       apiRef.current?.queueServerRowMutation(patch)
       return mutationId
     },
-    [],
+    [nextMutationId],
   )
 
   const scrollToCell = useCallback(
@@ -314,32 +322,14 @@ export function useServerPagedGrid<TRow>(
   return { props, state, actions }
 }
 
-function createAbortError(): Error {
-  const error = new Error("Aborted")
-  error.name = "AbortError"
-  return error
-}
-
 /**
- * Minimal debounce hook. Returns the input value unchanged on the
- * first render; subsequent input changes are deferred by `delayMs`
- * and coalesced (the latest input wins). When `delayMs` is `0`, the
- * value is forwarded immediately on every change.
- *
- * Exported for unit testing.
+ * Re-export of the shared debounce primitive. Kept on
+ * `useServerPagedGrid` for consumers who want it without reaching into
+ * `internal/`. New code should import the shared primitive from a
+ * future `@bc-grid/react` public surface if it grows beyond the
+ * server-grid hooks.
  */
-export function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState<T>(value)
-  useEffect(() => {
-    if (delayMs <= 0) {
-      setDebounced(value)
-      return
-    }
-    const timer = setTimeout(() => setDebounced(value), delayMs)
-    return () => clearTimeout(timer)
-  }, [value, delayMs])
-  return debounced
-}
+export const useDebouncedValue = useDebouncedValueInternal
 
 /**
  * Pure helper exported for unit testing. Decides the initial controlled-
@@ -387,18 +377,20 @@ export function resolveServerPagedPageAfterViewChange(input: {
 
 /**
  * Pure helper exported for unit testing. Builds an optimistic-edit
- * `ServerRowPatch` with a deterministic mutation ID prefix so
- * consumers can correlate hook-issued patches in their telemetry or
- * `onServerRowMutation` settle handler.
+ * `ServerRowPatch` with the `useServerPagedGrid:` mutation-ID prefix
+ * so consumers can correlate hook-issued patches in their telemetry
+ * or `onServerRowMutation` settle handler. Thin wrapper around the
+ * shared `internal/useServerOrchestration` builder for test stability.
  */
 export function buildOptimisticEditPatch(input: {
   rowId: RowId
   changes: Record<ColumnId, unknown>
   sequence: number
 }): ServerRowPatch {
-  return {
-    mutationId: `useServerPagedGrid:${input.sequence}`,
+  return buildOptimisticEditPatchInternal({
     rowId: input.rowId,
     changes: input.changes,
-  }
+    prefix: HOOK_MUTATION_PREFIX,
+    sequence: input.sequence,
+  })
 }
