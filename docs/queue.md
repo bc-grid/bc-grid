@@ -49,7 +49,7 @@ Read-only audits, one findings doc per author. See `docs/coordination/audit-2026
 Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the scope. Workers actively claiming. v0.4.0 is published; v0.5 PRs land into the v0.5.0 candidate.
 
 - `[done: worker3 #359]` **v05-use-bc-grid-state** (worker3) — `useBcGridState({ persistTo, columns })` turnkey state hook + `BcGridStateBindings`/`BcGridStateBoundProps`/`BcGridStateDispatch`/`BcGridStateValues`/`UseBcGridStateOptions` types. Coordinator pushed api-surface manifest update on the same branch.
-- `[ready]` **v05-use-server-paged-grid** (worker1) — `useServerPagedGrid({ gridId, loadPage })` owning request-id, stale rejection, debounce, page reset on filter, optimistic edits.
+- `[review: worker1 #363]` **v05-use-server-paged-grid** (worker1) — `useServerPagedGrid({ gridId, loadPage })` owning request-id, stale rejection, debounce, page reset on filter, optimistic edits. Branch `agent/worker1/v05-use-server-paged-grid`.
 - `[ready]` **v05-api-ref-server** (worker1) — `BcGridApi.scrollToCell` for server-paged grids.
 - `[done: worker3 #361]` **v05-api-ref-editor** (worker3) — `BcGridApi.startEdit` / `commitEdit` / `cancelEdit` and editor portal methods. **Branch:** `agent/worker3/v05-api-ref-editor`.
 - `[ready]` **v05-spike-sales-estimating** (worker3) — hero spike at `apps/examples/src/sales-estimating.example.tsx`, <100 LOC consumer code. Depends on `useBcGridState` (#359) + worker2 paste integration.
