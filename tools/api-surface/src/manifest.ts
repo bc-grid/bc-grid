@@ -143,6 +143,7 @@ export const apiSurfaceManifest = [
       "useServerInfiniteGrid",
       "useServerPagedGrid",
       "useServerRowUpdates",
+      "useServerTreeGrid",
     ],
     declarationExports: [
       "BcAggregationFormatterParams",
@@ -251,6 +252,12 @@ export const apiSurfaceManifest = [
       "UseServerPagedGridOptions",
       "UseServerPagedGridResult",
       "UseServerPagedGridState",
+      "UseServerTreeGridActions",
+      "UseServerTreeGridBoundProps",
+      "UseServerTreeGridInitial",
+      "UseServerTreeGridOptions",
+      "UseServerTreeGridResult",
+      "UseServerTreeGridState",
       "resolveVisibleSegments",
       "useAggregations",
       "useBcGridApi",
@@ -258,6 +265,7 @@ export const apiSurfaceManifest = [
       "useServerInfiniteGrid",
       "useServerPagedGrid",
       "useServerRowUpdates",
+      "useServerTreeGrid",
     ],
   },
   {
