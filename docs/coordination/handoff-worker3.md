@@ -51,6 +51,21 @@ bsncraft is on `0.5.0-alpha.1`. Until they surface migration findings, bundle th
 
 **Branch:** `agent/worker3/v05-editor-bundle-1`. **Effort:** ~30-40 min for the bundle.
 
+### After bundle-1 ships → `v05-context-menu-editor-toggles` (your context-menu lane)
+
+The maintainer asked for a "vanilla grid by default + everything toggleable from right-click + consumer-supplied persistence API" architecture. RFC is being drafted by coordinator (`agent/coordinator/v05-vanilla-and-context-menu-rfc`); ratifies before this task ships, but the editor-side toggles are predictable and you can start when bundle-1 ships.
+
+**Items in your lane:**
+
+1. **Edit mode toggle** — context-menu item Editor → "Edit mode" (checkbox: read-only vs editable). When off, the grid behaves as a `<BcGrid>` (no edit affordance, no `<BcEditGrid>` chrome). When on, the grid behaves as `<BcEditGrid>`. Wires through a new `editingEnabled` controlled prop that flips the underlying composition. RFC will pin the prop name.
+2. **Per-column editable toggle** — context-menu item on a header → Editor → "Allow edits in this column" (checkbox). Sets a per-column override that takes precedence over the grid-level edit mode. Persists in `BcUserSettings.columnSettings[columnId].editable`.
+3. **Show validation messages inline toggle** — context-menu item View → "Show validation messages" (checkbox). When off, validation still runs (cells still mark as `aria-invalid`) but the visible popover from #356 is suppressed. Useful for read-only views or for users who want a less noisy edit experience.
+4. **Editor keyboard hints toggle** — context-menu item Editor → "Show keyboard hints" (checkbox). When on, editor inputs render a subtle "F2 / Enter / Esc / Tab" caption at the bottom of the popover for new users. Off by default.
+
+The persistence shape will be defined in the RFC's `BcUserSettings` spec. Wait for the RFC to ratify before final wiring; until then, store toggles in memory + accept a `userSettings` prop that the coordinator will define.
+
+**Branch:** `agent/worker3/v05-context-menu-editor-toggles`. **Effort:** ~40-60 min.
+
 ### Previously active → `v05-editor-followups-planning-doc` (DONE)
 
 Mirror worker1's #383 + worker2's grouping-followups pattern: convert your audit findings (#352) — the editor-lane items not yet shipped — into concrete v0.6 task entries. Output: read-only doc at `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`. No source changes; pure planning while your lane is otherwise clean.
