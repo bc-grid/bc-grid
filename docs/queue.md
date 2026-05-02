@@ -60,6 +60,7 @@ Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `
 - `[ready]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional.
 - `[ready]` **v05-search-hotkey-prop** (worker2) — `<BcGrid searchHotkey>` prop owning Cmd+F.
 - `[ready]` **v05-fit-prop** (worker2) — `fit="content" | "viewport" | "auto"` prop owning viewport-fit height math.
+- `[ready]` **v05-api-ref-filter** (worker2) — `BcGridApi.openFilter` / `closeFilter` / `getActiveFilter` filter-side imperative methods (synthesis P0-7 split: worker3 editor side done in #361, worker1 owns server-side `scrollToCell`, worker2 owns filter side).
 - `[ready, stretch]` **v05-filter-discriminated-union** (worker2) — `BcColumnFilter` becomes a tagged union per type.
 - `[ready]` **v05-paste-listener** (worker2) — `paste` event + `pasteTsv` API on `BcGridApi`. Pairs with worker3 `v05-paste-editor-binding`.
 - `[ready]` **v05-paste-editor-binding** (worker3) — `editController.commitFromPasteApplyPlan` to route paste through commit. Waits for worker2's `pasteTsv` contract.
