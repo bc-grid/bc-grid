@@ -294,6 +294,38 @@ function EditorMount<TRow>({
         {...(error != null ? { error } : {})}
         {...(pending ? { pending } : {})}
       />
+      <EditorValidationPopover error={error} />
+    </div>
+  )
+}
+
+/**
+ * Visible validation surface anchored below the editor input. Audit
+ * P0 #1 (`docs/coordination/audit-2026-05/worker3-findings.md`):
+ * before this, the `error` string lived only in a visually-hidden
+ * `<span>` referenced via `aria-describedby`. Sighted users got a red
+ * border and nothing else — they could not learn *why* the value was
+ * rejected, which broke any Tab-driven entry workflow with 80+ rows.
+ *
+ * Rendered as an inline popover positioned below the cell. Marked
+ * `aria-hidden="true"` because the editor's existing visually-hidden
+ * span (linked by `aria-describedby`) plus the controller's assertive
+ * live-region announce already cover the AT path; we don't want
+ * double-announcement on every keystroke that re-runs validation.
+ *
+ * Lives inside `data-bc-grid-editor-root`, so the document-level
+ * pointerdown click-outside handler treats clicks on it as
+ * "still in the editor" and does not commit-and-dismiss.
+ */
+export function EditorValidationPopover({ error }: { error?: string | undefined }): ReactNode {
+  if (!error) return null
+  return (
+    <div
+      className="bc-grid-editor-error-popover"
+      data-bc-grid-editor-error-popover="true"
+      aria-hidden="true"
+    >
+      {error}
     </div>
   )
 }
