@@ -14,6 +14,8 @@ This is binding (`docs/AGENTS.md §6`). Workers run focused unit tests + `bun ru
 
 You implement code; the coordinator reviews and runs the slow gates.
 
+**Note on CI:** GitHub Actions automatically runs `smoke`, `e2e (Playwright)`, and `smoke perf (Chromium)` jobs on every PR. Those CI jobs are not "you running tests" — they are the coordinator's CI infrastructure verifying your work. Seeing `e2e (Playwright) ✓` in the PR's checks panel is expected and good. PR descriptions should explicitly state which gates you ran locally so reviewers don't conflate your local runs with CI's automatic ones.
+
 ---
 
 ## Active task — v0.5 work (updated 2026-05-02 — re-ping)
@@ -45,16 +47,11 @@ P0-4 and P0-9 hero spikes both fully closed. Paste-editor binding (your half of 
 
 4. **`v05-editor-aria-states`** (audit P1-W3-7) — thread `required` / `readOnly` / `disabled` props through `BcCellEditorProps`; default editors set `aria-required` / `aria-readonly` / `aria-disabled` on inputs. **Effort: ~2 hours including tests.** Branch: `agent/worker3/v05-editor-aria-states`.
 
-### When worker2's `pasteTsv` API surface lands → `v05-paste-editor-binding`
+### Paste-editor-binding subsumed by worker2's #380
 
-After worker2 ships the listener + API contract (their PR #v05-paste-listener), pick up your half of audit P0-1. The contract worker2 defines in `docs/api.md` will tell you the exact shape; expected:
-- `editController.commitFromPasteApplyPlan(plan)` takes the apply-plan from `buildRangeTsvPasteApplyPlan`.
-- Routes each commit through the existing edit controller so `valueParser` + `validate` + optimistic update + rollback all fire.
-- Atomic: if any cell in the plan fails parse/validate, abort all writes and surface diagnostics.
+Worker2's #380 (`pasteTsv`) wired the paste listener directly through `useEditingController`'s bulk-edit overlay commit path — including the editor-side binding that was originally going to be your `commitFromPasteApplyPlan` half. Net result: **v0.5 P0-1 (paste integration) is fully closed in #380**, and the `v05-paste-editor-binding` task you had queued is no longer needed (it was subsumed).
 
-**Branch (when you reach it):** `agent/worker3/v05-paste-editor-binding`. **Effort:** half day after contract is set.
-
-This closes the LAST v0.5 P0 (P0-1).
+If worker2's wiring needs an editor-side polish PR (e.g. validation rejection feedback during paste, paste-specific commit announcements), that becomes a v0.6 follow-up rather than a v0.5 task.
 
 ### v0.5 lane — remaining pipeline
 
@@ -75,7 +72,7 @@ This closes the LAST v0.5 P0 (P0-1).
 6. ✅ **`v05-combobox-multi-select-v2`** — DONE (#372). P0-4 fully closed.
 7. ✅ **`v05-spike-sales-estimating`** — DONE (#375). P0-9 hero set entirely closed (4 of 4 spikes).
 8. **🟢 Active P1 cleanups** — see "Active now" above (Backspace/Delete clear, discardRowEdits, getValue hook, ARIA states).
-9. **`v05-paste-editor-binding`** — your half of audit P0-1; waits on worker2's `pasteTsv` API contract.
+9. ✅ **`v05-paste-editor-binding`** — subsumed by worker2's #380 (worker2 wired the editor-side commit path inline through `useEditingController`'s bulk-edit overlay; closes audit P0-1 fully).
 
 ### Cheap P1s to fold in opportunistically
 

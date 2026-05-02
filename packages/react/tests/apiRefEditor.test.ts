@@ -66,6 +66,11 @@ describe("BcGridApi imperative editor methods (v0.5 audit P0-7)", () => {
 function stubApi(): BcGridApi {
   const noop = () => undefined
   const noopAsync = () => Promise.resolve()
+  const noopPaste = () =>
+    Promise.resolve({
+      ok: false as const,
+      error: { code: "no-paste-target" as const, message: "No paste target." },
+    })
   return {
     scrollToRow: noop,
     scrollToCell: noop,
@@ -89,6 +94,7 @@ function stubApi(): BcGridApi {
     autoSizeColumn: noop,
     setRangeSelection: noop,
     copyRange: noopAsync,
+    pasteTsv: noopPaste,
     clearRangeSelection: noop,
     expandAll: noop,
     collapseAll: noop,
@@ -111,6 +117,7 @@ function stubServerApi(): BcServerGridApi {
     applyServerRowUpdate: noop,
     queueServerRowMutation: noop,
     settleServerRowMutation: noop,
+    scrollToServerCell: () => Promise.resolve({ scrolled: false }),
     getServerRowModelState: () => ({
       mode: "paged",
       rows: [],

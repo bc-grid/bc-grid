@@ -78,6 +78,9 @@ export const defaultMessages: BcGridMessages = {
     `${columnLabel} was not updated. ${error}`,
   editServerErrorAnnounce: ({ columnLabel, error }) =>
     `${columnLabel} update failed. ${error} Reverted.`,
+  pasteCommittedAnnounce: ({ count }) =>
+    count === 1 ? "Pasted 1 cell." : `Pasted ${count} cells.`,
+  pasteRejectedAnnounce: ({ error }) => `Paste rejected. ${error} Nothing was changed.`,
 }
 
 // ---------------------------------------------------------------------------

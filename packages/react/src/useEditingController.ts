@@ -7,6 +7,7 @@ import {
   type MoveOnSettle,
   reduceEditState,
 } from "./editingStateMachine"
+import type { RangeTsvPasteApplyPlan } from "./rangeClipboard"
 import type { BcCellEditCommitEvent, BcCellEditor, BcReactGridColumn } from "./types"
 
 /**
@@ -385,6 +386,255 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     [options.validate, options.onCellEditCommit, options.announce],
   )
 
+  /**
+   * Programmatically clear a cell value, bypassing the editor portal.
+   *
+   * Mirrors Excel's Delete semantic — the user wants the cell empty
+   * and stays in nav mode. Runs through `column.valueParser` (called
+   * with `""`) + `validate` + the overlay update + `onCellEditCommit`,
+   * so consumer column logic applies the same way as a keyboard /
+   * paste commit. The state machine is not driven — no editor
+   * portal mount, no Mounting / Editing / Validating transitions.
+   *
+   * No-ops when the controller is in any non-Navigation mode (the
+   * grid is editing a different cell; respect the in-flight edit).
+   *
+   * Audit P1-W3-1.
+   */
+  const clearCell = useCallback(
+    async (candidate: {
+      rowId: RowId
+      row: TRow
+      columnId: ColumnId
+      column: BcReactGridColumn<TRow, unknown>
+      previousValue: unknown
+    }): Promise<void> => {
+      // Cancel any in-flight async validation from a superseded commit.
+      validateAbortRef.current?.abort()
+      const ac = new AbortController()
+      validateAbortRef.current = ac
+
+      // Empty-input convention: the column's `valueParser` decides
+      // what "empty" means in its typed domain (null for text,
+      // 0 for number, [] for multi-select, etc.). Without a parser
+      // we land null — consistent with the column's nullable contract
+      // and the v0.1 "delete clears to null" behaviour the v0.5
+      // Backspace/Delete clear feature pins.
+      const parser = candidate.column.valueParser
+      const parsedValue: unknown = parser ? (parser("", candidate.row) as unknown) : null
+
+      const validator = options.validate
+      let result: BcValidationResult
+      try {
+        result = validator
+          ? await Promise.resolve(
+              validator(parsedValue, candidate.row, candidate.columnId, ac.signal),
+            )
+          : { valid: true }
+      } catch (err) {
+        if (ac.signal.aborted) return
+        const message = err instanceof Error ? err.message : "Validation failed."
+        result = { valid: false, error: message }
+      }
+      if (ac.signal.aborted) return
+      if (validateAbortRef.current === ac) validateAbortRef.current = null
+
+      if (!result.valid) {
+        // No editor portal mounted to display the error inline; the
+        // assertive live-region announce still informs AT users.
+        // Sighted users won't see anything — Delete on a required
+        // field is a no-op for them today. v0.6 follow-up: surface
+        // a transient toast / status-bar slot for clear-rejection
+        // feedback (cross-references the validation visual passive
+        // finding from the audit).
+        options.announce?.({
+          kind: "validationError",
+          column: candidate.column,
+          error: result.error,
+        })
+        return
+      }
+
+      // Overlay update — same shape as `commit` but without the
+      // state-machine dispatches. Reuses `mutationCounterRef` so
+      // stale-settle guards continue to work for any subsequent
+      // re-edit of the same cell.
+      const rowPatch = overlayRef.current.patches.get(candidate.rowId) ?? new Map()
+      rowPatch.set(candidate.columnId, parsedValue)
+      overlayRef.current.patches.set(candidate.rowId, rowPatch)
+      const mutationId = `m-${++mutationCounterRef.current}`
+      const rowEntries = editEntriesRef.current.get(candidate.rowId) ?? new Map()
+      rowEntries.set(candidate.columnId, {
+        pending: false,
+        previousValue: candidate.previousValue,
+        mutationId,
+      })
+      editEntriesRef.current.set(candidate.rowId, rowEntries)
+      forceRender()
+
+      const announceCommitted = () =>
+        options.announce?.({
+          kind: "committed",
+          column: candidate.column,
+          row: candidate.row,
+          rowId: candidate.rowId,
+          nextValue: parsedValue,
+        })
+
+      const consumerHook = options.onCellEditCommit
+      if (consumerHook) {
+        const settle = consumerHook({
+          rowId: candidate.rowId,
+          row: candidate.row,
+          columnId: candidate.columnId,
+          column: candidate.column,
+          previousValue: candidate.previousValue as never,
+          nextValue: parsedValue as never,
+          source: "keyboard",
+        })
+        if (settle && typeof (settle as Promise<void>).then === "function") {
+          // Same async-settle + stale-settle + rollback semantics as
+          // `commit` so Delete-then-immediately-edit-the-same-cell
+          // doesn't race the server reject of the older clear.
+          const entry = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
+          if (entry) entry.pending = true
+          forceRender()
+          try {
+            await settle
+            const after = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
+            if (after && after.mutationId === mutationId) {
+              after.pending = false
+              forceRender()
+              announceCommitted()
+            }
+          } catch (err) {
+            const rollbackEntry = editEntriesRef.current
+              .get(candidate.rowId)
+              ?.get(candidate.columnId)
+            if (!rollbackEntry || rollbackEntry.mutationId !== mutationId) return
+            const patches = overlayRef.current.patches.get(candidate.rowId)
+            patches?.delete(candidate.columnId)
+            const rollbackError = err instanceof Error ? err.message : "Server rejected the edit."
+            rollbackEntry.pending = false
+            rollbackEntry.error = rollbackError
+            forceRender()
+            options.announce?.({
+              kind: "serverError",
+              column: candidate.column,
+              error: rollbackError,
+            })
+          }
+        } else {
+          announceCommitted()
+        }
+      } else {
+        announceCommitted()
+      }
+    },
+    [options.validate, options.onCellEditCommit, options.announce],
+  )
+
+  const rollbackPasteCommit = useCallback(
+    (
+      commitEntry: RangeTsvPasteApplyPlan<TRow>["commits"][number],
+      mutationId: string,
+      err: unknown,
+    ) => {
+      const rollbackEntry = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
+      if (!rollbackEntry || rollbackEntry.mutationId !== mutationId) return
+
+      const patches = overlayRef.current.patches.get(commitEntry.rowId)
+      patches?.delete(commitEntry.columnId)
+      if (patches && patches.size === 0) overlayRef.current.patches.delete(commitEntry.rowId)
+
+      const rollbackError = err instanceof Error ? err.message : "Server rejected the edit."
+      rollbackEntry.pending = false
+      rollbackEntry.error = rollbackError
+      forceRender()
+      options.announce?.({
+        kind: "serverError",
+        column: commitEntry.column,
+        error: rollbackError,
+      })
+    },
+    [options.announce],
+  )
+
+  const commitFromPasteApplyPlan = useCallback(
+    (plan: RangeTsvPasteApplyPlan<TRow>): void => {
+      validateAbortRef.current?.abort()
+      validateAbortRef.current = null
+
+      const appliedCommits: Array<{
+        commit: (typeof plan.commits)[number]
+        mutationId: string
+      }> = []
+
+      for (const commitEntry of plan.commits) {
+        const rowPatch = overlayRef.current.patches.get(commitEntry.rowId) ?? new Map()
+        rowPatch.set(commitEntry.columnId, commitEntry.nextValue)
+        overlayRef.current.patches.set(commitEntry.rowId, rowPatch)
+
+        const mutationId = `m-${++mutationCounterRef.current}`
+        const rowEntries = editEntriesRef.current.get(commitEntry.rowId) ?? new Map()
+        rowEntries.set(commitEntry.columnId, {
+          pending: false,
+          previousValue: commitEntry.previousValue,
+          mutationId,
+        })
+        editEntriesRef.current.set(commitEntry.rowId, rowEntries)
+        appliedCommits.push({ commit: commitEntry, mutationId })
+      }
+
+      forceRender()
+
+      const consumerHook = options.onCellEditCommit
+      if (!consumerHook) return
+
+      let pendingChanged = false
+      for (const { commit: commitEntry, mutationId } of appliedCommits) {
+        const event: BcCellEditCommitEvent<TRow> = {
+          rowId: commitEntry.rowId,
+          row: commitEntry.row,
+          columnId: commitEntry.columnId,
+          column: commitEntry.column,
+          previousValue: commitEntry.previousValue as never,
+          nextValue: commitEntry.nextValue as never,
+          source: "paste",
+        }
+
+        let settle: void | Promise<void>
+        try {
+          settle = consumerHook(event)
+        } catch (err) {
+          rollbackPasteCommit(commitEntry, mutationId, err)
+          continue
+        }
+
+        if (!settle || typeof (settle as Promise<void>).then !== "function") continue
+
+        const entry = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
+        if (entry) {
+          entry.pending = true
+          pendingChanged = true
+        }
+
+        void (settle as Promise<void>)
+          .then(() => {
+            const after = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
+            if (after && after.mutationId === mutationId) {
+              after.pending = false
+              forceRender()
+            }
+          })
+          .catch((err) => rollbackPasteCommit(commitEntry, mutationId, err))
+      }
+
+      if (pendingChanged) forceRender()
+    },
+    [options.onCellEditCommit, rollbackPasteCommit],
+  )
+
   // ------- Lifecycle dispatch shortcuts (called from editor portal) --------
 
   const dispatchMounted = useCallback(() => dispatch({ type: "mounted" }), [])
@@ -482,6 +732,8 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     pruneOverlay,
     start,
     commit,
+    clearCell,
+    commitFromPasteApplyPlan,
     cancel,
     discardRowEdits,
     dispatchMounted,

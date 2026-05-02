@@ -1,51 +1,33 @@
 import { describe, expect, test } from "bun:test"
-import type { BcGridApi, BcGridFilter, BcServerGridApi } from "@bc-grid/core"
+import type { BcGridApi, BcGridPasteTsvResult, BcServerGridApi } from "@bc-grid/core"
 
-/**
- * Compile-time + runtime contract for the v0.5 imperative filter API
- * additions (audit P0-7). The methods live on the public grid API and
- * are inherited by the server grid API.
- */
-
-describe("BcGridApi imperative filter methods (v0.5 audit P0-7)", () => {
-  test("BcGridApi exposes openFilter, closeFilter, getActiveFilter as functions", () => {
+describe("BcGridApi pasteTsv imperative method (v0.5 audit P0-1)", () => {
+  test("BcGridApi exposes pasteTsv as a function", () => {
     const api: BcGridApi = stubApi()
 
-    expect(typeof api.openFilter).toBe("function")
-    expect(typeof api.closeFilter).toBe("function")
-    expect(typeof api.getActiveFilter).toBe("function")
+    expect(typeof api.pasteTsv).toBe("function")
   })
 
-  test("BcServerGridApi inherits the same methods", () => {
+  test("BcServerGridApi inherits pasteTsv", () => {
     const api: BcServerGridApi = stubServerApi()
 
-    expect(typeof api.openFilter).toBe("function")
-    expect(typeof api.closeFilter).toBe("function")
-    expect(typeof api.getActiveFilter).toBe("function")
+    expect(typeof api.pasteTsv).toBe("function")
   })
 
-  test("openFilter signature accepts default, popup, and inline variants", () => {
+  test("pasteTsv signature accepts a TSV payload with optional range and overflow", async () => {
     const api: BcGridApi = stubApi()
-    api.openFilter("name")
-    api.openFilter("name", { variant: "popup" })
-    api.openFilter("name", { variant: "inline" })
+    await api.pasteTsv({ tsv: "Ada\t12" })
+    await api.pasteTsv({
+      range: {
+        start: { rowId: "r1", columnId: "name" },
+        end: { rowId: "r1", columnId: "name" },
+      },
+      tsv: "Ada\t12",
+      overflow: "clip",
+    })
 
-    expect(true).toBe(true)
-  })
-
-  test("closeFilter accepts optional column id", () => {
-    const api: BcGridApi = stubApi()
-    api.closeFilter()
-    api.closeFilter("name")
-
-    expect(true).toBe(true)
-  })
-
-  test("getActiveFilter returns a column-scoped filter tree", () => {
-    const api: BcGridApi = stubApi()
-    const filter: BcGridFilter | null = api.getActiveFilter("name")
-
-    expect(filter).toBeNull()
+    const result: BcGridPasteTsvResult = await api.pasteTsv({ tsv: "" })
+    expect(result.ok).toBe(false)
   })
 })
 

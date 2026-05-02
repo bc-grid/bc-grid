@@ -188,6 +188,126 @@ export interface BcRange {
   end: BcCellPosition
 }
 
+export type BcGridPasteTsvOverflowMode = "reject" | "clip"
+
+export interface BcGridPasteTsvParams {
+  /**
+   * Range anchor for the paste. When omitted, React grids use the most
+   * recent active range or the active cell as a single-cell range.
+   */
+  range?: BcRange
+  tsv: string
+  /**
+   * `reject` preserves strict atomic rectangle semantics. `clip` applies
+   * only in-bounds cells and reports the skipped cells.
+   */
+  overflow?: BcGridPasteTsvOverflowMode
+  signal?: AbortSignal
+}
+
+export type BcGridPasteTsvSkipReason =
+  | "anchor-row-not-found"
+  | "anchor-column-not-found"
+  | "row-out-of-bounds"
+  | "column-out-of-bounds"
+  | "row-not-editable"
+  | "cell-readonly"
+
+export interface BcGridPasteTsvSkippedCell {
+  sourceRowIndex: number
+  sourceColumnIndex: number
+  targetRowIndex?: number
+  targetColumnIndex?: number
+  rowId?: RowId
+  columnId?: ColumnId
+  value: string
+  reasons: BcGridPasteTsvSkipReason[]
+}
+
+export type BcGridPasteTsvParseDiagnosticCode =
+  | "empty-paste"
+  | "max-cell-limit-exceeded"
+  | "ragged-row"
+  | "unexpected-quote"
+  | "unexpected-character-after-closing-quote"
+  | "unterminated-quoted-cell"
+
+export interface BcGridPasteTsvParseDiagnostic {
+  code: BcGridPasteTsvParseDiagnosticCode
+  rowIndex: number
+  columnIndex: number
+  charIndex: number
+  actualColumnCount?: number
+  cellCount?: number
+  expectedColumnCount?: number
+  maxCells?: number
+}
+
+export type BcGridPasteTsvFailureCode =
+  | "no-paste-target"
+  | "edit-in-progress"
+  | "parse-error"
+  | "anchor-not-found"
+  | "paste-out-of-bounds"
+  | "row-not-found"
+  | "row-not-editable"
+  | "column-not-found"
+  | "cell-readonly"
+  | "value-parser-error"
+  | "validation-error"
+
+export interface BcGridPasteTsvFailure {
+  code: BcGridPasteTsvFailureCode
+  message: string
+  sourceRowIndex?: number
+  sourceColumnIndex?: number
+  targetRowIndex?: number
+  targetColumnIndex?: number
+  rowId?: RowId
+  columnId?: ColumnId
+  rawValue?: string
+  diagnostic?: BcGridPasteTsvParseDiagnostic
+  skippedCell?: BcGridPasteTsvSkippedCell
+  validation?: BcValidationResult
+}
+
+export interface BcGridPasteTsvCommit<TRow = unknown> {
+  sourceRowIndex: number
+  sourceColumnIndex: number
+  targetRowIndex: number
+  targetColumnIndex: number
+  rowId: RowId
+  row: TRow
+  columnId: ColumnId
+  previousValue: unknown
+  nextValue: unknown
+  rawValue: string
+}
+
+export interface BcGridPasteTsvRowPatch<TRow = unknown> {
+  rowId: RowId
+  row: TRow
+  values: Record<string, unknown>
+}
+
+export interface BcGridPasteTsvSuccess<TRow = unknown> {
+  ok: true
+  range: BcRange
+  cells: readonly (readonly string[])[]
+  appliedCount: number
+  commits: BcGridPasteTsvCommit<TRow>[]
+  rowPatches: BcGridPasteTsvRowPatch<TRow>[]
+  skippedCells: BcGridPasteTsvSkippedCell[]
+}
+
+export type BcGridPasteTsvResult<TRow = unknown> =
+  | BcGridPasteTsvSuccess<TRow>
+  | {
+      ok: false
+      range?: BcRange
+      error: BcGridPasteTsvFailure
+    }
+
 export {
   emptyBcRangeSelection,
   expandRangeTo,
@@ -346,6 +466,13 @@ export interface BcGridApi<TRow = unknown> {
   autoSizeColumn(columnId: ColumnId): void
   setRangeSelection(selection: BcRangeSelection): void
   copyRange(range?: BcRange): Promise<void>
+  /**
+   * Paste a TSV matrix into the grid at `range.start`, or at the active
+   * range / active cell when no range is supplied. The operation is
+   * atomic for parse, parser, and validation failures: no overlay writes
+   * occur unless every target cell can be applied.
+   */
+  pasteTsv(params: BcGridPasteTsvParams): Promise<BcGridPasteTsvResult<TRow>>
   clearRangeSelection(): void
   expandAll(): void
   collapseAll(): void

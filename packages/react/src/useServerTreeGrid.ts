@@ -5,11 +5,13 @@ import type {
   ColumnId,
   LoadServerTreeChildren,
   RowId,
+  ServerGroupKey,
   ServerInvalidation,
   ServerLoadContext,
   ServerRowPatch,
   ServerTreeQuery,
   ServerTreeResult,
+  ServerTreeRow,
 } from "@bc-grid/core"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
@@ -19,6 +21,7 @@ import {
   useDebouncedValue as useDebouncedValueInternal,
   useMutationIdStream,
 } from "./internal/useServerOrchestration"
+import { readPersistedGridState } from "./persistence"
 import type { BcServerTreeProps } from "./types"
 
 const HOOK_MUTATION_PREFIX = "useServerTreeGrid"
@@ -74,6 +77,43 @@ export interface UseServerTreeGridOptions<TRow> {
    * disable. Mirrors `useServerPagedGrid` and `useServerInfiniteGrid`.
    */
   debounceMs?: number
+  /**
+   * Consumer override for stable group-row identifiers. When supplied,
+   * the hook applies the function to every group row in each
+   * `loadChildren` / `loadRoots` result and stamps the returned
+   * `RowId` onto `row.groupKey.rowId` before handing the result to
+   * the model. The model layer then uses that id directly instead of
+   * synthesising one from `viewKey + groupPath`.
+   *
+   * Required for selection algebra against group rows (selecting a
+   * group row needs a stable id), focus retention across re-render,
+   * and persisted expansion state. Surfaced by the bsncraft
+   * 2026-05-03 review.
+   *
+   * `path` is the full ancestor chain ending in `key`. Implementations
+   * typically join the path columnId/value pairs with a delimiter.
+   */
+  groupRowId?: (key: ServerGroupKey, path: readonly ServerGroupKey[]) => RowId
+  /**
+   * Persistence target. `"localStorage"` reads `sort` and `filter`
+   * from `bc-grid:<gridId>:*` on mount so the hook's controlled state
+   * matches what `<BcGrid>` would have hydrated, then continues
+   * writing through the inner `<BcGrid>`'s
+   * `usePersistedGridStateWriter` (always active when `gridId` is
+   * supplied).
+   *
+   * Persistence is best-effort: SSR, sandboxed iframes, and storage
+   * quota errors are silently ignored — the hook falls through to
+   * `initial` and built-in empty values.
+   *
+   * `searchText` and `expansion` persistence is **not yet wired** —
+   * they are not in the `PersistedGridState` shape that
+   * `<BcGrid>`'s persistence layer writes. Adding them is queued as a
+   * v0.6 follow-up.
+   *
+   * `"url"` is reserved for v0.6.
+   */
+  persistTo?: "localStorage" | null
 }
 
 export interface UseServerTreeGridState {
@@ -180,11 +220,35 @@ export interface UseServerTreeGridResult<TRow> {
 export function useServerTreeGrid<TRow>(
   opts: UseServerTreeGridOptions<TRow>,
 ): UseServerTreeGridResult<TRow> {
-  const { gridId, loadChildren, loadRoots, rowId, initial, debounceMs = DEFAULT_DEBOUNCE_MS } = opts
+  const {
+    gridId,
+    loadChildren,
+    loadRoots,
+    rowId,
+    initial,
+    debounceMs = DEFAULT_DEBOUNCE_MS,
+    groupRowId,
+    persistTo,
+  } = opts
+
+  // Hydrate sort / filter from `bc-grid:<gridId>:*` localStorage on
+  // mount when the consumer opted into persistence. `<BcGrid>`'s
+  // existing `usePersistedGridStateWriter` already handles writes
+  // through the props pipeline; the read step is what's missing
+  // because the hook owns controlled state and would otherwise
+  // override the persisted values with built-in defaults.
+  const persistedGridState = useMemo(
+    () => (persistTo === "localStorage" && gridId ? readPersistedGridState(gridId) : null),
+    [persistTo, gridId],
+  )
 
   const apiRef = useRef<BcServerGridApi<TRow> | null>(null)
-  const [sort, setSort] = useState<readonly BcGridSort[]>(() => initial?.sort ?? [])
-  const [filter, setFilter] = useState<BcGridFilter | null>(() => initial?.filter ?? null)
+  const [sort, setSort] = useState<readonly BcGridSort[]>(
+    () => initial?.sort ?? persistedGridState?.sort ?? [],
+  )
+  const [filter, setFilter] = useState<BcGridFilter | null>(
+    () => initial?.filter ?? persistedGridState?.filter ?? null,
+  )
   const [searchText, setSearchText] = useState<string>(() => initial?.search ?? "")
   const [expansion, setExpansion] = useState<ReadonlySet<RowId>>(
     () => initial?.expansion ?? new Set<RowId>(),
@@ -200,12 +264,16 @@ export function useServerTreeGrid<TRow>(
   const inFlightCountRef = useRef(0)
   const loadChildrenRef = useRef(loadChildren)
   const loadRootsRef = useRef(loadRoots)
+  const groupRowIdRef = useRef(groupRowId)
   useEffect(() => {
     loadChildrenRef.current = loadChildren
   }, [loadChildren])
   useEffect(() => {
     loadRootsRef.current = loadRoots
   }, [loadRoots])
+  useEffect(() => {
+    groupRowIdRef.current = groupRowId
+  }, [groupRowId])
 
   const wrappedLoadChildren = useCallback<LoadServerTreeChildren<TRow>>(
     async (query: ServerTreeQuery, ctx: ServerLoadContext) => {
@@ -217,7 +285,7 @@ export function useServerTreeGrid<TRow>(
         if (isLoadAborted(ctx.signal)) {
           throw createServerLoadAbortError()
         }
-        return result
+        return applyGroupRowIdOverride(result, groupRowIdRef.current)
       } catch (e) {
         if (isLoadAborted(ctx.signal)) throw e
         setError(e)
@@ -247,7 +315,7 @@ export function useServerTreeGrid<TRow>(
         if (isLoadAborted(ctx.signal)) {
           throw createServerLoadAbortError()
         }
-        return result
+        return applyGroupRowIdOverride(result, groupRowIdRef.current)
       } catch (e) {
         if (isLoadAborted(ctx.signal)) throw e
         setError(e)
@@ -406,4 +474,31 @@ export function buildOptimisticEditPatch(input: {
     prefix: HOOK_MUTATION_PREFIX,
     sequence: input.sequence,
   })
+}
+
+/**
+ * Pure helper exported for unit testing. Walks every group row in a
+ * `ServerTreeResult` and stamps `row.groupKey.rowId` with the value
+ * returned by the consumer-supplied `groupRowId` callback. Leaf rows
+ * and group rows that already carry an explicit `rowId` are left
+ * untouched so consumer-set ids continue to win.
+ *
+ * Returns the original result reference when no override was supplied
+ * (the common case) so React equality checks don't see a spurious
+ * change.
+ */
+export function applyGroupRowIdOverride<TRow>(
+  result: ServerTreeResult<TRow>,
+  groupRowId: ((key: ServerGroupKey, path: readonly ServerGroupKey[]) => RowId) | undefined,
+): ServerTreeResult<TRow> {
+  if (!groupRowId) return result
+  let mutated = false
+  const nextRows = result.rows.map((row): ServerTreeRow<TRow> => {
+    if (row.kind !== "group" || !row.groupKey || row.rowId || row.groupKey.rowId) return row
+    const path = [...result.groupPath, row.groupKey]
+    const id = groupRowId(row.groupKey, path)
+    mutated = true
+    return { ...row, groupKey: { ...row.groupKey, rowId: id } }
+  })
+  return mutated ? { ...result, rows: nextRows } : result
 }
