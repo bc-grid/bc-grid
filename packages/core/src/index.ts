@@ -212,9 +212,9 @@ export interface BcGridStateProps {
   defaultSearchText?: string
   onSearchTextChange?: (next: string, prev: string) => void
 
-  filter?: BcGridFilter | null
+  filter?: BcGridFilter | null | undefined
   defaultFilter?: BcGridFilter | null
-  onFilterChange?: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
+  onFilterChange?: ((next: BcGridFilter | null, prev: BcGridFilter | null) => void) | undefined
 
   selection?: BcSelection
   defaultSelection?: BcSelection

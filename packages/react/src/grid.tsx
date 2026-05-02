@@ -83,6 +83,7 @@ import {
   deriveColumnState,
   domToken,
   flattenColumnDefinitions,
+  hasDefinedProp,
   hasProp,
   headerRowStyle,
   headerViewportStyle,
@@ -288,12 +289,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultSort ?? defaultLayoutSort ?? urlPersistedGridState.sort ?? [],
     props.onSortChange,
   )
-  const defaultFilterState = hasProp(props, "defaultFilter")
+  const defaultFilterState = hasDefinedProp(props, "defaultFilter")
     ? (props.defaultFilter ?? null)
     : defaultLayoutFilter !== undefined
       ? defaultLayoutFilter
       : (urlPersistedGridState.filter ?? persistedGridState.filter ?? null)
-  const filterControlled = hasProp(props, "filter")
+  const filterControlled = hasDefinedProp(props, "filter")
   const [filterState, setFilterState] = useControlledState<BcGridFilter | null>(
     filterControlled,
     props.filter ?? null,

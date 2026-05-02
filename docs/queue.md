@@ -57,7 +57,7 @@ Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `
 - `[ready]` **v05-spike-production-estimating** (coordinator) — hero spike at `apps/examples/src/production-estimating.example.tsx`, <100 LOC consumer code.
 - `[ready]` **v05-spike-document-management** (coordinator) — hero spike at `apps/examples/src/document-management.example.tsx`, <100 LOC consumer code.
 - `[done: worker2 #358]` **v05-test-import-lint** (worker2) — replaced 10 internal-path test imports with `@bc-grid/editors`; added `tools/lint-test-import-boundaries.ts`. **Branch:** `agent/worker2/v05-test-import-lint`.
-- `[ready]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional.
+- `[in-flight: worker2]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional. **Branch:** `agent/worker2/v05-optional-filter-prop`.
 - `[ready]` **v05-search-hotkey-prop** (worker2) — `<BcGrid searchHotkey>` prop owning Cmd+F.
 - `[ready]` **v05-fit-prop** (worker2) — `fit="content" | "viewport" | "auto"` prop owning viewport-fit height math.
 - `[ready, stretch]` **v05-filter-discriminated-union** (worker2) — `BcColumnFilter` becomes a tagged union per type.

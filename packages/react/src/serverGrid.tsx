@@ -25,7 +25,13 @@ import { emptyBcRangeSelection } from "@bc-grid/core"
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { BcGrid, useBcGridApi } from "./grid"
-import { assignRef, columnIdFor, createEmptySelection, hasProp } from "./gridInternals"
+import {
+  assignRef,
+  columnIdFor,
+  createEmptySelection,
+  hasDefinedProp,
+  hasProp,
+} from "./gridInternals"
 import {
   BcGridPagination,
   type PaginationWindow,
@@ -515,7 +521,7 @@ function useServerSortFilterState<TRow>(
   const [uncontrolledSort, setUncontrolledSort] = useState<readonly BcGridSort[]>(
     () => props.defaultSort ?? [],
   )
-  const filterControlled = hasProp(props, "filter")
+  const filterControlled = hasDefinedProp(props, "filter")
   const [uncontrolledFilter, setUncontrolledFilter] = useState<BcGridFilter | null>(
     () => props.defaultFilter ?? null,
   )
