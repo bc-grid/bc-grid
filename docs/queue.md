@@ -38,7 +38,7 @@ Read-only audits, one findings doc per author. See `docs/coordination/audit-2026
 - `[done: worker2 #351]` **audit-worker2** — filters + aggregations + chrome consistency. Findings: `docs/coordination/audit-2026-05/worker2-findings.md`.
 - `[done: worker3 #352]` **audit-worker3** — editors + keyboard/a11y + lookup UX. Findings: `docs/coordination/audit-2026-05/worker3-findings.md`.
 - `[done: coordinator ddd1f7a]` **audit-coordinator** — API ergonomics, package boundaries, type discipline, visual quality, bsncraft integration, ERP comparison. Findings: `docs/coordination/audit-2026-05/coordinator-audit.md`.
-- `[in-flight: coordinator]` **audit-synthesis** — synthesize all four findings into ranked P0/P1/P2 with author tags + sprint plan. Output: `docs/coordination/audit-2026-05/synthesis.md`.
+- `[done: coordinator]` **audit-synthesis** — synthesized; ratifies v0.5 plan + adds v0.4 hotfix items + maps remaining P1s into v0.6/v0.7+. Output: `docs/coordination/audit-2026-05/synthesis.md`.
 
 ## v0.5 — Audit-Driven Ergonomics Refactor (DRAFT — pending audit synthesis)
 
