@@ -31,6 +31,15 @@ export type {
   UseServerPagedGridState,
 } from "./useServerPagedGrid"
 export { useServerRowUpdates } from "./useServerRowUpdates"
+export { useServerTreeGrid } from "./useServerTreeGrid"
+export type {
+  UseServerTreeGridActions,
+  UseServerTreeGridBoundProps,
+  UseServerTreeGridInitial,
+  UseServerTreeGridOptions,
+  UseServerTreeGridResult,
+  UseServerTreeGridState,
+} from "./useServerTreeGrid"
 
 export type {
   BcAggregationFormatterParams,
