@@ -12,6 +12,15 @@ export type {
   BcGridStateValues,
   UseBcGridStateOptions,
 } from "./useBcGridState"
+export { useServerPagedGrid } from "./useServerPagedGrid"
+export type {
+  UseServerPagedGridActions,
+  UseServerPagedGridBoundProps,
+  UseServerPagedGridInitial,
+  UseServerPagedGridOptions,
+  UseServerPagedGridResult,
+  UseServerPagedGridState,
+} from "./useServerPagedGrid"
 export { useServerRowUpdates } from "./useServerRowUpdates"
 
 export type {
