@@ -175,6 +175,7 @@ import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } fro
 import { BcStatusBar } from "./statusBar"
 import type {
   BcCellEditCommitEvent,
+  BcCellEditor,
   BcGridLayoutState,
   BcGridProps,
   BcReactGridColumn,
@@ -1727,10 +1728,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         if (!rowEntry || rowEntry.kind !== "data") return
         const column = resolvedColumns.find((c) => c.columnId === cell.columnId)
         if (!column) return
+        const editorForRead = (column.source.cellEditor ?? defaultTextEditor) as BcCellEditor<TRow>
         const value =
           opts && Object.hasOwn(opts, "value")
             ? opts.value
-            : readEditorInputValue(findActiveEditorInput(rootRef.current))
+            : readEditorInputValue(
+                findActiveEditorInput(rootRef.current),
+                editorForRead as BcCellEditor<unknown>,
+              )
         const previousValue = column.source.field
           ? (rowEntry.row as Record<string, unknown>)[column.source.field]
           : undefined

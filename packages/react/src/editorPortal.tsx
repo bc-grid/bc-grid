@@ -225,14 +225,14 @@ function EditorMount<TRow>({
       const target = event.target
       if (!(target instanceof Element)) return
       if (target.closest("[data-bc-grid-editor-root], [data-bc-grid-editor-portal]")) return
-      const value = readEditorInputValue(focusRef.current)
+      const value = readEditorInputValue(focusRef.current, editor as BcCellEditor<unknown>)
       handleCommitRef.current?.(value, "stay", "pointer")
     }
     document.addEventListener("pointerdown", handlePointerDown, true)
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown, true)
     }
-  }, [])
+  }, [editor])
 
   // Wrapper-level keyboard intercepts. The editor input handles printable
   // keys / arrow keys / Backspace via browser default; only the Q1
@@ -245,7 +245,7 @@ function EditorMount<TRow>({
     })
     if (intent.type === "commit") {
       event.preventDefault()
-      const value = readEditorInputValue(focusRef.current)
+      const value = readEditorInputValue(focusRef.current, editor as BcCellEditor<unknown>)
       handleCommit(value, intent.moveOnSettle, "keyboard")
       return
     }
@@ -431,7 +431,22 @@ export function findActiveEditorInput(root: HTMLElement | null): HTMLElement | n
   return root.querySelector<HTMLElement>("[data-bc-grid-editor-input='true']")
 }
 
-export function readEditorInputValue(focusRefCurrent: HTMLElement | null): unknown {
+export function readEditorInputValue(
+  focusRefCurrent: HTMLElement | null,
+  editor?: BcCellEditor<unknown> | undefined,
+): unknown {
+  // Custom-editor escape hatch (audit P1-W3-6). Editors that don't
+  // expose a standard `<input>` / `<select>` / `<textarea>` / shadcn
+  // Combobox `<button>` via `focusRef` (e.g. a `<div role="combobox">`,
+  // a popover-anchored editor whose focused element is some other
+  // tag, a typed wrapper holding its value in module state) supply
+  // `getValue?` on their `BcCellEditor` spec. We call it first; if
+  // it returns `undefined` we fall through to the built-in
+  // tag-dispatch path so consumers can opt-in selectively.
+  if (editor?.getValue) {
+    const custom = editor.getValue(focusRefCurrent)
+    if (custom !== undefined) return custom
+  }
   const tagName = focusRefCurrent?.tagName.toUpperCase()
   if (tagName === "INPUT") {
     const input = focusRefCurrent as HTMLInputElement

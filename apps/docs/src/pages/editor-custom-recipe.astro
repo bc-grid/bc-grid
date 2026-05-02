@@ -184,6 +184,28 @@ const commitSnippet = `<BcEditGrid<Item>
   }}
 />`
 
+const getValueSnippet = `// v0.5 (audit P1-W3-6). When focusRef points at any element other
+// than <input> / <select> / <textarea> / shadcn-Combobox <button>,
+// the framework's tag-dispatch fallback returns undefined on click-
+// outside / Tab / Enter — silently committing undefined. Editors
+// that wire focusRef to a <div role="combobox">, a typed wrapper
+// holding state in module scope, or any other custom element should
+// supply getValue?: (focusEl) => unknown so the commit reads the
+// real typed value.
+
+export const colourEditor: BcCellEditor<unknown, string> = {
+  Component: ColourEditor,
+  kind: "colour",
+  // Optional getValue?(focusEl) — runs on click-outside / Tab / Enter
+  // BEFORE the tag-dispatch fallback. Return the typed value or
+  // undefined to defer to the fallback.
+  getValue: (focusEl) => {
+    if (!focusEl) return undefined
+    const draft = focusEl.dataset.colourDraft
+    return typeof draft === "string" ? draft : undefined
+  },
+}`
+
 const checklist = [
   "Factory exports a BcCellEditor with Component + optional prepare + optional kind discriminator.",
   "Component attaches focusRef in useLayoutEffect (not useEffect) so the framework's mount-focus call lands.",
@@ -193,6 +215,7 @@ const checklist = [
   "Typed-value editors call event.stopPropagation() in their own onKeyDown and pass { moveOnSettle } to commit so the wrapper doesn't fire a duplicate string commit.",
   "Component uses prepareResult when the editor needs async setup (palettes, options, etc.).",
   "Popovered editors mark portaled content with data-bc-grid-editor-portal so click-outside doesn't fire inside the popover.",
+  "Editors whose focusRef element isn't <input>/<select>/<textarea>/<button> wire getValue?(focusEl) so click-outside / Tab / Enter commit the typed value (audit P1-W3-6).",
   "Column wires the editor via column.cellEditor; validate runs at commit before the overlay updates.",
 ]
 ---
@@ -328,6 +351,29 @@ const checklist = [
       <code>data-bc-grid-editor-root</code>; you only need the portal marker on
       content rendered outside that wrapper.
     </p>
+
+    <h3>Reading the value when focusRef isn't a standard input</h3>
+    <p>
+      When click-outside, Tab, or Enter commit fires, the framework reads the
+      current value off <code>focusRef.current</code>. The built-in tag-dispatch
+      handles <code>&lt;input&gt;</code>, <code>&lt;select&gt;</code>,
+      <code>&lt;textarea&gt;</code>, and the shadcn-Combobox <code>&lt;button&gt;</code>
+      pattern (it pulls a stashed typed value off the trigger). Custom editors
+      that focus any other element — <code>&lt;div role="combobox"&gt;</code>,
+      a popover-anchored editor whose focused element isn't directly stamped
+      with <code>data-bc-grid-editor-input</code>, a typed wrapper holding its
+      value in module state — should set
+      <code>BcCellEditor.getValue?(focusEl)</code> on the editor spec. The
+      framework calls it <em>before</em> the tag-dispatch fallback; return the
+      typed value, or <code>undefined</code> to defer. Audit P1-W3-6.
+    </p>
+    <div class="code-shell">
+      <div class="code-title">
+        <span>colour-editor.tsx</span>
+        <span>getValue hook</span>
+      </div>
+      <Code code={getValueSnippet} lang="ts" theme="github-dark" />
+    </div>
   </section>
 
   <section class="section">

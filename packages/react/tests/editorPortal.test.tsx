@@ -85,6 +85,76 @@ describe("readEditorInputValue", () => {
 
     expect(readEditorInputValue(select)).toEqual(["open", 3])
   })
+
+  test("editor.getValue takes precedence over the tag-dispatch fallback (audit P1-W3-6)", () => {
+    // Custom editors wire the focusRef to whatever element they
+    // want; the new getValue?(focusEl) hook lets them return the
+    // typed value without depending on the tag-dispatch fallback.
+    // Even when focusEl IS a standard <input>, the editor's
+    // getValue wins — letting consumers sidestep the value-parser
+    // pipeline and commit a typed value directly.
+    const focusEl = {
+      tagName: "INPUT",
+      type: "text",
+      value: "Acme",
+    } as unknown as HTMLElement
+    const editor = {
+      Component: () => null,
+      getValue: (el: HTMLElement | null) => {
+        if (!el) return undefined
+        return { typed: (el as HTMLInputElement).value, kind: "custom" }
+      },
+    }
+
+    expect(readEditorInputValue(focusEl, editor)).toEqual({ typed: "Acme", kind: "custom" })
+  })
+
+  test("editor.getValue returning undefined defers to the tag-dispatch fallback", () => {
+    // The opt-in contract — getValue can return undefined for
+    // values it doesn't know how to read, falling through cleanly
+    // to the built-in INPUT/SELECT/TEXTAREA/BUTTON path. Lets
+    // consumers handle "my custom popover only" without rewriting
+    // the standard reads.
+    const focusEl = {
+      tagName: "INPUT",
+      type: "text",
+      value: "Acme",
+    } as unknown as HTMLElement
+    const editor = {
+      Component: () => null,
+      getValue: () => undefined,
+    }
+
+    expect(readEditorInputValue(focusEl, editor)).toBe("Acme")
+  })
+
+  test("editor without getValue uses the tag-dispatch fallback (back-compat)", () => {
+    // Existing custom editors that don't supply getValue keep
+    // working via the tag-dispatch path. No back-compat break.
+    const focusEl = {
+      tagName: "INPUT",
+      type: "text",
+      value: "Acme",
+    } as unknown as HTMLElement
+    const editor = { Component: () => null }
+
+    expect(readEditorInputValue(focusEl, editor)).toBe("Acme")
+  })
+
+  test("editor.getValue runs even when focusRef.current is null (custom state-only editors)", () => {
+    // The hook signature is (focusEl: HTMLElement | null) so editors
+    // that hold their value entirely outside the DOM (a typed
+    // wrapper that drives state through a closure / module store)
+    // can still commit on click-outside without losing the value.
+    // Without this contract, those editors fall through to the
+    // tag-dispatch path which returns undefined for null elements.
+    const editor = {
+      Component: () => null,
+      getValue: () => "module-state-value",
+    }
+
+    expect(readEditorInputValue(null, editor)).toBe("module-state-value")
+  })
 })
 
 describe("EditorValidationPopover", () => {

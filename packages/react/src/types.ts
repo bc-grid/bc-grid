@@ -688,6 +688,26 @@ export interface BcCellEditor<TRow, TValue = unknown> {
   Component: ComponentType<BcCellEditorProps<TRow, TValue>>
   prepare?: (params: BcCellEditorPrepareParams<TRow>) => Promise<unknown>
   kind?: string
+  /**
+   * Optional reader for the editor's current value. Called by the
+   * framework's click-outside / Tab / Enter commit paths in place of
+   * the built-in tag-dispatch fallback (`<input>` / `<select>` /
+   * `<textarea>` / shadcn-Combobox `<button>`). Audit P1-W3-6.
+   *
+   * Custom editors that expose any other element via `focusRef`
+   * (a `<div role="combobox">`, a popover-anchored editor that
+   * focuses a child input not directly stamped with
+   * `data-bc-grid-editor-input`, a typed wrapper that holds its
+   * value in module-level state, etc.) should set this so commit
+   * paths read the typed value instead of falling through to
+   * `undefined`.
+   *
+   * Receives the element currently held by `focusRef.current`
+   * (which the framework also uses for focus). Return the typed
+   * value to commit; return `undefined` to defer to the tag-dispatch
+   * fallback. Pure — no side effects expected.
+   */
+  getValue?: (focusEl: HTMLElement | null) => unknown
 }
 
 export interface BcCellEditorPrepareParams<TRow> {
