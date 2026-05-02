@@ -10,40 +10,35 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 ---
 
-## Active task — v0.5 work (updated 2026-05-02)
+## Active task — v0.5 work (updated 2026-05-02 — re-ping)
 
-**v0.4.0 published** (tag pushed; release workflow runs in CI). Your PRs #354 (date/datetime/time `useLayoutEffect` fix) and #356 (visible validation surface) both shipped — that closed the v0.4 P0 hotfix train. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the v0.5 plan; PRs from here roll into the v0.5.0 candidate.
+### What's already shipped from your lane
 
-### v0.5 work — start now (in this order)
+- ✅ **#352** worker3 audit findings doc
+- ✅ **#354** date/datetime/time `useLayoutEffect` focusRef fix — went out in `v0.4.0`
+- ✅ **#356** visible validation surface (popover under editor input) — went out in `v0.4.0`
+- ✅ **#359** `useBcGridState` turnkey state hook + `BcGridStateBindings` / `BcGridStateBoundProps` / `BcGridStateDispatch` / `BcGridStateValues` / `UseBcGridStateOptions` types (v0.5 task 1)
+- ✅ **#361** `BcGridApi.startEdit/commitEdit/cancelEdit` + editor portal methods (v0.5 task 2)
 
-Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified your v0.5 lane. Order:
+v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate.
 
-1. **`v05-use-bc-grid-state` — `useBcGridState({ persistTo, columns, server? })`**
-   Turnkey state hook owning the ~30 controlled-state pairs (sort, filter, search, selection, expansion, grouping, pagination, columnVisibility, columnOrder, columnWidths). Persists to `localStorage` keyed by `gridId` if `persistTo: 'local:gridId'`.
-   ```ts
-   const { props, state, dispatch } = useBcGridState({
-     persistTo: 'local:customers',
-     columns,
-     server: false,  // true reserves space for useServerPagedGrid integration
-   });
-   return <BcGrid {...props} columns={columns} rows={rows} />;
-   ```
-   - Existing controlled-prop API stays for advanced consumers.
-   - Audit P0-5 / synthesis sprint plan.
-   - **Branch:** `agent/worker3/v05-use-bc-grid-state`. **Effort:** 1 day.
+### Active now → `v05-spike-colour-selection` (recommended next; task 4 below)
 
-2. **`v05-api-ref-editor` — `BcGridApi` editor methods**
-   Add `focusCell(rowId, colId)`, `startEdit(rowId, colId, { seedKey? })`, `commitEdit()`, `cancelEdit()`, `getActiveCell()` to the public `BcGridApi`. Coordinate with worker1 on `scrollToCell` boundary (worker1 owns server-side scroll; you own focus + edit lifecycle on visible cells).
-   - Audit P0-7 / synthesis sprint plan.
-   - **Branch:** `agent/worker3/v05-api-ref-editor`. **Effort:** half day.
+**Recommendation: start with task 4 (colour-selection) ahead of task 3 (sales-estimating).** Sales-estimating's "Excel paste fidelity" leg depends on worker2's paste-listener PR landing first; colour-selection is fully independent and includes the shadcn Combobox migration that the synthesis ratified for the lookup editors. Task 3 can land later, with the paste leg, once worker2's `pasteTsv` is in.
 
-3. **`v05-spike-sales-estimating` — Sales Estimating hero spike**
+### v0.5 lane — full pipeline
+
+1. ✅ **`v05-use-bc-grid-state`** — DONE (#359).
+
+2. ✅ **`v05-api-ref-editor`** — DONE (#361).
+
+3. **`v05-spike-sales-estimating` — Sales Estimating hero spike** (BLOCKED on worker2 paste PR if you want the paste leg; can land WITHOUT paste first as a "missing pattern" datapoint)
    `apps/examples/src/sales-estimating.example.tsx`. Demonstrates: money column type with currency-aware formatting, dependent cells (`extPrice = qty * price * (1 - discount)` recomputes on commit), Excel paste fidelity for line-item entry. **Goal: <100 LOC consumer code.** Anything that pushes over → surface in the spike's PR description as a missing pattern.
    - Audit P0-9 / synthesis hero-spike track.
-   - Uses `useBcGridState` (task 1) + worker2's paste integration (task 5).
+   - Uses `useBcGridState` (task 1, done) + worker2's paste integration (task 5).
    - **Branch:** `agent/worker3/v05-spike-sales-estimating`. **Effort:** half day.
 
-4. **`v05-spike-colour-selection` — Colour Selection hero spike**
+4. **🟢 `v05-spike-colour-selection` — Colour Selection hero spike (ACTIVE — recommended next)**
    `apps/examples/src/colour-selection.example.tsx`. Demonstrates: shadcn-Combobox-anchored lookup with 16×16 colored swatch chips beside option labels, recently-used section, "create new colour" inline. **Goal: <100 LOC consumer code.**
    - **Includes the shadcn Combobox migration for the lookup editors** (audit P0-4 / synthesis P0-4) — replace native `<select>` / `<datalist>` shells in `packages/editors/src/{select,multiSelect,autocomplete}.tsx` with shadcn Popover-anchored Combobox/Listbox. Extend `EditorOption` with `swatch?: string` (CSS color) and `icon?: ReactNode` per the synthesis answer to your open-question #2.
    - **Branch:** `agent/worker3/v05-spike-colour-selection`. **Effort:** 1-1.5 days (Combobox migration is the bulk).

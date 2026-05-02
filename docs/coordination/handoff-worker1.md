@@ -10,9 +10,18 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 ---
 
-## Active task — v0.5: `useServerPagedGrid` turnkey hook (updated 2026-05-02)
+## Active task — v0.5: `useServerPagedGrid` turnkey hook (updated 2026-05-02 — re-ping)
 
-**v0.4.0 published** (tag pushed; release workflow runs in CI). Your PR #353 (`rowProcessingMode`) shipped. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the v0.5 plan; PRs from here roll into the v0.5.0 candidate.
+### What's already shipped from your lane
+
+- ✅ **#353** `rowProcessingMode` — went out in `v0.4.0`
+- ✅ **#360** worker1 audit findings doc
+
+### Active now → `useServerPagedGrid({ gridId, loadPage })`
+
+This is your primary v0.5 task. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified it. v0.4.0 is **published** to GitHub Packages; v0.5 PRs land into the v0.5.0 candidate. No new framing — same spec as before, still active. If you've started locally, push when you have a clean WIP for review.
+
+If you're stuck, ping the coordinator with the specific question (don't rebuild bsncraft's 9-`useState` orchestration; subsume it).
 
 ### Primary task — `useServerPagedGrid({ gridId, loadPage })`
 

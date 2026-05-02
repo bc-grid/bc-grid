@@ -10,15 +10,23 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 
 ---
 
-## Active task — v0.5 cleanup train (updated 2026-05-02)
+## Active task — v0.5 cleanup train (updated 2026-05-02 — re-ping)
 
-**v0.4.0 published** (tag pushed; release workflow runs in CI). Your PR #355 (filters panel active summary) shipped. Synthesis at `docs/coordination/audit-2026-05/synthesis.md` ratified the v0.5 plan; PRs from here roll into the v0.5.0 candidate. **Pivot to v0.5 cleanup work** — small, focused PRs in the order below. Each is a separate branch + PR.
+### What's already shipped from your lane
 
-### Order of work (each one is a separate PR; ship in this order)
+- ✅ **#351** worker2 audit findings doc
+- ✅ **#355** filters panel active filter summary chip strip — went out in `v0.4.0`
+- ✅ **#358** test-import lint rule + `tools/lint-test-import-boundaries.ts` (cleanup train task 1)
 
-1. **`v05-test-import-lint`** — Replace 10 internal-path test imports in `packages/react/tests/editorChrome.test.tsx` (lines 4-12) and `checkboxEditor.markup.test.tsx:3` with `@bc-grid/editors` imports. Then add a Biome rule (or eslint rule) that fails on relative imports across `packages/*/src` boundaries from test files. **Effort: ~30 min including the rule.** Branch: `agent/worker2/v05-test-import-lint`.
+v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate.
 
-2. **`v05-optional-filter-prop`** — Make `filter` and `onFilterChange` truly optional on `BcGridProps`. Today bsncraft uses `...{onFilterChange ? { filter, onFilterChange } : {}}` to work around the type (see `~/work/bsncraft/apps/web/components/data-grid.tsx:573`). Tests pin the optional path. **Effort: ~30 min.** Branch: `agent/worker2/v05-optional-filter-prop`.
+### Active now → `v05-optional-filter-prop` (task 2 below)
+
+Pick up from task 2 in the ordered list. Each task is its own branch + PR; ship in order. The full pipeline:
+
+1. ✅ **`v05-test-import-lint`** — DONE (#358).
+
+2. **🟢 `v05-optional-filter-prop` (ACTIVE)** — Make `filter` and `onFilterChange` truly optional on `BcGridProps`. Today bsncraft uses `...{onFilterChange ? { filter, onFilterChange } : {}}` to work around the type (see `~/work/bsncraft/apps/web/components/data-grid.tsx:573`). Tests pin the optional path. **Effort: ~30 min.** Branch: `agent/worker2/v05-optional-filter-prop`.
 
 3. **`v05-search-hotkey-prop`** — Add `<BcGrid searchHotkey>` prop that owns Cmd/Ctrl+F. Exposes a `searchInputRef` so consumers can wire focus. Removes the duplicate listeners in `~/work/bsncraft/apps/web/components/data-grid.tsx:179-215` and `~/work/bsncraft/packages/ui/src/components/data-table.tsx:1-25`. **Effort: 1-2 hours.** Branch: `agent/worker2/v05-search-hotkey-prop`.
 
