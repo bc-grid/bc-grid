@@ -24,13 +24,11 @@ import { fileURLToPath } from "node:url"
  */
 
 /**
- * Editors that own their own focus handoff inline. `select` was on this
- * list pre-v0.5; the v0.5 Combobox migration moved its focusRef
- * plumbing into the shared `internal/combobox.tsx` primitive so the
- * contract is enforced *there* (covered separately below). Adding
- * `multiSelect` / `autocomplete` to that primitive is the next-PR
- * follow-up — until then they keep their inline handoff and stay on
- * this list.
+ * Editors that own their own focus handoff inline. `select` and
+ * `autocomplete` delegated to shared Combobox primitives in v0.5
+ * (audit P0-4); the contract there is enforced separately below.
+ * `multiSelect` migration to `internal/combobox.tsx` is in flight
+ * via PR #365 and will move there once that lands.
  */
 const editorsToCheck = [
   "text",
@@ -39,7 +37,6 @@ const editorsToCheck = [
   "datetime",
   "time",
   "multiSelect",
-  "autocomplete",
   "checkbox",
 ] as const
 
@@ -61,6 +58,17 @@ describe("editor focusRef contract", () => {
     // button continues to see a non-null `focusRef.current`.
     const source = await readEditorSource("src/internal/combobox.tsx")
     assertFocusRefUsesLayoutEffect(source, "internal/combobox.tsx")
+  })
+
+  test("internal SearchCombobox primitive (used by autocomplete) assigns focusRef inside useLayoutEffect", async () => {
+    // v0.5 autocomplete migrated from <input list>+<datalist> to the
+    // SearchCombobox primitive. Same race-fix contract: focusRef must
+    // be assigned in useLayoutEffect so the framework's mount-focus
+    // call (also useLayoutEffect, parent) sees the input element when
+    // it reads. Without this, click-outside commit reads
+    // `readEditorInputValue(null)` and silently commits `undefined`.
+    const source = await readEditorSource("src/internal/combobox-search.tsx")
+    assertFocusRefUsesLayoutEffect(source, "internal/combobox-search.tsx")
   })
 })
 
