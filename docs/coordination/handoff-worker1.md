@@ -18,9 +18,22 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#360** worker1 audit findings doc
 - ✅ **#363** `useServerPagedGrid` turnkey orchestration hook (audit P0-6)
 - ✅ **#366** `apiRef.scrollToCell` + `useServerPagedGrid.scrollToServerCell` action (audit P0-7 server-side)
-- 🟡 **#368** `useServerInfiniteGrid` + extracted `internal/useServerOrchestration.ts` — in coordinator review
+- ✅ **#368** `useServerInfiniteGrid` + extracted `internal/useServerOrchestration.ts`
+- ✅ **#371** `useServerTreeGrid` companion hook — closes the server-hook trio (paged + infinite + tree)
 
-### Active now → `useServerTreeGrid` companion hook
+### Active now → `v05-server-loader-generics` (stretch P1-C2)
+
+Generic `TRow` propagation into `LoadServerPage<TRow>` / `LoadServerBlock<TRow>` / `LoadServerTreeChildren<TRow>` query types so `query.sort` / `query.filter` are typed against column ids instead of `string`. The hook signatures already carry `<TRow>`; the gap is that the sort/filter shapes inside `ServerPagedQuery` / `ServerBlockQuery` / `ServerTreeQuery` use bare `string` for `columnId`. Tighten to `keyof TRow & string` (or a column-id phantom type) so a typo in a server loader's switch on `query.sort[0].columnId` becomes a compile error.
+
+**Branch:** `agent/worker1/v05-server-loader-generics`. **Effort:** ~half day. **Only ship if low risk** — this touches the public type surface in `@bc-grid/core` server query types. If the change ripples through bsncraft's wrapper unfavorably, defer to v0.6.
+
+### After stretch → bsncraft migration proof (coordinator-led)
+
+The coordinator owns the bsncraft migration proof but server-grid expertise is yours. When you finish the stretch (or defer it), pair with the coordinator on:
+- Migrating `~/work/bsncraft/apps/web/components/server-edit-grid.tsx` (the 9-`useState` orchestration) to `useServerPagedGrid`. Target diff: ≥-100 LOC of wrapper code.
+- Walking through any rough edges that surface — every "this is awkward" moment in the migration is a v0.6 input.
+
+### Earlier follow-up tasks superseded (server-hook trio complete)
 
 Same orchestration shape as `useServerPagedGrid` and `useServerInfiniteGrid`, adapted for `LoadServerTreeChildren`. Reuses the `internal/useServerOrchestration.ts` primitives you extracted in #368. **Recommendation: branch from `agent/worker1/v05-use-server-infinite-grid`** (your #368 branch) so you get the orchestration extraction without waiting for #368 to merge — coordinator will sort the merge order.
 
