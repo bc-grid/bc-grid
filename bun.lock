@@ -60,25 +60,25 @@
     },
     "packages/aggregations": {
       "name": "@bc-grid/aggregations",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/animations": {
       "name": "@bc-grid/animations",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/core": {
       "name": "@bc-grid/core",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
     },
     "packages/editors": {
       "name": "@bc-grid/editors",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -92,7 +92,7 @@
     },
     "packages/enterprise": {
       "name": "@bc-grid/enterprise",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -103,7 +103,7 @@
     },
     "packages/export": {
       "name": "@bc-grid/export",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
@@ -118,14 +118,14 @@
     },
     "packages/filters": {
       "name": "@bc-grid/filters",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/react": {
       "name": "@bc-grid/react",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/aggregations": "workspace:*",
         "@bc-grid/animations": "workspace:*",
@@ -148,21 +148,21 @@
     },
     "packages/server-row-model": {
       "name": "@bc-grid/server-row-model",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/theming": {
       "name": "@bc-grid/theming",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/virtualizer": {
       "name": "@bc-grid/virtualizer",
-      "version": "0.4.0",
+      "version": "0.5.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
@@ -765,7 +765,7 @@
 
     "duplexer2": ["duplexer2@0.1.4", "", { "dependencies": { "readable-stream": "^2.0.2" } }, "sha512-asLFVfWWtJ90ZyOUHMqk7/S2w2guQKxUI2itj3d92ADHhxUSbCMGi1f1cBcJ7xM1To+pE/Khbwo1yuNbMEPKeA=="],
 
-    "electron-to-chromium": ["electron-to-chromium@1.5.348", "", {}, "sha512-QC2X59nRlycQQMc4ZXjSVBX+tSgJfgRtcrYHbIZLgOV2dCvefoQGegLR7lLXKgpPpSuVmJU19LMzGrSa2C7k3Q=="],
+    "electron-to-chromium": ["electron-to-chromium@1.5.349", "", {}, "sha512-QsWVGyRuY07Aqb234QytTfwd5d9AJlfNIQ5wIOl1L+PZDzI9d9+Fn0FRale/QYlFxt/bUnB0/nLd1jFPGxGK1A=="],
 
     "emoji-regex": ["emoji-regex@10.6.0", "", {}, "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A=="],
 
