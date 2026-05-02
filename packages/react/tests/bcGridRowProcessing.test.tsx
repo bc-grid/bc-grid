@@ -44,6 +44,8 @@ function renderGrid(
     data?: readonly Row[]
     showInactive?: boolean
     rowIsInactive?: (row: Row) => boolean
+    defaultFilter?: BcGridFilter | null
+    onFilterChange?: ((next: BcGridFilter | null, prev: BcGridFilter | null) => void) | undefined
   } = {},
 ): string {
   const {
@@ -56,6 +58,8 @@ function renderGrid(
     rowProcessingMode,
     showInactive,
     rowIsInactive,
+    defaultFilter,
+    onFilterChange,
   } = props
   return renderToStaticMarkup(
     <BcGrid<Row>
@@ -69,6 +73,8 @@ function renderGrid(
       rowProcessingMode={rowProcessingMode}
       sort={sort}
       filter={filter}
+      defaultFilter={defaultFilter}
+      onFilterChange={onFilterChange}
       searchText={searchText}
       showInactive={showInactive}
       rowIsInactive={rowIsInactive}
@@ -110,6 +116,28 @@ describe("BcGrid rowProcessingMode — default 'client'", () => {
       values: ["active"],
     }
     const html = renderGrid({ filter })
+    expect(dataRowIdsInOrder(html)).toEqual(["a", "c"])
+  })
+
+  test("filter={undefined} and onFilterChange={undefined} behave like omitted props", () => {
+    const maybeFilter: BcGridFilter | null | undefined = undefined
+    const maybeOnFilterChange:
+      | ((next: BcGridFilter | null, prev: BcGridFilter | null) => void)
+      | undefined = undefined
+    const defaultFilter: BcGridFilter = {
+      columnId: "status",
+      kind: "column",
+      op: "in",
+      type: "set",
+      values: ["active"],
+    }
+
+    const html = renderGrid({
+      defaultFilter,
+      filter: maybeFilter,
+      onFilterChange: maybeOnFilterChange,
+    })
+
     expect(dataRowIdsInOrder(html)).toEqual(["a", "c"])
   })
 

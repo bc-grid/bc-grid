@@ -57,7 +57,7 @@ Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `
 - `[ready]` **v05-spike-production-estimating** (coordinator) — hero spike at `apps/examples/src/production-estimating.example.tsx`, <100 LOC consumer code.
 - `[ready]` **v05-spike-document-management** (coordinator) — hero spike at `apps/examples/src/document-management.example.tsx`, <100 LOC consumer code.
 - `[done: worker2 #358]` **v05-test-import-lint** (worker2) — replaced 10 internal-path test imports with `@bc-grid/editors`; added `tools/lint-test-import-boundaries.ts`. **Branch:** `agent/worker2/v05-test-import-lint`.
-- `[ready]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional.
+- `[review: worker2 #362]` **v05-optional-filter-prop** (worker2) — make `filter` / `onFilterChange` truly optional. **Branch:** `agent/worker2/v05-optional-filter-prop`.
 - `[ready]` **v05-search-hotkey-prop** (worker2) — `<BcGrid searchHotkey>` prop owning Cmd+F.
 - `[ready]` **v05-fit-prop** (worker2) — `fit="content" | "viewport" | "auto"` prop owning viewport-fit height math.
 - `[ready]` **v05-api-ref-filter** (worker2) — `BcGridApi.openFilter` / `closeFilter` / `getActiveFilter` filter-side imperative methods (synthesis P0-7 split: worker3 editor side done in #361, worker1 owns server-side `scrollToCell`, worker2 owns filter side).

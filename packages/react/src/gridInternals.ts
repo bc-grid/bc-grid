@@ -801,6 +801,10 @@ export function hasProp(object: object, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(object, key)
 }
 
+export function hasDefinedProp(object: object, key: PropertyKey): boolean {
+  return hasProp(object, key) && (object as Record<PropertyKey, unknown>)[key] !== undefined
+}
+
 export function clamp(value: number, min: number, max: number): number {
   if (max < min) return min
   return Math.min(max, Math.max(min, value))
@@ -897,7 +901,13 @@ export function assertNoMixedControlledProps<TRow>(props: BcGridProps<TRow>): vo
   ]
 
   for (const [controlled, uncontrolled] of pairs) {
-    if (hasProp(props, controlled) && hasProp(props, uncontrolled)) {
+    const hasControlled =
+      controlled === "filter" ? hasDefinedProp(props, controlled) : hasProp(props, controlled)
+    const hasUncontrolled =
+      uncontrolled === "defaultFilter"
+        ? hasDefinedProp(props, uncontrolled)
+        : hasProp(props, uncontrolled)
+    if (hasControlled && hasUncontrolled) {
       throw new Error(
         `BcGrid received both ${String(controlled)} and ${String(
           uncontrolled,
