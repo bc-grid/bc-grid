@@ -36,24 +36,13 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#381** `editController.discardRowEdits` + `BcEditGrid` Discard action (audit P1-W3-3) — coordinator merge-resolved a test-file conflict from #378
 - ✅ **#382** `BcCellEditor.getValue?` hook for custom editors (audit P1-W3-6) + custom-editor recipe doc
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
+- ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
 
-### Active now → `v05-editor-bundle-1` (3 editor polish items in one PR, ~30-40 min)
+### Active now → `v05-context-menu-editor-toggles` (your context-menu implementation lane, ~40-60 min)
 
-bsncraft is on `0.5.0-alpha.1`. Until they surface migration findings, bundle these 3 editor items from your own #387 planning doc into one PR. They're independent + small + each addresses a real ERP-user friction.
+**Bundle-1 (#390) is shipped** (locale parser + multi-Enter fix + clear-rejection toast). The next active task is the context-menu editor toggles.
 
-**Items:**
-
-1. **Locale-aware number parser** (#387 §2 — audit P1-W3-5) — ship `numberEditor.parseLocaleNumber(value, locale)` helper using `Intl.NumberFormat`'s decimal separator. Document as the recommended `column.valueParser` for international ERP grids. `de-DE` user types `1,5` → parses as `1.5`. Export from `@bc-grid/editors`. Add unit tests for `en-US`, `de-DE`, `fr-FR`, `ja-JP`.
-
-2. **Multi-mode Combobox `Enter` semantics fix** (#387 §5 — surfaced fixing `editor-multi-select.pw.ts` at `a57a33f` / `8af914e`) — `Enter` currently routes through `updateSelection` (toggling the active option) before bubbling to the editor portal commit. In multi-mode, `Enter` should ONLY bubble to commit; `Space` stays as the toggle gesture. Also update `editor-multi-select.pw.ts` to use `Enter` for commit (drop the `Tab` workaround); coordinator will run Playwright at merge.
-
-3. **Clear-rejection feedback for sighted users** (#387 §6 — surfaced in worker3 #378) — when `clearCell` runs `column.validate("")` and validate rejects, today no editor portal is mounted so the visible validation popover (#356) doesn't fire. Sighted users see nothing; AT users hear the assertive announce. Add a transient toast / status-bar slot. Pairs with #387 §1 (validation visual flash) but ship them separately.
-
-**Branch:** `agent/worker3/v05-editor-bundle-1`. **Effort:** ~30-40 min for the bundle.
-
-### After bundle-1 ships → `v05-context-menu-editor-toggles` (your context-menu lane)
-
-The maintainer asked for a "vanilla grid by default + everything toggleable from right-click + consumer-supplied persistence API" architecture. RFC is being drafted by coordinator (`agent/coordinator/v05-vanilla-and-context-menu-rfc`); ratifies before this task ships, but the editor-side toggles are predictable and you can start when bundle-1 ships.
+The maintainer's vision is "vanilla grid by default + everything toggleable from right-click + consumer-supplied persistence API." The RFC at `docs/design/vanilla-and-context-menu-rfc.md` (#392, merged) ratified the architecture (note the 10 open questions in §9 — until those resolve, use placeholder field names + TODO comments for the persistence shape; coordinator will sweep through and update on RFC ratification).
 
 **Items in your lane:**
 
@@ -65,6 +54,10 @@ The maintainer asked for a "vanilla grid by default + everything toggleable from
 The persistence shape will be defined in the RFC's `BcUserSettings` spec. Wait for the RFC to ratify before final wiring; until then, store toggles in memory + accept a `userSettings` prop that the coordinator will define.
 
 **Branch:** `agent/worker3/v05-context-menu-editor-toggles`. **Effort:** ~40-60 min.
+
+### Previously active → `v05-editor-bundle-1` (DONE — #390)
+
+The 3 editor polish items from your own #387 doc landed (locale-aware number parser §2, multi-mode Combobox `Enter` semantics fix §5, clear-rejection feedback for sighted users via status-bar slot §6).
 
 ### Previously active → `v05-editor-followups-planning-doc` (DONE)
 

@@ -31,8 +31,9 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#377** `BcGridApi.openFilter` / `closeFilter` / `getActiveFilter` (audit P0-7 filter side — closes the apiRef trio fully)
 - ✅ **#380** `BcGridApi.pasteTsv` + native paste-event listener + bulk edit overlay commit path (audit **P0-1 fully closed** — you also subsumed the editor-side binding worker3 was originally going to write)
 - ✅ **#384** `BcColumnFilter` discriminated union (per-type narrowing for text/number/number-range/date/date-range/set/boolean/custom)
+- ✅ **#393** v0.5 chrome+filter bundle-1 (active filter chip strip in toolbar + group selection algebra basic + filter operators blank/not-blank for every scalar type)
 
-v0.4.0 is **published** to GitHub Packages. v0.5 PRs land into the v0.5.0 candidate. **All v0.5 P0 + cleanup-train + stretch items are now closed** — your lane is done.
+v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
 ### Active now → `v05-context-menu-chrome-bundle-1` (your context-menu implementation lane, half 1 of 2, ~30-40 min)
 

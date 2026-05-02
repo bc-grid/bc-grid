@@ -30,6 +30,7 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#379** `useServerTreeGrid` `groupRowId` override + `persistTo` (bsncraft polish)
 - ✅ **#383** v0.5 → v0.6 server-perf follow-ups planning doc — 11 v0.6 task proposals + 5 open questions for coordinator
 - ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
+- ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
 
 ### Active now → `v05-context-menu-server-toggles` (your context-menu implementation lane, ~40-60 min)
 
