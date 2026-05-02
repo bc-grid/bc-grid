@@ -20,11 +20,15 @@ When the maintainer says **"review your handoff"**, read the **Active task** sec
 - ✅ **#359** `useBcGridState` turnkey state hook + types (v0.5 task 1)
 - ✅ **#361** `BcGridApi.startEdit/commitEdit/cancelEdit` + editor portal methods (v0.5 task 2)
 - ✅ **#364** shadcn Combobox migration for `select.tsx` + `EditorOption.swatch`/`icon` fields + `colour-selection` hero spike (v0.5 P0-4 part 1)
-- 🟡 **#365** multi-select Combobox migration (v0.5 P0-4 part 2) — in coordinator review
+- ❌ **#365** multi-select Combobox migration — **CLOSED, must be re-attempted.** The branch was based on a commit before #353 and #363 merged; rebasing was unsafe (the diff carried 500+ lines of unintended reverts, including the entire `useServerPagedGrid` hook and `rowProcessingMode` server-grid contract). Multi-select work itself is good — the Combobox `mode: "single" | "multi"` design and multiSelect.tsx migration are sound — but they need to land on a fresh branch from current `main`.
 
-### Active now → `autocomplete` Combobox migration (close P0-4 fully)
+### Active now → `autocomplete` Combobox migration
 
-Synthesis P0-4 listed all three lookup editors. With #364 (select) shipped and #365 (multi-select) in review, autocomplete is the last leg.
+If you've already started autocomplete locally, continue and ship that PR — it's the last unfinished leg of P0-4.
+
+After autocomplete, **re-attempt multi-select on a fresh branch** (closed #365 cannot be rebased safely; see "What's already shipped" above for the rationale). Branch name: `agent/worker3/v05-combobox-multi-select-v2`. The Combobox `mode: "single" | "multi"` extension you designed in #365 is still the right shape.
+
+Synthesis P0-4 listed all three lookup editors. With #364 (select) shipped, autocomplete next, and multi-select-v2 after, that closes P0-4 cleanly.
 
 - Migrate `packages/editors/src/autocomplete.tsx` to the `internal/combobox.tsx` shell. The base Combobox (#364) is your template; preserve autocomplete-specific behavior: free-text input, debounced async option loading, "no results" state, "still loading" state.
 - **Wire `prepareResult` consumption** (audit P1-W3-2) — autocomplete is the natural place. The state machine carries `prepareResult` through `Preparing` → `Editing`; the hook should preload the first page of options via `editor.prepare()` and hand them to the Combobox so the dropdown paints with options on first frame instead of a blank "loading" state.
@@ -38,7 +42,7 @@ Synthesis P0-4 listed all three lookup editors. With #364 (select) shipped and #
 1. ✅ **`v05-use-bc-grid-state`** — DONE (#359).
 2. ✅ **`v05-api-ref-editor`** — DONE (#361).
 3. ✅ **`v05-spike-colour-selection`** + select.tsx Combobox — DONE (#364).
-4. 🟡 **`v05-combobox-multi`** — multi-select Combobox migration in review (#365).
+4. ❌ **`v05-combobox-multi`** — closed (#365); must be re-attempted on fresh branch (`v05-combobox-multi-select-v2`) **after** autocomplete migrates so the Combobox primitive is fully exercised by all three editors.
 5. **🟢 `v05-combobox-autocomplete` (ACTIVE)** — finish P0-4 with the autocomplete migration + prepareResult wiring (above).
 6. **`v05-spike-sales-estimating` — Sales Estimating hero spike** (can ship without paste leg as "missing pattern" datapoint; or wait for worker2's paste PR)
    `apps/examples/src/sales-estimating.example.tsx`. Demonstrates: money column type with currency-aware formatting, dependent cells (`extPrice = qty * price * (1 - discount)` recomputes on commit), Excel paste fidelity for line-item entry. **Goal: <100 LOC consumer code.** Anything that pushes over → surface in the spike's PR description as a missing pattern.
@@ -62,6 +66,7 @@ Each cheap; pick whichever is touched naturally during the v0.5 work above:
 
 - **`apiRef` boundary:** you own `focusCell`/`startEdit`/`commitEdit`/`cancelEdit`/`getActiveCell`. Worker1 owns `scrollToCell`. Worker2 owns `openFilter`/`closeFilter`. Coordinate via the `BcGridApi` type.
 - **Paste:** wait for worker2's `pasteTsv` contract before starting your editor binding.
+- **Rebase discipline (lesson from #365):** when starting a new branch, rebase from current `origin/main` first. PRs in this sprint land every 30–60 minutes; a branch that's >2 hours behind risks carrying unintended reverts of intermediate PRs when it merges. If your local branch is more than 2–3 commits behind main, rebase before continuing or open a fresh branch.
 
 ### Rules reminder
 
