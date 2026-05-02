@@ -27,16 +27,29 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#368** `useServerInfiniteGrid` + extracted `internal/useServerOrchestration.ts`
 - ✅ **#371** `useServerTreeGrid` companion hook — closes the server-hook trio (paged + infinite + tree)
 - ✅ **#376** `v05-server-loader-generics` deferral doc — TS variance trap; stretch deferred to v0.6 with rationale
+- ✅ **#379** `useServerTreeGrid` `groupRowId` override + `persistTo` (bsncraft polish)
 
-### Active now → `v05-server-tree-grid-polish` (groupRowId + persistTo)
+### Active now → audit P1 server-perf follow-ups doc
 
-The bsncraft 2026-05-03 review surfaced two `useServerTreeGrid` polish items that are user-visible and worth shipping in v0.5 rather than deferring:
+Your v0.5 server-hook lane is essentially complete (server-hook trio + scrollToCell + groupRowId/persistTo polish all shipped; generic-`TRow` deferred to v0.6 with documented rationale; rest of the polish options `rootChildCount` / `pageSize` / `cacheLimit` queued in v0.6 backlog). The remaining v0.5 release-gate items for your involvement are bsncraft migration co-pilot (waits on the bsncraft team drafting their customers migration) and the alpha cut (coordinator-owned).
 
-1. **`groupRowId?: (key: ServerGroupKey, path: ServerGroupKey[]) => RowId`** — stable group-row identifiers. Required for selection algebra (selecting a group row needs a stable id), focus retention across re-render, and persisted expansion state. Today the hook synthesises group row ids internally from `groupKey + path`; expose the consumer override so user-defined ids can be used (often the natural choice is the path joined with a delimiter or a hash).
+While the bsncraft draft is in flight, do a focused planning pass on **audit P1 server-perf items you flagged in your own #360 findings doc**. Convert anything that's still relevant against the now-shipped `useServerPagedGrid` / `useServerInfiniteGrid` / `useServerTreeGrid` into concrete v0.6 task entries. Expected items based on `audit-2026-05/worker1-findings.md`:
 
-2. **`persistTo?: "url" | "localStorage" | null`** — match `useBcGridState`'s persistence pattern. URL or localStorage backing for `groupBy` / `expansion` / `sort` / `filter` / `search` state. Same `gridId` keying convention.
+- Block-cache LRU eviction policy tuning under realistic ERP scroll patterns
+- Prefetch-ahead budget calibration for `useServerInfiniteGrid` (default vs per-grid override)
+- Stale-response handling guarantees once `requestId` floods (high-frequency filter typing)
+- Per-row request-id supersedure correctness for `useServerTreeGrid` (children of row A vs row B)
+- Optimistic-edit rollback semantics under concurrent server invalidations
 
-**Branch:** `agent/worker1/v05-server-tree-grid-polish`. **Effort:** ~half day for both options + tests. Don't bundle the dual-output refactor — that's still cancelled. The other polish options (`rootChildCount`, `pageSize`, `cacheLimit`) stay in v0.6 (`v06-server-tree-grid-options`).
+**Branch:** `agent/worker1/v05-server-perf-audit-followups`. **Effort:** ~half day. **Output:** read-only doc at `docs/coordination/v05-audit-followups/worker1-server-perf.md` with concrete v0.6 task proposals (one per item: where it manifests, what's wrong, suggested fix shape, affected packages). No source changes — this is planning, not implementation. Worker rule unchanged: don't run Playwright / smoke-perf / perf benchmarks; the doc reasons about behavior from code + existing tests.
+
+### After this → bsncraft migration co-pilot (when bsncraft team drafts)
+
+The bsncraft team owns the actual customers migration code (~325 LOC `ServerEditGrid` wrapper → thin `<BcServerGrid>` adapter). When their draft PR opens, your role is server-grid expertise + reviewing the bc-grid-side rough edges. Walk through any "this is awkward" moment they hit — those become v0.6 inputs.
+
+### After bsncraft migration → v0.6 server-perf implementation
+
+The follow-up doc above will become the worker1 lane's v0.6 plan. Don't start v0.6 implementation work until v0.5 ships.
 
 ### After stretch → bsncraft migration proof (coordinator-led)
 
