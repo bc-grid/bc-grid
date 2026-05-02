@@ -24,13 +24,11 @@ import { fileURLToPath } from "node:url"
  */
 
 /**
- * Editors that own their own focus handoff inline. `select` was on this
- * list pre-v0.5; the v0.5 Combobox migration moved its focusRef
- * plumbing into the shared `internal/combobox.tsx` primitive so the
- * contract is enforced *there* (covered separately below). Adding
- * `multiSelect` / `autocomplete` to that primitive is the next-PR
- * follow-up — until then they keep their inline handoff and stay on
- * this list.
+ * Editors that own their own focus handoff inline. `select` and
+ * `multiSelect` delegated to the shared Combobox primitive in v0.5
+ * (audit P0-4); the contract there is enforced separately below.
+ * `autocomplete` keeps its inline handoff until its own Combobox
+ * migration lands in a follow-up PR.
  */
 const editorsToCheck = [
   "text",
@@ -38,7 +36,6 @@ const editorsToCheck = [
   "date",
   "datetime",
   "time",
-  "multiSelect",
   "autocomplete",
   "checkbox",
 ] as const
@@ -54,11 +51,12 @@ describe("editor focusRef contract", () => {
     })
   }
 
-  test("internal Combobox primitive (used by select) assigns focusRef inside useLayoutEffect", async () => {
-    // The v0.5 select editor delegates its focus handoff to the shared
-    // Combobox primitive. Pin the contract there so the click-outside
-    // / Tab path that reads `__bcGridComboboxValue` off the trigger
-    // button continues to see a non-null `focusRef.current`.
+  test("internal Combobox primitive (used by select + multiSelect) assigns focusRef inside useLayoutEffect", async () => {
+    // The v0.5 select + multiSelect editors delegate their focus
+    // handoff to the shared Combobox primitive. Pin the contract there
+    // so the click-outside / Tab path that reads `__bcGridComboboxValue`
+    // off the trigger button continues to see a non-null
+    // `focusRef.current`.
     const source = await readEditorSource("src/internal/combobox.tsx")
     assertFocusRefUsesLayoutEffect(source, "internal/combobox.tsx")
   })

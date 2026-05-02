@@ -143,7 +143,13 @@ describe("built-in editor chrome hooks", () => {
     expect(html).toContain('aria-haspopup="listbox"')
   })
 
-  test("multi-select editor keeps typed options and exposes native listbox hooks", () => {
+  test("multi-select editor renders chips for selected options + multi listbox hooks (audit P0-4)", () => {
+    // v0.5: multi-select migrated from native `<select multiple>` to
+    // the shadcn-native Combobox in `mode="multi"` (audit P0-4 /
+    // synthesis P0-4). The trigger now renders a chip strip and the
+    // listbox carries `aria-multiselectable`. Public selectors
+    // (data-bc-grid-editor-kind, option-count, seeded) preserved so
+    // existing e2e queries don't break.
     const html = renderEditor(
       {
         editor: multiSelectEditor,
@@ -153,10 +159,31 @@ describe("built-in editor chrome hooks", () => {
       { seedKey: "c" },
     )
 
-    expect(html).toContain("multiple")
     expect(html).toContain('aria-label="Status"')
     expect(html).toContain('data-bc-grid-editor-kind="multi-select"')
     expect(html).toContain('data-bc-grid-editor-option-count="2"')
+    expect(html).toContain('aria-multiselectable="true"')
+    expect(html).toContain('data-bc-grid-editor-combobox-chip="true"')
+    expect(html).toContain('data-bc-grid-editor-multi="true"')
+  })
+
+  test("multi-select editor renders option swatches when supplied (audit P0-4)", () => {
+    const html = renderEditor({
+      editor: multiSelectEditor,
+      initialValue: ["antique-walnut"],
+      column: {
+        field: "finishes",
+        header: "Finishes",
+        options: [
+          { value: "antique-walnut", label: "Antique Walnut", swatch: "#5C3A21" },
+          { value: "honey-oak", label: "Honey Oak", swatch: "#C68642" },
+        ],
+      },
+    })
+
+    expect(html).toContain('data-bc-grid-editor-swatch="true"')
+    expect(html).toContain("background:#5C3A21")
+    expect(html).toContain("background:#C68642")
   })
 
   test("autocomplete editor exposes datalist, busy, and live status hooks", () => {

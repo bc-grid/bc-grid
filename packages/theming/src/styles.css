@@ -1279,6 +1279,61 @@ select.bc-grid-editor-input {
   border-top: 1px solid color-mix(in srgb, var(--bc-grid-input-border) 70%, transparent);
 }
 
+/*
+ * Multi-select Combobox additions (audit P0-4 v0.5). Trigger renders a
+ * chip strip; listbox options have a check column. All sized by the
+ * existing editor-input height tokens — no new vars.
+ */
+.bc-grid-editor-combobox-chips {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bc-grid-editor-combobox-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: calc(var(--bc-grid-radius) - 4px);
+  background: color-mix(in srgb, var(--bc-grid-accent) 16%, transparent);
+  color: var(--bc-grid-fg);
+  font-size: 0.8125rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.bc-grid-editor-combobox-chip-swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--bc-grid-fg) 12%, transparent);
+}
+
+.bc-grid-editor-combobox-placeholder {
+  color: var(--bc-grid-muted-fg);
+}
+
+.bc-grid-editor-combobox-option-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  font-size: 0.875rem;
+  line-height: 1;
+  color: var(--bc-grid-focus-ring);
+}
+
+.bc-grid-editor-combobox-option-check:not([data-checked="true"]) {
+  color: transparent;
+}
+
 .bc-grid-cell-right {
   justify-content: flex-end;
   text-align: right;
