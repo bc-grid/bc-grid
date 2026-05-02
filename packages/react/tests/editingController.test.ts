@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import type { ColumnId, RowId } from "@bc-grid/core"
 import {
   type BcCellEditEntry,
@@ -181,5 +183,54 @@ describe("summariseRowEditState — row aggregation for action column", () => {
       pending: true,
       error: "Server rejected",
     })
+  })
+})
+
+describe("clearCell — programmatic empty-cell commit (audit P1-W3-1)", () => {
+  // The clearCell method bypasses the editing state machine — it
+  // runs valueParser("") + validate + overlay update + onCellEditCommit
+  // directly. The repo's test runner is bun:test with no DOM (no
+  // @testing-library / happy-dom / jsdom), so a true behavioural
+  // test would require new infra. Instead we pin the contract via
+  // source-shape assertions: clearCell is exposed on the controller's
+  // return value, the implementation runs valueParser with an empty
+  // string, and it announces validation errors through the same hook
+  // the editor portal uses.
+  const here = fileURLToPath(new URL(".", import.meta.url))
+  const source = readFileSync(`${here}../src/useEditingController.ts`, "utf8")
+
+  test("controller exposes clearCell in its return value", () => {
+    // The controller's return statement lists clearCell so the grid
+    // (and future paste-editor binding) can call it. Pinning the
+    // export name catches accidental drops during refactors.
+    expect(source).toContain("clearCell,")
+  })
+
+  test("clearCell runs valueParser with empty string input", () => {
+    // Empty-input convention: column.valueParser("") yields the
+    // typed empty value (null for text, 0 for number, etc.).
+    // Without a parser, clearCell falls through to null. This is
+    // the contract the grid relies on for both Backspace and
+    // Delete to leave the cell in a parseable empty state.
+    expect(source).toMatch(/parser\s*\?\s*\(parser\("",\s*candidate\.row\)/)
+  })
+
+  test("clearCell announces validation errors for AT users", () => {
+    // No editor portal is mounted on the clear path, so the visible
+    // validation popover (#356) doesn't fire. The assertive
+    // live-region announce still informs AT users — sighted users
+    // see nothing today (audit follow-up: surface a transient
+    // toast / status-bar slot for clear-rejection feedback).
+    expect(source).toMatch(/clearCell[\s\S]*?announce\?\.\(\{\s*kind: "validationError"/)
+  })
+
+  test("clearCell does NOT dispatch state-machine events", () => {
+    // The whole point of clearCell vs commit is that the grid stays
+    // in nav mode. Pin the absence of `dispatch({ type: "commit"`
+    // and `dispatch({ type: "validateResolved"` inside the clearCell
+    // body. (commit's dispatches stay; clearCell's don't.)
+    const clearCellBody = source.match(/const clearCell = useCallback[\s\S]*?\n {2}\)/)?.[0] ?? ""
+    expect(clearCellBody).not.toContain('dispatch({ type: "commit"')
+    expect(clearCellBody).not.toContain('dispatch({ type: "validateResolved"')
   })
 })

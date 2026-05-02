@@ -80,6 +80,46 @@ describe("editor keyboard activation contract", () => {
       expect(state.seedKey).toBe("A")
     }
   })
+
+  test("Backspace and Delete emit a clear intent (audit P1-W3-1)", () => {
+    // Excel-style clear semantics: Backspace + Delete both clear the
+    // cell value. The disambiguation between "enter edit afterwards"
+    // (Backspace) and "stay in nav" (Delete) lives in the grid's
+    // keydown handler which inspects the discriminator key.
+    expect(getEditorActivationIntent({ key: "Backspace" })).toEqual({
+      type: "clear",
+      key: "Backspace",
+    })
+    expect(getEditorActivationIntent({ key: "Delete" })).toEqual({
+      type: "clear",
+      key: "Delete",
+    })
+  })
+
+  test("Cmd/Ctrl/Alt + Backspace/Delete are OS-level word/line gestures, not cell-clear", () => {
+    // Cmd+Backspace deletes a word in macOS text fields, Ctrl+Delete
+    // deletes the next word — both belong to the OS, not bc-grid.
+    // Disqualifying modifier-held cases keeps those gestures available
+    // when the user accidentally hits them while a cell is focused.
+    expect(getEditorActivationIntent({ key: "Backspace", metaKey: true })).toEqual({
+      type: "ignore",
+    })
+    expect(getEditorActivationIntent({ key: "Backspace", ctrlKey: true })).toEqual({
+      type: "ignore",
+    })
+    expect(getEditorActivationIntent({ key: "Backspace", altKey: true })).toEqual({
+      type: "ignore",
+    })
+    expect(getEditorActivationIntent({ key: "Delete", metaKey: true })).toEqual({
+      type: "ignore",
+    })
+    expect(getEditorActivationIntent({ key: "Delete", ctrlKey: true })).toEqual({
+      type: "ignore",
+    })
+    expect(getEditorActivationIntent({ key: "Delete", altKey: true })).toEqual({
+      type: "ignore",
+    })
+  })
 })
 
 describe("editor edit-mode keyboard contract", () => {

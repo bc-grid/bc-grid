@@ -1969,6 +1969,40 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           })
           return
         }
+        if (activationIntent.type === "clear") {
+          // Excel-style clear semantics (audit P1-W3-1):
+          //   - Backspace: clear + enter edit mode (so the user can
+          //     immediately type a replacement value).
+          //   - Delete: clear + stay in nav (the "I want it empty" gesture).
+          //
+          // Both run through column.valueParser (with `""` input) +
+          // validate + the overlay update + onCellEditCommit, so
+          // consumer column logic applies the same way as a keyboard
+          // commit. Backspace activates with an empty seed so the
+          // editor mounts with a blank input; Delete bypasses the
+          // editor portal entirely via `editController.clearCell`.
+          event.preventDefault()
+          if (activationIntent.key === "Backspace") {
+            editController.start(cellTarget, "printable", {
+              ...startOpts,
+              seedKey: "",
+            })
+          } else {
+            // Read previous value the same way EditorMount does so
+            // onCellEditCommit's previousValue matches what the user saw.
+            const previousValue = cellColumn.source.field
+              ? (cellRow.row as Record<string, unknown>)[cellColumn.source.field]
+              : undefined
+            void editController.clearCell({
+              rowId: cellRow.rowId,
+              row: cellRow.row,
+              columnId: cellTarget.columnId,
+              column: cellColumn.source,
+              previousValue,
+            })
+          }
+          return
+        }
       }
 
       if ((event.ctrlKey || event.metaKey) && (event.key === "c" || event.key === "C")) {
