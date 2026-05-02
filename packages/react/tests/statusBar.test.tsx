@@ -21,6 +21,9 @@ function ctx(overrides: Partial<BcStatusBarContext<unknown>> = {}): BcStatusBarC
     filteredRowCount: 100,
     selectedRowCount: 0,
     aggregations: [],
+    activeFilters: [],
+    clearColumnFilter: () => {},
+    clearAllFilters: () => {},
     ...overrides,
   }
 }
@@ -70,6 +73,29 @@ describe("resolveVisibleSegments", () => {
     // RFC: aggregations segment defaults to right alignment so it sits
     // opposite the row counts.
     expect(populated[0]?.align).toBe("right")
+  })
+
+  test("`activeFilters` renders only when active filter chips exist", () => {
+    const empty = resolveVisibleSegments(["activeFilters"], ctx({ activeFilters: [] }))
+    expect(empty.length).toBe(0)
+
+    const populated = resolveVisibleSegments(
+      ["activeFilters"],
+      ctx({
+        activeFilters: [
+          {
+            columnId: "account",
+            filterText: "cash",
+            label: "Account",
+            summary: "cash",
+            type: "text",
+          },
+        ],
+      }),
+    )
+    expect(populated.length).toBe(1)
+    expect(populated[0]?.id).toBe("activeFilters")
+    expect(populated[0]?.align).toBe("left")
   })
 
   test("custom segments render unconditionally and respect align", () => {
@@ -185,5 +211,43 @@ describe("BcStatusBar render", () => {
       />,
     )
     expect(html).toContain("— rows")
+  })
+
+  test("renders active filter chips with removable icon buttons", () => {
+    const html = renderToStaticMarkup(
+      <BcStatusBar
+        ariaLabel="Grid status"
+        ctx={ctx({
+          activeFilters: [
+            {
+              columnId: "account",
+              filterText: "cash",
+              label: "Account",
+              summary: "cash",
+              type: "text",
+            },
+            {
+              columnId: "postedOn",
+              filterText: "{}",
+              label: "Posted",
+              summary: "Not blank",
+              type: "date",
+            },
+          ],
+        })}
+        segments={["activeFilters"]}
+      />,
+    )
+
+    expect(html).toContain('data-segment="activeFilters"')
+    expect(html).toContain('aria-label="2 active filters"')
+    expect(html).toContain("bc-grid-statusbar-filter-chip")
+    expect(html).toContain('<span class="bc-grid-statusbar-filter-label">Account</span>')
+    expect(html).toContain('<span class="bc-grid-statusbar-filter-value">cash</span>')
+    expect(html).toContain('<span class="bc-grid-statusbar-filter-value">Not blank</span>')
+    expect(html).toMatch(
+      /<button[^>]*aria-label="Clear filter on Account"[^>]*class="bc-grid-statusbar-filter-remove"/,
+    )
+    expect(html).toMatch(/<svg aria-hidden="true" class="bc-grid-panel-icon"/)
   })
 })

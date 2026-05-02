@@ -1,5 +1,6 @@
 import type { BcColumnFilter, ColumnId } from "@bc-grid/core"
 import { type ReactNode, useCallback, useId, useMemo } from "react"
+import { filterSummaryLabel, isFilterDraftActive } from "./filterSummary"
 import { domToken, flattenColumnDefinitions } from "./gridInternals"
 import { FilterEditorBody } from "./headerCells"
 import { FilterEmptyIcon, XIcon } from "./internal/panel-icons"
@@ -137,10 +138,10 @@ export function buildFilterToolPanelItems<TRow>(
       const filterText = columnFilterText[columnId] ?? ""
       return [
         {
-          active: isFilterToolPanelDraftActive(filterText),
+          active: isFilterDraftActive(filterText),
           columnId,
           filterText,
-          label: filterToolPanelLabel(column, columnId),
+          label: filterSummaryLabel(column, columnId),
           type: column.filter ? column.filter.type : "text",
         },
       ]
@@ -155,9 +156,5 @@ export function activeFilterToolPanelItems(
 }
 
 export function isFilterToolPanelDraftActive(value: string): boolean {
-  return value.trim().length > 0
-}
-
-function filterToolPanelLabel<TRow>(column: BcReactGridColumn<TRow>, columnId: ColumnId): string {
-  return typeof column.header === "string" ? column.header : columnId
+  return isFilterDraftActive(value)
 }

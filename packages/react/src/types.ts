@@ -175,7 +175,18 @@ export interface BcStatusBarContext<TRow = unknown> {
    * `readonly AggregationResult[]` so consumers can read it now.
    */
   aggregations: readonly AggregationResult[]
+  activeFilters: readonly BcActiveFilterSummaryItem[]
+  clearColumnFilter(columnId: ColumnId): void
+  clearAllFilters(): void
   api: BcGridApi<TRow>
+}
+
+export interface BcActiveFilterSummaryItem {
+  columnId: ColumnId
+  filterText: string
+  label: string
+  summary: string
+  type: BcColumnFilter["type"]
 }
 
 export interface BcStatusBarCustomSegment<TRow = unknown> {
@@ -188,12 +199,14 @@ export interface BcStatusBarCustomSegment<TRow = unknown> {
  * Status-bar segment shape per `chrome-rfc §Status bar`. Strings
  * resolve to built-ins; objects render the consumer-supplied node.
  * Built-ins: `total` always shown when listed; `filtered` shows only
- * when a filter is active; `selected` shows only when selectionSize >
- * 0; `aggregations` shows when results are non-empty.
+ * when a filter is active; `activeFilters` shows removable filter
+ * chips when any column filter is active; `selected` shows only when
+ * selectionSize > 0; `aggregations` shows when results are non-empty.
  */
 export type BcStatusBarSegment<TRow = unknown> =
   | "total"
   | "filtered"
+  | "activeFilters"
   | "selected"
   | "aggregations"
   | BcStatusBarCustomSegment<TRow>
@@ -489,11 +502,19 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   /**
    * Footer status bar segments rendered below the body, above any
    * `footer` slot. Built-in segment IDs (`total`, `filtered`,
-   * `selected`, `aggregations`) opt in to the standard renderers;
-   * `BcStatusBarCustomSegment` objects render consumer-supplied
-   * content. Per `chrome-rfc §Status bar`.
+   * `activeFilters`, `selected`, `aggregations`) opt in to the
+   * standard renderers; `BcStatusBarCustomSegment` objects render
+   * consumer-supplied content. Per `chrome-rfc §Status bar`.
    */
   statusBar?: readonly BcStatusBarSegment<TRow>[]
+  /**
+   * Render a compact active-filter chip strip in the status-bar region
+   * whenever column filters are active. Defaults to `"status-bar"` so
+   * restored/shared ERP views expose their active filters even when the
+   * Filters sidebar is closed. Set `"off"` to keep the status bar fully
+   * consumer-owned.
+   */
+  activeFilterSummary?: "status-bar" | "off"
   sidebar?: readonly BcSidebarPanel<TRow>[]
   defaultSidebarPanel?: string | null
   sidebarPanel?: string | null

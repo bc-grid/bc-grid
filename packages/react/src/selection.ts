@@ -49,6 +49,34 @@ export function toggleRow(selection: BcSelection, rowId: RowId): BcSelection {
 }
 
 /**
+ * Group-row checkbox toggle. If every supplied row is already selected,
+ * remove the whole set; otherwise add every supplied row. Empty groups
+ * are a no-op.
+ */
+export function toggleRows(selection: BcSelection, rowIds: readonly RowId[]): BcSelection {
+  const uniqueRowIds = Array.from(new Set(rowIds))
+  if (uniqueRowIds.length === 0) return selection
+  const nextSelected = !uniqueRowIds.every((rowId) => isRowSelected(selection, rowId))
+
+  if (selection.mode === "explicit") {
+    const next = new Set(selection.rowIds)
+    for (const rowId of uniqueRowIds) {
+      if (nextSelected) next.add(rowId)
+      else next.delete(rowId)
+    }
+    return { mode: "explicit", rowIds: next }
+  }
+
+  const nextExcept = new Set(selection.except)
+  for (const rowId of uniqueRowIds) {
+    if (nextSelected) nextExcept.delete(rowId)
+    else nextExcept.add(rowId)
+  }
+  if (selection.mode === "all") return { mode: "all", except: nextExcept }
+  return { ...selection, except: nextExcept }
+}
+
+/**
  * Shift-click → range select from `anchor` to `current` inclusive,
  * indexed into the supplied row order. Returns an "explicit" selection
  * containing exactly the rows in the range. If either anchor or current
