@@ -42,11 +42,44 @@ export interface BcGridColumn<TRow, TValue = unknown> {
   rowHeader?: boolean
 }
 
-export interface BcColumnFilter {
-  type: "text" | "number" | "number-range" | "date" | "date-range" | "set" | "boolean" | "custom"
+interface BcColumnFilterBase {
   defaultValue?: unknown
   variant?: "popup" | "inline"
 }
+
+export type BcColumnFilter =
+  | (BcColumnFilterBase & {
+      type: "text"
+      caseSensitive?: boolean
+      regex?: boolean
+    })
+  | (BcColumnFilterBase & {
+      type: "number"
+      precision?: number
+    })
+  | (BcColumnFilterBase & {
+      type: "number-range"
+      precision?: number
+    })
+  | (BcColumnFilterBase & {
+      type: "date"
+      granularity?: "day" | "month"
+    })
+  | (BcColumnFilterBase & {
+      type: "date-range"
+      granularity?: "day" | "month"
+    })
+  | (BcColumnFilterBase & {
+      type: "set"
+      options?: readonly string[]
+      loadOptions?: () => Promise<readonly string[]>
+    })
+  | (BcColumnFilterBase & {
+      type: "boolean"
+    })
+  | (BcColumnFilterBase & {
+      type: "custom"
+    })
 
 export type BcColumnFormat =
   | "text"

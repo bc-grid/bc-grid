@@ -202,21 +202,42 @@ export interface BcGridColumn<TRow, TValue = unknown> {
 export type ColumnId = string
 export type RowId = string
 
-export interface BcColumnFilter {
-  type:
-    | "text"
-    | "number"
-    | "number-range"
-    | "date"
-    | "date-range"
-    | "set"
-    | "boolean"
-    | "custom"
-  /** Optional starting value. */
-  defaultValue?: unknown
-  /** Optional UI variant. */
-  variant?: "popup" | "inline"
-}
+export type BcColumnFilter =
+  | {
+      type: "text"
+      /** Optional starting value. */
+      defaultValue?: unknown
+      /** Optional UI variant. */
+      variant?: "popup" | "inline"
+      /** Default false. */
+      caseSensitive?: boolean
+      /** Default false. */
+      regex?: boolean
+    }
+  | {
+      type: "number" | "number-range"
+      defaultValue?: unknown
+      variant?: "popup" | "inline"
+      precision?: number
+    }
+  | {
+      type: "date" | "date-range"
+      defaultValue?: unknown
+      variant?: "popup" | "inline"
+      granularity?: "day" | "month"
+    }
+  | {
+      type: "set"
+      defaultValue?: unknown
+      variant?: "popup" | "inline"
+      options?: readonly string[]
+      loadOptions?: () => Promise<readonly string[]>
+    }
+  | {
+      type: "boolean" | "custom"
+      defaultValue?: unknown
+      variant?: "popup" | "inline"
+    }
 
 export type BcColumnFormat =
   | "text"
