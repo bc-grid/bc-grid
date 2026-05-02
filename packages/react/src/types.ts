@@ -691,6 +691,15 @@ export interface BcServerInfiniteProps<TRow>
   maxCachedBlocks?: number
   blockLoadDebounceMs?: number
   maxConcurrentRequests?: number
+  /**
+   * Number of blocks to fetch ahead of the visible viewport on each
+   * `onVisibleRowRangeChange`. Default 1 — matches the prior implicit
+   * behavior of fetching exactly one block past `range.endIndex`.
+   * Higher values reduce scroll-cliff jank for fast scrollers at the
+   * cost of more bandwidth; `0` disables prefetch entirely. Clamped
+   * to a non-negative integer at the React boundary.
+   */
+  prefetchAhead?: number
   loadBlock: LoadServerBlock<TRow>
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
 }

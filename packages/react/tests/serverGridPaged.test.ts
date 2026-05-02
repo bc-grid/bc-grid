@@ -9,6 +9,7 @@ import type {
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import {
   isActiveServerPagedResponse,
+  resolvePrefetchAhead,
   resolveScrollToServerCellAction,
   resolveServerPagedGridShell,
   resolveServerPagedRequestPage,
@@ -1084,5 +1085,33 @@ describe("resolveTreeRowCount", () => {
         rootLoading: true,
       }),
     ).toBe(12)
+  })
+})
+
+describe("resolvePrefetchAhead (worker1 audit P1 §8)", () => {
+  test("defaults to 1 when undefined (matches prior implicit behavior)", () => {
+    expect(resolvePrefetchAhead(undefined)).toBe(1)
+  })
+
+  test("passes through finite non-negative integers", () => {
+    expect(resolvePrefetchAhead(0)).toBe(0)
+    expect(resolvePrefetchAhead(1)).toBe(1)
+    expect(resolvePrefetchAhead(3)).toBe(3)
+    expect(resolvePrefetchAhead(10)).toBe(10)
+  })
+
+  test("clamps negative values to 0 (defensive)", () => {
+    expect(resolvePrefetchAhead(-1)).toBe(0)
+    expect(resolvePrefetchAhead(-10)).toBe(0)
+  })
+
+  test("rounds non-integer values down", () => {
+    expect(resolvePrefetchAhead(2.7)).toBe(2)
+    expect(resolvePrefetchAhead(0.9)).toBe(0)
+  })
+
+  test("falls back to default for NaN / Infinity", () => {
+    expect(resolvePrefetchAhead(Number.NaN)).toBe(1)
+    expect(resolvePrefetchAhead(Number.POSITIVE_INFINITY)).toBe(1)
   })
 })

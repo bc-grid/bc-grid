@@ -1884,3 +1884,100 @@ describe("createServerRowModel", () => {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
+
+describe("paged stale-response flood (worker1 audit P1 §9)", () => {
+  test("10 rapid keystroke-style requests: only the latest result lands; all priors abort", async () => {
+    const model = createServerRowModel<Row>()
+
+    const buildView = (id: number): ServerViewState => ({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["name"],
+      filter: {
+        columnId: "name",
+        kind: "column",
+        op: "contains",
+        type: "text",
+        value: `flood-${id}`,
+      },
+    })
+
+    const requests: Array<{
+      blockKey: string
+      load: ReturnType<typeof deferred<ServerPagedResult<Row>>>
+      promise: Promise<ServerPagedResult<Row>>
+      viewKey: string
+    }> = []
+
+    // Fire 10 paged requests rapidly — mirrors a user typing "flood-0…9"
+    // into a search input over <1s with no debounce. The React layer
+    // would normally debounce; this test pins the model-layer contract
+    // assuming the debounced state still produces 10 distinct queries.
+    for (let i = 0; i < 10; i++) {
+      const view = buildView(i)
+      const viewKey = model.createViewKey(view)
+      const load = deferred<ServerPagedResult<Row>>()
+      const request = model.loadPagedPage({
+        loadPage: () => load.promise,
+        pageIndex: 0,
+        pageSize: 25,
+        view,
+        viewKey,
+      })
+      // Suppress unhandled rejection warnings; we assert on rejection
+      // explicitly below.
+      request.promise.catch(() => {})
+      // Abort all priors as the new request lands — mirrors the React
+      // serverGrid layer's abortExcept-on-each-load behavior.
+      model.abortExcept(request.blockKey)
+      requests.push({
+        blockKey: request.blockKey,
+        load,
+        promise: request.promise,
+        viewKey,
+      })
+    }
+
+    // Settle all 10 backing loaders out of order: 0, 9, 1, 8, …, 4, 5.
+    // The model's abort gate must drop the 9 stale results regardless.
+    const order = [0, 9, 1, 8, 2, 7, 3, 6, 4, 5]
+    for (const i of order) {
+      const r = requests[i]
+      if (!r) throw new Error("missing request")
+      r.load.resolve({
+        pageIndex: 0,
+        pageSize: 25,
+        rows: [{ id: `row-${i}`, name: `flood-${i}` }],
+        totalRows: 1,
+        viewKey: r.viewKey,
+      })
+    }
+
+    // The first 9 promises reject with AbortError (their controllers
+    // were aborted when later requests fired via abortExcept).
+    for (let i = 0; i < 9; i++) {
+      const r = requests[i]
+      if (!r) throw new Error("missing request")
+      await expect(r.promise).rejects.toThrow("Aborted")
+    }
+
+    // The 10th (latest) request resolves successfully.
+    const last = requests[9]
+    if (!last) throw new Error("missing last request")
+    const lastResult = await last.promise
+    expect(lastResult.rows).toEqual([{ id: "row-9", name: "flood-9" }])
+
+    // Cache reflects only the latest active request's data.
+    const lastBlock = model.cache.get(last.blockKey)
+    expect(lastBlock?.state).toBe("loaded")
+    expect(lastBlock?.rows).toEqual([{ id: "row-9", name: "flood-9" }])
+
+    // None of the 9 prior block-keys remain as loaded in the cache.
+    for (let i = 0; i < 9; i++) {
+      const r = requests[i]
+      if (!r) throw new Error("missing request")
+      const block = model.cache.get(r.blockKey)
+      if (block) expect(block.state).not.toBe("loaded")
+    }
+  })
+})

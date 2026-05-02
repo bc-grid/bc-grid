@@ -264,6 +264,19 @@ export function resolveServerVisibleColumns<TRow>(
 }
 
 /**
+ * Pure helper exported for unit testing. Resolves the prefetch-ahead
+ * block budget for `<BcServerGrid rowModel="infinite">` from the
+ * consumer-supplied `BcServerInfiniteProps.prefetchAhead`. Default 1
+ * (matches prior implicit behavior of one block past the visible
+ * range). Clamps to non-negative integers; `0` disables prefetch
+ * entirely.
+ */
+export function resolvePrefetchAhead(prefetchAhead: number | undefined): number {
+  if (typeof prefetchAhead !== "number" || !Number.isFinite(prefetchAhead)) return 1
+  return Math.max(0, Math.floor(prefetchAhead))
+}
+
+/**
  * Pure helper exported for unit testing. Resolves the per-tree-fetch
  * `childCount` from the consumer-supplied `BcServerTreeProps.childCount`,
  * defaulting to `DEFAULT_SERVER_BLOCK_SIZE` (100) and clamping to a
@@ -1083,6 +1096,8 @@ function useInfiniteServerState<TRow>(
   const blockLoadDebounceMs = props.rowModel === "infinite" ? props.blockLoadDebounceMs : undefined
   const maxConcurrentRequests =
     props.rowModel === "infinite" ? props.maxConcurrentRequests : undefined
+  const prefetchAhead =
+    props.rowModel === "infinite" ? resolvePrefetchAhead(props.prefetchAhead) : 1
   const loadBlock = props.rowModel === "infinite" ? props.loadBlock : undefined
   const searchText = props.searchText ?? props.defaultSearchText
   const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
@@ -1186,10 +1201,12 @@ function useInfiniteServerState<TRow>(
       ensureBlock(range.startIndex)
       ensureBlock(range.endIndex)
       if (rowCount === "unknown" || rows.length < rowCount) {
-        ensureBlock(range.endIndex + blockSize)
+        for (let i = 1; i <= prefetchAhead; i++) {
+          ensureBlock(range.endIndex + blockSize * i)
+        }
       }
     },
-    [blockSize, ensureBlock, loadBlock, rowCount, rows.length],
+    [blockSize, ensureBlock, loadBlock, prefetchAhead, rowCount, rows.length],
   )
 
   const refresh = useCallback((opts?: { purge?: boolean }) => {
@@ -1211,11 +1228,13 @@ function useInfiniteServerState<TRow>(
       ensureBlock(range.startIndex)
       ensureBlock(range.endIndex)
       if (rowCount === "unknown" || rows.length < rowCount) {
-        ensureBlock(range.endIndex + blockSize)
+        for (let i = 1; i <= prefetchAhead; i++) {
+          ensureBlock(range.endIndex + blockSize * i)
+        }
       }
       setRefreshVersion((version) => version + 1)
     },
-    [blockSize, ensureBlock, props.rowId, rowCount, rows.length, syncRowsFromCache],
+    [blockSize, ensureBlock, prefetchAhead, props.rowId, rowCount, rows.length, syncRowsFromCache],
   )
 
   const retryBlock = useCallback((blockKey: ServerBlockKey) => {
@@ -1369,6 +1388,17 @@ function useTreeServerState<TRow>(
     [expansionControlled, expansionState, props.onExpansionChange],
   )
 
+  // §10 fix (audit P1 server-perf bundle): track the latest viewKey so
+  // late tree fetches under a superseded view can be discarded at merge
+  // time. `loadTreeChildren` does not call `abortExcept` (paged does);
+  // without this gate, a fetch under viewKey K1 that resolves after
+  // the user has changed filter to K2 would merge K1 children into a
+  // K2 snapshot.
+  const treeViewKeyRef = useRef(viewKey)
+  useEffect(() => {
+    treeViewKeyRef.current = viewKey
+  }, [viewKey])
+
   const loadTreeChildren = useCallback(
     (node: TreeNode<TRow> | null) => {
       if (!loadChildRows) return
@@ -1398,13 +1428,19 @@ function useTreeServerState<TRow>(
 
       request.promise
         .then((result) => {
+          // §10 fix: discard responses for a superseded viewKey. The
+          // result still settles in the model cache (handy for a
+          // later refetch after a re-expand under the new view), but
+          // we don't merge stale children into the active snapshot.
+          const resultViewKey = result.viewKey ?? viewKey
+          if (resultViewKey !== treeViewKeyRef.current) return
           setTree((prev) =>
             modelRef.current.mergeTreeResult({
               getRowId: props.rowId,
               parentNode: node,
               result,
               snapshot: prev,
-              viewKey: result.viewKey ?? viewKey,
+              viewKey: resultViewKey,
             }),
           )
           setError(null)
