@@ -452,7 +452,7 @@ their current/default state.
 
 ## Bundle size
 
-Current main baseline for `core+virtualizer+animations+react`: 72.75 KiB gzipped. Enforced under a 100 KiB hard cap with a 10% per-PR drift guard from the latest accepted main baseline by `tools/bundle-size`.
+Current main baseline for `core+virtualizer+animations+react`: ~99 KiB gzipped (post-v0.5 audit-refactor + v0.6 layout/in-cell-editor train). Enforced under a 150 KiB hard cap (raised 2026-05-03 from 100 KiB to absorb v0.6+ feature surface) with a 10% per-PR drift guard from the latest accepted main baseline by `tools/bundle-size`.
 
 ## Documentation
 

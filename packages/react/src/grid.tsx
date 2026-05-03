@@ -18,6 +18,8 @@ import type {
   BcSelection,
   ColumnId,
   RowId,
+  SetFilterOption,
+  SetFilterOptionLoadResult,
 } from "@bc-grid/core"
 import { Virtualizer } from "@bc-grid/virtualizer"
 import {
@@ -63,7 +65,7 @@ import {
 import {
   type ColumnFilterText,
   type ColumnFilterTypeByColumnId,
-  type SetFilterOption,
+  type SetFilterOptionLoaderParams,
   buildGridFilter,
   columnFilterTextEqual,
   columnFilterTextFromGridFilter,
@@ -1280,7 +1282,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     }
   }, [fit, height, minViewportFitHeight])
 
-  const loadSetFilterOptions = useCallback(
+  const getLocalSetFilterOptions = useCallback(
     (columnId: ColumnId): readonly SetFilterOption[] => {
       const column = resolvedColumns.find((candidate) => candidate.columnId === columnId)
       if (!column) return []
@@ -1352,6 +1354,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       rowIsInactive,
       searchText,
     ],
+  )
+  const loadSetFilterOptions = useCallback(
+    async (params: SetFilterOptionLoaderParams): Promise<SetFilterOptionLoadResult> => {
+      const { loadGridSetFilterOptions } = await import("./setFilterLoader")
+      return loadGridSetFilterOptions({
+        columnFilterText,
+        columnFilterTypes,
+        getLocalSetFilterOptions,
+        params,
+        resolvedColumns,
+      })
+    },
+    [columnFilterText, columnFilterTypes, getLocalSetFilterOptions, resolvedColumns],
   )
   const findHeaderFilterAnchor = useCallback((columnId: ColumnId): DOMRect | null => {
     const root = rootRef.current
@@ -2649,9 +2664,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       columns,
       columnState,
       filterState: activeFilter,
-      getSetFilterOptions: loadSetFilterOptions,
+      getSetFilterOptions: getLocalSetFilterOptions,
       groupableColumns: props.groupableColumns ?? [],
       groupBy: groupByState,
+      loadSetFilterOptions,
       messages,
       pivotState,
       setColumnState,
@@ -2667,6 +2683,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       columnFilterText,
       columnState,
       columns,
+      getLocalSetFilterOptions,
       groupByState,
       loadSetFilterOptions,
       messages,
@@ -3548,7 +3565,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 filterType={popupFilter.type}
                 filterText={columnFilterText[popupColumnId] ?? ""}
                 filterLabel={popupLabel}
-                getSetFilterOptions={() => loadSetFilterOptions(popupColumnId)}
+                loadSetFilterOptions={loadSetFilterOptions}
                 onFilterChange={(next) => updateColumnFilterText(popupColumnId, next)}
                 onClear={() => {
                   clearColumnFilterText(popupColumnId)

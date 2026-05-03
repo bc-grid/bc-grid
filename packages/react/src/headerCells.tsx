@@ -5,6 +5,8 @@ import {
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
+  Suspense,
+  lazy,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -15,7 +17,7 @@ import {
   type DateFilterOperator,
   type NumberFilterOperator,
   type SetFilterOperator,
-  type SetFilterOption,
+  type SetFilterOptionLoader,
   type TextFilterInput,
   type TextFilterOperator,
   decodeDateFilterInput,
@@ -30,8 +32,6 @@ import {
   encodeNumberRangeFilterInput,
   encodeSetFilterInput,
   encodeTextFilterInput,
-  filterSetFilterOptions,
-  nextSetFilterValuesOnToggleAll,
 } from "./filter"
 import { getReactFilterDefinition, reportUnknownFilterDefinition } from "./filterRegistry"
 import {
@@ -428,7 +428,7 @@ interface RenderFilterCellParams<TRow> {
   filterText: string
   headerHeight: number
   index: number
-  loadSetFilterOptions?: ((columnId: ColumnId) => readonly SetFilterOption[]) | undefined
+  loadSetFilterOptions?: SetFilterOptionLoader | undefined
   onFilterChange: (next: string) => void
   pinnedEdge: "left" | "right" | null
   /**
@@ -494,9 +494,8 @@ export function renderFilterCell<TRow>({
           filterId={filterId}
           filterLabel={filterLabel}
           column={column.source}
-          getSetFilterOptions={
-            loadSetFilterOptions ? () => loadSetFilterOptions(column.columnId) : undefined
-          }
+          columnId={column.columnId}
+          loadSetFilterOptions={loadSetFilterOptions}
           onFilterChange={onFilterChange}
           surface="inline"
           messages={messages}
@@ -509,6 +508,10 @@ export function renderFilterCell<TRow>({
 type FilterFocusElement = HTMLInputElement | HTMLSelectElement | HTMLButtonElement
 type FilterKeyDownHandler = (event: KeyboardEvent<HTMLElement>) => void
 type BlankFilterOperator = "blank" | "not-blank"
+
+const SetFilterMenu = lazy(() =>
+  import("./setFilterMenu").then((module) => ({ default: module.SetFilterMenu })),
+)
 
 function isBlankFilterOperator(value: unknown): value is BlankFilterOperator {
   return value === "blank" || value === "not-blank"
@@ -764,33 +767,32 @@ function DateFilterControl({
 }
 
 function SetFilterControl({
+  columnId,
   filterId,
   filterLabel,
   filterText,
-  getSetFilterOptions,
+  loadSetFilterOptions,
   onFilterChange,
   onFilterKeyDown,
   primaryRef,
 }: {
+  columnId: ColumnId
   filterId: string
   filterLabel: string
   filterText: string
-  getSetFilterOptions?: (() => readonly SetFilterOption[]) | undefined
+  loadSetFilterOptions?: SetFilterOptionLoader | undefined
   onFilterChange: (next: string) => void
   onFilterKeyDown: FilterKeyDownHandler
   primaryRef?: { current: FilterFocusElement | null }
 }): ReactNode {
-  const input = decodeSetFilterInput(filterText)
+  const input = useMemo(() => decodeSetFilterInput(filterText), [filterText])
   const [draftOp, setDraftOp] = useState<SetFilterOperator>(input.op)
   const [open, setOpen] = useState(false)
   const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number } | null>(
     null,
   )
-  const [options, setOptions] = useState<readonly SetFilterOption[] | null>(null)
-  const [search, setSearch] = useState("")
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (filterText.length > 0) setDraftOp(input.op)
@@ -807,42 +809,9 @@ function SetFilterControl({
     return () => document.removeEventListener("pointerdown", handlePointerDown, true)
   }, [open])
 
-  // Reset the search input every time the menu opens — re-opening with
-  // a stale search query would surprise the user.
-  useEffect(() => {
-    if (!open) setSearch("")
-  }, [open])
-
-  // Focus the search input on open so typing immediately narrows
-  // options. AT users get the same path via the trigger's
-  // aria-controls + aria-expanded contract.
-  useLayoutEffect(() => {
-    if (open) searchInputRef.current?.focus()
-  }, [open])
+  const selectedValueList = input.values
 
   const op = filterText.length > 0 ? input.op : draftOp
-  const selectedValues = useMemo(() => new Set(input.values), [input.values])
-  const menuOptions = useMemo(() => {
-    const byValue = new Map<string, SetFilterOption>()
-    for (const option of options ?? []) byValue.set(option.value, option)
-    for (const value of input.values) {
-      if (!byValue.has(value)) byValue.set(value, { value, label: value })
-    }
-    return Array.from(byValue.values())
-  }, [input.values, options])
-
-  // Search narrows the visible set. Pure helper, unit-tested in
-  // `filter.test.ts`, so the case-folding + label-vs-value matching
-  // contract stays pinned without rendering the menu.
-  const visibleOptions = useMemo(
-    () => filterSetFilterOptions(menuOptions, search),
-    [menuOptions, search],
-  )
-  const searchTrimmed = search.trim()
-
-  const allVisibleSelected =
-    visibleOptions.length > 0 && visibleOptions.every((option) => selectedValues.has(option.value))
-  const anyVisibleSelected = visibleOptions.some((option) => selectedValues.has(option.value))
 
   const commit = (next: { op: SetFilterOperator; values: readonly string[] }) => {
     setDraftOp(next.op)
@@ -858,14 +827,9 @@ function SetFilterControl({
     onFilterChange(encodeSetFilterInput({ op: next.op, values }))
   }
 
-  const loadOptions = () => {
-    setOptions(getSetFilterOptions ? getSetFilterOptions() : [])
-  }
-
   const openMenu = (button: HTMLButtonElement) => {
     const rect = button.getBoundingClientRect()
     setMenuRect({ top: rect.bottom + 4, left: rect.left, width: rect.width })
-    loadOptions()
     setOpen(true)
   }
 
@@ -874,55 +838,16 @@ function SetFilterControl({
     triggerRef.current?.focus()
   }
 
-  const toggleValue = (value: string) => {
-    const values = selectedValues.has(value)
-      ? input.values.filter((selected) => selected !== value)
-      : [...input.values, value]
-    commit({ op, values })
-  }
-
-  const toggleAllVisible = () => {
-    commit({ op, values: nextSetFilterValuesOnToggleAll(visibleOptions, input.values) })
-  }
-
-  // ArrowUp/ArrowDown moves focus between option checkboxes inside the
-  // menu (and from the search input into the first option). Pure
-  // `querySelectorAll` lookup, no React refs per item, so the menu
-  // stays cheap to render with hundreds of distinct values.
-  const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") {
-      event.stopPropagation()
-      closeMenu()
-      return
-    }
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
-    const menu = rootRef.current?.querySelector('[data-bc-grid-set-menu="true"]')
-    if (!menu) return
-    const focusables = Array.from(
-      menu.querySelectorAll<HTMLElement>(
-        'input[type="checkbox"], [data-bc-grid-set-search="true"]',
-      ),
-    )
-    if (focusables.length === 0) return
-    const active = document.activeElement as HTMLElement | null
-    const currentIndex = active ? focusables.indexOf(active) : -1
-    const delta = event.key === "ArrowDown" ? 1 : -1
-    const nextIndex = (currentIndex + delta + focusables.length) % focusables.length
-    event.preventDefault()
-    focusables[nextIndex]?.focus()
-  }
-
   const summary =
     op === "blank"
       ? "Blank rows"
       : op === "not-blank"
         ? "Not blank rows"
-        : input.values.length === 0
+        : selectedValueList.length === 0
           ? "Select values"
-          : `${input.values.length} selected`
-  const isActive = isBlankFilterOperator(op) || input.values.length > 0
+          : `${selectedValueList.length} selected`
+  const isActive = isBlankFilterOperator(op) || selectedValueList.length > 0
   const menuId = `${filterId}-set-menu`
-  const searchId = `${filterId}-set-search`
   const pickerDisabled = isBlankFilterOperator(op)
 
   return (
@@ -932,7 +857,7 @@ function SetFilterControl({
         className="bc-grid-filter-select"
         value={op}
         onChange={(event) =>
-          commit({ op: event.currentTarget.value as SetFilterOperator, values: input.values })
+          commit({ op: event.currentTarget.value as SetFilterOperator, values: selectedValueList })
         }
         onKeyDown={onFilterKeyDown}
       >
@@ -982,96 +907,20 @@ function SetFilterControl({
         </span>
       </button>
       {open && menuRect ? (
-        <div
-          id={menuId}
-          className="bc-grid-filter-set-menu"
-          data-bc-grid-set-menu="true"
-          data-state="open"
-          data-side="bottom"
-          data-align="start"
-          role="group"
-          aria-label={`${filterLabel} values`}
-          onKeyDown={handleMenuKeyDown}
-          style={{
-            position: "fixed",
-            top: menuRect.top,
-            left: menuRect.left,
-            minWidth: Math.max(220, menuRect.width),
-            zIndex: 110,
-          }}
-        >
-          <div className="bc-grid-filter-set-toolbar">
-            <input
-              ref={searchInputRef}
-              type="search"
-              aria-label={`Search ${filterLabel} values`}
-              className="bc-grid-filter-set-search"
-              data-bc-grid-set-search="true"
-              id={searchId}
-              placeholder="Search values"
-              value={search}
-              onChange={(event) => setSearch(event.currentTarget.value)}
-            />
-          </div>
-          {menuOptions.length > 0 ? (
-            <div className="bc-grid-filter-set-actions">
-              <button
-                type="button"
-                aria-label={
-                  allVisibleSelected
-                    ? `Clear ${visibleOptions.length} ${searchTrimmed ? "matching" : ""} values`.trim()
-                    : `Select ${visibleOptions.length} ${searchTrimmed ? "matching" : ""} values`.trim()
-                }
-                className="bc-grid-filter-set-action"
-                disabled={visibleOptions.length === 0}
-                onClick={toggleAllVisible}
-              >
-                {allVisibleSelected ? "Clear all" : "Select all"}
-              </button>
-              <span className="bc-grid-filter-set-count" aria-hidden="true">
-                {input.values.length === 0
-                  ? `${visibleOptions.length}`
-                  : `${input.values.length} / ${menuOptions.length}`}
-              </span>
-            </div>
-          ) : null}
-          <div className="bc-grid-filter-set-options" role="presentation">
-            {menuOptions.length === 0 ? (
-              <div className="bc-grid-filter-set-empty">No values</div>
-            ) : visibleOptions.length === 0 ? (
-              <div className="bc-grid-filter-set-empty">No values match "{search.trim()}"</div>
-            ) : (
-              visibleOptions.map((option) => {
-                const checked = selectedValues.has(option.value)
-                return (
-                  <label
-                    key={option.value}
-                    className="bc-grid-filter-set-option"
-                    data-selected={checked ? "true" : undefined}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleValue(option.value)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                )
-              })
-            )}
-          </div>
-          {input.values.length > 0 || anyVisibleSelected ? (
-            <div className="bc-grid-filter-set-footer">
-              <button
-                type="button"
-                className="bc-grid-filter-set-clear"
-                onClick={() => commit({ op, values: [] })}
-              >
-                Clear selection
-              </button>
-            </div>
-          ) : null}
-        </div>
+        <Suspense fallback={null}>
+          <SetFilterMenu
+            columnId={columnId}
+            filterId={filterId}
+            filterLabel={filterLabel}
+            loadSetFilterOptions={loadSetFilterOptions}
+            menuRect={menuRect}
+            op={op}
+            rootRef={rootRef}
+            selectedValueList={selectedValueList}
+            onClose={closeMenu}
+            onCommit={commit}
+          />
+        </Suspense>
       ) : null}
     </div>
   )
@@ -1123,11 +972,12 @@ function FunnelIcon({ active }: { active: boolean }): ReactNode {
  */
 export function FilterEditorBody({
   column,
+  columnId,
   filterType,
   filterText,
   filterId,
   filterLabel,
-  getSetFilterOptions,
+  loadSetFilterOptions,
   onFilterChange,
   allowEscapeKeyPropagation = false,
   autoFocus,
@@ -1135,11 +985,12 @@ export function FilterEditorBody({
   messages,
 }: {
   column?: unknown
+  columnId: ColumnId
   filterType: BcColumnFilter["type"]
   filterText: string
   filterId: string
   filterLabel: string
-  getSetFilterOptions?: (() => readonly SetFilterOption[]) | undefined
+  loadSetFilterOptions?: SetFilterOptionLoader | undefined
   onFilterChange: (next: string) => void
   allowEscapeKeyPropagation?: boolean
   autoFocus?: boolean
@@ -1230,10 +1081,11 @@ export function FilterEditorBody({
   if (filterType === "set") {
     return (
       <SetFilterControl
+        columnId={columnId}
         filterId={filterId}
         filterLabel={filterLabel}
         filterText={filterText}
-        getSetFilterOptions={getSetFilterOptions}
+        loadSetFilterOptions={loadSetFilterOptions}
         onFilterChange={onFilterChange}
         onFilterKeyDown={onFilterKeyDown}
         primaryRef={focusRef}
@@ -1310,7 +1162,7 @@ interface FilterPopupProps {
   filterType: BcColumnFilter["type"]
   filterText: string
   filterLabel: string
-  getSetFilterOptions?: (() => readonly SetFilterOption[]) | undefined
+  loadSetFilterOptions?: SetFilterOptionLoader | undefined
   onFilterChange: (next: string) => void
   onClear: () => void
   onClose: () => void
@@ -1370,7 +1222,7 @@ export function FilterPopup({
   filterType,
   filterText,
   filterLabel,
-  getSetFilterOptions,
+  loadSetFilterOptions,
   onFilterChange,
   onClear,
   onClose,
@@ -1440,7 +1292,8 @@ export function FilterPopup({
           filterId={filterId}
           filterLabel={filterLabel}
           column={column}
-          getSetFilterOptions={getSetFilterOptions}
+          columnId={columnId}
+          loadSetFilterOptions={loadSetFilterOptions}
           onFilterChange={onFilterChange}
           autoFocus
           messages={messages}

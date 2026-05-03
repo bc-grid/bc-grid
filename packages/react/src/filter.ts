@@ -4,6 +4,9 @@ import type {
   ColumnId,
   ServerColumnFilter,
   ServerFilter,
+  SetFilterOption,
+  SetFilterOptionLoadParams,
+  SetFilterOptionLoadResult,
 } from "@bc-grid/core"
 import {
   columnFilterFromSerializedCriteria,
@@ -98,10 +101,11 @@ export interface SetFilterInput {
   values: readonly string[]
 }
 
-export interface SetFilterOption {
-  value: string
-  label: string
-}
+export type SetFilterOptionLoaderParams = Omit<SetFilterOptionLoadParams, "filterWithoutSelf">
+
+export type SetFilterOptionLoader = (
+  params: SetFilterOptionLoaderParams,
+) => Promise<SetFilterOptionLoadResult>
 
 export type FilterCellValue =
   | string
@@ -598,6 +602,51 @@ export function filterSetFilterOptions(
       option.value.toLocaleLowerCase().includes(trimmed)
     )
   })
+}
+
+export function normaliseSetFilterOption(input: string | SetFilterOption): SetFilterOption | null {
+  if (typeof input === "string") {
+    const value = setFilterValueKeys(input)[0]
+    return value ? { value, label: value } : null
+  }
+  const value = setFilterValueKeys(input.value)[0]
+  if (!value) return null
+  const label = input.label.trim().length > 0 ? input.label : value
+  return { value, label }
+}
+
+export function normaliseSetFilterOptions(
+  options: readonly (string | SetFilterOption)[],
+): SetFilterOption[] {
+  const byValue = new Map<string, SetFilterOption>()
+  for (const optionInput of options) {
+    const option = normaliseSetFilterOption(optionInput)
+    if (!option || byValue.has(option.value)) continue
+    byValue.set(option.value, option)
+  }
+  return Array.from(byValue.values())
+}
+
+export function buildSetFilterOptionLoadResult(
+  options: readonly (string | SetFilterOption)[],
+  params: Pick<SetFilterOptionLoadParams, "limit" | "offset" | "search" | "selectedValues">,
+): SetFilterOptionLoadResult {
+  const normalised = normaliseSetFilterOptions(options)
+  const filtered = filterSetFilterOptions(normalised, params.search)
+  const offset = Math.max(0, Math.floor(params.offset))
+  const limit = Math.max(0, Math.floor(params.limit))
+  const pagedOptions = limit === 0 ? [] : filtered.slice(offset, offset + limit)
+  const byValue = new Map(normalised.map((option) => [option.value, option]))
+  const selectedOptions = normaliseSetFilterOptions(
+    params.selectedValues.map((value) => byValue.get(value) ?? { value, label: value }),
+  )
+
+  return {
+    options: pagedOptions,
+    totalCount: filtered.length,
+    selectedOptions,
+    hasMore: offset + pagedOptions.length < filtered.length,
+  }
 }
 
 /**

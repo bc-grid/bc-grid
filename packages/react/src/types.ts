@@ -55,6 +55,10 @@ import type {
   ServerTreeResult,
   ServerTreeRow,
   ServerViewDiagnostics,
+  SetFilterOption,
+  SetFilterOptionLoadParams,
+  SetFilterOptionLoadResult,
+  SetFilterOptionProvider,
 } from "@bc-grid/core"
 import type { BcFilterDefinition as BcEngineFilterDefinition } from "@bc-grid/filters"
 import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
@@ -503,7 +507,10 @@ export interface BcSidebarContext<TRow = unknown> {
   columnFilterText: Readonly<Record<ColumnId, string>>
   setColumnFilterText: (columnId: ColumnId, value: string) => void
   clearColumnFilterText: (columnId?: ColumnId) => void
-  getSetFilterOptions?: (columnId: ColumnId) => readonly { value: string; label: string }[]
+  getSetFilterOptions?: (columnId: ColumnId) => readonly SetFilterOption[]
+  loadSetFilterOptions?: (
+    params: Omit<SetFilterOptionLoadParams, "filterWithoutSelf">,
+  ) => Promise<SetFilterOptionLoadResult>
   messages: BcGridMessages
   /**
    * Legacy placeholder retained for custom panels created before the pivot
@@ -1344,6 +1351,10 @@ export type {
   BcServerGridApi,
   BcValidationResult,
   ColumnId,
+  SetFilterOption,
+  SetFilterOptionLoadParams,
+  SetFilterOptionLoadResult,
+  SetFilterOptionProvider,
   LoadServerBlock,
   LoadServerPage,
   LoadServerTreeChildren,
