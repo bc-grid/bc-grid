@@ -1177,6 +1177,18 @@ export interface BcServerEditMutationProps<TRow> {
    * converts cell edits into `ServerRowPatch` values, queues the optimistic
    * server-row-model mutation, awaits this callback, settles the mutation, and
    * rejects the edit overlay for rejected/conflict results.
+   *
+   * **Rollback ≠ invalidate (worker1 audit P1 §11).** When this
+   * handler resolves with `{ status: "rejected" }`, the grid restores
+   * the affected row from the model's snapshot at queue time — it
+   * does NOT refetch from the server. If the server has accepted
+   * other changes for the same row during the rejected mutation's
+   * lifetime (e.g. another user's commit landed via a separate
+   * `invalidate` cycle), the rollback's snapshot may be stale
+   * relative to the server's current state. Consumers who care about
+   * post-rollback server-truth should call
+   * `apiRef.current?.invalidateRowCache(rowId)` from their rejection
+   * branch — the next fetch will refetch the canonical state.
    */
   onServerRowMutation?: BcServerEditMutationHandler<TRow>
   /**
@@ -1268,6 +1280,34 @@ export interface BcServerGridProps<TRow>
    * fetch.
    */
   initialRootChildCount?: number
+
+  /**
+   * View-change reset opt-out (worker1 audit P1 §1). When the
+   * resolved viewKey changes (filter / sort / search / groupBy /
+   * visibleColumns), `<BcServerGrid>` resets scroll-to-top by default
+   * so users see the new query result from row 0 — matches the
+   * NetSuite / Salesforce LWC datatable / Excel-table convention.
+   * Set to `true` to preserve scroll position across view changes.
+   */
+  preserveScrollOnViewChange?: boolean
+  /**
+   * View-change reset opt-out for selection (worker1 audit P1 §1).
+   * When the viewKey changes, `<BcServerGrid>` clears the row
+   * selection by default so the prior view's selected rowIds don't
+   * become "ghost selection" (rowIds that may not exist in the new
+   * query result). Set to `true` to preserve selection across view
+   * changes; consumers wanting per-view selection persistence should
+   * mirror the selection into their own state keyed by viewKey.
+   */
+  preserveSelectionOnViewChange?: boolean
+  /**
+   * View-change reset opt-out for active cell focus (worker1 audit P1
+   * §1). When the viewKey changes, `<BcServerGrid>` clears the active
+   * cell by default so the prior view's focused cell (whose row may
+   * not be in the new query result) doesn't strand. Set to `true` to
+   * preserve focus across view changes.
+   */
+  preserveFocusOnViewChange?: boolean
 
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
 }
