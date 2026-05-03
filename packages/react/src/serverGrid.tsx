@@ -53,6 +53,23 @@ const DEFAULT_SERVER_PAGE_SIZE = 100
 const DEFAULT_SERVER_BLOCK_SIZE = 100
 
 /**
+ * Time the React layer waits after a mode-switch deactivation for
+ * pending optimistic mutations to settle naturally before forcibly
+ * settling the remainder as `{ status: "rejected", reason: MODE_SWITCH_REJECT_REASON }`.
+ * Per `docs/design/server-mode-switch-rfc.md §4` item 13.
+ */
+const MODE_SWITCH_MUTATION_GRACE_MS = 100
+
+/**
+ * `reason` field on the `ServerMutationResult` synthesised by the
+ * React layer when force-settling a pending mutation that did not
+ * settle naturally during the grace window. Consumer error handlers
+ * can match on this string to differentiate user-driven rejections
+ * from mode-switch flushes.
+ */
+const MODE_SWITCH_REJECT_REASON = "mode switch"
+
+/**
  * Settlement payload returned by `PagedServerState.awaitNextSettlement`.
  * The `ok` flag distinguishes a successful loadPage settlement from a
  * rejected one or component unmount; consumers can use it to short-
@@ -432,6 +449,22 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
     // Mount-only — only fire when the active mode itself changes.
   }, [activeMode])
 
+  // Mode-switch RFC §5: render the inner `<BcGrid>` with `loading=true`
+  // for one frame between the abort-on-deactivate and the new mode's
+  // first response landing, so the user sees a clean loading state
+  // instead of the previous mode's stale rows briefly while the
+  // newly-active hook fires its initial query. Cleared on the next
+  // microtask so the new mode's own loading state takes over.
+  const [modeSwitchTransition, setModeSwitchTransition] = useState(false)
+  const prevActiveModeRef = useRef(activeMode)
+  useEffect(() => {
+    if (prevActiveModeRef.current === activeMode) return
+    prevActiveModeRef.current = activeMode
+    setModeSwitchTransition(true)
+    const handle = setTimeout(() => setModeSwitchTransition(false), 0)
+    return () => clearTimeout(handle)
+  }, [activeMode])
+
   const queueServerRowMutation = useCallback(
     (patch: ServerRowPatch) => {
       if (activeMode === "paged") paged.queueMutation(patch)
@@ -738,13 +771,14 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   const gridProps = props as unknown as BcGridProps<TRow>
   const loading =
     props.loading ??
-    (activeMode === "paged"
-      ? paged.loading
-      : activeMode === "infinite"
-        ? infinite.loading
-        : activeMode === "tree"
-          ? tree.loading
-          : true)
+    (modeSwitchTransition ||
+      (activeMode === "paged"
+        ? paged.loading
+        : activeMode === "infinite"
+          ? infinite.loading
+          : activeMode === "tree"
+            ? tree.loading
+            : true))
   const loadingOverlay =
     props.loadingOverlay ??
     (activeMode === "paged" && paged.error
@@ -1142,7 +1176,9 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
   // Mode-switch RFC §5: when this hook's mode goes inactive (e.g.
   // user switches groupBy and the heuristic flips paged→tree), abort
   // in-flight requests synchronously and drop the cache + result so
-  // the next reactivation starts clean.
+  // the next reactivation starts clean. RFC §4 item 13: also schedule
+  // the 100ms grace + force-settle pipeline for pending optimistic
+  // mutations that didn't settle naturally before the switch.
   const wasPagedActiveRef = useRef(isPagedActive)
   useEffect(() => {
     if (wasPagedActiveRef.current && !isPagedActive) {
@@ -1153,9 +1189,21 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
       setResult(undefined)
       setLoading(false)
       setError(null)
+      const model = modelRef.current
+      const rowIdGetter: (row: TRow) => RowId = (row) => props.rowId(row, 0)
+      const timer = setTimeout(() => {
+        for (const mutationId of model.pendingMutationIds()) {
+          model.settleMutation({
+            result: { mutationId, reason: MODE_SWITCH_REJECT_REASON, status: "rejected" },
+            rowId: rowIdGetter,
+          })
+        }
+      }, MODE_SWITCH_MUTATION_GRACE_MS)
+      wasPagedActiveRef.current = isPagedActive
+      return () => clearTimeout(timer)
     }
     wasPagedActiveRef.current = isPagedActive
-  }, [drainAwaiters, isPagedActive])
+  }, [drainAwaiters, isPagedActive, props.rowId])
 
   const rows = isPagedActive ? (result?.rows ?? []) : []
   const rowCount = isPagedActive ? (result?.totalRows ?? 0) : "unknown"
@@ -1368,7 +1416,9 @@ function useInfiniteServerState<TRow>(
   useEffect(() => () => modelRef.current.abortAll(), [])
 
   // Mode-switch RFC §5: abort + clear cache when this hook's mode
-  // goes inactive.
+  // goes inactive. RFC §4 item 13: 100ms grace then force-settle
+  // remaining pending mutations as rejected with the mode-switch
+  // reason.
   const wasInfiniteActiveRef = useRef(isInfiniteActive)
   useEffect(() => {
     if (wasInfiniteActiveRef.current && !isInfiniteActive) {
@@ -1380,9 +1430,21 @@ function useInfiniteServerState<TRow>(
       setRowCount("unknown")
       setLoading(false)
       setError(null)
+      const model = modelRef.current
+      const rowIdGetter: (row: TRow) => RowId = (row) => props.rowId(row, 0)
+      const timer = setTimeout(() => {
+        for (const mutationId of model.pendingMutationIds()) {
+          model.settleMutation({
+            result: { mutationId, reason: MODE_SWITCH_REJECT_REASON, status: "rejected" },
+            rowId: rowIdGetter,
+          })
+        }
+      }, MODE_SWITCH_MUTATION_GRACE_MS)
+      wasInfiniteActiveRef.current = isInfiniteActive
+      return () => clearTimeout(timer)
     }
     wasInfiniteActiveRef.current = isInfiniteActive
-  }, [isInfiniteActive])
+  }, [isInfiniteActive, props.rowId])
 
   const handleVisibleRowRangeChange = useCallback(
     (range: { startIndex: number; endIndex: number }) => {
@@ -1705,9 +1767,23 @@ function useTreeServerState<TRow>(
       // tree mode starts clean (RFC §4 item 7). Controlled `expansion`
       // is consumer-owned and untouched.
       if (!expansionControlled) setUncontrolledExpansion(new Set<RowId>())
+      // RFC §4 item 13: 100ms grace then force-settle remaining
+      // pending mutations as rejected with the mode-switch reason.
+      const model = modelRef.current
+      const treeRowIdGetter = serverRowId
+      const timer = setTimeout(() => {
+        for (const mutationId of model.pendingMutationIds()) {
+          model.settleMutation({
+            result: { mutationId, reason: MODE_SWITCH_REJECT_REASON, status: "rejected" },
+            rowId: treeRowIdGetter,
+          })
+        }
+      }, MODE_SWITCH_MUTATION_GRACE_MS)
+      wasTreeActiveRef.current = isTreeActive
+      return () => clearTimeout(timer)
     }
     wasTreeActiveRef.current = isTreeActive
-  }, [expansionControlled, isTreeActive])
+  }, [expansionControlled, isTreeActive, serverRowId])
 
   const toggleNode = useCallback(
     (rowId: RowId) => {
