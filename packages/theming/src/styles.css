@@ -25,44 +25,39 @@
   --bc-grid-loading-spinner-active: var(--bc-grid-focus-ring);
   --bc-grid-pinned-bg: var(--bc-grid-bg);
   --bc-grid-pinned-header-bg: var(--bc-grid-header-bg);
-  /* Pinned row-state tokens align with the body row-state composites so
-     pinned cells visually match the rest of the row in hover/selected/
-     focused states. The body's `--bc-grid-row-hover` is a transparent
-     accent overlay; pinned cells need an opaque bg (background-clip:
-     padding-box guards horizontally-scrolled content from showing
-     through). Pinned columns are already visually distinct via the
-     pinned boundary + shadow, so the hover treatment inherits the body
-     row-hover token. Earlier v0.4 attempt mixed accent at 70% to keep
-     pinned legible against saturated body overlays, but on hosts with
-     a saturated brand `--primary` (red, blue, etc.) the pinned hover
-     flashed bright on every row — surfaced by the bsncraft v0.5 alpha
-     consumer review (2026-05-03). */
-  --bc-grid-pinned-row-hover-bg: var(--bc-grid-row-hover);
-  --bc-grid-pinned-row-focused-bg: color-mix(
+  /* Body row-state composite colors. Pinned cells consume the same
+     tokens via `background-image: linear-gradient(<token>, <token>)`
+     to guarantee byte-identical pixels with the body row in every
+     state, while keeping `background-color: var(--bc-grid-bg)` as
+     an opaque base that occludes horizontally-scrolled content
+     bleeding through pinned cells. The historical
+     `--bc-grid-pinned-row-{hover,focused,selected,…}-bg` tokens are
+     gone — they sourced from `--bc-grid-accent` (= host's
+     `--primary`, the brand color), which produced a colored seam
+     between body and pinned on every host with a brand color.
+     Surfaced in three consumer integrations (most recently bsncraft
+     2026-05-03). Hosts that want pinned to visually differ from
+     body opt in by overriding `background-image` on the
+     `.bc-grid-cell-pinned-*` selectors directly. */
+  --bc-grid-row-focused-bg: color-mix(in srgb, var(--bc-grid-focus-ring) 7%, var(--bc-grid-bg));
+  --bc-grid-row-selected-hover-bg: color-mix(
     in srgb,
-    var(--bc-grid-focus-ring) 7%,
-    var(--bc-grid-bg)
+    var(--bc-grid-row-selected) 88%,
+    var(--bc-grid-row-hover)
   );
-  --bc-grid-pinned-row-selected-bg: var(--bc-grid-row-selected);
-  --bc-grid-pinned-row-selected-hover-bg: var(--bc-grid-row-selected);
-  --bc-grid-pinned-active-cell-bg: color-mix(
+  --bc-grid-row-selected-focused-bg: color-mix(
     in srgb,
-    var(--bc-grid-focus-ring) 8%,
-    var(--bc-grid-bg)
+    var(--bc-grid-row-selected) 84%,
+    var(--bc-grid-focus-ring)
   );
-  --bc-grid-pinned-selected-active-cell-bg: color-mix(
+  --bc-grid-active-cell-bg: color-mix(in srgb, var(--bc-grid-focus-ring) 8%, var(--bc-grid-bg));
+  --bc-grid-row-selected-active-cell-bg: color-mix(
     in srgb,
     var(--bc-grid-focus-ring) 12%,
     var(--bc-grid-row-selected)
   );
   --bc-grid-pinned-actions-bg: var(--bc-grid-pinned-bg);
   --bc-grid-pinned-actions-header-bg: var(--bc-grid-pinned-header-bg);
-  --bc-grid-pinned-actions-hover-bg: var(--bc-grid-pinned-row-hover-bg);
-  --bc-grid-pinned-actions-focused-bg: var(--bc-grid-pinned-row-focused-bg);
-  --bc-grid-pinned-actions-selected-bg: var(--bc-grid-pinned-row-selected-bg);
-  --bc-grid-pinned-actions-selected-hover-bg: var(--bc-grid-pinned-row-selected-hover-bg);
-  --bc-grid-pinned-actions-active-bg: var(--bc-grid-pinned-active-cell-bg);
-  --bc-grid-pinned-actions-selected-active-bg: var(--bc-grid-pinned-selected-active-cell-bg);
   --bc-grid-pinned-boundary: color-mix(in srgb, var(--bc-grid-border) 76%, var(--bc-grid-fg) 24%);
   --bc-grid-header-bg: var(--muted, hsl(210 40% 96%));
   --bc-grid-header-fg: var(--muted-foreground, hsl(215 16% 47%));
@@ -221,7 +216,7 @@
 }
 
 .bc-grid-row[data-bc-grid-focused-row="true"] {
-  background: color-mix(in srgb, var(--bc-grid-focus-ring) 7%, var(--bc-grid-bg));
+  background: var(--bc-grid-row-focused-bg);
 }
 
 .bc-grid-row[aria-selected="true"] {
@@ -230,11 +225,11 @@
 }
 
 .bc-grid-row[aria-selected="true"]:hover {
-  background: color-mix(in srgb, var(--bc-grid-row-selected) 88%, var(--bc-grid-row-hover));
+  background: var(--bc-grid-row-selected-hover-bg);
 }
 
 .bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] {
-  background: color-mix(in srgb, var(--bc-grid-row-selected) 84%, var(--bc-grid-focus-ring));
+  background: var(--bc-grid-row-selected-focused-bg);
 }
 
 .bc-grid-row-group {
@@ -848,11 +843,23 @@
   color: var(--bc-grid-row-selected-fg);
 }
 
+/* Pinned cells: opaque `background-color` base + body-token state
+   layered as `background-image: linear-gradient(<token>, <token>)`.
+   The opaque base structurally occludes horizontally-scrolled body
+   content from bleeding through (consumer-facing geometric
+   guarantee); the gradient layer composites identically with the
+   body row's `background: var(--bc-grid-row-*)` because both
+   reference the same source tokens. Result: pinned and body produce
+   byte-identical pixels in every state regardless of host theme.
+
+   Hosts that want pinned cells to visually differ from body
+   override `background-image` on these selectors directly. */
 .bc-grid-cell-pinned-left,
 .bc-grid-cell-pinned-right,
 .bc-grid-row .bc-grid-cell-pinned-left,
 .bc-grid-row .bc-grid-cell-pinned-right {
-  background: var(--bc-grid-pinned-bg);
+  background-color: var(--bc-grid-pinned-bg);
+  background-image: none;
   background-clip: padding-box;
 }
 
@@ -860,32 +867,43 @@
 .bc-grid-header .bc-grid-cell-pinned-right,
 .bc-grid-filter-row .bc-grid-cell-pinned-left,
 .bc-grid-filter-row .bc-grid-cell-pinned-right {
-  background: var(--bc-grid-pinned-header-bg);
+  background-color: var(--bc-grid-pinned-header-bg);
+  background-image: none;
 }
 
 .bc-grid-row:hover .bc-grid-cell-pinned-left,
 .bc-grid-row:hover .bc-grid-cell-pinned-right {
-  background: var(--bc-grid-pinned-row-hover-bg);
+  background-image: linear-gradient(var(--bc-grid-row-hover), var(--bc-grid-row-hover));
 }
 
 .bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-left,
 .bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-right {
-  background: var(--bc-grid-pinned-row-focused-bg);
+  background-image: linear-gradient(var(--bc-grid-row-focused-bg), var(--bc-grid-row-focused-bg));
 }
 
 .bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left,
 .bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-right,
 .bc-grid-cell-pinned-left[aria-selected="true"],
 .bc-grid-cell-pinned-right[aria-selected="true"] {
-  background: var(--bc-grid-pinned-row-selected-bg);
+  background-image: linear-gradient(var(--bc-grid-row-selected), var(--bc-grid-row-selected));
   color: var(--bc-grid-row-selected-fg);
 }
 
 .bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-left,
-.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-right,
+.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-right {
+  background-image: linear-gradient(
+    var(--bc-grid-row-selected-hover-bg),
+    var(--bc-grid-row-selected-hover-bg)
+  );
+  color: var(--bc-grid-row-selected-fg);
+}
+
 .bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-left,
 .bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-right {
-  background: var(--bc-grid-pinned-row-selected-hover-bg);
+  background-image: linear-gradient(
+    var(--bc-grid-row-selected-focused-bg),
+    var(--bc-grid-row-selected-focused-bg)
+  );
   color: var(--bc-grid-row-selected-fg);
 }
 
@@ -899,47 +917,62 @@
   .bc-grid-cell-pinned-left[data-bc-grid-active-cell="true"],
 .bc-grid-row[data-bc-grid-focused-row="true"]
   .bc-grid-cell-pinned-right[data-bc-grid-active-cell="true"] {
-  background: var(--bc-grid-pinned-active-cell-bg);
+  background-image: linear-gradient(var(--bc-grid-active-cell-bg), var(--bc-grid-active-cell-bg));
 }
 
 .bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left[data-bc-grid-active-cell="true"],
 .bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-right[data-bc-grid-active-cell="true"],
 .bc-grid-cell-pinned-left[aria-selected="true"][data-bc-grid-active-cell="true"],
 .bc-grid-cell-pinned-right[aria-selected="true"][data-bc-grid-active-cell="true"] {
-  background: var(--bc-grid-pinned-selected-active-cell-bg);
+  background-image: linear-gradient(
+    var(--bc-grid-row-selected-active-cell-bg),
+    var(--bc-grid-row-selected-active-cell-bg)
+  );
   color: var(--bc-grid-row-selected-fg);
 }
 
 .bc-grid-cell[data-column-id="__bc_actions"],
 .bc-grid-row .bc-grid-cell[data-column-id="__bc_actions"] {
-  background: var(--bc-grid-pinned-actions-bg);
+  background-color: var(--bc-grid-pinned-actions-bg);
+  background-image: none;
   background-clip: border-box;
 }
 
 .bc-grid-header .bc-grid-cell[data-column-id="__bc_actions"],
 .bc-grid-filter-row .bc-grid-cell[data-column-id="__bc_actions"] {
   justify-content: center;
-  background: var(--bc-grid-pinned-actions-header-bg);
+  background-color: var(--bc-grid-pinned-actions-header-bg);
+  background-image: none;
 }
 
 .bc-grid-row:hover .bc-grid-cell[data-column-id="__bc_actions"] {
-  background: var(--bc-grid-pinned-actions-hover-bg);
+  background-image: linear-gradient(var(--bc-grid-row-hover), var(--bc-grid-row-hover));
 }
 
 .bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell[data-column-id="__bc_actions"] {
-  background: var(--bc-grid-pinned-actions-focused-bg);
+  background-image: linear-gradient(var(--bc-grid-row-focused-bg), var(--bc-grid-row-focused-bg));
 }
 
 .bc-grid-row[aria-selected="true"] .bc-grid-cell[data-column-id="__bc_actions"],
 .bc-grid-cell[data-column-id="__bc_actions"][aria-selected="true"] {
-  background: var(--bc-grid-pinned-actions-selected-bg);
+  background-image: linear-gradient(var(--bc-grid-row-selected), var(--bc-grid-row-selected));
   color: var(--bc-grid-row-selected-fg);
 }
 
-.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell[data-column-id="__bc_actions"],
+.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell[data-column-id="__bc_actions"] {
+  background-image: linear-gradient(
+    var(--bc-grid-row-selected-hover-bg),
+    var(--bc-grid-row-selected-hover-bg)
+  );
+  color: var(--bc-grid-row-selected-fg);
+}
+
 .bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"]
   .bc-grid-cell[data-column-id="__bc_actions"] {
-  background: var(--bc-grid-pinned-actions-selected-hover-bg);
+  background-image: linear-gradient(
+    var(--bc-grid-row-selected-focused-bg),
+    var(--bc-grid-row-selected-focused-bg)
+  );
   color: var(--bc-grid-row-selected-fg);
 }
 
@@ -948,13 +981,16 @@
 .bc-grid-row:hover .bc-grid-cell[data-column-id="__bc_actions"][data-bc-grid-active-cell="true"],
 .bc-grid-row[data-bc-grid-focused-row="true"]
   .bc-grid-cell[data-column-id="__bc_actions"][data-bc-grid-active-cell="true"] {
-  background: var(--bc-grid-pinned-actions-active-bg);
+  background-image: linear-gradient(var(--bc-grid-active-cell-bg), var(--bc-grid-active-cell-bg));
 }
 
 .bc-grid-row[aria-selected="true"]
   .bc-grid-cell[data-column-id="__bc_actions"][data-bc-grid-active-cell="true"],
 .bc-grid-cell[data-column-id="__bc_actions"][aria-selected="true"][data-bc-grid-active-cell="true"] {
-  background: var(--bc-grid-pinned-actions-selected-active-bg);
+  background-image: linear-gradient(
+    var(--bc-grid-row-selected-active-cell-bg),
+    var(--bc-grid-row-selected-active-cell-bg)
+  );
   color: var(--bc-grid-row-selected-fg);
 }
 
@@ -1206,6 +1242,43 @@ select.bc-grid-editor-input {
   box-shadow: 0 8px 16px -4px color-mix(in srgb, var(--bc-grid-fg) 18%, transparent);
   pointer-events: none;
   z-index: 10;
+}
+
+/*
+ * Editor keyboard-hints caption — opt-in via
+ * `BcGridProps.showEditorKeyboardHints`. Anchored below the editor
+ * input inside the portal; sits beside the validation popover when
+ * both are visible. aria-hidden because the AT contract is the
+ * input's own role + behavior — the caption is sighted-only
+ * discovery chrome.
+ */
+.bc-grid-editor-keyboard-hints {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--bc-grid-muted-fg);
+  background: var(--bc-grid-bg);
+  border: 1px solid color-mix(in srgb, var(--bc-grid-input-border) 70%, transparent);
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bc-grid-editor-keyboard-hints kbd {
+  display: inline-block;
+  padding: 0 0.25rem;
+  margin: 0 0.0625rem;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--bc-grid-fg);
+  background: color-mix(in srgb, var(--bc-grid-input-border) 35%, transparent);
+  border-radius: calc(var(--bc-grid-radius) - 4px);
 }
 
 /*
@@ -2103,6 +2176,47 @@ select.bc-grid-editor-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.bc-grid-menu-item-trailing {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  color: var(--bc-grid-muted-fg);
+}
+
+.bc-grid-context-menu-chevron {
+  display: block;
+}
+
+.bc-grid-context-menu-submenu {
+  position: relative;
+}
+
+.bc-grid-context-menu-submenu-content {
+  position: absolute;
+  top: -0.25rem;
+  left: calc(100% + 0.25rem);
+  z-index: 71;
+  display: none;
+  min-width: 12rem;
+  width: max-content;
+  max-width: min(16rem, calc(100vw - 16px));
+  border: 1px solid var(--bc-grid-context-menu-border);
+  border-radius: var(--bc-grid-radius);
+  background: var(--bc-grid-context-menu-bg);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+  color: var(--bc-grid-context-menu-fg);
+  padding: 0.25rem;
+}
+
+.bc-grid-context-menu-submenu:hover > .bc-grid-context-menu-submenu-content,
+.bc-grid-context-menu-submenu:focus-within > .bc-grid-context-menu-submenu-content,
+.bc-grid-context-menu-submenu[data-open="true"] > .bc-grid-context-menu-submenu-content {
+  display: flex;
+  flex-direction: column;
 }
 
 .bc-grid-context-menu-separator {
@@ -3855,6 +3969,11 @@ table.bc-grid-detail-nested-grid {
     --bc-grid-row-border: CanvasText;
     --bc-grid-row-selected: Highlight;
     --bc-grid-row-selected-fg: HighlightText;
+    --bc-grid-row-focused-bg: Canvas;
+    --bc-grid-row-selected-hover-bg: Highlight;
+    --bc-grid-row-selected-focused-bg: Highlight;
+    --bc-grid-active-cell-bg: Canvas;
+    --bc-grid-row-selected-active-cell-bg: Highlight;
     --bc-grid-overlay-bg: Canvas;
     --bc-grid-overlay-border: CanvasText;
     --bc-grid-overlay-shadow: none;
@@ -3862,20 +3981,8 @@ table.bc-grid-detail-nested-grid {
     --bc-grid-loading-spinner-active: Highlight;
     --bc-grid-pinned-bg: Canvas;
     --bc-grid-pinned-header-bg: Canvas;
-    --bc-grid-pinned-row-hover-bg: Canvas;
-    --bc-grid-pinned-row-focused-bg: Canvas;
-    --bc-grid-pinned-row-selected-bg: Highlight;
-    --bc-grid-pinned-row-selected-hover-bg: Highlight;
-    --bc-grid-pinned-active-cell-bg: Canvas;
-    --bc-grid-pinned-selected-active-cell-bg: Canvas;
     --bc-grid-pinned-actions-bg: Canvas;
     --bc-grid-pinned-actions-header-bg: Canvas;
-    --bc-grid-pinned-actions-hover-bg: Canvas;
-    --bc-grid-pinned-actions-focused-bg: Canvas;
-    --bc-grid-pinned-actions-selected-bg: Highlight;
-    --bc-grid-pinned-actions-selected-hover-bg: Highlight;
-    --bc-grid-pinned-actions-active-bg: Canvas;
-    --bc-grid-pinned-actions-selected-active-bg: Canvas;
     --bc-grid-pinned-boundary: CanvasText;
     --bc-grid-header-bg: Canvas;
     --bc-grid-header-fg: CanvasText;

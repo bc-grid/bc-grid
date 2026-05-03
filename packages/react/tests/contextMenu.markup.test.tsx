@@ -10,7 +10,7 @@ import type {
 import { renderToStaticMarkup } from "react-dom/server"
 import type { ResolvedColumn, RowEntry } from "../src/gridInternals"
 import { BcGridContextMenu } from "../src/internal/context-menu"
-import type { BcContextMenuItems } from "../src/types"
+import type { BcContextMenuContext, BcContextMenuItems } from "../src/types"
 
 interface Row {
   id: string
@@ -50,7 +50,7 @@ const resolvedColumns: readonly ResolvedColumn<Row>[] = [
 ]
 
 const rowsById: ReadonlyMap<RowId, RowEntry<Row>> = new Map([
-  ["r1", { kind: "data", level: 0, row: { id: "r1", name: "Acme" }, rowId: "r1" }],
+  ["r1", { kind: "data", index: 0, level: 0, row: { id: "r1", name: "Acme" }, rowId: "r1" }],
 ])
 
 const emptySelection: BcSelection = { mode: "explicit", rowIds: new Set() }
@@ -74,6 +74,20 @@ function renderMenu(items?: BcContextMenuItems<Row>, api: BcGridApi<Row> = noopA
 }
 
 describe("BcGridContextMenu — Radix-style attribute contract", () => {
+  test("passes row identity and index through the trigger context", () => {
+    let seen: Pick<BcContextMenuContext<Row>, "row" | "rowId" | "rowIndex"> | null = null
+    renderMenu((ctx) => {
+      seen = { row: ctx.row, rowId: ctx.rowId, rowIndex: ctx.rowIndex }
+      return []
+    })
+
+    expect(seen).toEqual({
+      row: { id: "r1", name: "Acme" },
+      rowId: "r1",
+      rowIndex: 0,
+    })
+  })
+
   test("emits data-state='open' on the menu root", () => {
     // The right-click menu is point-anchored and unmount-on-close, so
     // the value is constant — but the attribute is set so apps can
@@ -196,6 +210,69 @@ describe("BcGridContextMenu — separator markup", () => {
     expect(html).toContain('role="separator"')
     expect(html).toContain('class="bc-grid-context-menu-separator"')
     expect(html).toContain('aria-orientation="horizontal"')
+  })
+})
+
+describe("BcGridContextMenu — toggle and submenu markup", () => {
+  test("renders toggle items as checkbox menuitems with checked state hooks", () => {
+    const html = renderMenu([
+      {
+        kind: "toggle",
+        id: "show-filter-row",
+        label: "Show filter row",
+        checked: true,
+        onToggle: () => {},
+      },
+    ])
+
+    expect(html).toContain('role="menuitemcheckbox"')
+    expect(html).toContain('aria-checked="true"')
+    expect(html).toContain('data-state="checked"')
+    expect(html).toContain(">Show filter row</span>")
+    expect(html).toContain("M3 8.5 6.5 12 13 4.5")
+  })
+
+  test("renders radio-style toggle items as radio menuitems", () => {
+    const html = renderMenu([
+      {
+        kind: "toggle",
+        selection: "radio",
+        id: "density-normal",
+        label: "Normal",
+        checked: true,
+        onToggle: () => {},
+      },
+    ])
+
+    expect(html).toContain('role="menuitemradio"')
+    expect(html).toContain('aria-checked="true"')
+    expect(html).toContain(">Normal</span>")
+  })
+
+  test("renders submenu triggers with aria-haspopup and nested menu content", () => {
+    const html = renderMenu([
+      {
+        kind: "submenu",
+        id: "view",
+        label: "View",
+        items: [
+          {
+            kind: "toggle",
+            id: "show-sidebar",
+            label: "Show sidebar",
+            checked: false,
+            onToggle: () => {},
+          },
+        ],
+      },
+    ])
+
+    expect(html).toContain('class="bc-grid-context-menu-submenu"')
+    expect(html).toContain('aria-haspopup="menu"')
+    expect(html).toContain('class="bc-grid-context-menu-submenu-content"')
+    expect(html).toContain('role="menu"')
+    expect(html).toContain('class="bc-grid-context-menu-chevron"')
+    expect(html).toContain(">Show sidebar</span>")
   })
 })
 

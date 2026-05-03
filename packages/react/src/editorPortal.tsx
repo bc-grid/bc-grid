@@ -41,6 +41,21 @@ interface EditorPortalProps<TRow> {
    * `cellEditor`. v0.1 default is a text input.
    */
   defaultEditor?: BcCellEditor<TRow>
+  /**
+   * Show the visible inline validation popover under the editor on
+   * rejection. AT contract (assertive announce + `aria-invalid`) is
+   * unchanged when this is false. Audit P1-W3 / vanilla-and-context-
+   * menu RFC View → "Show validation messages" toggle.
+   */
+  showValidationMessages?: boolean
+  /**
+   * Render the F2 / Enter / Esc / Tab keyboard-hints caption at the
+   * bottom of the editor portal. Off by default; opt-in via
+   * `BcGridProps.showEditorKeyboardHints`.
+   */
+  showKeyboardHints?: boolean
+  blurAction?: "commit" | "reject" | "ignore"
+  escDiscardsRow?: boolean
 }
 
 /**
@@ -63,6 +78,10 @@ export function EditorPortal<TRow>({
   rowIndexById,
   columnIndexById,
   defaultEditor,
+  showValidationMessages = true,
+  showKeyboardHints = false,
+  blurAction = "commit",
+  escDiscardsRow = false,
 }: EditorPortalProps<TRow>): ReactNode {
   const { editState } = controller
 
@@ -107,6 +126,10 @@ export function EditorPortal<TRow>({
       column={column}
       rowEntry={rowEntry}
       editor={editorSpec}
+      showValidationMessages={showValidationMessages}
+      showKeyboardHints={showKeyboardHints}
+      blurAction={blurAction}
+      escDiscardsRow={escDiscardsRow}
       {...(virtualizer ? { virtualizer } : {})}
       {...(typeof rowIndex === "number" ? { rowIndex } : {})}
       {...(typeof colIndex === "number" ? { colIndex } : {})}
@@ -124,6 +147,10 @@ interface EditorMountProps<TRow> {
   virtualizer?: Virtualizer
   rowIndex?: number
   colIndex?: number
+  showValidationMessages: boolean
+  showKeyboardHints: boolean
+  blurAction: "commit" | "reject" | "ignore"
+  escDiscardsRow: boolean
 }
 
 function EditorMount<TRow>({
@@ -136,11 +163,22 @@ function EditorMount<TRow>({
   virtualizer,
   rowIndex,
   colIndex,
+  showValidationMessages,
+  showKeyboardHints,
+  blurAction,
+  escDiscardsRow,
 }: EditorMountProps<TRow>) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const focusRef = useRef<HTMLElement | null>(null)
-  const { editState, commit, cancel, dispatchMounted, dispatchUnmounted, getOverlayValue } =
-    controller
+  const {
+    editState,
+    commit,
+    cancel,
+    discardRowEdits,
+    dispatchMounted,
+    dispatchUnmounted,
+    getOverlayValue,
+  } = controller
 
   // editState is narrowed to Mounting / Editing / Validating here.
   const seedKey =
@@ -218,6 +256,10 @@ function EditorMount<TRow>({
       handleCommit,
     )
   handleCommitRef.current = handleCommit
+  // Same stable-ref pattern for cancel — used by the blurAction
+  // `"reject"` path.
+  const cancelRef = useRef(cancel)
+  cancelRef.current = cancel
 
   // Portal-aware click-outside per `editing-rfc §Portal click-outside rules`.
   // Pointerdown anywhere outside the editor or any descendant marked
@@ -226,11 +268,29 @@ function EditorMount<TRow>({
   // outside target, so don't drift the active cell on top of that.
   // Clicks on the editor's wrapper or on portaled popovers (date/select/
   // autocomplete) are ignored — the editor still has focus.
+  //
+  // The `blurAction` prop chooses what click-outside means:
+  //   - `"commit"` (default): commit the current value (today's behaviour).
+  //   - `"reject"`: cancel the edit (mirror Escape) — for forms-style
+  //     ERPs that want explicit Tab/Enter commit and treat blur as cancel.
+  //   - `"ignore"`: do nothing — for high-stakes edits where accidental
+  //     commits would be costly.
+  // Stable ref so the listener bound at mount sees the latest value
+  // without re-binding (each new prop value would race with mid-edit
+  // state churn).
+  const blurActionRef = useRef(blurAction)
+  blurActionRef.current = blurAction
   useEffect(() => {
     const handlePointerDown = (event: globalThis.PointerEvent) => {
       const target = event.target
       if (!(target instanceof Element)) return
       if (target.closest("[data-bc-grid-editor-root], [data-bc-grid-editor-portal]")) return
+      const action = blurActionRef.current
+      if (action === "ignore") return
+      if (action === "reject") {
+        cancelRef.current?.()
+        return
+      }
       const value = readEditorInputValue(focusRef.current, editor as BcCellEditor<unknown>)
       handleCommitRef.current?.(value, "stay", "pointer")
     }
@@ -257,7 +317,21 @@ function EditorMount<TRow>({
     }
     if (intent.type === "cancel") {
       event.preventDefault()
-      cancel()
+      // `escDiscardsRow` (audit P1-W3-3 follow-up to #381): in
+      // BcEditGrid (or any consumer that opts in), Esc rolls back
+      // the row's prior overlay patches in addition to cancelling
+      // the active editor. `discardRowEdits` already handles the
+      // active-editor cancel internally when its target row matches
+      // the editing row (which it always does here, since the
+      // editor portal mounted for a cell on this row). So we call
+      // discardRowEdits OR cancel — never both, to avoid a double
+      // dispatch (the state machine absorbs the second event but
+      // the redundant work is silly).
+      if (escDiscardsRow) {
+        discardRowEdits(cell.rowId)
+      } else {
+        cancel()
+      }
       return
     }
   }
@@ -315,7 +389,30 @@ function EditorMount<TRow>({
         {...(requiredFlag ? { required: true } : {})}
         {...(disabledFlag ? { disabled: true } : {})}
       />
-      <EditorValidationPopover error={error} />
+      {showValidationMessages ? <EditorValidationPopover error={error} /> : null}
+      {showKeyboardHints ? <EditorKeyboardHints /> : null}
+    </div>
+  )
+}
+
+/**
+ * Subtle keyboard-hints caption rendered at the bottom of the editor
+ * portal when the consumer opts in via
+ * `BcGridProps.showEditorKeyboardHints`. Off by default; intended for
+ * teams onboarding new ERP users to the bc-grid edit model. The
+ * caption is `aria-hidden` because the AT contract is already covered
+ * by the input's ARIA role + `aria-keyshortcuts` would be the right
+ * AT path (followup) — this surface exists for sighted discovery
+ * only.
+ */
+export function EditorKeyboardHints(): ReactNode {
+  return (
+    <div
+      className="bc-grid-editor-keyboard-hints"
+      data-bc-grid-editor-keyboard-hints="true"
+      aria-hidden="true"
+    >
+      <kbd>F2</kbd> edit · <kbd>Enter</kbd> commit · <kbd>Esc</kbd> cancel · <kbd>Tab</kbd> next
     </div>
   )
 }

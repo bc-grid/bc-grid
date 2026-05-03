@@ -10,7 +10,7 @@ import {
 export interface BcGridContextMenuState {
   anchor: { x: number; y: number }
   columnId?: ColumnId | undefined
-  rowId: RowId
+  rowId?: RowId | undefined
 }
 
 export function attachContextMenuEvents(
@@ -74,7 +74,7 @@ export function attachContextMenuEvents(
     event.stopPropagation()
   }
 
-  root.addEventListener("contextmenu", handleContextMenu)
+  root.addEventListener("contextmenu", handleContextMenu, true)
   root.addEventListener("pointerdown", handlePointerDown)
   root.addEventListener("pointermove", handlePointerMove)
   root.addEventListener("pointerup", clearLongPress)
@@ -84,7 +84,7 @@ export function attachContextMenuEvents(
 
   return () => {
     clearLongPress()
-    root.removeEventListener("contextmenu", handleContextMenu)
+    root.removeEventListener("contextmenu", handleContextMenu, true)
     root.removeEventListener("pointerdown", handlePointerDown)
     root.removeEventListener("pointermove", handlePointerMove)
     root.removeEventListener("pointerup", clearLongPress)
@@ -116,16 +116,38 @@ export function contextMenuStateFromKeyboard<TRow>({
   }
 }
 
-function contextMenuStateFromTarget(
+export function contextMenuStateFromTarget(
   target: EventTarget | null,
   anchor: BcGridContextMenuState["anchor"],
 ): BcGridContextMenuState | null {
   const targetElement = target instanceof Element ? target : null
-  const rowId = targetElement?.closest<HTMLElement>("[data-bc-grid-row-kind='data']")?.dataset.rowId
-  if (!rowId) return null
+  if (!targetElement) return null
+  if (
+    targetElement.closest("[data-bc-grid-filter-button='true']") ||
+    targetElement.closest("[data-bc-grid-column-menu-button='true']")
+  ) {
+    return null
+  }
+
+  const columnId = targetElement.closest<HTMLElement>("[data-column-id]")?.dataset.columnId
+  const rowId = targetElement.closest<HTMLElement>("[data-bc-grid-row-kind='data']")?.dataset.rowId
+  if (rowId != null) {
+    return {
+      anchor,
+      columnId,
+      rowId,
+    }
+  }
+
+  const header = targetElement.closest<HTMLElement>("[role='columnheader'][data-column-id]")
+  // Preserve the existing header right-click column-visibility menu when
+  // the trigger is present; headers without that menu fall through to
+  // the grid context menu's column-only context.
+  if (header?.querySelector("[data-bc-grid-column-menu-button='true']")) return null
+  const headerColumnId = header?.dataset.columnId ?? columnId
+  if (!headerColumnId) return null
   return {
     anchor,
-    columnId: targetElement?.closest<HTMLElement>("[data-column-id]")?.dataset.columnId,
-    rowId,
+    columnId: headerColumnId,
   }
 }

@@ -35,31 +35,9 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
-### Active now → `v05-context-menu-chrome-bundle-1` (your context-menu implementation lane, half 1 of 2, ~30-40 min)
+### Active now → `v05-context-menu-row-actions` (~45-60 min)
 
-**Bundle-1 (#393) is shipped** (active filter chip strip + group selection algebra basic + blank/not-blank operators). The next active task is the context-menu chrome toggles. The maintainer's vision is "vanilla grid by default + everything toggleable from right-click + consumer-supplied persistence API"; the RFC at `docs/design/vanilla-and-context-menu-rfc.md` (#392) ratified the architecture (note the 10 open questions in §9 — until those resolve, use placeholder field names + TODO comments for the persistence shape; coordinator will sweep through and update on RFC ratification).
-
-**Items in this PR — toggle category "View" + "Filter" (~30-40 min):**
-
-1. **Filter row toggle** — context-menu item View → "Show filter row" (checkbox affordance). Wires through to `BcGridProps.filterRow` (today: defaults `true`, becomes default `false` in vanilla mode per RFC §3).
-2. **Sidebar toggle** — context-menu item View → "Show sidebar" + a submenu when shown: which panel is open (Columns / Filters / Pivot).
-3. **Status bar toggle** — context-menu item View → "Show status bar" (checkbox).
-4. **Filters panel toggle** — context-menu item Filter → "Open Filters panel" (action; routes to sidebar with filters panel selected).
-
-Each toggle reads + writes via the new `BcUserSettings` shape (RFC will pin the exact field names). Until RFC ratifies, use placeholder field names + flag the spots in TODO comments for coordinator to update on RFC ratification.
-
-**Branch:** `agent/worker2/v05-context-menu-chrome-bundle-1`. **Effort:** ~30-40 min.
-
-### After bundle-1 ships → `v05-context-menu-chrome-bundle-2` (half 2 of 2, ~30-40 min)
-
-5. **Density toggle** — context-menu item View → Density → Compact / Normal / Comfortable (radio group). Wires to the existing `data-density` attribute that the theming layer already styles for.
-6. **Group-by menu** — context-menu item Group → "Group by this column" (only on header context — needs column id from event target). Toggle current column in/out of `groupBy[]`.
-7. **Pin column menu** — context-menu item Pin → "Pin left" / "Pin right" / "Unpin" (on header context).
-8. **Active filter chip strip toggle** — bundle-1 (#393) shipped the chip strip; now add a View → "Show active filters" toggle so users can hide it.
-
-**Branch:** `agent/worker2/v05-context-menu-chrome-bundle-2`. **Effort:** ~30-40 min.
-
-### After bundle-2 ships → `v05-context-menu-row-actions` (~45-60 min)
+**Bundles 1 and 2 are shipped** (#396 chrome bundle-1: filter row / sidebar / status bar / filters-panel toggles + the `BcContextMenuSubmenuItem` / `BcContextMenuToggleItem` / `BcUserSettings` primitives. #399 chrome bundle-2: density / group-by / pin column / chip strip + column-only header commands).
 
 The vanilla+context-menu RFC (#392) covers chrome + view + filter toggles, but ERP grids also need row-shaped actions on right-click. Worker2 owns the chrome + the right-click handler + the menu structure, so this lane is yours.
 
@@ -79,6 +57,22 @@ These are all `<BcEditGrid>` patterns; `<BcGrid>` (read-only) shouldn't show the
 Pull one of the v0.5 → v0.6 grouping items forward from `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`. Pick whichever is at the top of that doc that isn't gated on a breaking change. Suggested first pull: any "group selection algebra" follow-up that builds on bundle-1 #393's basic implementation (e.g. tri-state group checkboxes when partial children selected, or selection-aware aggregations in group rows). Read the doc, pick the item that fits a single-PR shape, write a brief task slug entry into this handoff under "Active now" when you start.
 
 **Branch:** `agent/worker2/v05-grouping-pull-forward`. **Effort:** ~half day.
+
+### After grouping pull-forward → `v06-detail-panel-sticky-left` (~30-45 min)
+
+Surfaced 2026-05-03 by bsncraft consumer review on the customers grid. When the master grid scrolls horizontally, the detail panel scrolls with it (it's a child of the same scroll container), revealing empty space beyond the detail's content width. The recommendation matches AG Grid / Linear / Notion / Airtable: `position: sticky; left: 0` on the detail panel wrapper at `packages/react/src/grid.tsx:2941`, with width measured by `ResizeObserver` against the master grid container's `clientWidth` (do **NOT** use `100vw` — sidebars / host chrome reduce the grid's actual width below viewport).
+
+Detail content keeps its own horizontal scroll inside the sticky container. Vertical scroll behavior unchanged. Pinned-left disclosure column ▶ stays visually aligned with the detail row's left edge because both anchor to scroll-left = 0.
+
+Acceptance criteria (from the consumer thread):
+
+- Horizontal scroll on master leaves the detail panel anchored to the visible viewport.
+- Detail panel content keeps its own horizontal scroll if it overflows the viewport width.
+- Vertical scroll on master scrolls the detail row off-screen as expected (no sticky-vertical).
+- `detailPanelHeight` (and the row-fn variant) is still honored.
+- Pinned-left disclosure column ▶ button still visually connects to the detail row's left edge.
+
+**Branch:** `agent/worker2/v06-detail-panel-sticky-left`. **Effort:** ~30-45 min including a Playwright spec (coordinator runs the spec). Tagged v0.6 by the consumer; folding in here keeps your lane productive.
 
 ### Previously active → `v05-chrome-and-filter-bundle-1` (DONE — #393)
 

@@ -2,12 +2,16 @@ import { describe, expect, test } from "bun:test"
 import type { BcColumnStateEntry, BcGridFilter, BcSelection } from "@bc-grid/core"
 import {
   DEFAULT_CONTEXT_MENU_ITEMS,
+  contextMenuItemChecked,
   contextMenuItemDisabled,
   contextMenuItemKey,
   contextMenuItemLabel,
   isContextMenuSeparator,
+  isContextMenuSubmenuItem,
+  isContextMenuToggleItem,
   isCustomContextMenuItem,
   resolveContextMenuItems,
+  resolveContextMenuSubmenuItems,
 } from "../src/contextMenu"
 import type { BcContextMenuContext, BcContextMenuItem, BcReactGridColumn } from "../src/types"
 
@@ -21,7 +25,7 @@ const emptySelection: BcSelection = { mode: "explicit", rowIds: new Set() }
 function makeContext(
   overrides: Partial<BcContextMenuContext<Row>> = {},
 ): BcContextMenuContext<Row> {
-  return {
+  const context = {
     api: {
       getRangeSelection: () => ({ ranges: [], anchor: null }),
     } as BcContextMenuContext<Row>["api"],
@@ -30,6 +34,10 @@ function makeContext(
     row: null,
     selection: emptySelection,
     ...overrides,
+  }
+  return {
+    ...context,
+    columnId: context.columnId ?? context.cell?.columnId,
   }
 }
 
@@ -158,6 +166,63 @@ describe("context menu — separators and shape predicates", () => {
     expect(isCustomContextMenuItem("copy")).toBe(false)
     expect(isCustomContextMenuItem("clear-selection")).toBe(false)
     expect(isCustomContextMenuItem({ id: "x", label: "X", onSelect: () => {} })).toBe(true)
+    expect(
+      isCustomContextMenuItem({
+        kind: "toggle",
+        id: "show-filter-row",
+        label: "Show filter row",
+        checked: true,
+        onToggle: () => {},
+      }),
+    ).toBe(false)
+    expect(
+      isCustomContextMenuItem({
+        kind: "submenu",
+        id: "view",
+        label: "View",
+        items: [],
+      }),
+    ).toBe(false)
+  })
+
+  test("toggle and submenu predicates narrow the new object item shapes", () => {
+    const toggle: BcContextMenuItem<Row> = {
+      kind: "toggle",
+      id: "show-sidebar",
+      label: "Show sidebar",
+      checked: (context) => context.row?.id === "open",
+      onToggle: () => {},
+    }
+    const submenu: BcContextMenuItem<Row> = {
+      kind: "submenu",
+      id: "view",
+      label: "View",
+      items: ["copy", false, null, undefined, "clear-range"],
+    }
+
+    expect(isContextMenuToggleItem(toggle)).toBe(true)
+    expect(isContextMenuSubmenuItem(toggle)).toBe(false)
+    expect(contextMenuItemChecked(toggle, makeContext({ row: { id: "open", name: "Acme" } }))).toBe(
+      true,
+    )
+    expect(
+      contextMenuItemChecked(toggle, makeContext({ row: { id: "closed", name: "Acme" } })),
+    ).toBe(false)
+
+    expect(isContextMenuSubmenuItem(submenu)).toBe(true)
+    expect(isContextMenuToggleItem(submenu)).toBe(false)
+    expect(resolveContextMenuSubmenuItems(submenu, makeContext())).toEqual(["copy", "clear-range"])
+  })
+
+  test("empty submenus are disabled so the renderer skips dead branches", () => {
+    const submenu: BcContextMenuItem<Row> = {
+      kind: "submenu",
+      id: "empty",
+      label: "Empty",
+      items: () => [false, null, undefined],
+    }
+
+    expect(contextMenuItemDisabled(submenu, makeContext())).toBe(true)
   })
 
   test("contextMenuItemDisabled treats every separator as disabled regardless of context", () => {
@@ -353,6 +418,19 @@ describe("context menu — filter clear built-ins", () => {
     ).toBe(false)
   })
 
+  test("clear-column-filter is enabled with a column-only header context", () => {
+    expect(
+      contextMenuItemDisabled(
+        "clear-column-filter",
+        makeContext({
+          api: apiWithFilter(nameFilter),
+          columnId: "name",
+          column: dummyColumn,
+        }),
+      ),
+    ).toBe(false)
+  })
+
   test("the new built-ins are NOT in DEFAULT_CONTEXT_MENU_ITEMS (consumer-opt-in only)", () => {
     // Per the v0.3 brief, default item set stays untouched — consumers
     // wire these IDs explicitly via the contextMenuItems prop.
@@ -427,6 +505,17 @@ describe("context menu — column command built-ins", () => {
         columnContext([{ columnId: "name", pinned: "right" }, ...baseState.slice(1)]),
       ),
     ).toBe(false)
+  })
+
+  test("column commands enable with a column-only header context", () => {
+    const ctx = makeContext({
+      api: apiWithColumnState(baseState),
+      columnId: "name",
+      column: dummyColumn,
+    })
+    expect(contextMenuItemDisabled("pin-column-left", ctx)).toBe(false)
+    expect(contextMenuItemDisabled("pin-column-right", ctx)).toBe(false)
+    expect(contextMenuItemDisabled("autosize-column", ctx)).toBe(false)
   })
 
   test("pin-column-right disables when already pinned right; enables otherwise", () => {
