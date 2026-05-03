@@ -418,6 +418,12 @@ export type BcGridPasteTsvResult<TRow = unknown> =
 export interface BcRowPatch<TRow = unknown> {
   rowId: RowId
   fields: Partial<TRow>
+  /**
+   * Optional inverse patch payload for host-owned undo affordances. The
+   * grid ignores this field while applying the forward patch; consumers
+   * can pass the collected inverse patches back to `applyRowPatches`.
+   */
+  inverse?: readonly BcRowPatch<TRow>[]
 }
 
 export type BcRowPatchFailureCode =

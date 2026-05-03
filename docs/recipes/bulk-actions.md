@@ -5,7 +5,7 @@
 Use this pattern for CRUD grids where users repeatedly select rows and run one command: "Mark selected paid", "Move selected documents", "Export selected", or "Assign selected to me".
 
 ```tsx
-import { BcGrid, type BcBulkActionsContext, type RowId } from "@bc-grid/react"
+import { BcGrid, type BcBulkActionsContext, type BcRowPatch, type RowId } from "@bc-grid/react"
 ```
 
 ## Slot Contract
@@ -15,10 +15,16 @@ interface BcBulkActionsContext {
   selectedRowIds: readonly RowId[]
   selectedRowCount: number
   clearSelection(): void
+  showUndo(action: {
+    label: string
+    inversePatches: readonly BcRowPatch[]
+  }): void
 }
 ```
 
 `selectedRowIds` resolves the current `BcSelection` against rows known to the client grid. For server-wide `all` or `filtered` bulk operations over unloaded rows, keep using the controlled `selection` snapshot and send that selection descriptor to the server.
+
+After a successful grid-owned bulk edit, call `showUndo({ label, inversePatches })` to surface the built-in 5-second undo toast. The toast's Undo button applies the inverse patches through `api.applyRowPatches`.
 
 ## AR Aging
 

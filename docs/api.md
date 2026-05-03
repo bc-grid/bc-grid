@@ -1491,7 +1491,17 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * label, clear-selection button, and themed bar surface; the slot
    * supplies domain actions.
    */
-  bulkActions?: React.ReactNode | ((ctx: BcBulkActionsContext) => React.ReactNode)
+  bulkActions?: React.ReactNode | ((ctx: BcBulkActionsContext<TRow>) => React.ReactNode)
+  /**
+   * Optional renderer for the transient undo toast shown when a bulk
+   * action calls `ctx.showUndo(...)`. Defaults to the built-in label,
+   * Undo button, and dismiss button.
+   */
+  bulkActionUndoSlot?:
+    | React.ReactNode
+    | ((ctx: BcBulkActionUndoContext<TRow>) => React.ReactNode)
+  /** Defaults to 5000; pass 0 to require explicit undo/dismiss. */
+  bulkActionUndoTimeoutMs?: number
   footer?: React.ReactNode
   /**
    * Footer status-bar segments rendered below the body and above any
@@ -1728,17 +1738,36 @@ clear-selection button; the slot supplies the domain actions. The render
 function receives:
 
 ```ts
-interface BcBulkActionsContext {
+interface BcBulkActionsContext<TRow = unknown> {
   selectedRowIds: readonly RowId[]
   selectedRowCount: number
   clearSelection(): void
+  showUndo(action: BcBulkActionUndoableAction<TRow>): void
+}
+
+interface BcBulkActionUndoableAction<TRow = unknown> {
+  label: string
+  inversePatches: readonly BcRowPatch<TRow>[]
+}
+
+interface BcBulkActionUndoContext<TRow = unknown> {
+  undoableAction: BcBulkActionUndoableAction<TRow>
+  undo(): Promise<BcRowPatchResult<TRow>>
+  dismiss(): void
 }
 ```
 
 `selectedRowIds` is resolved against rows currently known to the client grid.
 For server-wide select-all operations over unloaded rows, keep the controlled
-`selection` snapshot and send that descriptor to the server. The full recipe is
-in `docs/recipes/bulk-actions.md`.
+`selection` snapshot and send that descriptor to the server. The full recipes
+are in `docs/recipes/bulk-actions.md` and
+`docs/recipes/bulk-actions-undo.md`.
+
+When a host bulk action commits and has a precomputed inverse patch list, call
+`showUndo({ label, inversePatches })`. The grid displays a transient undo toast;
+the built-in Undo button applies `inversePatches` through `api.applyRowPatches`.
+Use `bulkActionUndoSlot` to replace the toast body while keeping the same
+`undo()` / `dismiss()` context.
 
 The `statusBar` slot accepts an array of segment descriptors. Built-in IDs hide
 themselves when their content is irrelevant: `filtered` only appears once a

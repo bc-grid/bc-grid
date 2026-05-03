@@ -88,6 +88,8 @@ export type {
   BcActionsColumnProps,
   BcAggregationFormatterParams,
   BcAggregationScope,
+  BcBulkActionUndoContext,
+  BcBulkActionUndoableAction,
   BcBulkActionsContext,
   BcCellEditCommitEvent,
   BcCellEditor,

@@ -29,8 +29,8 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --tsconfig tsconfig.build.json",
-    "dev": "tsup src/index.ts --format esm --dts --sourcemap --watch --tsconfig tsconfig.build.json",
+    "build": "tsup src/index.ts src/range.ts src/selection.ts --format esm --dts --sourcemap --clean --tsconfig tsconfig.build.json",
+    "dev": "tsup src/index.ts src/range.ts src/selection.ts --format esm --dts --sourcemap --watch --tsconfig tsconfig.build.json",
     "type-check": "tsc -b"
   }
 }

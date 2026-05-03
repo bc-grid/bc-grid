@@ -2583,6 +2583,75 @@ select.bc-grid-editor-input {
   padding: 0;
 }
 
+.bc-grid-bulk-action-undo-toast {
+  position: absolute;
+  right: 1rem;
+  bottom: 4.25rem;
+  display: inline-flex;
+  max-width: max(22rem, 50%);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.625rem 0.5rem 0.75rem;
+  border: 1px solid var(--bc-grid-border);
+  border-radius: var(--bc-grid-radius);
+  background: color-mix(in srgb, var(--bc-grid-accent) 12%, var(--bc-grid-bg));
+  box-shadow: 0 8px 16px -4px color-mix(in srgb, var(--bc-grid-fg) 18%, transparent);
+  color: var(--bc-grid-fg);
+  font-size: 0.875rem;
+  line-height: 1.3;
+  z-index: 11;
+}
+
+.bc-grid-bulk-action-undo-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bc-grid-bulk-action-undo-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.bc-grid-bulk-action-undo-button,
+.bc-grid-bulk-action-undo-dismiss {
+  display: inline-flex;
+  min-height: 1.875rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bc-grid-border);
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: var(--bc-grid-bg);
+  color: var(--bc-grid-fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1;
+  padding-block: 0;
+  padding-inline: 0.625rem;
+}
+
+.bc-grid-bulk-action-undo-button:hover,
+.bc-grid-bulk-action-undo-dismiss:hover {
+  border-color: var(--bc-grid-input-border);
+  background: var(--bc-grid-row-hover);
+}
+
+.bc-grid-bulk-action-undo-button:focus-visible,
+.bc-grid-bulk-action-undo-dismiss:focus-visible {
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: 2px;
+}
+
+.bc-grid-bulk-action-undo-dismiss {
+  width: 1.875rem;
+  min-width: 1.875rem;
+  padding: 0;
+}
+
 /*
  * Auto-height / page-flow mode (consumer set `<BcGrid height="auto">`).
  * The grid grows to fit its rendered canvas, the scroller hands its
@@ -4170,6 +4239,8 @@ table.bc-grid-detail-nested-grid {
 .bc-grid-cell-checkbox,
 .bc-grid-bulk-actions-slot button,
 .bc-grid-bulk-actions-clear,
+.bc-grid-bulk-action-undo-button,
+.bc-grid-bulk-action-undo-dismiss,
 .bc-grid-context-menu-item,
 .bc-grid-column-menu-item,
 .bc-grid-sidebar-tab,
@@ -4218,6 +4289,8 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-pagination-size select,
   .bc-grid-bulk-actions-slot button,
   .bc-grid-bulk-actions-clear,
+  .bc-grid-bulk-action-undo-button,
+  .bc-grid-bulk-action-undo-dismiss,
   .bc-grid-context-menu-item,
   .bc-grid-column-menu-item,
   .bc-grid-sidebar-tab,
@@ -4352,6 +4425,7 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-sidebar,
   .bc-grid-sidebar-panel,
   .bc-grid-bulk-actions,
+  .bc-grid-bulk-action-undo-toast,
   .bc-grid-detail-panel,
   .bc-grid-detail-section,
   .bc-grid-detail-empty,
@@ -4439,7 +4513,9 @@ table.bc-grid-detail-nested-grid {
   }
 
   .bc-grid-bulk-actions-slot button,
-  .bc-grid-bulk-actions-clear {
+  .bc-grid-bulk-actions-clear,
+  .bc-grid-bulk-action-undo-button,
+  .bc-grid-bulk-action-undo-dismiss {
     border-color: CanvasText;
     background: Canvas;
     color: CanvasText;
@@ -4448,7 +4524,11 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-bulk-actions-slot button:hover:not(:disabled),
   .bc-grid-bulk-actions-clear:hover,
   .bc-grid-bulk-actions-slot button:focus-visible,
-  .bc-grid-bulk-actions-clear:focus-visible {
+  .bc-grid-bulk-actions-clear:focus-visible,
+  .bc-grid-bulk-action-undo-button:hover,
+  .bc-grid-bulk-action-undo-dismiss:hover,
+  .bc-grid-bulk-action-undo-button:focus-visible,
+  .bc-grid-bulk-action-undo-dismiss:focus-visible {
     background: Highlight;
     color: HighlightText;
   }

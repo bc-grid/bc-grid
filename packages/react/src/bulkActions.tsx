@@ -1,18 +1,23 @@
 import type { BcSelection, RowId } from "@bc-grid/core"
 import type { ReactNode } from "react"
 import { XIcon } from "./internal/panel-icons"
-import type { BcBulkActionsContext } from "./types"
+import type { BcBulkActionUndoContext, BcBulkActionsContext } from "./types"
 
-interface BcGridBulkActionsProps {
-  actions: ReactNode | ((ctx: BcBulkActionsContext) => ReactNode)
-  ctx: BcBulkActionsContext
+interface BcGridBulkActionsProps<TRow> {
+  actions: ReactNode | ((ctx: BcBulkActionsContext<TRow>) => ReactNode)
+  ctx: BcBulkActionsContext<TRow>
+}
+
+interface BcGridBulkActionUndoToastProps<TRow> {
+  ctx: BcBulkActionUndoContext<TRow>
+  slot?: ReactNode | ((ctx: BcBulkActionUndoContext<TRow>) => ReactNode)
 }
 
 interface RowIdEntry {
   rowId: RowId
 }
 
-export function BcGridBulkActions({ actions, ctx }: BcGridBulkActionsProps): ReactNode {
+export function BcGridBulkActions<TRow>({ actions, ctx }: BcGridBulkActionsProps<TRow>): ReactNode {
   if (ctx.selectedRowCount <= 0) return null
 
   const content = typeof actions === "function" ? actions(ctx) : actions
@@ -33,6 +38,53 @@ export function BcGridBulkActions({ actions, ctx }: BcGridBulkActionsProps): Rea
         {XIcon}
       </button>
     </section>
+  )
+}
+
+export function BcGridBulkActionUndoToast<TRow>({
+  ctx,
+  slot,
+}: BcGridBulkActionUndoToastProps<TRow>): ReactNode {
+  const content = typeof slot === "function" ? slot(ctx) : slot
+  if (content != null && typeof content !== "boolean") {
+    return (
+      <output
+        aria-live="polite"
+        className="bc-grid-bulk-action-undo-toast"
+        data-bc-grid-bulk-action-undo-toast="true"
+      >
+        {content}
+      </output>
+    )
+  }
+
+  return (
+    <output
+      aria-live="polite"
+      className="bc-grid-bulk-action-undo-toast"
+      data-bc-grid-bulk-action-undo-toast="true"
+    >
+      <span className="bc-grid-bulk-action-undo-message">{ctx.undoableAction.label}</span>
+      <div className="bc-grid-bulk-action-undo-actions">
+        <button
+          className="bc-grid-bulk-action-undo-button"
+          onClick={() => {
+            void ctx.undo()
+          }}
+          type="button"
+        >
+          Undo
+        </button>
+        <button
+          aria-label="Dismiss bulk action undo"
+          className="bc-grid-bulk-action-undo-dismiss"
+          onClick={ctx.dismiss}
+          type="button"
+        >
+          {XIcon}
+        </button>
+      </div>
+    </output>
   )
 }
 
