@@ -56,11 +56,15 @@ The persistence shape will be pinned by the RFC's `BcUserSettings` spec. Until R
 
 **Goal:** one bc-grid construct that holds shared state once and switches its row-model engine internally based on a controlled `groupBy` prop (or equivalent). Consumer just sets `groupBy`; the grid handles the rest.
 
-**Wait for maintainer ratification.** RFC is **delivered** at `docs/design/server-mode-switch-rfc.md` (2026-05-03). Recommendation: **Shape A** — `<BcServerGrid>` becomes mode-polymorphic internally with a controlled `groupBy` driver (and optional `rowModel` override); the three turnkey hooks stay as escape-hatches; a new `useServerGrid` polymorphic hook lands in alpha.3 / GA. The RFC pins the per-piece-of-state carry-over contract (§4 — 14 dimensions, with explicit drops for expansion / rangeSelection / pending-mutations), the server query sequence on switch (§5), the public API delta (§6), the migration path (§7), the perf budget (§8 — < 50ms synchronous flip), and the test plan (§9 — 14 unit cases + 1 Playwright + 1 perf bench). Effort estimate (§11): 18-25 hours, single PR; split if it grows past 1500 LOC of net diff.
+**RFC ratified 2026-05-03.** Read `docs/design/server-mode-switch-rfc.md` end-to-end before you start; the §10 ratification block records all 8 maintainer calls. Headline:
 
-**Eight open questions in §10** need maintainer ratification before you start. The most consequential are Q3 (synthesise vs clean loading frame), Q2 (groupBy heuristic vs `resolveMode` callback), and Q6 (alpha.2 vs alpha.3 boundary). Coordinator will edit the RFC with the maintainer's calls inline, then ping you to start.
+- **Shape A confirmed** — `<BcServerGrid>` becomes mode-polymorphic internally; controlled `groupBy` drives the switch; `rowModel` prop is the optional override. The three turnkey hooks stay as escape-hatches.
+- **Q1 hybrid** (deviation from rec) — state setters stay sync (matches AG Grid SSRM), but you also implement `apiRef.current.whenIdle(): Promise<void>` so consumers who want await semantics after a state change can opt in. General-purpose, not mode-switch-specific. Implementation tracks pending requests via the existing `createServerRowModel` in-flight map + the `useServerOrchestration` debounce timer; resolves when both are clear. See §6 for the API delta.
+- **Q2-Q8 land with the recommendation:** hard-coded heuristic + `rowModel` override; clean loading frame on switch (no synthesis); pending mutations settle as rejected after 100ms grace; `BcUserSettings.preferredRowModel` deferred to v0.6; `useServerGrid` polymorphic hook split out to alpha.3 / GA; keep `<BcServerGrid>` name; selection carries by default, no opt-in prop.
 
-**Until then,** finish the context-menu lane above and (if you're idle after that) you may pull a v0.6 task from `docs/coordination/v05-audit-followups/worker1-server-perf.md` to keep momentum.
+**Effort:** 18-25h, single PR. Split if >1500 LOC of net diff: structural change first (alpha.2), polymorphic hook second (alpha.3 / GA — that part is your alpha.3 lane, not this PR).
+
+**Gating:** finish the context-menu server-toggles lane above first. After that PR ships, you can branch from main onto `agent/worker1/v05-server-mode-switch` and start. The carry-over contract (§4) is the load-bearing section; read it twice.
 
 **Branch (when ready):** `agent/worker1/v05-server-mode-switch`. **Effort:** structural change spanning `packages/server-row-model/src/index.ts`, `packages/react/src/serverGrid.tsx`, all three turnkey hooks, plus tests and Playwright spec — likely 2-3 worker sessions, broken into stages per the RFC.
 

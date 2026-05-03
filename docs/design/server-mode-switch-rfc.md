@@ -182,7 +182,7 @@ Three loader fields, all optional at the type level; the runtime contract is "th
 
 The three legacy interfaces (`BcServerPagedProps`, `BcServerInfiniteProps`, `BcServerTreeProps`) remain exported as **type aliases** — `type BcServerPagedProps<TRow> = BcServerGridProps<TRow> & { rowModel: "paged"; loadPage: LoadServerPage<TRow> }` — so existing consumers' explicit type annotations keep type-checking. The discriminated union as the **value** of `BcServerGridProps` collapses to the broader interface above.
 
-### `BcServerGridApi` — one new method
+### `BcServerGridApi` — two new methods
 
 ```ts
 export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
@@ -193,10 +193,28 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
    * route imperative calls per mode should branch on this.
    */
   getActiveRowModelMode(): ServerRowModelMode
+
+  /**
+   * Resolves when there are no in-flight server requests AND no pending
+   * state-change debounces. Consumers that want await-style semantics
+   * after a sync state setter (e.g. setRowGroupColumns, setFilterModel,
+   * setSortModel, or a controlled groupBy prop change) can:
+   *
+   *   setGroupBy(['customerType'])
+   *   await apiRef.current.whenIdle()
+   *   // model is settled; new mode's first response has landed.
+   *
+   * General-purpose, not mode-switch-specific: works after any state
+   * change. Resolves immediately if already idle. Rejects if the grid
+   * unmounts before settling.
+   */
+  whenIdle(): Promise<void>
 }
 ```
 
-`getServerRowModelState().mode` already returns this; `getActiveRowModelMode()` is a one-line shortcut for callers that don't want the full state snapshot.
+`getServerRowModelState().mode` already returns the active mode; `getActiveRowModelMode()` is a one-line shortcut for callers that don't want the full state snapshot.
+
+`whenIdle()` is the Q1 ratification: state setters stay sync (matches AG Grid SSRM's `setRowGroupColumns` shape — return `void` and refresh asynchronously), and consumers who want await-style "switch completed" semantics get a Promise-returning getter. The implementation tracks pending requests via the existing `createServerRowModel`'s in-flight map plus the `useServerOrchestration` debounce timer; resolves when both are clear. Consumers that don't await it pay no Promise overhead.
 
 ### Turnkey hooks — keep them, mark as escape hatches (see §7)
 
@@ -277,16 +295,18 @@ One test per dimension in §4 — 14 cases covering both directions (paged→tre
 
 The bench case from §8.
 
-## 10. Open questions for maintainer ratification
+## 10. Maintainer ratification (2026-05-03)
 
-1. **Sync or async API for the switch?** Today's hooks are fully sync — the host sets `groupBy` via React state and the new query fires on the next render. The proposed contract preserves that. AG Grid SSRM exposes a Promise from `setRowGroupColumns`. *Recommendation: stay sync. Consumers that want a "switching…" spinner already have `state.loading` from the carried hook. Confirm.*
-2. **Should the heuristic `groupBy.length > 0 ⇒ tree` be hard-coded, or a `resolveMode` callback?** A consumer with a server-grouped paged query (`groupBy: ['region']` + `loadPage` returns flat rows in group order) wants `groupBy.length > 0 ⇒ paged`. Today's flat-server-grouping workflow exists in `api.md §"Client vs server / current-page grouping"`. *Recommendation: hard-coded heuristic with explicit `rowModel` prop as the override; no `resolveMode` callback in v0.5. Consumers who need the override pass `rowModel="paged"` explicitly. Confirm.*
-3. **Synthesise a single-root tree from paged data on the switch to avoid the loading frame?** *Recommendation: no, per §5. Ratify or override.*
-4. **Pending mutations on switch — settle as rejected, or carry to the new cache?** *Recommendation: settle as `{ status: "rejected", reason: "mode switch" }` after a 100 ms grace. Carrying them is wrong (they were queued against the previous viewKey). Confirm.*
-5. **`BcUserSettings.preferredRowModel`** — pin a mode override across sessions? *Recommendation: defer to v0.6. No new persistence key in v0.5. Confirm.*
-6. **`useServerGrid` (the new polymorphic hook) lands in v0.5.0-alpha.2 or v0.5.0 GA?** Alpha.2 is tighter scope; GA is more polish room. *Recommendation: structural change in alpha.2 (component-level), polymorphic hook in alpha.3 / GA. The three legacy hooks remain canonical until then. Confirm.*
-7. **Component naming.** `<BcServerGrid>` stays as the polymorphic shell? Or do we rename to `<BcServerDataGrid>` and `<BcServerGrid>` becomes a thin alias? *Recommendation: keep `<BcServerGrid>`. Renaming during alpha.2 burns the v0.5 freeze. Confirm.*
-8. **Selection scope.** §4 item 8 carries selection by rowId. Does the maintainer want a "selection clears on mode switch" opt-in for security-sensitive grids (e.g. an audit-log grid where carrying a selection across a re-grouped view is wrong)? *Recommendation: no opt-in; consumers who want it call `apiRef.current.clearRangeSelection()` from a `groupBy` listener. Adding a prop here is API surface for a niche. Confirm.*
+Maintainer ratified all 8 open questions in a single planning pass. 7 of 8 carried the coordinator's recommendation; **Q1 lands as a hybrid (sync setter + Promise-returning getter on apiRef)** — discussed below.
+
+1. **Sync or async API for the switch?** **RESOLVED — hybrid.** State setters stay sync (matches AG Grid SSRM's `setRowGroupColumns` / `setFilterModel` shape and our existing `useServerPagedGrid` actions); a new Promise-returning getter on `apiRef.current` lets consumers `await` for "current pending operations have settled" semantics when they want it. See §6 for the API delta — name proposed: `whenIdle(): Promise<void>`. The hybrid is general-purpose (works for any state-change settle, not just mode switch) and matches modern grid-library norms while leaving an await escape-hatch for consumers who want one.
+2. **Heuristic vs `resolveMode` callback?** **RESOLVED — hard-coded heuristic with `rowModel` prop override.** No `resolveMode` callback in v0.5. Consumers with server-grouped paged queries pass `rowModel="paged"` explicitly.
+3. **Synthesise a single-root tree from paged data on the switch?** **RESOLVED — no.** Clean one-frame loading state, then real tree paints. Matches AG Grid behavior on grouping change.
+4. **Pending mutations on switch — settle as rejected, or carry forward?** **RESOLVED — settle as `{ status: "rejected", reason: "mode switch" }` after a 100ms grace.** Carrying them against the new viewKey is wrong.
+5. **`BcUserSettings.preferredRowModel`?** **RESOLVED — defer to v0.6.** No new persistence key in v0.5. The existing `groupBy` round-trip via `useBcGridState({ persistTo })` covers the heuristic-driven case.
+6. **`useServerGrid` polymorphic hook in alpha.2 or alpha.3 / GA?** **RESOLVED — split.** Structural change (`<BcServerGrid>` mode-polymorphism) ships in alpha.2 so bsncraft can migrate immediately; new `useServerGrid` hook ships in alpha.3 / GA. The three legacy hooks remain canonical until then.
+7. **Component naming?** **RESOLVED — keep `<BcServerGrid>`.** No rename in alpha.2.
+8. **Selection scope on switch — opt-in clear?** **RESOLVED — carry by default, no opt-in prop.** Selection is rowId-keyed; consumers who want it cleared call `apiRef.current.clearSelection()` from a `groupBy` listener.
 
 ## 11. Estimated scope
 
