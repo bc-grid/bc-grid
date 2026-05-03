@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import type { BcSelection, RowId } from "@bc-grid/core"
 import { renderToStaticMarkup } from "react-dom/server"
-import { resolveBulkActionSelectedRowIds } from "../src/bulkActions"
+import { BcGridBulkActionUndoToast, resolveBulkActionSelectedRowIds } from "../src/bulkActions"
 import { BcGrid } from "../src/grid"
-import type { BcBulkActionsContext, BcGridColumn, BcGridProps } from "../src/types"
+import type {
+  BcBulkActionUndoContext,
+  BcBulkActionsContext,
+  BcGridColumn,
+  BcGridProps,
+} from "../src/types"
 
 interface Row {
   id: string
@@ -56,6 +61,7 @@ describe("BcGrid bulkActions slot", () => {
     expect(captured?.selectedRowCount).toBe(2)
     expect(captured?.selectedRowIds.map(String)).toEqual(["a", "b"])
     expect(typeof captured?.clearSelection).toBe("function")
+    expect(typeof captured?.showUndo).toBe("function")
   })
 
   test("does not render the bar when selection is empty", () => {
@@ -78,6 +84,43 @@ describe("BcGrid bulkActions slot", () => {
     expect(html).toContain('class="bc-grid-bulk-actions-count">1 selected')
     expect(html).toContain("Move to folder")
     expect(html).toContain('class="bc-grid-bulk-actions-clear"')
+  })
+})
+
+describe("BcGridBulkActionUndoToast", () => {
+  const undoContext: BcBulkActionUndoContext<Row> = {
+    undoableAction: {
+      label: "Marked 2 invoices paid",
+      inversePatches: [{ rowId: "a" as RowId, fields: { name: "Acme" } }],
+    },
+    dismiss() {},
+    undo: () => Promise.resolve({ ok: true, applied: 1, rowsAffected: 1 }),
+  }
+
+  test("renders the default label, Undo button, and dismiss button", () => {
+    const html = renderToStaticMarkup(<BcGridBulkActionUndoToast ctx={undoContext} />)
+
+    expect(html).toContain('class="bc-grid-bulk-action-undo-toast"')
+    expect(html).toContain("<output")
+    expect(html).toContain("Marked 2 invoices paid")
+    expect(html).toContain("Undo")
+    expect(html).toContain('aria-label="Dismiss bulk action undo"')
+  })
+
+  test("accepts a custom undo slot with the undo context", () => {
+    let captured: BcBulkActionUndoContext<Row> | null = null
+    const html = renderToStaticMarkup(
+      <BcGridBulkActionUndoToast
+        ctx={undoContext}
+        slot={(ctx) => {
+          captured = ctx
+          return <button type="button">Restore {ctx.undoableAction.label}</button>
+        }}
+      />,
+    )
+
+    expect(captured?.undoableAction.label).toBe("Marked 2 invoices paid")
+    expect(html).toContain("Restore Marked 2 invoices paid")
   })
 })
 

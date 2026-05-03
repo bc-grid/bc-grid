@@ -40,6 +40,10 @@ export type DateFilterOperator =
   | "last-n-days"
   | "this-month"
   | "last-month"
+  | "mtd"
+  | "qtd"
+  | "ytd"
+  | "last-fiscal-week"
   | "this-fiscal-quarter"
   | "last-fiscal-quarter"
   | "this-fiscal-year"
@@ -65,14 +69,15 @@ export type SetFilterOperator =
   | "current-team"
 /**
  * Operator surface for `BcColumnFilter.type === "text"` per
- * `filter-registry-rfc §text`. The `regex` modifier is a separate
- * boolean toggle that, when on, causes the predicate to interpret
- * `value` as a `RegExp` pattern (operator-agnostic — `op` is ignored
- * for matching because regex patterns describe their own anchoring).
+ * `filter-registry-rfc §text`. `op: "regex"` is the explicit regex
+ * operator; the legacy `regex` boolean modifier is still accepted for
+ * persisted state and controlled filters that pre-date the operator.
  */
 export type TextFilterOperator =
   | "contains"
   | "does-not-contain"
+  | "regex"
+  | "fuzzy"
   | "starts-with"
   | "ends-with"
   | "equals"
@@ -89,6 +94,8 @@ export interface TextFilterInput {
   caseSensitive?: boolean
   /** Default false. When true, `value` is a regex pattern. */
   regex?: boolean
+  /** Optional fuzzy threshold. Defaults to 2. */
+  fuzzyDistance?: number
 }
 
 export interface DateFilterInput {
@@ -101,6 +108,8 @@ export interface NumberFilterInput {
   op: NumberFilterOperator
   value: string
   valueTo?: string
+  includeMin?: boolean
+  includeMax?: boolean
 }
 
 /**
@@ -112,6 +121,11 @@ export interface NumberFilterInput {
 export interface NumberRangeFilterInput {
   value: string
   valueTo: string
+}
+
+interface NumberFilterValuePair extends NumberRangeFilterInput {
+  includeMin?: boolean
+  includeMax?: boolean
 }
 
 /**
@@ -337,7 +351,7 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
       return encodeNumberFilterInput({ op: filter.op, value: "" })
     }
     if (filter.op === "between") {
-      const values = numberFilterValuePair(filter.values)
+      const values = numberFilterValuePair(filter.values, filter.value)
       return values ? encodeNumberFilterInput({ op: "between", ...values }) : undefined
     }
     const value = scalarFilterInputValue(filter.value)
@@ -346,7 +360,7 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
 
   if (filter.type === "number-range") {
     if (filter.op !== "between") return undefined
-    const values = numberFilterValuePair(filter.values)
+    const values = numberFilterValuePair(filter.values, filter.value)
     return values ? encodeNumberRangeFilterInput(values) : undefined
   }
 
@@ -408,13 +422,15 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
   const value = scalarFilterInputValue(filter.value)
   if (!value || value.trim().length === 0) return undefined
   const caseSensitive = filter.caseSensitive === true
-  const regex = filter.regex === true
+  const regex = filter.regex === true || op === "regex"
+  const fuzzyDistance = typeof filter.values?.[0] === "number" ? filter.values[0] : undefined
   if (op === "contains" && !caseSensitive && !regex) return value
   return encodeTextFilterInput({
     op,
     value,
     ...(caseSensitive ? { caseSensitive: true } : {}),
     ...(regex ? { regex: true } : {}),
+    ...(op === "fuzzy" && fuzzyDistance != null ? { fuzzyDistance } : {}),
   })
 }
 
@@ -462,12 +478,12 @@ export function matchesColumnFilter(
 /**
  * Predicate for the `text` filter type. Switches on the operator
  * (`contains` default, plus `starts-with` / `ends-with` / `equals`)
- * and applies the `caseSensitive` and `regex` modifier flags. When
- * `regex` is on the operator is ignored — regex patterns describe
- * their own anchoring, so applying op semantics on top would surprise
- * users who wrote `^foo$` and selected `contains`. A regex that fails
- * to compile drops the filter (no match) — defense-in-depth alongside
- * the build-time guard in parseTextFilterInput.
+ * and applies the `caseSensitive` and `regex` modifier flags. Regex
+ * patterns describe their own anchoring, so applying op semantics on top
+ * would surprise users who wrote `^foo$` and selected `contains`. A regex
+ * that fails to compile or trips the slow-pattern guard drops the filter
+ * (no match) — defense-in-depth alongside the build-time guard in
+ * parseTextFilterInput.
  */
 function matchesTextFilter(
   cellValue: { formattedValue: string; rawValue?: unknown },
@@ -483,14 +499,21 @@ function matchesTextFilter(
   const needleRaw = String(filter.value ?? "")
   if (needleRaw.length === 0) return true
 
-  if (filter.regex === true) {
-    try {
-      const pattern = new RegExp(needleRaw, filter.caseSensitive === true ? "" : "i")
-      const matched = pattern.test(formattedValue)
-      return filter.op === "not-equals" || filter.op === "does-not-contain" ? !matched : matched
-    } catch {
-      return false
-    }
+  if (filter.op === "fuzzy") {
+    return fuzzyTextMatch(
+      formattedValue,
+      needleRaw,
+      filter.caseSensitive === true,
+      fuzzyDistanceFromFilter(filter),
+    )
+  }
+
+  if (filter.op === "regex" || filter.regex === true) {
+    const pattern = compileTextFilterRegex(needleRaw, filter.caseSensitive === true)
+    if (!pattern) return false
+    const matched = pattern.test(formattedValue)
+    if (filter.op === "not-equals" || filter.op === "does-not-contain") return !matched
+    return matched
   }
 
   const caseSensitive = filter.caseSensitive === true
@@ -566,7 +589,10 @@ export function decodeTextFilterInput(raw: string): TextFilterInput {
     ) {
       const out: TextFilterInput = { op: parsed.op, value: parsed.value }
       if (parsed.caseSensitive === true) out.caseSensitive = true
-      if (parsed.regex === true) out.regex = true
+      if (parsed.regex === true || parsed.op === "regex") out.regex = true
+      if (typeof parsed.fuzzyDistance === "number" && Number.isInteger(parsed.fuzzyDistance)) {
+        out.fuzzyDistance = Math.min(10, Math.max(0, parsed.fuzzyDistance))
+      }
       return out
     }
   } catch {
@@ -749,12 +775,8 @@ function parseTextFilterInput(raw: string): TextColumnFilterDraft | null {
   const value = input.value.trim()
   if (!value) return null
 
-  if (input.regex === true) {
-    try {
-      new RegExp(value, input.caseSensitive === true ? "" : "i")
-    } catch {
-      return null
-    }
+  if (input.regex === true || input.op === "regex") {
+    if (!compileTextFilterRegex(value, input.caseSensitive === true)) return null
   }
 
   const draft: TextColumnFilterDraft = {
@@ -764,7 +786,8 @@ function parseTextFilterInput(raw: string): TextColumnFilterDraft | null {
     value,
   }
   if (input.caseSensitive === true) draft.caseSensitive = true
-  if (input.regex === true) draft.regex = true
+  if (input.regex === true || input.op === "regex") draft.regex = true
+  if (input.op === "fuzzy" && input.fuzzyDistance != null) draft.values = [input.fuzzyDistance]
   return draft
 }
 
@@ -835,11 +858,14 @@ function parseNumberFilterInput(raw: string): NumberColumnFilterDraft | null {
     if (valueTo == null) return null
     const min = Math.min(value, valueTo)
     const max = Math.max(value, valueTo)
+    const includeMin = input.includeMin !== false
+    const includeMax = input.includeMax !== false
     return {
       kind: "column",
       type: "number",
       op: "between",
       values: [min, max],
+      ...(!includeMin || !includeMax ? { value: { min, max, includeMin, includeMax } } : {}),
     }
   }
 
@@ -931,11 +957,27 @@ function scalarFilterInputValue(value: unknown): string | undefined {
 
 function numberFilterValuePair(
   values: readonly unknown[] | undefined,
-): NumberRangeFilterInput | undefined {
+  rangeValue?: unknown,
+): NumberFilterValuePair | undefined {
+  const objectRange = numberBetweenValueRange(rangeValue)
+  if (objectRange) {
+    return {
+      value: String(objectRange.min),
+      valueTo: String(objectRange.max),
+      includeMin: objectRange.includeMin,
+      includeMax: objectRange.includeMax,
+    }
+  }
   if (!Array.isArray(values) || values.length < 2) return undefined
   const value = scalarFilterInputValue(values[0])
   const valueTo = scalarFilterInputValue(values[1])
-  return value && valueTo ? { value, valueTo } : undefined
+  if (!value || !valueTo) return undefined
+  return {
+    value,
+    valueTo,
+    ...(values[2] === false ? { includeMin: false } : {}),
+    ...(values[3] === false ? { includeMax: false } : {}),
+  }
 }
 
 function dateFilterInputValue(value: unknown): string | undefined {
@@ -968,7 +1010,11 @@ function normaliseNumberFilterInput(input: Partial<NumberFilterInput>): NumberFi
     op,
     value: typeof input.value === "string" ? input.value : "",
     ...(op === "between"
-      ? { valueTo: typeof input.valueTo === "string" ? input.valueTo : "" }
+      ? {
+          valueTo: typeof input.valueTo === "string" ? input.valueTo : "",
+          ...(input.includeMin === false ? { includeMin: false } : {}),
+          ...(input.includeMax === false ? { includeMax: false } : {}),
+        }
       : {}),
   }
 }
@@ -1051,11 +1097,11 @@ function matchesNumberFilter(
   if (actual == null) return false
 
   if (filter.op === "between") {
-    const values = filter.values?.map((value) => Number(value)).filter(Number.isFinite) ?? []
-    if (values.length < 2) return false
-    const min = Math.min(values[0] ?? 0, values[1] ?? 0)
-    const max = Math.max(values[0] ?? 0, values[1] ?? 0)
-    return actual >= min && actual <= max
+    const range = numberBetweenRange(filter)
+    if (!range) return false
+    const aboveMin = range.includeMin ? actual >= range.min : actual > range.min
+    const belowMax = range.includeMax ? actual <= range.max : actual < range.max
+    return aboveMin && belowMax
   }
 
   const expected = Number(filter.value)
@@ -1067,6 +1113,133 @@ function matchesNumberFilter(
   if (filter.op === ">") return actual > expected
   if (filter.op === ">=") return actual >= expected
   return false
+}
+
+interface NumberBetweenRange {
+  min: number
+  max: number
+  includeMin: boolean
+  includeMax: boolean
+}
+
+function numberBetweenRange(filter: ServerColumnFilter): NumberBetweenRange | null {
+  const valueRange = numberBetweenValueRange(filter.value)
+  if (valueRange) return valueRange
+  const first = scalarFilterNumberValue(filter.values?.[0])
+  const second = scalarFilterNumberValue(filter.values?.[1])
+  if (first == null || second == null) return null
+  const includeFirst = filter.values?.[2] !== false
+  const includeSecond = filter.values?.[3] !== false
+  if (first <= second) {
+    return { min: first, max: second, includeMin: includeFirst, includeMax: includeSecond }
+  }
+  return { min: second, max: first, includeMin: includeSecond, includeMax: includeFirst }
+}
+
+function numberBetweenValueRange(value: unknown): NumberBetweenRange | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const range = value as {
+    min?: unknown
+    max?: unknown
+    includeMin?: unknown
+    includeMax?: unknown
+  }
+  const minRaw = scalarFilterNumberValue(range.min)
+  const maxRaw = scalarFilterNumberValue(range.max)
+  if (minRaw == null || maxRaw == null) return null
+  const includeMinRaw = range.includeMin !== false
+  const includeMaxRaw = range.includeMax !== false
+  if (minRaw <= maxRaw) {
+    return { min: minRaw, max: maxRaw, includeMin: includeMinRaw, includeMax: includeMaxRaw }
+  }
+  return { min: maxRaw, max: minRaw, includeMin: includeMaxRaw, includeMax: includeMinRaw }
+}
+
+function scalarFilterNumberValue(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null
+  if (typeof value !== "string") return null
+  return parseFilterNumber(value)
+}
+
+function compileTextFilterRegex(pattern: string, caseSensitive: boolean): RegExp | null {
+  if (isPotentiallySlowRegex(pattern)) {
+    warnSlowRegexPattern(pattern)
+    return null
+  }
+  try {
+    return new RegExp(pattern, caseSensitive ? "" : "i")
+  } catch {
+    return null
+  }
+}
+
+const warnedSlowRegexPatterns = new Set<string>()
+
+function warnSlowRegexPattern(pattern: string): void {
+  if (isProduction() || warnedSlowRegexPatterns.has(pattern)) return
+  warnedSlowRegexPatterns.add(pattern)
+  console.warn(
+    `[bc-grid] Text filter regex "${pattern}" was ignored because it may be slow. Use a bounded pattern or handle this filter server-side.`,
+  )
+}
+
+function isPotentiallySlowRegex(pattern: string): boolean {
+  if (pattern.length > 256) return true
+  const nestedQuantifier = /\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d*,?\d*\})/
+  const quantifiedAlternation = /\((?:[^()\\]|\\.)*\|(?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d*,?\d*\})/
+  return nestedQuantifier.test(pattern) || quantifiedAlternation.test(pattern)
+}
+
+function fuzzyDistanceFromFilter(filter: ServerColumnFilter): number {
+  const rawDistance = filter.values?.[0]
+  if (typeof rawDistance !== "number" || !Number.isInteger(rawDistance)) return 2
+  return Math.min(10, Math.max(0, rawDistance))
+}
+
+function fuzzyTextMatch(
+  value: string,
+  query: string,
+  caseSensitive: boolean,
+  maxDistance: number,
+): boolean {
+  const haystack = caseSensitive ? value.trim() : value.trim().toLowerCase()
+  const needle = caseSensitive ? query.trim() : query.trim().toLowerCase()
+  if (!needle) return true
+  if (levenshteinWithin(haystack, needle, maxDistance)) return true
+  return haystack
+    .split(/\s+/)
+    .filter(Boolean)
+    .some((token) => levenshteinWithin(token, needle, maxDistance))
+}
+
+function levenshteinWithin(left: string, right: string, maxDistance: number): boolean {
+  if (Math.abs(left.length - right.length) > maxDistance) return false
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index)
+  const current = Array.from({ length: right.length + 1 }, () => 0)
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    current[0] = leftIndex
+    let rowMin = current[0]
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1
+      current[rightIndex] = Math.min(
+        (previous[rightIndex] ?? 0) + 1,
+        (current[rightIndex - 1] ?? 0) + 1,
+        (previous[rightIndex - 1] ?? 0) + substitutionCost,
+      )
+      rowMin = Math.min(rowMin, current[rightIndex] ?? Number.POSITIVE_INFINITY)
+    }
+    if (rowMin > maxDistance) return false
+    for (let index = 0; index < previous.length; index += 1) {
+      previous[index] = current[index] ?? 0
+    }
+  }
+
+  return (previous[right.length] ?? Number.POSITIVE_INFINITY) <= maxDistance
+}
+
+function isProduction(): boolean {
+  return typeof process !== "undefined" && process.env.NODE_ENV === "production"
 }
 
 function parseFormattedNumber(value: string): number | null {
@@ -1203,6 +1376,10 @@ function isDateFilterOperator(value: unknown): value is DateFilterOperator {
     value === "last-n-days" ||
     value === "this-month" ||
     value === "last-month" ||
+    value === "mtd" ||
+    value === "qtd" ||
+    value === "ytd" ||
+    value === "last-fiscal-week" ||
     value === "this-fiscal-quarter" ||
     value === "last-fiscal-quarter" ||
     value === "this-fiscal-year" ||
@@ -1220,6 +1397,10 @@ function isDateValueLessFilterOperator(value: DateFilterOperator): boolean {
     value === "last-week" ||
     value === "this-month" ||
     value === "last-month" ||
+    value === "mtd" ||
+    value === "qtd" ||
+    value === "ytd" ||
+    value === "last-fiscal-week" ||
     value === "this-fiscal-quarter" ||
     value === "last-fiscal-quarter" ||
     value === "this-fiscal-year" ||
@@ -1245,6 +1426,8 @@ function isTextFilterOperator(value: unknown): value is TextFilterOperator {
   return (
     value === "contains" ||
     value === "does-not-contain" ||
+    value === "regex" ||
+    value === "fuzzy" ||
     value === "starts-with" ||
     value === "ends-with" ||
     value === "equals" ||

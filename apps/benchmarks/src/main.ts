@@ -51,6 +51,13 @@ interface PrefetchSweepPerfInput {
   viewportRows?: number
 }
 
+interface GroupRowsPerfInput {
+  groupCount?: number
+  leafRowsPerGroup?: number
+  levels?: number
+  viewportRows?: number
+}
+
 interface PrefetchSweepPerfMetric extends PerfMetric {
   blocksCached: number
   blocksFetched: number
@@ -78,6 +85,21 @@ interface ServerRowModelPerfMetric extends PerfMetric {
   queuedRequests: number
 }
 
+interface GroupRowsPerfMetric extends PerfMetric {
+  collapsedFlattenMs: number
+  collapsedRowCount: number
+  expandedFlattenMs: number
+  expandedRowCount: number
+  groupCount: number
+  groupRowCount: number
+  leafRowsPerGroup: number
+  levels: number
+  rowHeightBucketMs: number
+  treeBuildMs: number
+  virtualizerMs: number
+  visibleRowCount: number
+}
+
 interface PerfRow {
   id: number
   customer: string
@@ -96,6 +118,7 @@ declare global {
       scrollForFps(durationMs?: number): Promise<ScrollPerfMetric>
       serverRowModelBlocks(input?: ServerRowModelPerfInput): Promise<ServerRowModelPerfMetric>
       serverRowModelPrefetchSweep(input: PrefetchSweepPerfInput): Promise<PrefetchSweepPerfMetric>
+      groupRowsExpand(input?: GroupRowsPerfInput): Promise<GroupRowsPerfMetric>
       rawRowCount: number
     }
     __fps__: number[]
@@ -490,6 +513,138 @@ window.__bcGridPerf = {
   scrollForFps,
   serverRowModelBlocks,
   serverRowModelPrefetchSweep,
+  groupRowsExpand,
+}
+
+interface GroupRowsPerfTree {
+  groupRowCount: number
+  leafRowCount: number
+  roots: readonly GroupRowsPerfGroup[]
+}
+
+interface GroupRowsPerfGroup {
+  id: number
+  children: GroupRowsPerfGroup[]
+  leafCount: number
+  leafStart: number
+}
+
+async function groupRowsExpand(input: GroupRowsPerfInput = {}): Promise<GroupRowsPerfMetric> {
+  const levels = input.levels ?? 5
+  const groupCount = input.groupCount ?? 1000
+  const leafRowsPerGroup = input.leafRowsPerGroup ?? 1000
+  const viewportRows = input.viewportRows ?? 40
+
+  const startedAt = performance.now()
+  const treeStartedAt = performance.now()
+  const tree = createGroupRowsPerfTree({ groupCount, leafRowsPerGroup, levels })
+  const treeBuildMs = performance.now() - treeStartedAt
+
+  const collapsedStartedAt = performance.now()
+  const collapsedRows = flattenGroupRows(tree, new Set())
+  const collapsedFlattenMs = performance.now() - collapsedStartedAt
+
+  const expandedGroupIds = new Set<number>()
+  for (let id = 0; id < tree.groupRowCount; id += 1) expandedGroupIds.add(id)
+
+  const expandedStartedAt = performance.now()
+  const expandedRows = flattenGroupRows(tree, expandedGroupIds)
+  const expandedFlattenMs = performance.now() - expandedStartedAt
+
+  const virtualizerStartedAt = performance.now()
+  const virtualizedGroupRows = new Virtualizer({
+    rowCount: expandedRows.length,
+    colCount: 8,
+    defaultRowHeight: 32,
+    defaultColWidth: 120,
+    viewportHeight: viewportRows * 32,
+    viewportWidth: 960,
+    rowOverscan: 6,
+    colOverscan: 2,
+  })
+
+  const rowHeightBucketStartedAt = performance.now()
+  for (let index = 0; index < expandedRows.length; index += 1) {
+    if ((expandedRows[index] ?? 0) < 0) virtualizedGroupRows.setRowHeight(index, 28)
+  }
+  const rowHeightBucketMs = performance.now() - rowHeightBucketStartedAt
+
+  virtualizedGroupRows.setScrollTop(
+    virtualizedGroupRows.scrollOffsetForRow(Math.floor(expandedRows.length / 2), "center"),
+  )
+  const visibleRowCount = virtualizedGroupRows.computeWindow().rows.length
+  const virtualizerMs = performance.now() - virtualizerStartedAt
+
+  await nextPaint()
+
+  return {
+    collapsedFlattenMs,
+    collapsedRowCount: collapsedRows.length,
+    durationMs: performance.now() - startedAt,
+    expandedFlattenMs,
+    expandedRowCount: expandedRows.length,
+    groupCount,
+    groupRowCount: tree.groupRowCount,
+    leafRowsPerGroup,
+    levels,
+    rowCount: tree.leafRowCount,
+    rowHeightBucketMs,
+    treeBuildMs,
+    virtualizerMs,
+    visibleRowCount,
+  }
+}
+
+function createGroupRowsPerfTree({
+  groupCount,
+  leafRowsPerGroup,
+  levels,
+}: {
+  groupCount: number
+  leafRowsPerGroup: number
+  levels: number
+}): GroupRowsPerfTree {
+  const roots: GroupRowsPerfGroup[] = []
+  let groupRowCount = 0
+  for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+    let root: GroupRowsPerfGroup | null = null
+    let parent: { children: GroupRowsPerfGroup[] } | null = null
+    for (let level = 0; level < levels; level += 1) {
+      const node: GroupRowsPerfGroup = {
+        children: [],
+        id: groupRowCount,
+        leafCount: level === levels - 1 ? leafRowsPerGroup : 0,
+        leafStart: groupIndex * leafRowsPerGroup,
+      }
+      groupRowCount += 1
+      if (parent) parent.children.push(node)
+      else root = node
+      parent = node
+    }
+    if (root) roots.push(root)
+  }
+  return {
+    groupRowCount,
+    leafRowCount: groupCount * leafRowsPerGroup,
+    roots,
+  }
+}
+
+function flattenGroupRows(
+  tree: GroupRowsPerfTree,
+  expandedGroupIds: ReadonlySet<number>,
+): number[] {
+  const output: number[] = []
+  const appendGroup = (group: GroupRowsPerfGroup): void => {
+    output.push(-group.id - 1)
+    if (!expandedGroupIds.has(group.id)) return
+    for (const child of group.children) appendGroup(child)
+    for (let offset = 0; offset < group.leafCount; offset += 1) {
+      output.push(group.leafStart + offset)
+    }
+  }
+  for (const root of tree.roots) appendGroup(root)
+  return output
 }
 
 async function serverRowModelBlocks(

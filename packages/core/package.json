@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/core",
-  "version": "0.5.0",
+  "version": "0.6.0-alpha.1",
   "description": "Core types and contracts for bc-grid",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
@@ -29,8 +29,8 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean --tsconfig tsconfig.build.json",
-    "dev": "tsup src/index.ts --format esm --dts --sourcemap --watch --tsconfig tsconfig.build.json",
+    "build": "tsup src/index.ts src/range.ts src/selection.ts --format esm --dts --sourcemap --clean --tsconfig tsconfig.build.json",
+    "dev": "tsup src/index.ts src/range.ts src/selection.ts --format esm --dts --sourcemap --watch --tsconfig tsconfig.build.json",
     "type-check": "tsc -b"
   }
 }

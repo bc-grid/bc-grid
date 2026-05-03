@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { ColumnId } from "@bc-grid/core"
 import { type DataRowEntry, type GroupRowEntry, resolveColumns } from "../src/gridInternals"
-import { buildGroupedRowModel } from "../src/grouping"
+import { buildGroupedRowModel, buildGroupedRowTree, flattenGroupedRowTree } from "../src/grouping"
 import type { BcReactGridColumn } from "../src/types"
 
 interface Row {
@@ -52,6 +52,28 @@ describe("buildGroupedRowModel", () => {
       "Status: (Blank)",
     ])
     expect(model.rows.map((entry) => (entry as GroupRowEntry).childCount)).toEqual([2, 1, 1])
+  })
+
+  test("reuses the grouped tree when expansion state changes", () => {
+    const tree = buildGroupedRowTree({
+      rows: rowEntries,
+      columns: resolveColumns(columns, []),
+      groupBy: ["status"],
+    })
+    const openGroupId = tree.allGroupRowIds[0]
+    if (!openGroupId) throw new Error("expected group id")
+
+    const collapsed = flattenGroupedRowTree(tree, new Set())
+    const expanded = flattenGroupedRowTree(tree, new Set([openGroupId]))
+
+    expect(collapsed.rows.every((entry) => entry.kind === "group")).toBe(true)
+    expect(expanded.rows.map((entry) => entry.rowId)).toEqual([
+      openGroupId,
+      "1",
+      "3",
+      collapsed.rows[1]?.rowId,
+      collapsed.rows[2]?.rowId,
+    ])
   })
 
   test("expands a group row and stamps tree levels on leaves", () => {

@@ -90,6 +90,38 @@ describe("buildGridFilter", () => {
     })
   })
 
+  test("text regex and fuzzy operators produce explicit ServerColumnFilter payloads", () => {
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "regex", value: "^Acme" }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "regex",
+      value: "^Acme",
+      regex: true,
+    })
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "regex", value: "[" }),
+      }),
+    ).toBeNull()
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "fuzzy", value: "tradin", fuzzyDistance: 1 }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "fuzzy",
+      value: "tradin",
+      values: [1],
+    })
+  })
+
   test("multiple non-empty inputs → ServerFilterGroup with op: and", () => {
     const result = buildGridFilter({ name: "John", email: "@acme" })
     expect(result?.kind).toBe("group")
@@ -147,6 +179,30 @@ describe("buildGridFilter", () => {
       type: "number",
       op: "between",
       values: [1000, 2500],
+    })
+  })
+
+  test("between number inputs can exclude either bound", () => {
+    expect(
+      buildGridFilter(
+        {
+          balance: encodeNumberFilterInput({
+            op: "between",
+            value: "1000",
+            valueTo: "2500",
+            includeMin: false,
+            includeMax: false,
+          }),
+        },
+        { balance: "number" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "balance",
+      type: "number",
+      op: "between",
+      values: [1000, 2500],
+      value: { min: 1000, max: 2500, includeMin: false, includeMax: false },
     })
   })
 
@@ -255,6 +311,17 @@ describe("buildGridFilter", () => {
         { lastInvoice: "date" },
       ),
     ).toBeNull()
+    expect(
+      buildGridFilter(
+        { lastInvoice: encodeDateFilterInput({ op: "mtd", value: "" }) },
+        { lastInvoice: "date" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "lastInvoice",
+      type: "date",
+      op: "mtd",
+    })
   })
 
   test("between date inputs produce inclusive min/max values", () => {
@@ -594,6 +661,25 @@ describe("columnFilterTextFromGridFilter", () => {
       op: "between",
       value: "100",
       valueTo: "5000",
+    })
+    expect(buildGridFilter(text, { balance: "number" })).toEqual(filter)
+  })
+
+  test("projects number 'between' filters with exclusive bounds", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "balance",
+      type: "number" as const,
+      op: "between" as const,
+      values: [100, 5000],
+      value: { min: 100, max: 5000, includeMin: false, includeMax: true },
+    }
+    const text = columnFilterTextFromGridFilter(filter)
+    expect(text.balance ? decodeNumberFilterInput(text.balance) : null).toEqual({
+      op: "between",
+      value: "100",
+      valueTo: "5000",
+      includeMin: false,
     })
     expect(buildGridFilter(text, { balance: "number" })).toEqual(filter)
   })
@@ -974,6 +1060,26 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(filter, lookup({ balance: "$2,501" }))).toBe(false)
   })
 
+  test("number filters respect exclusive between bounds", () => {
+    const filter = buildGridFilter(
+      {
+        balance: encodeNumberFilterInput({
+          op: "between",
+          value: "1000",
+          valueTo: "2500",
+          includeMin: false,
+          includeMax: false,
+        }),
+      },
+      { balance: "number" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(matchesGridFilter(filter, lookup({ balance: "$1,000" }))).toBe(false)
+    expect(matchesGridFilter(filter, lookup({ balance: "$1,750" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ balance: "$2,500" }))).toBe(false)
+  })
+
   test("date filters compare formatted date values", () => {
     const beforeFilter = buildGridFilter(
       { lastInvoice: encodeDateFilterInput({ op: "before", value: "2026-03-01" }) },
@@ -1044,6 +1150,25 @@ describe("matchesGridFilter — column", () => {
     ).toBe(true)
     expect(
       matchesGridFilter(filter, lookup({ postedOn: "2026-10-01" }), {
+        context: { now: "2026-08-15", fiscalCalendar: { startMonth: 7, startDay: 1 } },
+      }),
+    ).toBe(false)
+  })
+
+  test("date to-date filters use predicate fiscal calendar context", () => {
+    const filter = buildGridFilter(
+      { postedOn: encodeDateFilterInput({ op: "qtd", value: "" }) },
+      { postedOn: "date" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, lookup({ postedOn: "2026-07-01" }), {
+        context: { now: "2026-08-15", fiscalCalendar: { startMonth: 7, startDay: 1 } },
+      }),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(filter, lookup({ postedOn: "2026-09-30" }), {
         context: { now: "2026-08-15", fiscalCalendar: { startMonth: 7, startDay: 1 } },
       }),
     ).toBe(false)
@@ -1319,12 +1444,39 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(filter, lookup({ code: "VIP-001" }))).toBe(false)
   })
 
+  test("text regex and fuzzy filters match through the registered predicates", () => {
+    expect(
+      matchesGridFilter(
+        {
+          kind: "column" as const,
+          columnId: "name",
+          type: "text" as const,
+          op: "regex",
+          value: "^J",
+        },
+        lookup({ name: "John" }),
+      ),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(
+        {
+          kind: "column" as const,
+          columnId: "name",
+          type: "text" as const,
+          op: "fuzzy",
+          value: "jon",
+        },
+        lookup({ name: "John" }),
+      ),
+    ).toBe(true)
+  })
+
   test("unknown op is rejected (Q2 follow-up)", () => {
     const filter = {
       kind: "column" as const,
       columnId: "name",
       type: "text" as const,
-      op: "regex",
+      op: "unsupported-op",
       value: "^J",
     }
     expect(matchesGridFilter(filter, lookup({ name: "John" }))).toBe(false)

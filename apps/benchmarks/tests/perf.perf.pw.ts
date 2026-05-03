@@ -5,6 +5,7 @@ const LATENCY_BAR_MS = 100
 const MEMORY_BAR_BYTES = 30 * 1024 * 1024
 const RUN_COUNT = 3
 const SERVER_ROW_MODEL_BAR_MS = 3000
+const GROUP_ROWS_EXPAND_BAR_MS = 2000
 
 declare global {
   interface Window {
@@ -13,6 +14,7 @@ declare global {
       mountGrid(): Promise<PerfMetric>
       sortRows(): Promise<PerfMetric>
       filterRows(): Promise<PerfMetric>
+      groupRowsExpand(input?: GroupRowsPerfInput): Promise<GroupRowsPerfMetric>
       serverRowModelBlocks(input?: ServerRowModelPerfInput): Promise<ServerRowModelPerfMetric>
       serverRowModelPrefetchSweep(input: PrefetchSweepPerfInput): Promise<PrefetchSweepPerfMetric>
       rawRowCount: number
@@ -48,6 +50,13 @@ interface PrefetchSweepPerfInput {
   viewportRows?: number
 }
 
+interface GroupRowsPerfInput {
+  groupCount?: number
+  leafRowsPerGroup?: number
+  levels?: number
+  viewportRows?: number
+}
+
 interface PrefetchSweepPerfMetric extends PerfMetric {
   blocksCached: number
   blocksFetched: number
@@ -73,6 +82,21 @@ interface ServerRowModelPerfMetric extends PerfMetric {
   maxQueueDepth: number
   maxQueueWaitMs: number
   queuedRequests: number
+}
+
+interface GroupRowsPerfMetric extends PerfMetric {
+  collapsedFlattenMs: number
+  collapsedRowCount: number
+  expandedFlattenMs: number
+  expandedRowCount: number
+  groupCount: number
+  groupRowCount: number
+  leafRowsPerGroup: number
+  levels: number
+  rowHeightBucketMs: number
+  treeBuildMs: number
+  virtualizerMs: number
+  visibleRowCount: number
 }
 
 test(`scroll FPS at 100k x 30 stays >=${FPS_BAR} (median of ${RUN_COUNT})`, async ({ page }) => {
@@ -175,6 +199,46 @@ test(`server row model loads and re-hits 100k cached rows under ${SERVER_ROW_MOD
   expect(metric.blockFetches).toBe(1000)
   expect(metric.hotCacheHitRate).toBeGreaterThanOrEqual(0.99)
   expect(metric.durationMs).toBeLessThan(SERVER_ROW_MODEL_BAR_MS)
+})
+
+test(`group-row expand at 5 x 1k scale stays under ${GROUP_ROWS_EXPAND_BAR_MS}ms`, async ({
+  page,
+}) => {
+  await page.goto("/?mount=false")
+  await page.waitForFunction(() => typeof window.__bcGridPerf?.groupRowsExpand === "function")
+
+  const metric = await page.evaluate(() =>
+    window.__bcGridPerf.groupRowsExpand({
+      leafRowsPerGroup: 1000,
+      levels: 5,
+    }),
+  )
+
+  console.log(
+    [
+      `perf group-rows rows=${metric.rowCount}`,
+      `groups=${metric.groupRowCount}`,
+      `collapsedRows=${metric.collapsedRowCount}`,
+      `expandedRows=${metric.expandedRowCount}`,
+      `duration=${metric.durationMs.toFixed(2)}ms`,
+      `bar=${GROUP_ROWS_EXPAND_BAR_MS}ms`,
+      `tree=${metric.treeBuildMs.toFixed(2)}ms`,
+      `collapsedFlatten=${metric.collapsedFlattenMs.toFixed(2)}ms`,
+      `expandedFlatten=${metric.expandedFlattenMs.toFixed(2)}ms`,
+      `rowHeightBucket=${metric.rowHeightBucketMs.toFixed(2)}ms`,
+      `virtualizer=${metric.virtualizerMs.toFixed(2)}ms`,
+      `visibleRows=${metric.visibleRowCount}`,
+    ].join(" "),
+  )
+
+  expect(metric.levels).toBe(5)
+  expect(metric.leafRowsPerGroup).toBe(1000)
+  expect(metric.groupRowCount).toBe(5000)
+  expect(metric.rowCount).toBe(1_000_000)
+  expect(metric.collapsedRowCount).toBe(1000)
+  expect(metric.expandedRowCount).toBe(1_005_000)
+  expect(metric.visibleRowCount).toBeGreaterThan(0)
+  expect(metric.durationMs).toBeLessThan(GROUP_ROWS_EXPAND_BAR_MS)
 })
 
 // `v06-server-perf-block-cache-lru-tuning` (worker1 audit P1 §5).

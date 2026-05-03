@@ -44,6 +44,10 @@ interface BcRowPatchFailure {
 
 `applied` is the cell count; `rowsAffected` is the unique-row count.
 
+`BcRowPatch.inverse` is optional metadata. The grid ignores it while applying
+the forward patch, but bulk-action undo recipes can collect those inverse
+patches and pass them back to `applyRowPatches`.
+
 ## Pattern 1 — Fill Down
 
 Copy the active cell's value into the same column on every selected row. The classic spreadsheet gesture; in an ERP, this is "set status of selected to Approved."
