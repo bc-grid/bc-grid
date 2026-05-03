@@ -65,6 +65,22 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain("hsl(var(")
   })
 
+  test("row-hover token mixes accent with --bc-grid-bg (opaque) so body and pinned composite to the same pixels", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    // Body cells paint hover via `background: var(--bc-grid-row-hover)`
+    // (shorthand clears their resting `background-color`); pinned
+    // cells layer it via `background-image: linear-gradient(<token>,
+    // <token>)` over their opaque `background-color: var(
+    // --bc-grid-pinned-bg)` base. An opaque hover token (mix with
+    // `--bc-grid-bg`, never `transparent`) is the only shape that
+    // produces byte-identical pixels for body and pinned in every
+    // consumer host. Surfaced by bsncraft 2026-05 P0 #1 + #3.
+    expect(css).toMatch(
+      /--bc-grid-row-hover:\s*color-mix\(in srgb,\s*var\(--accent,[^)]+\)\)\s*70%,\s*var\(--bc-grid-bg\)\)/,
+    )
+    expect(css).not.toMatch(/--bc-grid-row-hover:[^;]*\btransparent\b/)
+  })
+
   test("token bridge consumes the full shadcn / Tailwind v4 surface set", () => {
     // Every shadcn token named in the v4 / shadcn-2025 colour contract
     // must be readable via a `--bc-grid-*` companion. Apps that already
