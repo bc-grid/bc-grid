@@ -1,5 +1,5 @@
 import { AnimationBudget, flash } from "@bc-grid/animations"
-import { emptyBcPivotState, emptyBcRangeSelection, rangeClear } from "@bc-grid/core"
+import { emptyBcPivotState, emptyBcRangeSelection, normaliseRange, rangeClear } from "@bc-grid/core"
 import type {
   BcCellPosition,
   BcColumnFilter,
@@ -329,6 +329,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // editorTabWraparound default: "row-wrap" (matches Excel + Google
   // Sheets). Per `v06-editor-tab-wraparound-polish` (bsncraft request).
   const editorTabWraparound = props.editorTabWraparound ?? "row-wrap"
+  // confirmRangeDelete: opt-in for multi-cell range Delete (v0.6 §1
+  // `v06-editor-multi-cell-delete-confirm`). Default undefined =
+  // preserve v0.5 single-cell clear behaviour.
+  const confirmRangeDelete = props.confirmRangeDelete
   const editScrollOutAction: "commit" | "cancel" | "preserve" =
     props.editScrollOutAction ?? "commit"
 
@@ -3063,6 +3067,58 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         }
       }
 
+      // Multi-cell range-delete (v0.6 §1
+      // `v06-editor-multi-cell-delete-confirm`). When Delete /
+      // Backspace fires AND a range > 1 cell is active AND the
+      // consumer opted in via `confirmRangeDelete`, clear every
+      // editable cell in the range. Default `undefined` / `false`
+      // falls through to the single-cell clear path below
+      // (preserves v0.5 behaviour).
+      if (
+        editingEnabled &&
+        confirmRangeDelete &&
+        (event.key === "Delete" || event.key === "Backspace") &&
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
+        const activeRange = rangeSelectionState.ranges[rangeSelectionState.ranges.length - 1]
+        if (activeRange) {
+          const cells = collectEditableCellsInRange({
+            range: activeRange,
+            rangeRowIds,
+            resolvedColumns,
+            rowEntries,
+            isRowDisabled,
+          })
+          if (cells.length > 1) {
+            event.preventDefault()
+            const confirmFn = confirmRangeDelete
+            const proceed: boolean | Promise<boolean> =
+              typeof confirmFn === "function" ? confirmFn(activeRange) : true
+            const finishClear = (ok: boolean): void => {
+              if (!ok) return
+              for (const cell of cells) {
+                void editController.clearCell({
+                  rowId: cell.rowId,
+                  row: cell.row,
+                  columnId: cell.columnId,
+                  column: cell.column,
+                  previousValue: cell.previousValue,
+                })
+              }
+            }
+            if (proceed instanceof Promise) {
+              void proceed.then(finishClear)
+            } else {
+              finishClear(proceed)
+            }
+            return
+          }
+        }
+      }
+
       if (
         editingEnabled &&
         cellTarget &&
@@ -3209,6 +3265,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       setRangeSelectionState,
       setSelectionState,
       toggleGroupRow,
+      confirmRangeDelete,
     ],
   )
 
@@ -4538,6 +4595,69 @@ function publicPasteSkippedCell(cell: BcGridPasteTsvSkippedCell): BcGridPasteTsv
 function isEditableKeyTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   return target.isContentEditable || editableKeyTargetTags.has(target.tagName)
+}
+
+/**
+ * Resolve every editable cell inside a range — used by the
+ * multi-cell range-delete path (v0.6 §1
+ * `v06-editor-multi-cell-delete-confirm`). Walks the rectangle
+ * `range.start` → `range.end` (inclusive, normalised), skips group
+ * rows / disabled rows / non-editable cells, and returns
+ * `{ rowId, row, columnId, column, previousValue }` records ready
+ * to feed into `editController.clearCell`.
+ *
+ * Returning `[]` (or a single entry) lets the caller decide whether
+ * to fall through to the existing single-cell clear path.
+ */
+function collectEditableCellsInRange<TRow>(params: {
+  range: BcRange
+  rangeRowIds: readonly RowId[]
+  resolvedColumns: readonly ResolvedColumn<TRow>[]
+  rowEntries: readonly RowEntry<TRow>[]
+  isRowDisabled: (row: TRow) => boolean
+}): Array<{
+  rowId: RowId
+  row: TRow
+  columnId: ColumnId
+  column: BcReactGridColumn<TRow, unknown>
+  previousValue: unknown
+}> {
+  const { range, rangeRowIds, resolvedColumns, rowEntries, isRowDisabled } = params
+  const normalised = normaliseRange(
+    range,
+    resolvedColumns.map((c) => ({ columnId: c.columnId })),
+    rangeRowIds,
+  )
+  if (!normalised) return []
+
+  const cells: Array<{
+    rowId: RowId
+    row: TRow
+    columnId: ColumnId
+    column: BcReactGridColumn<TRow, unknown>
+    previousValue: unknown
+  }> = []
+  for (let r = normalised.rowStart; r <= normalised.rowEnd; r++) {
+    const rowEntry = rowEntries[r]
+    if (!rowEntry || !isDataRowEntry(rowEntry)) continue
+    if (isRowDisabled(rowEntry.row)) continue
+    for (let c = normalised.colStart; c <= normalised.colEnd; c++) {
+      const column = resolvedColumns[c]
+      if (!column) continue
+      if (!isCellEditable(column, rowEntry.row)) continue
+      const previousValue = column.source.field
+        ? (rowEntry.row as Record<string, unknown>)[column.source.field]
+        : undefined
+      cells.push({
+        rowId: rowEntry.rowId,
+        row: rowEntry.row,
+        columnId: column.columnId,
+        column: column.source,
+        previousValue,
+      })
+    }
+  }
+  return cells
 }
 
 function cellPositionFromPoint(

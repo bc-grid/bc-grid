@@ -1081,6 +1081,33 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * the spreadsheet-style fill handle.
    */
   rangeSelectionOptions?: boolean | BcRangeSelectionOptions
+
+  /**
+   * Multi-cell range-delete opt-in (v0.6 §1
+   * `v06-editor-multi-cell-delete-confirm`). When the user presses
+   * Delete / Backspace on a range selection covering more than one
+   * cell, this prop controls whether the grid clears every cell in
+   * the range:
+   *
+   *   - `undefined` / `false` (default): no multi-cell clear — the
+   *     keystroke falls through to the single-cell clear path
+   *     (clears just the active cell). Preserves v0.5 behaviour.
+   *   - `true`: multi-cell clear fires immediately, no prompt.
+   *     Iterates every editable cell in the range and runs each
+   *     through `clearCell` (consumer's `column.valueParser` +
+   *     `validate` + `onCellEditCommit` apply per-cell, same as a
+   *     keyboard clear).
+   *   - Function: the grid awaits the consumer's prompt with the
+   *     resolved range. Returning `true` proceeds with the
+   *     multi-cell clear; `false` aborts. Use this for an
+   *     Excel/Google-Sheets style "Clear contents on N cells?"
+   *     confirm dialog.
+   *
+   * Cells in the range that are non-editable (or read-only) are
+   * skipped; the clear is best-effort across the editable subset.
+   */
+  confirmRangeDelete?: boolean | ((range: CoreBcRange) => boolean | Promise<boolean>)
+
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
 
