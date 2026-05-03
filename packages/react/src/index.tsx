@@ -3,6 +3,12 @@ export { DEFAULT_CONTEXT_MENU_ITEMS } from "./contextMenu"
 export { BcEditGrid } from "./editGrid"
 export { registerReactFilterDefinition } from "./filterRegistry"
 export { BcGrid, useBcGridApi } from "./grid"
+export {
+  BC_SAVED_VIEW_VERSION,
+  applySavedViewLayout,
+  createSavedView,
+  migrateSavedViewLayout,
+} from "./savedView"
 export { BcServerGrid } from "./serverGrid"
 export { BcStatusBar, resolveVisibleSegments } from "./statusBar"
 export { useBcGridState } from "./useBcGridState"
@@ -55,6 +61,14 @@ export type {
   UseServerTreeGridResult,
   UseServerTreeGridState,
 } from "./useServerTreeGrid"
+export type {
+  BcSavedView,
+  BcSavedViewInput,
+  BcSavedViewLayoutApplier,
+  BcSavedViewLayoutInput,
+  BcSavedViewScope,
+  CreateSavedViewOptions,
+} from "./savedView"
 
 export type {
   BcAggregationFormatterParams,
