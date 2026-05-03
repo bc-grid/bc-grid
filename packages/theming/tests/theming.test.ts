@@ -390,10 +390,12 @@ describe("@bc-grid/theming", () => {
 
     const leftEdge = ruleFor(".bc-grid-cell-pinned-left-edge::after {")
     expect(leftEdge).toContain("var(--bc-grid-pinned-boundary)")
+    expect(leftEdge).toContain("mix-blend-mode: multiply")
     expect(leftEdge).toContain("opacity: 0")
 
     const rightEdge = ruleFor(".bc-grid-cell-pinned-right-edge::before {")
     expect(rightEdge).toContain("var(--bc-grid-pinned-boundary)")
+    expect(rightEdge).toContain("mix-blend-mode: multiply")
     expect(rightEdge).toContain("opacity: 0")
 
     expect(
@@ -431,6 +433,7 @@ describe("@bc-grid/theming", () => {
     expect(forced).toContain("--bc-grid-pinned-boundary: CanvasText")
     expect(forced).toContain(".bc-grid-cell-pinned-left-edge::after,")
     expect(forced).toContain("background: CanvasText")
+    expect(forced).toContain("mix-blend-mode: normal")
     expect(forced).toContain("opacity: 1")
   })
 
