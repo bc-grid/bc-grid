@@ -119,3 +119,31 @@ test("selectEditor mounts in popup mode (in-cell-editor-mode-rfc §4: dropdown o
   await expect(wrapper).toBeAttached()
   await expect(wrapper).toHaveAttribute("data-bc-grid-editor-mount", "popup")
 })
+
+// First-page preload via `column.fetchOptions("", signal)` —
+// `v06-prepareresult-preload-select-multi`. The `selectEditor.prepare`
+// hook resolves async options before mount; the Component reads
+// `prepareResult.initialOptions` and feeds the Combobox primitive's
+// new `initialOptions` prop. Demo column `status` uses static options
+// today; this stub is `test.skip` pending a demo column wired with
+// `fetchOptions`. Coordinator: unskip once the example app exposes a
+// remote-enum select column (see PR description for the fixture
+// requirement).
+test.skip("selectEditor preloads options from column.fetchOptions on first paint", async ({
+  page,
+}) => {
+  await page.goto(URL)
+  await focusBodyCell(page, 0, SELECT_COLUMN)
+  await page.keyboard.press("F2")
+
+  const trigger = page.locator(TRIGGER_SELECTOR).first()
+  // The whole point: options are PRESENT on first paint — no
+  // intermediate "Loading…" / blank dropdown — because the framework
+  // awaits `prepare()` before mounting. Pin the option count via the
+  // trigger's `data-bc-grid-editor-option-count` attribute (which the
+  // primitive populates from the resolved option list, not from a
+  // post-mount async fetch).
+  await expect(trigger).toHaveAttribute("data-bc-grid-editor-option-count", /[1-9]\d*/)
+  const options = page.locator('[role="listbox"] [role="option"]')
+  await expect(options.first()).toBeVisible()
+})
