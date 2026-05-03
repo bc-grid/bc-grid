@@ -38,12 +38,10 @@ describe("editingEnabled gates every editor activation path", () => {
     expect(gridSource).toMatch(/startEdit\([\s\S]*?if\s*\(\s*!editingEnabled\s*\)\s*return/)
   })
 
-  test("double-click cell activation respects editingEnabled", () => {
-    // The body-cell double-click handler at line ~2670 is the
-    // pointer activation path. Gating here keeps a vanilla read-only
-    // grid from accidentally entering edit mode on accidental
-    // double-clicks.
-    expect(gridSource).toMatch(/if\s*\(\s*editingEnabled\s*&&\s*!disabled\s*&&\s*columnId\s*\)/)
+  test("double-click cell activation respects editingEnabled (and editorActivation mode)", () => {
+    expect(gridSource).toMatch(
+      /editingEnabled\s*&&\s*\n?\s*editorActivation\s*===\s*"double-click"\s*&&\s*\n?\s*!disabled\s*&&\s*\n?\s*columnId/,
+    )
   })
 })
 

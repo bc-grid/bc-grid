@@ -69,7 +69,13 @@ export function BcEditGrid<TRow>(props: BcEditGridProps<TRow>): ReactNode {
     onEdit,
   ])
 
-  return <BcGrid {...props} columns={editColumns} />
+  // BcEditGrid defaults `escDiscardsRow` to true since the row-discard
+  // surface already lives in its action column — the keyboard
+  // shortcut completes the symmetry. Consumers can opt out with
+  // `escDiscardsRow={false}` to get cell-only Esc. Spread BEFORE
+  // the default so `props.escDiscardsRow === false` wins; if the
+  // prop is `undefined` (default), our `?? true` kicks in.
+  return <BcGrid {...props} escDiscardsRow={props.escDiscardsRow ?? true} columns={editColumns} />
 }
 
 export function createActionsColumn<TRow>(options: {

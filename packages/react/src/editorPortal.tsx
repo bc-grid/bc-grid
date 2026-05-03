@@ -54,6 +54,8 @@ interface EditorPortalProps<TRow> {
    * `BcGridProps.showEditorKeyboardHints`.
    */
   showKeyboardHints?: boolean
+  blurAction?: "commit" | "reject" | "ignore"
+  escDiscardsRow?: boolean
 }
 
 /**
@@ -78,6 +80,8 @@ export function EditorPortal<TRow>({
   defaultEditor,
   showValidationMessages = true,
   showKeyboardHints = false,
+  blurAction = "commit",
+  escDiscardsRow = false,
 }: EditorPortalProps<TRow>): ReactNode {
   const { editState } = controller
 
@@ -124,6 +128,8 @@ export function EditorPortal<TRow>({
       editor={editorSpec}
       showValidationMessages={showValidationMessages}
       showKeyboardHints={showKeyboardHints}
+      blurAction={blurAction}
+      escDiscardsRow={escDiscardsRow}
       {...(virtualizer ? { virtualizer } : {})}
       {...(typeof rowIndex === "number" ? { rowIndex } : {})}
       {...(typeof colIndex === "number" ? { colIndex } : {})}
@@ -143,6 +149,8 @@ interface EditorMountProps<TRow> {
   colIndex?: number
   showValidationMessages: boolean
   showKeyboardHints: boolean
+  blurAction: "commit" | "reject" | "ignore"
+  escDiscardsRow: boolean
 }
 
 function EditorMount<TRow>({
@@ -157,11 +165,20 @@ function EditorMount<TRow>({
   colIndex,
   showValidationMessages,
   showKeyboardHints,
+  blurAction,
+  escDiscardsRow,
 }: EditorMountProps<TRow>) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const focusRef = useRef<HTMLElement | null>(null)
-  const { editState, commit, cancel, dispatchMounted, dispatchUnmounted, getOverlayValue } =
-    controller
+  const {
+    editState,
+    commit,
+    cancel,
+    discardRowEdits,
+    dispatchMounted,
+    dispatchUnmounted,
+    getOverlayValue,
+  } = controller
 
   // editState is narrowed to Mounting / Editing / Validating here.
   const seedKey =
@@ -239,6 +256,10 @@ function EditorMount<TRow>({
       handleCommit,
     )
   handleCommitRef.current = handleCommit
+  // Same stable-ref pattern for cancel — used by the blurAction
+  // `"reject"` path.
+  const cancelRef = useRef(cancel)
+  cancelRef.current = cancel
 
   // Portal-aware click-outside per `editing-rfc §Portal click-outside rules`.
   // Pointerdown anywhere outside the editor or any descendant marked
@@ -247,11 +268,29 @@ function EditorMount<TRow>({
   // outside target, so don't drift the active cell on top of that.
   // Clicks on the editor's wrapper or on portaled popovers (date/select/
   // autocomplete) are ignored — the editor still has focus.
+  //
+  // The `blurAction` prop chooses what click-outside means:
+  //   - `"commit"` (default): commit the current value (today's behaviour).
+  //   - `"reject"`: cancel the edit (mirror Escape) — for forms-style
+  //     ERPs that want explicit Tab/Enter commit and treat blur as cancel.
+  //   - `"ignore"`: do nothing — for high-stakes edits where accidental
+  //     commits would be costly.
+  // Stable ref so the listener bound at mount sees the latest value
+  // without re-binding (each new prop value would race with mid-edit
+  // state churn).
+  const blurActionRef = useRef(blurAction)
+  blurActionRef.current = blurAction
   useEffect(() => {
     const handlePointerDown = (event: globalThis.PointerEvent) => {
       const target = event.target
       if (!(target instanceof Element)) return
       if (target.closest("[data-bc-grid-editor-root], [data-bc-grid-editor-portal]")) return
+      const action = blurActionRef.current
+      if (action === "ignore") return
+      if (action === "reject") {
+        cancelRef.current?.()
+        return
+      }
       const value = readEditorInputValue(focusRef.current, editor as BcCellEditor<unknown>)
       handleCommitRef.current?.(value, "stay", "pointer")
     }
@@ -278,7 +317,21 @@ function EditorMount<TRow>({
     }
     if (intent.type === "cancel") {
       event.preventDefault()
-      cancel()
+      // `escDiscardsRow` (audit P1-W3-3 follow-up to #381): in
+      // BcEditGrid (or any consumer that opts in), Esc rolls back
+      // the row's prior overlay patches in addition to cancelling
+      // the active editor. `discardRowEdits` already handles the
+      // active-editor cancel internally when its target row matches
+      // the editing row (which it always does here, since the
+      // editor portal mounted for a cell on this row). So we call
+      // discardRowEdits OR cancel — never both, to avoid a double
+      // dispatch (the state machine absorbs the second event but
+      // the redundant work is silly).
+      if (escDiscardsRow) {
+        discardRowEdits(cell.rowId)
+      } else {
+        cancel()
+      }
       return
     }
   }
