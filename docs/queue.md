@@ -131,8 +131,8 @@ Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both docume
 
 ### v0.6 supporting work (in worker queues)
 
-- `[ready: worker1]` **v06-stale-response-flood-test** (planning doc §9, ~half day, tests-only).
-- `[ready: worker1]` **v06-server-tree-stale-viewkey-fetches** (planning doc §10, ~half day).
+- `[review: worker1 #433]` **v06-stale-response-flood-test** (planning doc §9, tests-only) — 3 new model-layer tests pinning the existing flood contract: `lastLoad` ends at the FINAL request, every prior `controller.signal.aborted === true`, and a stale-loadPage-after-abortExcept race scenario.
+- `[in-flight: worker1]` **v06-server-tree-stale-viewkey-fetches** (worker1, planning doc §10) — extracts the existing React-layer viewKey gate at `serverGrid.tsx:1745-1755` (shipped in #391) into a pure exported helper `shouldMergeTreeResult({ resultViewKey, fallbackViewKey, currentViewKey })`. Updates the React caller to use the helper. 6 new unit tests pin the gate contract: result.viewKey echo path, fallback path, stale-with-undefined-echo path, stale-with-stale-echo path, empty-string edge case. Branch `agent/worker1/v06-server-tree-stale-viewkey-fetches`.
 - `[ready: worker1]` **v06-server-view-change-reset-policy** (planning doc §1, ~half day).
 - `[ready: worker1]` **v06-optimistic-rollback-vs-invalidate** (planning doc §11, ~half day).
 - `[ready: worker2]` **v05-bsncraft-pinned-scroll-shadow-overlay** — bsncraft P0 #4 carry-over: `mix-blend-mode: multiply` on the pinned-edge pseudo. ~half day.

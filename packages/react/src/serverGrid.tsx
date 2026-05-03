@@ -253,6 +253,33 @@ export function isActiveServerPagedResponse(input: {
 }
 
 /**
+ * Pure decision helper for the tree-mode stale-viewKey gate (worker1
+ * audit P1 §10). `loadTreeChildren` does not call `abortExcept` (paged
+ * does); without this gate, a fetch in flight under viewKey K1 that
+ * resolves AFTER the user has changed filter to K2 would merge K1's
+ * children into the K2 snapshot, surfacing stale rows under nodes that
+ * may have re-collapsed or been filtered out.
+ *
+ * Returns `true` when the result's resolved viewKey (the explicit
+ * `result.viewKey` if the loader echoed it, otherwise the request-time
+ * `fallbackViewKey`) matches the model's current viewKey at settle
+ * time. The React-layer caller `return`s early when this returns
+ * `false`, leaving the model cache populated (handy for a later
+ * refetch after a re-expand under the new view) but skipping the
+ * snapshot merge.
+ *
+ * Exported for unit testing; the React `loadTreeChildren` inlined this
+ * pre-#391 / #422 / #428.
+ */
+export function shouldMergeTreeResult(input: {
+  resultViewKey: string | undefined
+  fallbackViewKey: string
+  currentViewKey: string
+}): boolean {
+  return (input.resultViewKey ?? input.fallbackViewKey) === input.currentViewKey
+}
+
+/**
  * Pure decision helper for `BcServerGridApi.scrollToServerCell`. Given
  * the current loaded-row check, the active rowModel + paged page, and
  * the consumer-supplied `pageIndex` opt, decides which path to take:
@@ -1746,8 +1773,19 @@ function useTreeServerState<TRow>(
           // result still settles in the model cache (handy for a
           // later refetch after a re-expand under the new view), but
           // we don't merge stale children into the active snapshot.
+          // `shouldMergeTreeResult` is the exported pure-helper form;
+          // the contract is unit-tested independently of this React
+          // path.
+          if (
+            !shouldMergeTreeResult({
+              resultViewKey: result.viewKey,
+              fallbackViewKey: viewKey,
+              currentViewKey: treeViewKeyRef.current,
+            })
+          ) {
+            return
+          }
           const resultViewKey = result.viewKey ?? viewKey
-          if (resultViewKey !== treeViewKeyRef.current) return
           setTree((prev) =>
             modelRef.current.mergeTreeResult({
               getRowId: props.rowId,

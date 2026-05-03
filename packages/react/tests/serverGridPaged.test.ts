@@ -18,6 +18,7 @@ import {
   resolveServerVisibleColumns,
   resolveTreeChildCount,
   resolveTreeRowCount,
+  shouldMergeTreeResult,
   shouldResetServerPagedPage,
 } from "../src/serverGrid"
 import type { BcReactGridColumn } from "../src/types"
@@ -1225,5 +1226,93 @@ describe("resolveMissingLoaderMessage (server-mode-switch RFC §6 stage 2 mount 
       hasLoadChildren: false,
     })
     expect(message).toContain("loadPage")
+  })
+})
+
+describe("shouldMergeTreeResult — stale-viewKey gate (worker1 audit P1 §10)", () => {
+  // The React layer's `loadTreeChildren` does NOT call `abortExcept`
+  // (paged does at `serverGrid.tsx:1163`). Tree fetches under one
+  // viewKey can outlive a filter change to a new viewKey, and without
+  // a gate at the merge site the stale children would land in the new
+  // snapshot. The fix at `serverGrid.tsx:1745-1755` discards the
+  // result when the resolved viewKey != the model's current viewKey.
+
+  test("returns true when result.viewKey matches the current viewKey", () => {
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: "v1",
+        fallbackViewKey: "v1",
+        currentViewKey: "v1",
+      }),
+    ).toBe(true)
+  })
+
+  test("returns true when the loader echoed the active viewKey via result.viewKey", () => {
+    // Server may echo a different viewKey than the request-time one
+    // (e.g. it normalised the query). The gate respects what the
+    // server returned over the request-time fallback.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: "v2",
+        fallbackViewKey: "v1",
+        currentViewKey: "v2",
+      }),
+    ).toBe(true)
+  })
+
+  test("returns false when the result's resolved viewKey is stale (model has moved on)", () => {
+    // The classic §10 case: fetch fired under v1, user changed filter
+    // to v2 before the fetch resolved. result.viewKey is undefined
+    // (server didn't echo) → fallback is v1 → current is v2 → DROP.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: undefined,
+        fallbackViewKey: "v1",
+        currentViewKey: "v2",
+      }),
+    ).toBe(false)
+  })
+
+  test("returns false when result.viewKey itself doesn't match (server-echoed viewKey is stale)", () => {
+    // The server explicitly echoed the original viewKey (v1) but the
+    // model has moved to v2 since. Drop.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: "v1",
+        fallbackViewKey: "v1",
+        currentViewKey: "v2",
+      }),
+    ).toBe(false)
+  })
+
+  test("falls back to fallbackViewKey when result.viewKey is undefined", () => {
+    // Loader didn't echo viewKey; fallback (the request-time viewKey)
+    // is what's compared against the current viewKey. Match → merge.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: undefined,
+        fallbackViewKey: "v1",
+        currentViewKey: "v1",
+      }),
+    ).toBe(true)
+  })
+
+  test("empty-string viewKeys participate in equality (edge case)", () => {
+    // Defensive: an empty viewKey is a legitimate (degenerate) value;
+    // the gate should compare it like any other string.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: "",
+        fallbackViewKey: "v1",
+        currentViewKey: "",
+      }),
+    ).toBe(true)
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: undefined,
+        fallbackViewKey: "",
+        currentViewKey: "v2",
+      }),
+    ).toBe(false)
   })
 })
