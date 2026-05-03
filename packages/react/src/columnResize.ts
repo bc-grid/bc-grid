@@ -1,4 +1,4 @@
-import type { ColumnId } from "@bc-grid/core"
+import type { BcColumnStateEntry, ColumnId } from "@bc-grid/core"
 
 /**
  * In-flight column-resize session. Captured on pointer-down at the column
@@ -26,4 +26,21 @@ export function computeResizedWidth(session: ColumnResizeSession, currentClientX
   const delta = currentClientX - session.startClientX
   const target = session.startWidth + delta
   return Math.max(session.minWidth, Math.min(session.maxWidth, target))
+}
+
+/**
+ * Commit a fixed width for one column. A manual width commit converts a flex
+ * column to fixed-size by writing `flex: null`, the explicit column-state
+ * marker for "ignore the column definition's flex weight".
+ */
+export function commitColumnWidthState(
+  state: readonly BcColumnStateEntry[],
+  columnId: ColumnId,
+  width: number,
+): BcColumnStateEntry[] {
+  const patch = { width, flex: null } satisfies Partial<BcColumnStateEntry>
+  if (state.some((entry) => entry.columnId === columnId)) {
+    return state.map((entry) => (entry.columnId === columnId ? { ...entry, ...patch } : entry))
+  }
+  return [...state, { columnId, ...patch }]
 }

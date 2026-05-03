@@ -55,6 +55,7 @@ import {
   flattenClientTree,
 } from "./clientTree"
 import { computeAutosizeWidth, measureColumnWidths, upsertColumnStateEntry } from "./columnCommands"
+import { commitColumnWidthState } from "./columnResize"
 import {
   type ColumnVisibilityItem,
   ColumnVisibilityMenu,
@@ -2468,7 +2469,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           maxWidth: column.source.maxWidth ?? 800,
         })
         if (next == null) return
-        setColumnState(upsertColumnStateEntry(columnState, columnId, { width: next }))
+        setColumnState(commitColumnWidthState(columnState, columnId, next))
       },
       setRangeSelection(next) {
         setRangeSelectionState(next)

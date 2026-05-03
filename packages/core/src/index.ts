@@ -262,7 +262,7 @@ export type BcSelection =
 export interface BcColumnStateEntry {
   columnId: ColumnId
   width?: number
-  flex?: number
+  flex?: number | null
   hidden?: boolean
   pinned?: "left" | "right" | null
   sortDirection?: "asc" | "desc" | null

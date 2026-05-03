@@ -111,4 +111,14 @@ describe("resolveColumns flex distribution", () => {
     expect(resolved[0]?.width).toBe(600)
     expect(resolved[1]?.width).toBe(200)
   })
+
+  test("columnState.flex null clears column.flex and preserves committed width", () => {
+    const cols = [col("name", { flex: 2 }), col("address", { flex: 1 })]
+    const resolved = resolveColumns(cols, [{ columnId: "name", flex: null, width: 200 }], 800)
+
+    expect(resolved[0]?.flex).toBeUndefined()
+    expect(resolved[0]?.width).toBe(200)
+    expect(resolved[1]?.flex).toBe(1)
+    expect(resolved[1]?.width).toBe(600)
+  })
 })
