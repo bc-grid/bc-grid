@@ -2124,6 +2124,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         // skip the toast when nothing rolled back.
         return editController.discardRowEdits(targetRowId)
       },
+      getVisibleSetting(key) {
+        const visible = userSettingsRef.current?.visible
+        if (!visible) return undefined
+        return (visible as Record<string, boolean | undefined>)[key]
+      },
+      setVisibleSetting(key, value) {
+        setVisibleUserSetting(key as keyof NonNullable<BcUserSettings["visible"]>, value)
+      },
       refresh() {
         requestRender()
       },
@@ -2156,6 +2164,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     applyFilterState,
     setRangeSelectionState,
     setSortState,
+    setVisibleUserSetting,
     virtualizer,
   ])
 
@@ -2244,7 +2253,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // `showPagination === false` hides the pager chrome but leaves
   // page-window slicing / aria-rowcount / onPaginationChange intact.
   // Vanilla-and-context-menu RFC §4 (View → Show pagination toggle).
-  const showPaginationChrome = props.showPagination !== false
+  // Resolution: explicit prop wins; otherwise userSettings.visible.pagination
+  // (driven by the DEFAULT_CONTEXT_MENU_ITEMS Server submenu); otherwise true.
+  const showPaginationChrome = props.showPagination ?? userVisibleSettings?.pagination ?? true
   const renderedFooter =
     footer ??
     (paginationEnabled && showPaginationChrome ? (

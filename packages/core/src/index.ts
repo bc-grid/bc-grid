@@ -649,6 +649,23 @@ export interface BcGridApi<TRow = unknown> {
    */
   discardRowEdits(rowId: RowId): { discarded: number }
 
+  /**
+   * Read a chrome-visibility user setting (e.g. `"pagination"`,
+   * `"filterRow"`, `"statusBar"`). Returns `undefined` when no
+   * `userSettings` store is wired or the setting hasn't been written
+   * yet — callers should fall through to their default. Surfaced for
+   * `DEFAULT_CONTEXT_MENU_ITEMS` toggle items that need to read +
+   * write the persisted visibility shape directly.
+   */
+  getVisibleSetting(key: string): boolean | undefined
+  /**
+   * Write a chrome-visibility user setting. No-op when no
+   * `userSettings` store is wired (the toggle still flips the live
+   * UI state via the same mutator the writer feeds, so the visibility
+   * change takes effect even without persistence).
+   */
+  setVisibleSetting(key: string, value: boolean): void
+
   refresh(): void
 }
 

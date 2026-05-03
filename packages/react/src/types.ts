@@ -101,6 +101,15 @@ export interface BcUserSettings {
     activeFilterSummary?: boolean
     flashOnEdit?: boolean
     checkboxSelection?: boolean
+    /**
+     * Pagination chrome visibility. Mirrors the `<BcGrid showPagination>`
+     * prop shape: when `false`, the pager chrome is hidden but page-window
+     * slicing / `aria-rowcount` / `onPaginationChange` still fire.
+     * `<BcGrid>` resolves the effective value as `props.showPagination ??
+     * userSettings?.visible?.pagination ?? true`. Surfaced for the
+     * `DEFAULT_CONTEXT_MENU_ITEMS` Server → Show pagination toggle.
+     */
+    pagination?: boolean
   }
   density?: BcGridDensity
   layout?: BcGridLayoutState

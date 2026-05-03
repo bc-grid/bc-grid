@@ -644,6 +644,12 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       discardRowEdits(rowId) {
         return gridApiRef.current?.discardRowEdits(rowId) ?? { discarded: 0 }
       },
+      getVisibleSetting(key) {
+        return gridApiRef.current?.getVisibleSetting(key)
+      },
+      setVisibleSetting(key, value) {
+        gridApiRef.current?.setVisibleSetting(key, value)
+      },
       refresh() {
         gridApiRef.current?.refresh()
       },
