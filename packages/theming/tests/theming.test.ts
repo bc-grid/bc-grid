@@ -270,9 +270,29 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("--bc-grid-pinned-header-bg: var(--bc-grid-header-bg)")
     expect(css).toContain("--bc-grid-pinned-boundary:")
     expect(css).toContain(".bc-grid-pinned-lane {")
-    expect(css).toContain("grid-column: 1 / -1")
     expect(css).toContain("grid-row: 1")
     expect(css).toContain("align-self: start")
+
+    // Bsncraft v0.5.0 GA P0 regression: both pinned lanes used to
+    // share `grid-column: 1 / -1`, so with the row's `display: grid`
+    // they both landed at grid-column 1 (left edge) and visually
+    // overlapped. Per-side placement pins lanes to the first/last
+    // grid track + adds `justify-self` so sticky positioning pulls
+    // each to its viewport edge correctly.
+    const leftLaneRule = ruleFor(".bc-grid-pinned-lane-left {")
+    expect(leftLaneRule).toContain("grid-column: 1 / 2")
+    expect(leftLaneRule).toContain("justify-self: start")
+
+    const rightLaneRule = ruleFor(".bc-grid-pinned-lane-right {")
+    expect(rightLaneRule).toContain("grid-column: -2 / -1")
+    expect(rightLaneRule).toContain("justify-self: end")
+
+    // The shared `.bc-grid-pinned-lane` rule no longer carries a
+    // `grid-column: 1 / -1` directive (which would be fought against
+    // the per-side overrides via specificity ties). Per-side rules
+    // own the placement; the shared rule keeps grid-row + align-self.
+    const sharedLaneRule = ruleFor(".bc-grid-pinned-lane {")
+    expect(sharedLaneRule).not.toContain("grid-column: 1 / -1")
 
     // Pinned cells layer the same body row-state token as a
     // `background-image: linear-gradient(<token>, <token>)` overlay
