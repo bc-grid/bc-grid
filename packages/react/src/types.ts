@@ -27,6 +27,8 @@ import type {
   BcPaginationState,
   BcPivotState,
   BcRowId,
+  BcRowPatch,
+  BcRowPatchResult,
   BcRowState,
   BcSelection,
   BcServerGridApi,
@@ -382,7 +384,28 @@ export type BcStatusBarSegment<TRow = unknown> =
   | "latestError"
   | BcStatusBarCustomSegment<TRow>
 
-export interface BcBulkActionsContext {
+export interface BcBulkActionUndoableAction<TRow = unknown> {
+  /**
+   * Short user-facing label for the committed action, e.g. "Marked 12
+   * invoices paid". The default undo toast renders this text beside
+   * the Undo button.
+   */
+  label: string
+  /**
+   * Consumer-precomputed inverse patches. `undo()` applies these
+   * through `BcGridApi.applyRowPatches`, preserving parser/validation
+   * and commit-event semantics.
+   */
+  inversePatches: readonly BcRowPatch<TRow>[]
+}
+
+export interface BcBulkActionUndoContext<TRow = unknown> {
+  undoableAction: BcBulkActionUndoableAction<TRow>
+  undo(): Promise<BcRowPatchResult<TRow>>
+  dismiss(): void
+}
+
+export interface BcBulkActionsContext<TRow = unknown> {
   /**
    * Selected row IDs resolved against rows currently known to this
    * client grid. For explicit selection this is the selected set; for
@@ -392,6 +415,7 @@ export interface BcBulkActionsContext {
   selectedRowIds: readonly RowId[]
   selectedRowCount: number
   clearSelection(): void
+  showUndo(action: BcBulkActionUndoableAction<TRow>): void
 }
 
 export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
@@ -828,7 +852,18 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * selected-count label, and clear-selection button; the slot supplies
    * domain actions such as "Mark paid", "Move to folder", or "Delete".
    */
-  bulkActions?: ReactNode | ((ctx: BcBulkActionsContext) => ReactNode)
+  bulkActions?: ReactNode | ((ctx: BcBulkActionsContext<TRow>) => ReactNode)
+  /**
+   * Optional renderer for the transient undo toast shown after a bulk
+   * action calls `ctx.showUndo(...)`. Omit to use the built-in label +
+   * Undo + dismiss controls.
+   */
+  bulkActionUndoSlot?: ReactNode | ((ctx: BcBulkActionUndoContext<TRow>) => ReactNode)
+  /**
+   * Auto-dismiss delay for the bulk-action undo toast. Defaults to 5000.
+   * Pass `0` to keep the toast visible until Undo or dismiss is clicked.
+   */
+  bulkActionUndoTimeoutMs?: number
   footer?: ReactNode
   /**
    * Footer status bar segments rendered below the body, above any

@@ -43,7 +43,11 @@ import {
 } from "react"
 import { BcGridAggregationFooterRow, useAggregations } from "./aggregations"
 import { renderBodyCell, renderGroupRowCell } from "./bodyCells"
-import { BcGridBulkActions, resolveBulkActionSelectedRowIds } from "./bulkActions"
+import {
+  BcGridBulkActionUndoToast,
+  BcGridBulkActions,
+  resolveBulkActionSelectedRowIds,
+} from "./bulkActions"
 import {
   buildClientTree,
   compactVisibleAncestors,
@@ -207,6 +211,8 @@ import {
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
 import { BcStatusBar } from "./statusBar"
 import type {
+  BcBulkActionUndoContext,
+  BcBulkActionUndoableAction,
   BcCellEditCommitHandler,
   BcCellEditor,
   BcEditGridProps,
@@ -280,6 +286,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     locale,
     toolbar,
     bulkActions,
+    bulkActionUndoSlot,
+    bulkActionUndoTimeoutMs,
     footer,
     loading,
     loadingOverlay,
@@ -488,6 +496,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     key: number
   } | null>(null)
   const validationToastKeyRef = useRef(0)
+  const [bulkActionUndo, setBulkActionUndo] = useState<{
+    key: number
+    undoableAction: BcBulkActionUndoableAction<TRow>
+  } | null>(null)
+  const bulkActionUndoKeyRef = useRef(0)
 
   const requestRender = useCallback(() => {
     setRenderVersion((version) => (version + 1) % Number.MAX_SAFE_INTEGER)
@@ -1832,6 +1845,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     return () => clearTimeout(handle)
   }, [validationToast])
 
+  useEffect(() => {
+    if (!bulkActionUndo) return
+    const timeoutMs = bulkActionUndoTimeoutMs ?? 5000
+    if (timeoutMs <= 0) return
+    const handle = setTimeout(() => {
+      setBulkActionUndo((current) => (current?.key === bulkActionUndo.key ? null : current))
+    }, timeoutMs)
+    return () => clearTimeout(handle)
+  }, [bulkActionUndo, bulkActionUndoTimeoutMs])
+
   // Overlay cleanup per `editing-rfc §Row-model ownership`: when the
   // consumer's `data` prop catches up to a patched value, drop the
   // overlay entry — the canonical state now reflects it. Pending /
@@ -2624,13 +2647,39 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     selectionAnchorRef.current = null
     setSelectionState(clearSelection())
   }, [setSelectionState])
+  const showBulkActionUndo = useCallback((undoableAction: BcBulkActionUndoableAction<TRow>) => {
+    const key = ++bulkActionUndoKeyRef.current
+    setBulkActionUndo({ key, undoableAction })
+  }, [])
   const bulkActionsContext = useMemo(
     () => ({
       selectedRowIds: bulkActionSelectedRowIds,
       selectedRowCount,
       clearSelection: clearBulkSelection,
+      showUndo: showBulkActionUndo,
     }),
-    [bulkActionSelectedRowIds, clearBulkSelection, selectedRowCount],
+    [bulkActionSelectedRowIds, clearBulkSelection, selectedRowCount, showBulkActionUndo],
+  )
+  const bulkActionUndoContext = useMemo<BcBulkActionUndoContext<TRow> | null>(() => {
+    if (!bulkActionUndo) return null
+    return {
+      undoableAction: bulkActionUndo.undoableAction,
+      dismiss: () => {
+        setBulkActionUndo((current) => (current?.key === bulkActionUndo.key ? null : current))
+      },
+      undo: async (): Promise<BcRowPatchResult<TRow>> => {
+        setBulkActionUndo((current) => (current?.key === bulkActionUndo.key ? null : current))
+        return api.applyRowPatches(bulkActionUndo.undoableAction.inversePatches)
+      },
+    }
+  }, [api, bulkActionUndo])
+
+  const bulkActionUndoContent = useMemo(
+    () =>
+      bulkActionUndoContext ? (
+        <BcGridBulkActionUndoToast ctx={bulkActionUndoContext} slot={bulkActionUndoSlot} />
+      ) : null,
+    [bulkActionUndoContext, bulkActionUndoSlot],
   )
 
   // Status-bar render context per `chrome-rfc §Status bar`. The
@@ -4345,6 +4394,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           {validationToast.message}
         </div>
       ) : null}
+      {bulkActionUndoContent}
       {filterPopupState
         ? (() => {
             const popupColumn = resolvedColumns.find(
