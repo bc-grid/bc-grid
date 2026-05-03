@@ -33,44 +33,65 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
 - ✅ **#420** `v05-default-context-menu-wiring` server slice — `Server` submenu (`Show pagination`, `Expand all groups`, `Collapse all groups`)
 - ✅ **#422** `v06-server-perf-block-cache-lru-tuning` — LRU eviction order unit tests + smoke-perf bench (your planning doc §5)
+- ✅ **#428** `v06-server-infinite-prefetch-budget` — `prefetchAhead` knob + Server submenu Prefetch ahead radio + 5 contract tests + 4-budget bench sweep. Merged 86b9810.
 
-### Active now → `v06-server-infinite-prefetch-budget` (your planning doc §8, ~half day)
+## v0.6 train — your queue (in priority order)
 
-`#420`, `#421`, `#422`, `#423`, `#424` all merged. **Mode-switch RFC + layout pass + default context menu + saved-view DTO + editor visual-contract consolidation are complete.** Coordinator cut alpha.3 with the full v0.5 surface.
+**0.5.0 GA shipped 2026-05-03.** v0.6 is the consumer-feedback absorption + spreadsheet flows + bulk operations major release. Target ship date: ~2026-05-10.
 
-The next v0.6 server-perf task is **§8 of `docs/coordination/v05-audit-followups/worker1-server-perf.md`**: `v06-server-infinite-prefetch-budget`. Today's prefetch is hard-coded to "ensure current visible range + one block ahead at `range.endIndex + blockSize`" (`packages/react/src/serverGrid.tsx:1140-1146` and `:1163-1172`). A fast scroller hits the cliff every block; a slow scroller wastes bandwidth fetching ahead too much.
+Your v0.6 train has **5 queued tasks**, headlined by the client-side tree row model (the AG-Grid-parity gap that blocks every consumer who has parent/child data without a server endpoint to compute the tree). Pick them up in order; if you finish ahead of schedule, top of the v0.6 deferred list waits.
 
-Implementation:
+### Active now → `v06-stale-response-flood-test` (planning doc §9, ~half day, **tests-only**)
 
-1. **Add `prefetchAhead?: number` (default 1) to `BcServerInfiniteProps`** (`@bc-grid/core` — additive). Wire through `<BcServerGrid rowModel="infinite">` to issue `ensureBlock(range.endIndex + blockSize * i)` for `i = 1..prefetchAhead`. Then expose the same option on `useServerInfiniteGrid` props.
+Stress-test the existing abort-on-supersede contract under request floods. The orchestration cancels in-flight requests via `abortExcept` (`packages/server-row-model/src/index.ts:919`) + the React gate at `packages/react/src/serverGrid.tsx:790`. Existing test (`serverGridPaged.test.ts:374-688`) covers a single late response — not a flood. Add a model-layer test that fires 10+ paged requests in quick succession (e.g. user typing "abcdefghij" with 10 keystrokes in <1s), defers each `loadPage` resolution, resolves them out of order, and asserts:
 
-2. **Sweep the bench** at `apps/benchmarks/tests/perf.perf.pw.ts` — same 10k-row scroll harness from #422, but parameterize over `prefetchAhead = 0 / 1 / 2 / 3` and emit per-budget metrics (hit rate, fetches issued, queue depth, time-to-content-on-scroll). Coordinator reads the numbers at merge to decide if the recommended default should bump to `2`.
+- Only the latest result lands in cache (no zombie completions from intermediate requests).
+- `lastLoad.status === "success"` for the latest request.
+- All prior requests have `controller.signal.aborted === true`.
 
-3. **Pin the prefetch-trigger contract with a unit test** in `packages/server-row-model/tests/serverRowModel.test.ts`. The contract: when visible range approaches the bottom of loaded range, prefetch the next `prefetchAhead` blocks. Test that prefetch fires at the right scroll position and that block requests dedupe against in-flight fetches.
+**No source changes required** (existing behaviour is correct based on code review; this is contract pinning so a refactor that breaks the abort cascade catches in CI before users hit it).
 
-4. **Optionally add a `Prefetch ahead` submenu to the default context menu's `Server` submenu** (deferred from #420 — needs `BcUserSettings.layout.prefetchAhead` field + serverGrid wiring). Mode-conditional: visible only when `getActiveRowModelMode() === "infinite"`. Submenu items: `0 (off)`, `1 (default)`, `2`, `3`. Mirrors the existing `Show pagination` toggle pattern from #420.
+**Branch:** `agent/worker1/v06-stale-response-flood-test`. **Effort:** ~half day.
 
-**Branch:** `agent/worker1/v06-server-infinite-prefetch-budget`. **Effort:** ~half day.
+### Next-after → `v06-server-tree-stale-viewkey-fetches` (planning doc §10, ~half day)
 
-### Next-after → `v06-stale-response-flood-test` (planning doc §9, ~half day)
+Pick up §10 next — `loadTreeChildren` does NOT call `abortExcept` (only paged does at `serverGrid.tsx:902`). Tree fetches under stale `viewKey` can leak children from a previous filter set into the current cache after a filter change. Concrete consequence: stale children appear under a node that may have re-collapsed or been filtered out.
 
-Once prefetch budget ships, pull §9 forward — stale-response flood test. The orchestration cancels in-flight requests via `abortExcept` in `packages/server-row-model/src/index.ts:919` and the React gate at `packages/react/src/serverGrid.tsx:790`. Existing test (`serverGridPaged.test.ts:374-688`) covers a single late response — not a flood. Add a model-layer test that fires 10+ paged requests in quick succession, defers each loadPage, resolves them out of order, and asserts: only the latest result lands in cache, `lastLoad.status === "success"` for the latest, and all prior requests have `controller.signal.aborted === true`.
-
-**Branch:** `agent/worker1/v06-stale-response-flood-test`. **Effort:** ~half day. **Tests-only PR** (existing behavior is correct; this is contract pinning).
-
-### Then-after → `v06-server-tree-stale-viewkey-fetches` (planning doc §10, ~half day)
-
-Pick up §10 next — `loadTreeChildren` does NOT call `abortExcept` (only paged does at line 902). Tree fetches under stale viewKeys can leak into the cache after a filter change. Fix: gate `request.promise.then(...)` on `viewKey === viewKeyRef.current` (lower risk than full abort).
+**Fix shape:** gate the `request.promise.then((result) => ...)` block on `viewKey === viewKeyRef.current` (matches the React-layer pattern from `isActiveServerPagedResponse`). Lower risk than full abort because tree fetches run against multiple parent-row-id requests in parallel.
 
 **Branch:** `agent/worker1/v06-server-tree-stale-viewkey-fetches`. **Effort:** ~half day.
 
-### Optionally pick up the bsncraft RFCs queued for v0.6
+### Then-after → `v06-client-tree-rowmodel` (HEADLINE, ~1-2 days, two-spike-confirmed)
 
-Two new bsncraft P0 items hit the queue 2026-05-03; chrome+CSS-heavy fixes — worker2 / worker3 are the natural fit. Flag only if they're saturated.
+**This is your v0.6 headline.** Today bc-grid only ships server tree (`<BcServerGrid rowModel="tree">`) — consumers with client-side parent/child data have to either (a) flatten and use grouping (loses the parent ID model) or (b) wire a fake server endpoint. Production-estimating spike (#374) finding #1 flagged this; doc-management spike (#367) hit the same gap.
 
-### Optionally pick up the bsncraft RFCs queued for v0.6
+**Implementation:**
 
-Two new bsncraft P0 items hit the queue 2026-05-03 (alpha.2 consumer pass surfaced them; both require an RFC). Server-grid expertise is less critical for these; flag them only if worker2 / worker3 are already saturated.
+1. **`BcGridProps.treeData?: { getRowParentId: (row) => RowId | null; getRowKey?: ... }`** — opt-in client tree mode. When set, the grid builds a parent → children map and renders rows with hierarchical indentation.
+
+2. **Outline column variant** — extend the existing detail-column / grouping-column patterns. Indent based on tree depth; `▶` chevron toggles `expandedIds` set. Reuse `expansionState` plumbing from master-detail.
+
+3. **Sort + filter through the tree** — sorts apply to siblings under each parent (preserve hierarchy); filters that hide a row should also hide its descendants OR keep ancestors visible (configurable, default = "keep ancestors so user can see filtered context").
+
+4. **Aggregations integration** — group rows already aggregate in client mode; tree rows should too (sum of children's measure column at parent row). Reuse `@bc-grid/aggregations`.
+
+5. **Test coverage:** unit tests for the tree-build algorithm + 1 Playwright spec for an outline-style task list demo (production-estimating spike scenario).
+
+**Branch:** `agent/worker1/v06-client-tree-rowmodel`. **Effort:** ~1-2 days. **Two-spike-confirmed** (production-estimating #1, doc-mgmt fallback).
+
+### After-that → `v06-server-view-change-reset-policy` (planning doc §1, ~half day)
+
+When `view` changes (filter / sort / pagination), the orchestration tears down the cache + restarts. Today it does this synchronously inside the React effect; under fast filter typing this can hammer fetch/abort cycles. Add an opt-in debounce window for view changes — coalesce N view changes within K ms into one cache reset. Default off (preserves current behaviour); consumers who want it pass `viewChangeDebounceMs: 200` on the loader options.
+
+**Branch:** `agent/worker1/v06-server-view-change-reset-policy`. **Effort:** ~half day.
+
+### Last → `v06-optimistic-rollback-vs-invalidate` (planning doc §11, ~half day)
+
+The current managed-overlay rollback path treats the rollback as a pure local operation. If the server returns a fresh row payload that disagrees with the optimistic value, the overlay rollback runs but the next paged refetch re-shows the optimistic value because the cache hasn't been invalidated. Document the contract (rollback ≠ invalidate) and add a `BcServerGridApi.invalidateRowCache(rowId)` method consumers can call from their `onServerRowMutation` rejection branch when the server's final-state matters.
+
+**Branch:** `agent/worker1/v06-optimistic-rollback-vs-invalidate`. **Effort:** ~half day.
+
+### Previously active → `v06-server-infinite-prefetch-budget` (DONE — #428 merged 86b9810)
 
 ### Previously active → `v06-server-perf-block-cache-lru-tuning` (DONE — #422 merged 976344c)
 

@@ -117,16 +117,37 @@ Detailed plan at `docs/coordination/v0.5-audit-refactor-plan.md`. Synthesis at `
 - `[done: coordinator 7800361]` **v05-chrome-polish-pinned-and-detail-header** (coordinator) — bsncraft v0.4 audit findings (2026-05-03): align pinned row-state CSS tokens with body composites so pinned cells match the rest of the row in hover/selected states (was: noticeably darker/washed-out at saturated accents); remove decorative `<DisclosureChevron>` from the master-detail column header (it didn't toggle anything).
 - `[deferred-v0.6: worker1]` **v05-server-loader-generics** (worker1) — generic `TRow` propagation into `LoadServerPage<TRow>` / `LoadServerBlock<TRow>` / `LoadServerTreeChildren<TRow>` query types (audit P1-C2). **Defer reason:** the natural `<TRow>` parameterization puts TRow in contravariant position for the loader callbacks, breaking strict-function-type variance for every existing call site that passes a typed loader through a non-generic helper. Documented at `docs/design/server-loader-generics-deferral.md` with two recommended v0.6 paths (breaking change to method-style loader, or consumer-side opt-in narrowing helper).
 
-## v0.6 follow-ups (queued, do not start until v0.5 ships)
+## v0.6 follow-ups — ACTIVE TRAIN (post-0.5.0 GA)
 
-Sourced from spike findings (#367 + #374) and Combobox migration aftermath (a57a33f / 8af914e). Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both document-management and production-estimating spikes flagged the same gap.
+**0.5.0 GA shipped 2026-05-03.** v0.6 target ship date: ~2026-05-10. Theme: **consumer-feedback absorption + spreadsheet flows + bulk operations**. Three headline features (one per worker lane) plus consumer-feedback + planning-doc cleanup tails. See worker handoffs for the active queue order.
 
-- `[deferred]` **v06-row-drag-drop-hooks** — `BcGridProps.onRowDragOver` / `onRowDrop` callbacks for row-level drag-and-drop. **Two-spike-confirmed** (doc-mgmt #1, production-estimating #5).
-- `[deferred]` **v06-bulk-row-patch-primitive** — `apiRef.applyRowPatches(patches[])` as the primitive every "fill down" / "shift dates" / "set status" toolbar wants. **Two-spike-confirmed** (doc-mgmt #6, production-estimating #4).
-- `[deferred]` **v06-bcselection-narrowing** — `BcSelection` discriminated-union variant narrowing ergonomics. **Two-spike-confirmed** (doc-mgmt #3, production-estimating #6).
-- `[deferred]` **v06-combobox-enter-semantics** — multi-mode Combobox's `Enter` keydown routes through `updateSelection` (toggling the active option) before bubbling to the editor portal commit, undoing the user's last pick. Workaround in `editor-multi-select.pw.ts`: use `Tab`. Real fix: in multi mode, `Enter` should ONLY bubble to commit; `Space` stays as the toggle gesture.
-- `[deferred]` **v06-bulk-action-toolbar-primitive** — `<BcGridBulkActions>` slot or `bulkActions` prop on `BcGridProps`. Doc-mgmt spike finding #2.
-- `[deferred]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant. Production-estimating finding #1 (only `BcServerTreeProps` exists today; client tree forces parentId/expansion plumbing in consumer).
+Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both document-management (#367) and production-estimating (#374) spikes flagged the same gap.
+
+### v0.6 headlines (one per worker)
+
+- `[ready: worker1]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant. Today bc-grid only ships server tree (`<BcServerGrid rowModel="tree">`); consumers with client-side parent/child data have to flatten + use grouping (loses parent ID model) or wire a fake server endpoint. Build a parent → children map from `getRowParentId(row)`, render with hierarchical indentation reusing the existing `expansionState` plumbing from master-detail, sort/filter through the tree, integrate `@bc-grid/aggregations` for parent-row sums. **Two-spike-confirmed** (production-estimating #1, doc-mgmt fallback). ~1-2 days.
+- `[ready: worker2]` **v06-fill-handle** — drag-to-fill handle on the active range (range-rfc §6 — RFC done day 0; impl never landed). 8×8 px dot at the active range's bottom-right corner; mousedown → drag-extend mode → on release, source values fill into destination via the existing `editController.commitFromPasteApplyPlan` path. v0.6 ships literal-repeat semantics; series detection (1, 2 → 3, 4, 5; Mon → Tue, Wed) is a v0.7 follow-up. The spreadsheet-feel feature that takes bc-grid from "data grid that does ranges" to "Excel-replacement-class data grid." ~1-2 days.
+- `[ready: worker3]` **v06-bulk-row-patch-primitive** — `BcGridApi.applyRowPatches(patches[])` atomic bulk update with validate-all-then-apply semantics. The primitive every "fill down" / "shift dates" / "set status to Approved" toolbar wants. **Two-spike-confirmed** (doc-mgmt #6, production-estimating #4). ~1 day.
+
+### v0.6 supporting work (in worker queues)
+
+- `[ready: worker1]` **v06-stale-response-flood-test** (planning doc §9, ~half day, tests-only).
+- `[ready: worker1]` **v06-server-tree-stale-viewkey-fetches** (planning doc §10, ~half day).
+- `[ready: worker1]` **v06-server-view-change-reset-policy** (planning doc §1, ~half day).
+- `[ready: worker1]` **v06-optimistic-rollback-vs-invalidate** (planning doc §11, ~half day).
+- `[ready: worker2]` **v05-bsncraft-pinned-scroll-shadow-overlay** — bsncraft P0 #4 carry-over: `mix-blend-mode: multiply` on the pinned-edge pseudo. ~half day.
+- `[ready: worker2]` **v06-bulk-action-toolbar-primitive** — `<BcGridBulkActions>` slot. Doc-mgmt spike finding #2. ~half day.
+- `[ready: worker2]` **v06-saved-view-storage-recipe** — consumer-side persistence layer composing with #423 DTO. ~half day.
+- `[ready: worker2]` **v06-grouping-tristate-totals-row** — pinned `pinnedTotals: "bottom" | "top" | "both"` aggregation row. ~half day.
+- `[ready: worker3]` **v06-prepareresult-preload-select-multi** — async-loaded options on select + multi-select via `column.fetchOptions`. ~half day.
+- `[ready: worker3]` **v06-row-drag-drop-hooks** — `onRowDragOver` / `onRowDrop` callbacks. **Two-spike-confirmed**. ~1 day.
+- `[ready: worker3]` **v06-bcselection-narrowing** — `isExplicitSelection` / `isAllSelection` / `isFilteredSelection` type guards + `forEachSelectedRowId` iterator. **Two-spike-confirmed**. ~half day.
+- `[ready: worker3]` **v06-editor-tab-wraparound-polish** — `editorTabWraparound: "none" | "row-wrap" | "selection-wrap"` prop. ~half day.
+
+### v0.6 deferred (post-1.0 candidates)
+
+- `[deferred-v0.7]` **v06-combobox-enter-semantics** — already shipped in #390 + pinned in #427 (worker3 audit found the implementation was already in place). Closed.
+- `[deferred-v0.7]` **v06-cell-hover-ergonomics** — `BcCellRendererParams` carries no hover state and no shadcn `Tooltip` / `HoverCard` integration. Doc-mgmt spike finding #3.
 - `[deferred]` **v06-cell-hover-ergonomics** — `BcCellRendererParams` carries no hover state and no shadcn `Tooltip` / `HoverCard` integration. Doc-mgmt spike finding #3.
 - `[mostly-pulled-forward: see v05-server-tree-grid-options-pull-forward]` **v06-server-tree-grid-options** — polish options for `useServerTreeGrid` raised by the 2026-05-03 bsncraft conversation. **Pulled forward to v0.5:** `groupRowId` (#379), `persistTo: "localStorage"` (#379), `pageSize` / `cacheLimit` / `rootChildCount` (in-flight). **Still v0.6:** `persistTo: "url"`, `searchText` / `expansion` persistence keys.
 - `[superseded-by-v06-layout-architecture-pass]` **v06-detail-panel-sticky-left** — standalone task superseded 2026-05-03 by the consolidated `v06-layout-architecture-pass` (above), which closes this memo as PR (b) of the layout pass. Rationale: shipping a standalone ResizeObserver-driven sticky-left wrapper now would conflict with the layout pass's structural rewrite (single scroll container makes the ResizeObserver redundant — sticky positioning gives the detail panel its container-width directly). Original consumer thread + acceptance criteria preserved in `docs/coordination/handoff-worker2.md`'s PR (b) section.

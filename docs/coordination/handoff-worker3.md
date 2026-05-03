@@ -44,37 +44,92 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#427** `v06-multi-combobox-enter-semantics` — pinned the multi-mode Enter contract with 4 source-shape regression guards (implementation already shipped in #390). Merged 7bc55e5.
 - ✅ **#431** `v06-editor-keyboard-navigation-polish` — `nextEditableCellAfterEdit` helper skips non-editable cells + disabled rows during Tab/Shift+Tab. 13 new behavioural tests. Merged cbb65fd.
 
+## v0.6 train — your queue (in priority order)
+
+**0.5.0 GA shipped 2026-05-03.** v0.6 is the consumer-feedback absorption + spreadsheet flows + bulk operations major release. Target ship date: ~2026-05-10.
+
+Your v0.6 train has **5 queued tasks**, headlined by the **bulk row patch primitive** (`apiRef.applyRowPatches([...])` — the primitive every "fill down" / "shift dates" / "set status to Approved" toolbar wants; two-spike-confirmed). Pick them up in order; if you finish ahead of schedule, top of the v0.6 deferred list waits.
+
 ### Active now → `v06-prepareresult-preload-select-multi` (your planning doc §3, ~half day)
 
-`#427`, `#430`, and `#431` all merged. **In-cell editor RFC complete + cascade scoping closed + keyboard navigation polished + multi-Enter contract pinned.** Coordinator's already cut alpha.3 with the full v0.5 surface; alpha.4 cut imminent with this batch.
-
-The next v0.6 task is **§3 of `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`**: `v06-prepareresult-preload-select-multi`. Today autocomplete supports async-loaded options via `prepareResult.initialOptions`, but `select.tsx` and `multi-select.tsx` don't — consumers wanting "select editor with async-loaded options" have to either re-implement with a custom `cellEditor` or use autocomplete with all the free-text passthrough complexity they don't need.
+Today autocomplete supports async-loaded options via `prepareResult.initialOptions`, but `select.tsx` and `multi-select.tsx` don't — consumers wanting "select editor with async-loaded options" have to either re-implement with a custom `cellEditor` or use autocomplete with all the free-text passthrough complexity they don't need.
 
 The dependency (`BcCellEditorPrepareParams.column`) was already added in #403, so this is unblocked.
 
-Implementation:
+**Implementation:**
 
 1. **Add `initialOptions?: readonly EditorOption[]`** to the Combobox primitive's `ComboboxBaseProps` at `packages/editors/src/internal/combobox.tsx`. When set, the primitive uses these instead of (or in addition to) the `options` prop on first render.
 
 2. **Wire `prepare?: (params) => Promise<{ initialOptions: EditorOption[] }>`** on `selectEditor` and `multiSelectEditor` — same shape as autocomplete already uses. Each editor's `prepare` reads `column.fetchOptions` (if present) and resolves the first page; falls through to `column.options` if the column ships static options.
 
-3. **Graceful prepare-rejection** — let `prepare` resolve `undefined` (no preload, fall through to synchronous `column.options`) instead of bouncing back to Navigation. Matches the §3 risk note: a network failure shouldn't block edit entirely.
+3. **Graceful prepare-rejection** — let `prepare` resolve `undefined` (no preload, fall through to synchronous `column.options`) instead of bouncing back to Navigation. A network failure shouldn't block edit entirely.
 
 4. **Test coverage** — unit tests for the prepare wiring on both editors + 1 Playwright spec showing async-loaded options paint on first render of select + multi-select editors.
 
 **Branch:** `agent/worker3/v06-prepareresult-preload-select-multi`. **Effort:** ~half day.
 
-### Next-after → `v06-editor-tab-wraparound-polish` OR continue planning doc §7+
+### Next-after → `v06-bulk-row-patch-primitive` (HEADLINE, ~1 day, two-spike-confirmed)
 
-Two candidates:
+**This is your v0.6 headline.** Doc-management spike (#367) finding #6 + production-estimating spike (#374) finding #4: every CRUD-flavored grid wants a primitive for "patch N rows with M field updates atomically" — fill-down ("set status of selected to Approved"), shift-dates ("push due dates by 7 days"), bulk reassign ("move all to John"), copy-from-template. Today consumers have to either iterate calling `setRow` (loses atomicity, fires N validates, N renders) or wire ad-hoc bulk endpoints.
 
-**Option A: `v06-editor-tab-wraparound-polish` (~half day)** — followup to #431. The current helper clamps when Tab runs off the end (last editable cell of last row). Bsncraft asked about wraparound: should Tab from the very last editable cell wrap to the first editable cell of the first row? Default in spreadsheet editors (Excel / Google Sheets) is YES (wraparound) but with a subtle row-traversal restriction to keep within the active selection if any. RFC + small impl.
+**Implementation:**
 
-**Option B: continue down planning doc §7+** — your planning doc has additional editor + lookup polish items beyond §6. Pick the next at the top.
+1. **`BcGridApi.applyRowPatches(patches: readonly BcRowPatch<TRow>[]): Promise<BcRowPatchResult<TRow>>`** — atomic bulk update. Each patch is `{ rowId: RowId, fields: Partial<TRow> }`. Validates each field through `column.validate` first; if any patch fails, returns `{ ok: false, failures }` and applies NONE (atomic semantics). If all pass, applies all in one render pass + fires one batched `onCellEditCommit` per cell.
 
-### Then-after → bsncraft migration co-pilot (consumer-paced)
+2. **`<BcServerGrid>` integration** — patches go through the existing `onServerRowMutation` lifecycle (managed cell-overlay rollback). Each patched cell becomes a pending overlay; on server resolve, the overlays clear in batch.
 
-When bsncraft's customers grid migration draft surfaces editor-side rough edges, your role is editor + lookup expertise.
+3. **`<BcEditGrid>` integration** — same primitive; the `editRowsImperativeAdapter` exposes `applyRowPatches` so consumers can trigger from custom toolbar buttons.
+
+4. **Recipe doc** at `docs/recipes/bulk-row-patch.md` — three patterns:
+   - "Fill down" (copy active cell value to all selected rows in same column)
+   - "Set field on selection" ("Mark all selected as Paid")
+   - "Shift dates" (`row.dueDate = addDays(row.dueDate, 7)` for all selected)
+
+5. **Test coverage:** unit tests for the validate-all-then-apply atomic semantics + 1 Playwright spec under `apps/examples/tests/bulk-row-patch.pw.ts` covering fill-down + reject-all-on-validation-failure.
+
+**Branch:** `agent/worker3/v06-bulk-row-patch-primitive`. **Effort:** ~1 day. **Two-spike-confirmed** (doc-mgmt #6, production-estimating #4).
+
+### Then-after → `v06-row-drag-drop-hooks` (~1 day, two-spike-confirmed)
+
+`BcGridProps.onRowDragOver(event, row)` + `onRowDrop(event, row, sourceRowIds)` callbacks for row-level drag-and-drop. Doc-management spike (#367) finding #1 + production-estimating spike (#374) finding #5: every consumer with sortable manual ordering, drag-into-folder, drag-to-reassign-status pattern hand-rolls the same DnD wiring outside the grid.
+
+**Implementation:**
+
+1. **HTML5 native drag-and-drop** (no library — keep bundle tight). The grid's row element gets `draggable={true}` when `onRowDragOver || onRowDrop` is set. Selected rows drag together (multi-row drag — `dataTransfer` carries the selected `rowIds` list).
+
+2. **Drop-zone detection** — `onRowDragOver` fires per row hovered; consumer returns `BcRowDropAction = "before" | "after" | "into" | "none"` and the grid renders the matching visual indicator (top/bottom border line for before/after; row highlight for into).
+
+3. **`onRowDrop(event, dropRow, sourceRowIds, position)`** — fires on release. Consumer reorders/relinks; the grid doesn't mutate state on its own (consumer-owned ordering).
+
+4. **Auto-scroll near edges** — when dragging near top/bottom of viewport, auto-scroll. Lifts existing keyboard auto-scroll math.
+
+5. **Recipe doc** at `docs/recipes/row-drag-drop.md` — task-list reorder + drag-to-folder patterns.
+
+6. **Test coverage:** unit tests for the drop-position math + 1 Playwright spec under `apps/examples/tests/row-drag-drop.pw.ts`.
+
+**Branch:** `agent/worker3/v06-row-drag-drop-hooks`. **Effort:** ~1 day. **Two-spike-confirmed** (doc-mgmt #1, production-estimating #5).
+
+### After-that → `v06-bcselection-narrowing` (~half day, two-spike-confirmed)
+
+Doc-management spike (#367) finding #3 + production-estimating spike (#374) finding #6: `BcSelection` is a discriminated union (`{ mode: "explicit" | "all" | "filtered", rowIds?: Set<RowId>, exceptions?: Set<RowId> }`); consumers writing `if (selection.mode === "explicit") { selection.rowIds.forEach(...) }` get TypeScript narrowing via the discriminator BUT downstream helpers (`getSelectedRows(selection, allRows)`) can't narrow because the param is the wide union. Adds ergonomic narrowing helpers.
+
+**Implementation:**
+
+1. **`isExplicitSelection(s)` + `isAllSelection(s)` + `isFilteredSelection(s)`** — type guards exported from `@bc-grid/core`. Narrow in `if`-branches without requiring discriminator dance at every call site.
+
+2. **`forEachSelectedRowId(selection, visibleRowIds, callback)`** — consumer-friendly iteration helper that handles all three modes.
+
+3. **Doc updates** — `docs/api.md` selection section pins the new helpers + shows the recipe.
+
+**Branch:** `agent/worker3/v06-bcselection-narrowing`. **Effort:** ~half day.
+
+### Last → `v06-editor-tab-wraparound-polish` (~half day)
+
+Followup to #431. Current helper clamps when Tab runs off the end of the last editable cell of last row. Bsncraft asked about wraparound: should Tab from the last editable cell wrap to first editable of first row? Default in spreadsheet editors (Excel / Google Sheets) is YES (wraparound) but with subtle row-traversal restriction to keep within active selection if any. Add `editorTabWraparound: "none" | "row-wrap" | "selection-wrap"` prop (default `"row-wrap"`).
+
+**Branch:** `agent/worker3/v06-editor-tab-wraparound-polish`. **Effort:** ~half day.
+
+### Previously active → `v06-editor-keyboard-navigation-polish` (DONE — #431 merged cbb65fd)
 
 ### Previously active → `v06-editor-visual-contract-consolidation` (DONE — #424 merged 21b86e5)
 
