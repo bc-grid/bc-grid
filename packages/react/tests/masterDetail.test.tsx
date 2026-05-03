@@ -7,6 +7,7 @@ import {
   createDetailToggleColumn,
   detailPanelDomId,
   detailPanelLabel,
+  detailPanelSlotStyle,
   detailPanelStyle,
   detailRowHeight,
   normalizeDetailPanelHeight,
@@ -145,10 +146,28 @@ describe("master detail helpers", () => {
     expect(detailRowHeight(Number.NaN, 144)).toBe(144)
     expect(detailRowHeight(36, 144)).toBe(180)
 
-    const style = detailPanelStyle(Number.NaN, Number.POSITIVE_INFINITY, Number.NaN)
-    expect(style).toMatchObject({ height: 0, top: 0, width: 1 })
-    expect(style).not.toHaveProperty("transform")
-    expect(style).not.toHaveProperty("transition")
+    const slotStyle = detailPanelSlotStyle(Number.NaN, Number.POSITIVE_INFINITY, Number.NaN)
+    expect(slotStyle).toMatchObject({
+      height: 0,
+      position: "absolute",
+      top: 0,
+      width: 1,
+    })
+    expect(slotStyle).not.toHaveProperty("overflow")
+    expect(slotStyle).not.toHaveProperty("transform")
+    expect(slotStyle).not.toHaveProperty("transition")
+
+    const panelStyle = detailPanelStyle(Number.POSITIVE_INFINITY)
+    expect(panelStyle).toMatchObject({
+      height: 0,
+      left: 0,
+      overflow: "auto",
+      position: "sticky",
+      width: "var(--bc-grid-viewport-width)",
+    })
+    expect(panelStyle).not.toHaveProperty("top")
+    expect(panelStyle).not.toHaveProperty("transform")
+    expect(panelStyle).not.toHaveProperty("transition")
   })
 })
 
@@ -171,18 +190,22 @@ describe("master detail panel slot", () => {
     expect(html).toContain('id="bc-grid-master-detail-test-detail-panel-cust-1"')
     expect(html).toContain("<section")
     expect(html).toContain('aria-label="Details for row cust-1"')
+    expect(html).toContain('class="bc-grid-detail-panel-slot"')
     expect(html).toContain('role="gridcell"')
     expect(html).toContain('aria-colspan="2"')
+    expect(html).toContain("position:absolute")
+    expect(html).toContain("position:sticky")
+    expect(html).toContain("width:var(--bc-grid-viewport-width)")
     expect(html).toContain("Contacts for Acme")
   })
 
   test("does not emit text-scaling / height-morph styles on the detail panel slot", () => {
     // Regression net for the master/detail motion contract: the panel
-    // wrapper sets only `height` / `top` / `width` / layout props as
-    // inline styles; never `transform` (would risk text scaling on
-    // rotation / zoom), never `transition` (would risk a height-morph
-    // motion). Both properties are confirmed absent from
-    // `detailPanelStyle()` above; this guards the rendered markup too.
+    // slot + sticky panel set only placement / size / overflow layout
+    // props as inline styles; never `transform` (would risk text
+    // scaling on rotation / zoom), never `transition` (would risk a
+    // height-morph motion). Both properties are confirmed absent from
+    // the style helpers above; this guards the rendered markup too.
     const html = renderToStaticMarkup(
       <BcDetailPanelSlot<Row>
         colSpan={1}

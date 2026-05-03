@@ -41,8 +41,9 @@ describe("rootStyle", () => {
 
 describe("viewportStyle", () => {
   test("undefined body height + fixed mode → flex 1 1 auto, scroll-on-overflow", () => {
-    const style = viewportStyle(undefined)
+    const style = viewportStyle(undefined, false, 640)
     expect(style).toMatchObject({
+      "--bc-grid-viewport-width": "640px",
       flex: "1 1 auto",
       minHeight: 0,
       overflow: "auto",
@@ -52,8 +53,9 @@ describe("viewportStyle", () => {
   })
 
   test("numeric body height + fixed mode → fixed-height internal viewport", () => {
-    const style = viewportStyle(360)
+    const style = viewportStyle(360, false, 1024)
     expect(style).toMatchObject({
+      "--bc-grid-viewport-width": "1024px",
       flex: "0 0 auto",
       height: 360,
       overflow: "auto",
@@ -63,7 +65,8 @@ describe("viewportStyle", () => {
   })
 
   test("page-flow mode hands the scrollbar back to the document", () => {
-    const style = viewportStyle(undefined, true)
+    const style = viewportStyle(undefined, true, 720)
+    expect(style["--bc-grid-viewport-width" as keyof typeof style]).toBe("720px")
     expect(style.overflowX).toBe("auto")
     expect(style.overflowY).toBe("hidden")
     expect(style.flex).toBe("0 0 auto")
@@ -72,7 +75,8 @@ describe("viewportStyle", () => {
   })
 
   test("page-flow mode ignores any body-height hint", () => {
-    const style = viewportStyle(360, true)
+    const style = viewportStyle(360, true, Number.NaN)
+    expect(style["--bc-grid-viewport-width" as keyof typeof style]).toBe("800px")
     expect(style.overflowX).toBe("auto")
     expect(style.overflowY).toBe("hidden")
     expect(style).not.toHaveProperty("height")

@@ -98,7 +98,13 @@ export function BcDetailPanelSlot<TRow>({
   width,
 }: BcDetailPanelSlotProps<TRow>): ReactNode {
   return (
-    <>
+    <div
+      className="bc-grid-detail-panel-slot"
+      style={detailPanelSlotStyle(top, height, width)}
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
       <div
         className="bc-grid-detail-panel"
         // biome-ignore lint/a11y/useSemanticElements: virtualized ARIA grid cells are div-based, not table cells.
@@ -106,10 +112,7 @@ export function BcDetailPanelSlot<TRow>({
         aria-colindex={1}
         aria-colspan={Math.max(1, colSpan)}
         tabIndex={-1}
-        style={detailPanelStyle(top, height, width)}
-        onClick={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
+        style={detailPanelStyle(height)}
       >
         <section
           className="bc-grid-detail-panel-region"
@@ -123,7 +126,7 @@ export function BcDetailPanelSlot<TRow>({
           })}
         </section>
       </div>
-    </>
+    </div>
   )
 }
 
@@ -183,16 +186,25 @@ export function normalizeDetailPanelHeight(height: number): number {
   return Number.isFinite(height) ? Math.max(0, height) : 0
 }
 
-export function detailPanelStyle(top: number, height: number, width: number): CSSProperties {
+export function detailPanelSlotStyle(top: number, height: number, width: number): CSSProperties {
   const normalizedHeight = normalizeDetailPanelHeight(height)
   const normalizedWidth = Number.isFinite(width) ? Math.max(width, 1) : 1
   return {
     height: normalizedHeight,
     left: 0,
     minWidth: "100%",
-    overflow: "auto",
     position: "absolute",
     top: normalizeDetailPanelHeight(top),
     width: normalizedWidth,
+  }
+}
+
+export function detailPanelStyle(height: number): CSSProperties {
+  return {
+    height: normalizeDetailPanelHeight(height),
+    left: 0,
+    overflow: "auto",
+    position: "sticky",
+    width: "var(--bc-grid-viewport-width)",
   }
 }

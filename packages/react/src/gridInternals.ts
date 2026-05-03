@@ -769,13 +769,25 @@ export function headerBandStyle(width: number, height: number): CSSProperties {
   }
 }
 
-export function viewportStyle(bodyHeight: number | undefined, pageFlow = false): CSSProperties {
+type ViewportStyle = CSSProperties & { "--bc-grid-viewport-width": string }
+
+export function viewportStyle(
+  bodyHeight: number | undefined,
+  pageFlow = false,
+  viewportWidth = DEFAULT_VIEWPORT_WIDTH,
+): CSSProperties {
+  const style: ViewportStyle = {
+    "--bc-grid-viewport-width": `${
+      Number.isFinite(viewportWidth) ? Math.max(viewportWidth, 1) : DEFAULT_VIEWPORT_WIDTH
+    }px`,
+  }
   if (pageFlow) {
     // Auto-height mode: the viewport does not own vertical scrolling —
     // it grows to match its canvas content height and the page scrolls
     // through it. It still owns horizontal scrolling so the sticky
     // headers and pinned cells compose with native sticky positioning.
     return {
+      ...style,
       flex: "0 0 auto",
       overflowX: "auto",
       overflowY: "hidden",
@@ -783,6 +795,7 @@ export function viewportStyle(bodyHeight: number | undefined, pageFlow = false):
     }
   }
   return {
+    ...style,
     flex: bodyHeight == null ? "1 1 auto" : "0 0 auto",
     height: bodyHeight,
     minHeight: bodyHeight == null ? 0 : undefined,

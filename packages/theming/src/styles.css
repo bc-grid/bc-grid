@@ -3307,6 +3307,10 @@ select.bc-grid-editor-input {
  * stripe above. Kept the muted-tinted bg + symmetric padding —
  * those calibrations stay calibrated.
  */
+.bc-grid-detail-panel-slot {
+  min-width: 100%;
+}
+
 .bc-grid-detail-panel {
   box-sizing: border-box;
   border-top: 1px solid var(--bc-grid-border);
@@ -3314,6 +3318,7 @@ select.bc-grid-editor-input {
   background: var(--bc-grid-detail-panel-bg);
   color: var(--bc-grid-fg);
   padding: 0.5rem max(var(--bc-grid-cell-padding-x), 0.75rem);
+  z-index: 2;
 }
 
 .bc-grid-detail-panel > * {
