@@ -55,14 +55,27 @@ Implementation:
 
 **Branch:** `agent/worker2/v06-erp-filter-operators`. **Effort:** ~half day.
 
-### Optionally pick up the bsncraft RFCs queued for v0.6
+### Next-after → `v05-bsncraft-row-state-cascade-scoping` (RFC + implementation, ~half day)
 
-Two new bsncraft P0 items hit the queue 2026-05-03 (alpha.2 consumer pass surfaced them; both require an RFC):
+Once the filter operators ship, pick up bsncraft P0 #2 — master `.bc-grid-row:hover` cascades into nested grid cells via descendant selectors. The detail panel is rendered INSIDE the master row's DOM (`grid.tsx:3519` — `<BcDetailPanelSlot>` inside the `bc-grid-row` div), so when cursor is over a nested grid cell, the master row matches `:hover` (cursor in descendant) AND the nested row matches `:hover`. Master row state-selector rules then paint nested cells too.
 
-- **`v05-bsncraft-row-state-cascade-scoping`** — master `.bc-grid-row:hover` cascades into nested grid cells via descendant selectors. Likely fix: `@scope (.bc-grid) to (.bc-grid-detail-panel .bc-grid)` OR `:not(:has(.bc-grid-detail-panel:hover))` per row-state selector. Symmetric scoping needed for hover, focused, selected (and their permutations).
-- **`v05-bsncraft-pinned-scroll-shadow-overlay`** — pseudo-element gradient at pinned boundary paints over row hover bg. Likely fix: `mix-blend-mode: multiply` or negative z-index on the pseudo.
+Implementation:
 
-If you'd rather pick up one of these instead of the filter operators, flag it; the chrome+CSS architecture knowledge from your layout pass PR (b) and default context menu wiring is the natural fit.
+1. **Pick the scoping mechanism:** evaluate `@scope (.bc-grid) to (.bc-grid-detail-panel .bc-grid)` (cleanest, requires Chrome 118+ / Safari 17.4+ / Firefox 128+ — bc-grid claims modern browsers) vs `:not(:has(.bc-grid-detail-panel:hover))` per selector (more verbose, broader support but uglier). Recommend the @scope path; document the deviation if you go with `:has()`.
+
+2. **Apply symmetrically** to all state-cascade selectors: `:hover`, `[data-bc-grid-focused-row="true"]`, `[aria-selected="true"]`, and their cell-level `.bc-grid-row:hover .bc-grid-cell` etc. permutations (lines 214-234 + 817-862 + 874-933 in `packages/theming/src/styles.css`).
+
+3. **Test coverage:** Playwright spec at `apps/examples/tests/nested-grid-hover-isolation.pw.ts` — open a master row's detail panel containing a nested grid, hover a nested cell, assert master row's hover bg is NOT painted (compare computed background-color before/after hover entry).
+
+**Branch:** `agent/worker2/v05-bsncraft-row-state-cascade-scoping`. **Effort:** ~half day.
+
+### Then-after → `v05-bsncraft-pinned-scroll-shadow-overlay` (RFC + implementation, ~half day)
+
+Pick up bsncraft P0 #4 — pseudo-element gradient at pinned boundary (`bc-grid-cell-pinned-{left,right}-edge::after/::before` at `right: -8px`, `packages/theming/src/styles.css:3587-3611`) paints over row hover bg. Likely fix: `mix-blend-mode: multiply` so the shadow darkens the row state below instead of replacing it; alternative is negative z-index on the pseudo.
+
+Verify forced-colors mode + the existing `.bc-grid-cell-pinned-{left,right}-edge` Playwright spec from #415 doesn't regress.
+
+**Branch:** `agent/worker2/v05-bsncraft-pinned-scroll-shadow-overlay`. **Effort:** ~half day.
 
 Spec from your planning doc:
 

@@ -50,9 +50,19 @@ Implementation:
 
 **Branch:** `agent/worker1/v06-server-perf-prefetch-budget-tuning`. **Effort:** ~half day.
 
-### After prefetch tuning → continue down planning doc §7 / §8 / §9
+### Next-after → `v06-server-perf-stale-response-handling` (planning doc §7, ~half day)
 
-Your planning doc has 11 v0.6 task proposals; pick the next at the top of the unfinished list when you're ready.
+Once prefetch tuning ships, pull §7 forward — stale-response handling under requestId floods. The current orchestration cancels in-flight requests via the per-row request-id supersedure introduced in #391, but the pattern hasn't been stress-tested under request floods (e.g. user trackpad-scrolling rapidly through 10k rows with a 200ms server). Specifically: confirm dropped-response GC keeps the cache pressure bounded under floods, and pin the supersedure contract with a unit test that interleaves overlapping requests for the same block.
+
+**Branch:** `agent/worker1/v06-server-perf-stale-response-handling`. **Effort:** ~half day.
+
+### Then-after → continue down planning doc §8 / §9
+
+Your planning doc has 11 v0.6 task proposals total; pick the next at the top of the unfinished list when you're ready. The prefetch-tuning + stale-response pair closes the v0.6 server-perf train; after that the natural next pickup is whichever bsncraft RFC is still queued OR the v0.6 saved-view persistence layer (composable with worker2's #423 saved-view DTO).
+
+### Optionally pick up the bsncraft RFCs queued for v0.6
+
+Two new bsncraft P0 items hit the queue 2026-05-03 (alpha.2 consumer pass surfaced them; both require an RFC). Server-grid expertise is less critical for these; flag them only if worker2 / worker3 are already saturated.
 
 ### Previously active → `v06-server-perf-block-cache-lru-tuning` (DONE — #422 merged 976344c)
 

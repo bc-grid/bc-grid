@@ -60,14 +60,27 @@ Implementation:
 
 **Branch:** `agent/worker3/v06-popup-editor-verification-pr-c`. **Effort:** ~half day.
 
+### Next-after → `v06-editor-keyboard-navigation-polish` (planning doc §5, ~half day)
+
+Once popup editor verification ships, pull §5 forward — editor keyboard navigation polish. The current Tab / Shift+Tab / Enter / Esc routing through the editor portal works for the happy path, but bsncraft surfaced edge cases in the alpha.2 consumer pass: Tab on the LAST editable cell in a row should move to the FIRST editable cell of the NEXT row (it currently moves to the next column even if that column is non-editable, then no-ops); Shift+Tab on the FIRST editable cell of a row should move to the LAST editable cell of the PREVIOUS row.
+
+Implementation:
+
+1. **Editable-aware Tab routing** in `useEditingController.ts` — `findNextEditableCell({ direction, currentRow, currentColumn, columns, rows })` helper that skips non-editable columns AND row-disabled rows. Default to next-row wrap when at the row boundary.
+
+2. **Edge case: only one editable column** — Tab should round-trip to the next row's editable cell, not no-op or trap focus.
+
+3. **Test coverage:** unit tests for `findNextEditableCell` covering the wrap cases + 1 Playwright spec at `apps/examples/tests/editor-tab-navigation.pw.ts` demonstrating the wrap on a grid with mixed editable / read-only columns.
+
+**Branch:** `agent/worker3/v06-editor-keyboard-navigation-polish`. **Effort:** ~half day.
+
+### Then-after → bsncraft migration co-pilot (consumer-paced)
+
+Same as before — when bsncraft's customers grid migration draft surfaces editor-side rough edges, your role is editor + lookup expertise.
+
 ### Optionally pick up the bsncraft RFCs queued for v0.6
 
-Two new bsncraft P0 items hit the queue 2026-05-03 (alpha.2 consumer pass surfaced them; both require an RFC):
-
-- **`v05-bsncraft-row-state-cascade-scoping`** — master `.bc-grid-row:hover` cascades into nested grid cells via descendant selectors. Likely fix: `@scope (.bc-grid) to (.bc-grid-detail-panel .bc-grid)` OR `:not(:has(.bc-grid-detail-panel:hover))` per row-state selector.
-- **`v05-bsncraft-pinned-scroll-shadow-overlay`** — pseudo-element gradient at pinned boundary paints over row hover bg. Likely fix: `mix-blend-mode: multiply` or negative z-index on the pseudo.
-
-If you'd rather pick up one of these instead of the popup editor verification, flag it; the visual-contract token expertise from #424 is the natural fit for the row-state cascade scoping work.
+If worker2 doesn't pick them up, the visual-contract token expertise from #424 is the natural fit for `v05-bsncraft-row-state-cascade-scoping` — flag if you'd rather pivot to that than popup editor verification.
 
 ### Previously active → `v06-editor-visual-contract-consolidation` (DONE — #424 merged 21b86e5)
 
