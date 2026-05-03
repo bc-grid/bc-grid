@@ -350,10 +350,34 @@
   color: var(--bc-grid-muted-fg);
 }
 
+/*
+ * Pinned-lane wrappers (worker1 #415 layout architecture pass). Each
+ * lane is `position: sticky` on `left: 0` (left lane) or `right: 0`
+ * (right lane) — see `pinnedLaneStyle` in `gridInternals.ts`. The row
+ * is `display: grid`, so we must split the grid placement per side
+ * or both lanes land at `grid-column: 1` (the start) and visually
+ * overlap on the left edge of the row. Bsncraft v0.5.0 GA P0 surfaced
+ * this: pinned-right column rendered on the left, overlapping the
+ * auto-injected `__bc_detail` column.
+ *
+ * Fix: pin the left lane to `grid-column: 1 / 2` (first track) and
+ * the right lane to `grid-column: -2 / -1` (last track). Sticky
+ * positioning then pulls each lane to the visible viewport's
+ * left/right edge as the user horizontally scrolls.
+ */
 .bc-grid-pinned-lane {
-  grid-column: 1 / -1;
   grid-row: 1;
   align-self: start;
+}
+
+.bc-grid-pinned-lane-left {
+  grid-column: 1 / 2;
+  justify-self: start;
+}
+
+.bc-grid-pinned-lane-right {
+  grid-column: -2 / -1;
+  justify-self: end;
 }
 
 .bc-grid-overlay {
@@ -1617,6 +1641,19 @@ select.bc-grid-editor-input {
   z-index: 1;
 }
 
+.bc-grid-fill-handle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--bc-grid-bg);
+  background: var(--bc-grid-range-overlay-border);
+  cursor: crosshair;
+  pointer-events: auto;
+}
+
 .bc-grid-filter-row .bc-grid-cell {
   background: var(--bc-grid-header-bg);
   box-shadow: none;
@@ -2461,6 +2498,88 @@ select.bc-grid-editor-input {
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
+}
+
+.bc-grid-bulk-actions {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--bc-grid-border);
+  background: color-mix(in srgb, var(--bc-grid-accent) 8%, var(--bc-grid-bg));
+  color: var(--bc-grid-fg);
+  font-size: var(--bc-grid-font-size);
+  line-height: 1.2;
+  padding-block: 0.5rem;
+  padding-inline: var(--bc-grid-cell-padding-x);
+}
+
+.bc-grid-bulk-actions-count {
+  flex: 0 0 auto;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bc-grid-bulk-actions-slot {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bc-grid-bulk-actions-slot button,
+.bc-grid-bulk-actions-clear {
+  display: inline-flex;
+  min-height: 1.875rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bc-grid-border);
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: var(--bc-grid-bg);
+  color: var(--bc-grid-fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1;
+  padding-block: 0;
+  padding-inline: 0.625rem;
+  transition: background-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), border-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
+}
+
+.bc-grid-bulk-actions-slot button:hover:not(:disabled),
+.bc-grid-bulk-actions-clear:hover {
+  border-color: var(--bc-grid-input-border);
+  background: var(--bc-grid-row-hover);
+}
+
+.bc-grid-bulk-actions-slot button:active:not(:disabled),
+.bc-grid-bulk-actions-clear:active {
+  background: var(--bc-grid-accent-soft);
+}
+
+.bc-grid-bulk-actions-slot button:disabled {
+  cursor: default;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.bc-grid-bulk-actions-slot button:focus-visible,
+.bc-grid-bulk-actions-clear:focus-visible {
+  outline: 2px solid var(--bc-grid-focus-ring);
+  outline-offset: 2px;
+}
+
+.bc-grid-bulk-actions-clear {
+  flex: 0 0 auto;
+  width: 1.875rem;
+  min-width: 1.875rem;
+  margin-left: auto;
+  padding: 0;
 }
 
 /*
@@ -4038,6 +4157,8 @@ table.bc-grid-detail-nested-grid {
 .bc-grid-pagination-button,
 .bc-grid-pagination-size select,
 .bc-grid-cell-checkbox,
+.bc-grid-bulk-actions-slot button,
+.bc-grid-bulk-actions-clear,
 .bc-grid-context-menu-item,
 .bc-grid-column-menu-item,
 .bc-grid-sidebar-tab,
@@ -4084,6 +4205,8 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-detail-toggle,
   .bc-grid-pagination-button,
   .bc-grid-pagination-size select,
+  .bc-grid-bulk-actions-slot button,
+  .bc-grid-bulk-actions-clear,
   .bc-grid-context-menu-item,
   .bc-grid-column-menu-item,
   .bc-grid-sidebar-tab,
@@ -4128,6 +4251,11 @@ table.bc-grid-detail-nested-grid {
    * introduced in Q3 must have 44px hit targets."
    */
   .bc-grid-range-handle {
+    min-width: var(--bc-grid-hit-target-min);
+    min-height: var(--bc-grid-hit-target-min);
+  }
+
+  .bc-grid-fill-handle {
     min-width: var(--bc-grid-hit-target-min);
     min-height: var(--bc-grid-hit-target-min);
   }
@@ -4200,12 +4328,19 @@ table.bc-grid-detail-nested-grid {
     --bc-grid-detail-error-border: ButtonText;
   }
 
+  .bc-grid-fill-handle {
+    border-color: Canvas;
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+
   .bc-grid,
   .bc-grid-header,
   .bc-grid-row,
   .bc-grid-cell,
   .bc-grid-sidebar,
   .bc-grid-sidebar-panel,
+  .bc-grid-bulk-actions,
   .bc-grid-detail-panel,
   .bc-grid-detail-section,
   .bc-grid-detail-empty,
@@ -4284,6 +4419,27 @@ table.bc-grid-detail-nested-grid {
 
   .bc-grid-statusbar {
     border-top: 1px solid CanvasText;
+  }
+
+  .bc-grid-bulk-actions {
+    border-bottom: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .bc-grid-bulk-actions-slot button,
+  .bc-grid-bulk-actions-clear {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .bc-grid-bulk-actions-slot button:hover:not(:disabled),
+  .bc-grid-bulk-actions-clear:hover,
+  .bc-grid-bulk-actions-slot button:focus-visible,
+  .bc-grid-bulk-actions-clear:focus-visible {
+    background: Highlight;
+    color: HighlightText;
   }
 
   .bc-grid-statusbar-segment + .bc-grid-statusbar-segment {

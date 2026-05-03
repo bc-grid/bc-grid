@@ -123,3 +123,32 @@ describe("multi-mode Enter contract — keyboard intercept (planning doc §5)", 
     expect(source).toMatch(/Toggling on Enter undoes the most-recently/i)
   })
 })
+
+describe("initialOptions wiring (v06-prepareresult-preload-select-multi)", () => {
+  // The Combobox primitive accepts `initialOptions` so editors that
+  // resolve options via `prepare()` (selectEditor, multiSelectEditor)
+  // can pass the prepare-resolved list and have it override the
+  // static `options` prop. Mirrors the SearchCombobox pattern. Pin
+  // the precedence shape here so a refactor doesn't accidentally
+  // invert the fallthrough or drop `initialOptions` altogether,
+  // which would silently regress the async-loaded-options path.
+  const here = fileURLToPath(new URL(".", import.meta.url))
+  const source = readFileSync(`${here}../src/internal/combobox.tsx`, "utf8")
+
+  test("ComboboxBaseProps declares initialOptions alongside options", () => {
+    // Pin the prop shape — both `options` and `initialOptions` must
+    // be part of the public contract so editor consumers can target
+    // either path.
+    expect(source).toMatch(/options:\s*readonly\s+EditorOption\[\]/)
+    expect(source).toMatch(/initialOptions\?:\s*readonly\s+EditorOption\[\]\s*\|\s*undefined/)
+  })
+
+  test("Combobox prefers initialOptions over the options prop", () => {
+    // The whole point: when an editor's `prepare()` resolves async
+    // options, the resulting list must win over any static `options`
+    // prop the consumer also wired. The fallthrough order is
+    // load-bearing — flipping it would silently regress the
+    // first-page-preload UX.
+    expect(source).toMatch(/const\s+options\s*=\s*initialOptions\s*\?\?\s*optionsProp/)
+  })
+})

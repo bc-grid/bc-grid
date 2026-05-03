@@ -597,6 +597,87 @@ describe("range TSV paste helpers", () => {
     })
   })
 
+  test("buildRangeTsvPasteApplyPlan can skip read-only targets for fill", async () => {
+    const mixedColumns = [
+      resolvedColumn("name", "Name", { editable: true }),
+      resolvedColumn("amount", "Amount", { editable: false }),
+      resolvedColumn("note", "Note", { editable: true }),
+    ]
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "name", "r1", "name"),
+      tsv: "Ada\t12\tReady\nGrace\t34\tDone",
+      columns: mixedColumns,
+      rowEntries: rowEntries.slice(0, 2),
+      rowIds: rowIds.slice(0, 2),
+      skipReadOnlyTargets: true,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error.message)
+    expect(
+      result.plan.commits.map((commit) => [commit.rowId, commit.columnId, commit.nextValue]),
+    ).toEqual([
+      ["r1", "name", "Ada"],
+      ["r1", "note", "Ready"],
+      ["r2", "name", "Grace"],
+      ["r2", "note", "Done"],
+    ])
+    expect(result.plan.skippedCells.map((cell) => cell.reasons)).toEqual([
+      ["cell-readonly"],
+      ["cell-readonly"],
+    ])
+  })
+
+  test("buildRangeTsvPasteApplyPlan can skip disabled rows for fill", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "name", "r1", "name"),
+      tsv: "Ada\nGrace",
+      columns: editableColumns,
+      rowEntries: rowEntries.slice(0, 2),
+      rowIds: rowIds.slice(0, 2),
+      skipReadOnlyTargets: true,
+      isRowReadOnly: (row) => row.id === "r2",
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.plan.commits.map((commit) => [commit.rowId, commit.columnId])).toEqual([
+      ["r1", "name"],
+    ])
+    expect(result.plan.skippedCells).toEqual([
+      {
+        sourceRowIndex: 1,
+        sourceColumnIndex: 0,
+        targetRowIndex: 1,
+        targetColumnIndex: 0,
+        rowId: "r2",
+        columnId: "name",
+        value: "Grace",
+        reasons: ["row-not-editable"],
+      },
+    ])
+  })
+
+  test("buildRangeTsvPasteApplyPlan can allow an empty single-cell fill", async () => {
+    const result = await buildRangeTsvPasteApplyPlan({
+      range: range("r1", "note", "r1", "note"),
+      tsv: "",
+      columns: editableColumns,
+      rowEntries,
+      rowIds,
+      allowEmptyCells: true,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.plan.commits[0]).toMatchObject({
+      rowId: "r1",
+      columnId: "note",
+      nextValue: "",
+      rawValue: "",
+    })
+  })
+
   test("buildRangeTsvPasteApplyPlan reports skipped metadata for group-row targets", async () => {
     const result = await buildRangeTsvPasteApplyPlan({
       range: range("group-region", "name", "group-region", "name"),

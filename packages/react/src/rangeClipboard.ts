@@ -45,6 +45,7 @@ export interface RangeTsvParseResult {
 
 export interface RangeTsvParseOptions {
   maxCells?: number
+  allowEmpty?: boolean
 }
 
 export interface BuildRangeTsvPastePlanParams {
@@ -109,6 +110,14 @@ export interface BuildRangeTsvPasteApplyPlanParams<TRow> {
    * callers that want spreadsheet-style truncation at grid edges.
    */
   overflow?: RangeTsvPasteOverflowMode
+  /**
+   * Spreadsheet fill skips non-editable rows/cells but still applies the
+   * editable targets. Normal paste keeps the stricter reject-by-default
+   * behavior for compatibility.
+   */
+  skipReadOnlyTargets?: boolean
+  isRowReadOnly?: (row: TRow) => boolean
+  allowEmptyCells?: boolean
   signal?: AbortSignal
 }
 
@@ -391,7 +400,10 @@ export function parseRangeTsv(
     cells.push([""])
   }
 
-  if (cells.every((candidateRow) => candidateRow.every((value) => value.length === 0))) {
+  if (
+    options.allowEmpty !== true &&
+    cells.every((candidateRow) => candidateRow.every((value) => value.length === 0))
+  ) {
     diagnostics.push({
       code: "empty-paste",
       rowIndex: 0,
@@ -493,9 +505,12 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
   rowEntries,
   rowIds,
   overflow = "reject",
+  skipReadOnlyTargets = false,
+  isRowReadOnly,
+  allowEmptyCells = false,
   signal,
 }: BuildRangeTsvPasteApplyPlanParams<TRow>): Promise<RangeTsvPasteApplyResult<TRow>> {
-  const parsed = parseRangeTsv(tsv)
+  const parsed = parseRangeTsv(tsv, { allowEmpty: allowEmptyCells })
   const diagnostic = parsed.diagnostics[0]
   if (diagnostic) {
     return {
@@ -551,6 +566,7 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
 
   const rowEntryById = new Map(rowEntries.map((entry) => [entry.rowId, entry]))
   const columnById = new Map(columns.map((column) => [column.columnId, column]))
+  const skippedCells = [...pastePlan.skippedCells]
   const commits: RangeTsvPasteCommit<TRow>[] = []
   const patchEntries = new Map<RowId, RangeTsvPasteRowPatch<TRow>>()
 
@@ -579,6 +595,26 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
     }
     if (!isDataRowEntry(rowEntry)) {
       const skippedCell = skippedCellFromTarget(target, "row-not-editable")
+      if (skipReadOnlyTargets) {
+        skippedCells.push(skippedCell)
+        continue
+      }
+      return {
+        ok: false,
+        error: {
+          code: "row-not-editable",
+          message: "Paste target row is not editable.",
+          skippedCell,
+          ...failureTargetFields(skippedCell),
+        },
+      }
+    }
+    if (isRowReadOnly?.(rowEntry.row) === true) {
+      const skippedCell = skippedCellFromTarget(target, "row-not-editable")
+      if (skipReadOnlyTargets) {
+        skippedCells.push(skippedCell)
+        continue
+      }
       return {
         ok: false,
         error: {
@@ -604,6 +640,10 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
 
     if (!isRangePasteCellEditable(column, rowEntry.row)) {
       const skippedCell = skippedCellFromTarget(target, "cell-readonly")
+      if (skipReadOnlyTargets) {
+        skippedCells.push(skippedCell)
+        continue
+      }
       return {
         ok: false,
         error: {
@@ -672,7 +712,7 @@ export async function buildRangeTsvPasteApplyPlan<TRow>({
       pastePlan,
       commits,
       rowPatches: Array.from(patchEntries.values()),
-      skippedCells: pastePlan.skippedCells,
+      skippedCells,
     },
   }
 }

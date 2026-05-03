@@ -65,6 +65,20 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain("hsl(var(")
   })
 
+  test("bulk-actions bar has themed surface, action buttons, and coarse-pointer hit targets", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain(".bc-grid-bulk-actions {")
+    expect(css).toContain(
+      "background: color-mix(in srgb, var(--bc-grid-accent) 8%, var(--bc-grid-bg))",
+    )
+    expect(css).toContain(".bc-grid-bulk-actions-slot button,")
+    expect(css).toContain(".bc-grid-bulk-actions-clear")
+    expect(css).toContain(".bc-grid-bulk-actions-slot button:focus-visible,")
+    expect(css).toContain(".bc-grid-bulk-actions-slot button,\n.bc-grid-bulk-actions-clear,")
+    expect(css).toContain(".bc-grid-bulk-actions-slot button:hover:not(:disabled),")
+  })
+
   test("row-hover token mixes accent with --bc-grid-bg (opaque) so body and pinned composite to the same pixels", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     // Body cells paint hover via `background: var(--bc-grid-row-hover)`
@@ -270,9 +284,29 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("--bc-grid-pinned-header-bg: var(--bc-grid-header-bg)")
     expect(css).toContain("--bc-grid-pinned-boundary:")
     expect(css).toContain(".bc-grid-pinned-lane {")
-    expect(css).toContain("grid-column: 1 / -1")
     expect(css).toContain("grid-row: 1")
     expect(css).toContain("align-self: start")
+
+    // Bsncraft v0.5.0 GA P0 regression: both pinned lanes used to
+    // share `grid-column: 1 / -1`, so with the row's `display: grid`
+    // they both landed at grid-column 1 (left edge) and visually
+    // overlapped. Per-side placement pins lanes to the first/last
+    // grid track + adds `justify-self` so sticky positioning pulls
+    // each to its viewport edge correctly.
+    const leftLaneRule = ruleFor(".bc-grid-pinned-lane-left {")
+    expect(leftLaneRule).toContain("grid-column: 1 / 2")
+    expect(leftLaneRule).toContain("justify-self: start")
+
+    const rightLaneRule = ruleFor(".bc-grid-pinned-lane-right {")
+    expect(rightLaneRule).toContain("grid-column: -2 / -1")
+    expect(rightLaneRule).toContain("justify-self: end")
+
+    // The shared `.bc-grid-pinned-lane` rule no longer carries a
+    // `grid-column: 1 / -1` directive (which would be fought against
+    // the per-side overrides via specificity ties). Per-side rules
+    // own the placement; the shared rule keeps grid-row + align-self.
+    const sharedLaneRule = ruleFor(".bc-grid-pinned-lane {")
+    expect(sharedLaneRule).not.toContain("grid-column: 1 / -1")
 
     // Pinned cells layer the same body row-state token as a
     // `background-image: linear-gradient(<token>, <token>)` overlay
@@ -1624,6 +1658,24 @@ describe("@bc-grid/theming", () => {
     const inputRule = css.slice(inputIdx, css.indexOf("}", inputIdx))
     expect(inputRule).toContain("height: 1.875rem")
     expect(inputRule).toContain("background: color-mix")
+  })
+
+  test("range fill handle is an 8px pointer target with forced-colors support", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-fill-handle {")
+    expect(idx).toBeGreaterThan(-1)
+    const rule = css.slice(idx, css.indexOf("}", idx))
+
+    expect(rule).toContain("width: 8px")
+    expect(rule).toContain("height: 8px")
+    expect(rule).toContain("background: var(--bc-grid-range-overlay-border)")
+    expect(rule).toContain("pointer-events: auto")
+
+    const forcedIdx = css.indexOf(".bc-grid-fill-handle {", css.indexOf("@media (forced-colors"))
+    expect(forcedIdx).toBeGreaterThan(-1)
+    const forcedRule = css.slice(forcedIdx, css.indexOf("}", forcedIdx))
+    expect(forcedRule).toContain("background: Highlight")
+    expect(forcedRule).toContain("forced-color-adjust: none")
   })
 
   test("inline filter row containers carry a min-height floor so compact density stays readable", () => {
