@@ -203,6 +203,10 @@ function createServerSavedViewStore<TRow = unknown>(
 
 For multi-tenant products, the endpoint should derive tenant/user/team identity from the session rather than trusting client-supplied `ownerId` or `scope`.
 
+For shared team/global views that need concurrent-edit protection, prefer the
+`createServerSyncedSavedViewStore` helper and conflict flow in
+`docs/recipes/saved-view-server-sync.md`.
+
 ## Toolbar Wiring
 
 The storage adapter owns persistence; `BcGrid` still owns layout application through controlled `layoutState`.

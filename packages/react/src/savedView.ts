@@ -55,6 +55,29 @@ export interface BcSavedViewLayoutApplier {
   setSidebarPanel?: (next: string | null) => void
 }
 
+export interface BcServerSyncedSavedViewStoreOptions {
+  endpoint: string
+  gridId: string
+  fetch?: typeof fetch
+}
+
+export interface BcSavedViewSyncConflict<TRow = unknown> {
+  status: "conflict"
+  local: BcSavedView<TRow>
+  remote: BcSavedView<TRow>
+}
+
+export type BcSavedViewSyncResult<TRow = unknown> =
+  | { status: "saved"; view: BcSavedView<TRow> }
+  | BcSavedViewSyncConflict<TRow>
+
+export interface BcServerSyncedSavedViewStore<TRow = unknown> {
+  list(): Promise<readonly BcSavedView<TRow>[]>
+  getDefault(): Promise<BcSavedView<TRow> | null>
+  upsert(view: BcSavedViewInput<TRow>): Promise<BcSavedViewSyncResult<TRow>>
+  remove(viewId: string): Promise<void>
+}
+
 export function createSavedView<TRow = unknown>(
   opts: CreateSavedViewOptions<TRow>,
 ): BcSavedView<TRow> {
@@ -85,6 +108,79 @@ export function migrateSavedViewLayout<TRow = unknown>(
     ...view,
     version: BC_SAVED_VIEW_VERSION,
     layout: normalizeSavedViewLayout(view.layout),
+  }
+}
+
+export function createServerSyncedSavedViewStore<TRow = unknown>({
+  endpoint,
+  fetch: fetchImpl = globalThis.fetch?.bind(globalThis),
+  gridId,
+}: BcServerSyncedSavedViewStoreOptions): BcServerSyncedSavedViewStore<TRow> {
+  if (typeof fetchImpl !== "function") {
+    throw new Error("createServerSyncedSavedViewStore requires a fetch implementation.")
+  }
+
+  const baseEndpoint = endpoint.replace(/\/+$/, "")
+  const listUrl = `${baseEndpoint}?gridId=${encodeURIComponent(gridId)}`
+  const viewUrl = (viewId: string) => `${baseEndpoint}/${encodeURIComponent(viewId)}`
+
+  const requestJson = async (url: string, init?: RequestInit): Promise<Response> => {
+    const response = await fetchImpl(url, init)
+    if (response.ok || response.status === 404 || response.status === 409) return response
+    throw new Error(`Saved view sync request failed: ${response.status}`)
+  }
+
+  const readRemoteView = async (viewId: string): Promise<BcSavedView<TRow> | null> => {
+    const response = await requestJson(viewUrl(viewId), { method: "GET" })
+    if (response.status === 404) return null
+    return migrateSavedViewLayout((await response.json()) as BcSavedViewInput<TRow>)
+  }
+
+  return {
+    async list() {
+      const response = await requestJson(listUrl, { method: "GET" })
+      const rows = (await response.json()) as readonly BcSavedViewInput<TRow>[]
+      return rows
+        .map((view) => migrateSavedViewLayout(view))
+        .filter((view) => view.gridId === gridId)
+    },
+    async getDefault() {
+      const views = await this.list()
+      return views.find((view) => view.isDefault) ?? null
+    },
+    async upsert(input) {
+      const local = { ...migrateSavedViewLayout(input), gridId }
+      const remote = await readRemoteView(local.id)
+      if (remote && savedViewUpdatedAfter(remote.updatedAt, local.updatedAt)) {
+        return { status: "conflict", local, remote }
+      }
+
+      const next: BcSavedView<TRow> = {
+        ...local,
+        updatedAt: new Date().toISOString(),
+      }
+      const response = await requestJson(viewUrl(next.id), {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(next),
+      })
+      if (response.status === 409) {
+        const remoteConflict = migrateSavedViewLayout(
+          (await response.json()) as BcSavedViewInput<TRow>,
+        )
+        return { status: "conflict", local: next, remote: remoteConflict }
+      }
+      return {
+        status: "saved",
+        view:
+          response.status === 204
+            ? next
+            : migrateSavedViewLayout((await response.json()) as BcSavedViewInput<TRow>),
+      }
+    },
+    async remove(viewId) {
+      await requestJson(viewUrl(viewId), { method: "DELETE" })
+    },
   }
 }
 
@@ -161,6 +257,16 @@ function createSavedViewId(): string {
   const timestamp = Date.now().toString(36)
   const random = Math.random().toString(36).slice(2, 10)
   return `bc-view-${timestamp}-${random}`
+}
+
+function savedViewUpdatedAfter(remote: string | undefined, local: string | undefined): boolean {
+  if (!remote) return false
+  if (!local) return true
+  const remoteTime = Date.parse(remote)
+  const localTime = Date.parse(local)
+  if (!Number.isFinite(remoteTime)) return false
+  if (!Number.isFinite(localTime)) return true
+  return remoteTime > localTime
 }
 
 function cloneJsonLike<T>(value: T): T {

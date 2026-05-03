@@ -941,9 +941,17 @@ consumer-owned toolbar and storage flow:
 
 The full saved-view toolbar recipe is in `docs/recipes/saved-views.md`.
 Reference storage adapters for localStorage, IndexedDB, and server-backed
-storage are in `docs/recipes/saved-view-persistence.md`. URL state should carry
-the current layout blob only; consumers that need active saved-view identity can
-add their own `activeSavedViewId` URL parameter next to the grid payload.
+storage are in `docs/recipes/saved-view-persistence.md`; server conflict
+handling and `createServerSyncedSavedViewStore` are covered in
+`docs/recipes/saved-view-server-sync.md`. URL state should carry the current
+layout blob only; consumers that need active saved-view identity can add their
+own `activeSavedViewId` URL parameter next to the grid payload.
+
+`createServerSyncedSavedViewStore({ endpoint, gridId })` is a starter adapter
+for team/global saved views. `upsert(view)` compares `updatedAt` against the
+current remote record before writing and returns either `{ status: "saved",
+view }` or `{ status: "conflict", local, remote }`. The recommended conflict
+policy is reload-on-conflict; last-write-wins should be a host-owned override.
 
 Compact example:
 
