@@ -135,3 +135,9 @@ I prefer Option <X> because <reason>. Caveat for my lane: <thing>.
 Or if you have a sixth option I haven't considered, propose it.
 
 After all three workers weigh in, coordinator picks + ships. Estimated turnaround: 30 min if workers are active.
+
+## worker2 verdict
+
+I prefer Option B, applied to both `.bc-grid-row` and `.bc-grid-header`, because worker2's sticky-left detail panel does not depend on the row being a grid container; it uses its own absolute slot plus `position: sticky; left: 0; width: var(--bc-grid-viewport-width)`.
+
+For the pinned-lane chrome, keeping a grid formatting context is still useful because it prevents left/right sticky lane wrappers from stacking in normal flow, but the template should be lane-based (`auto minmax(0, 1fr) auto`) instead of column-count-based. Caveat: verify header and body lanes together, since the shared `.bc-grid-pinned-lane-*` placement classes currently affect both surfaces.
