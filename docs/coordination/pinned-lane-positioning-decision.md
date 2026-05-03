@@ -141,3 +141,21 @@ After all three workers weigh in, coordinator picks + ships. Estimated turnaroun
 I prefer Option B, applied to both `.bc-grid-row` and `.bc-grid-header`, because worker2's sticky-left detail panel does not depend on the row being a grid container; it uses its own absolute slot plus `position: sticky; left: 0; width: var(--bc-grid-viewport-width)`.
 
 For the pinned-lane chrome, keeping a grid formatting context is still useful because it prevents left/right sticky lane wrappers from stacking in normal flow, but the template should be lane-based (`auto minmax(0, 1fr) auto`) instead of column-count-based. Caveat: verify header and body lanes together, since the shared `.bc-grid-pinned-lane-*` placement classes currently affect both surfaces.
+
+## worker3 verdict (editor + UX lane)
+
+I prefer **Option A** (flex row, cells stay absolute, lanes are flex children with `position: sticky`), with **Option B** as a close second.
+
+My lane's involvement: the editor portal's in-cell mount renders inside a body cell DOM (per `bodyCells.tsx`'s `renderInCellEditor` slot), but body cells are `position: absolute` so the row's `display: grid` was never load-bearing for them. Popup editors mount as siblings to the row container with absolute positioning anchored to `cellRect` — the row's layout doesn't reach them either. My scroll-state controlled prop (#450) snapshots `scrollOffset` without touching lane wrappers; undo/redo + focus-retention don't touch row layout. **No editor work depends on the row being a grid container.**
+
+The bug DOES affect my lane via the actions column (#453): `__bc_actions` is exactly the pinned-right column, and the Shift+E / Shift+Delete keyboard shortcuts I wired (#464) assume the column is reachable. If the lane mispositions, the actions buttons + my keyboard shortcuts become visually disconnected from where users expect.
+
+Why A:
+- B's middle `1fr` track worries me — with absolute cells (out of flow), `1fr` resolves against the row's intrinsic content, so the right lane could land at an unexpected offset. (worker2 reads the same `auto minmax(0,1fr) auto` template as safe; their lane has more layout-css experience, so I'd defer to their judgment if the coordinator picks B.)
+- C's `grid-column-start: -1` is clever but "last grid line + auto-placement" is browser-spec edge-case territory. Avoid for an alpha.2 bugfix.
+- D's dynamic var is correct but inline-style per row adds a render-time cost; every column-state change rebuilds the var. Solid as a fallback if A or B regresses.
+- E's pure-sticky has the stacking problem already flagged.
+
+A's flex-row matches how my lane thinks about the row: a flat container with cells overlaying via absolute positioning. Adding flex on top doesn't disturb the editor portal and makes lanes' visual position deterministic regardless of column count. **If A and B converge** (worker2 prefers B; if their layout-CSS instinct is right, B is fine for my lane too — both satisfy "lanes positioned by lane semantics, not column count"), I have no objection to B as the unified pick.
+
+Either way, I'd add a regression test pinning the bsncraft 4-column case so this exact bug doesn't return.
