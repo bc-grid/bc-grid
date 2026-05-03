@@ -954,6 +954,7 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("--bc-grid-detail-loading-border")
     expect(css).toContain("--bc-grid-detail-loading-accent")
     expect(css).toContain(".bc-grid-row-expanded")
+    expect(css).toContain(".bc-grid-detail-panel-slot")
     expect(css).toContain(".bc-grid-detail-section")
     expect(css).toContain(".bc-grid-detail-section-header")
     expect(css).toContain(".bc-grid-detail-section-actions")
@@ -1007,6 +1008,7 @@ describe("@bc-grid/theming", () => {
       ".bc-grid-group-toggle-icon ",
       ".bc-grid-detail-toggle ",
       ".bc-grid-detail-toggle-icon ",
+      ".bc-grid-detail-panel-slot ",
       ".bc-grid-detail-panel ",
       ".bc-grid-detail-panel-region ",
       ".bc-grid-row-expanded ",
@@ -1079,6 +1081,7 @@ describe("@bc-grid/theming", () => {
     // Border-top + border-bottom remain the only visual separators.
     expect(panelRule).toMatch(/border-top:\s*1px\s+solid\s+var\(--bc-grid-border\)/)
     expect(panelRule).toMatch(/border-bottom:\s*1px\s+solid\s+var\(--bc-grid-border\)/)
+    expect(panelRule).toMatch(/z-index:\s*2\b/)
 
     // Expanded master row picks up an inset accent-soft stripe so the
     // master row visually anchors the detail panel below it. Single-

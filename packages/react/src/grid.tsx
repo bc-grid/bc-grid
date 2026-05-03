@@ -2811,7 +2811,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             ref={scrollerRef}
             className="bc-grid-viewport"
             onScroll={handleScroll}
-            style={viewportStyle(bodyHeight, isAutoHeight)}
+            style={viewportStyle(bodyHeight, isAutoHeight, viewport.width)}
           >
             <div
               className="bc-grid-header-band"
