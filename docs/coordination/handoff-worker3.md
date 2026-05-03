@@ -40,52 +40,41 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#414** `v06-in-cell-editor-mode-pr-c` — popup categorisation for select/multi/autocomplete (framework migration closed)
 - ✅ **#421** `v05-default-context-menu-wiring` editor + row-action slice — `Editor` submenu (edit mode / show validation / show keyboard hints / activation / blur / esc-discards-row) + row actions + dismiss-latest-error
 - ✅ **#424** `v06-editor-visual-contract-consolidation` — `data-bc-grid-edit-state` canonical attribute + six `--bc-grid-edit-state-*` tokens + dual-attribute helper for one-release migration
+- ✅ **#426** + **#430** `v05-bsncraft-row-state-cascade-scoping` — RFC documenting the bug + recommending approach B (`:not()` selector guard) + 16 selectors swept + 17 source-shape regression guards. Closes bsncraft 2026-05-03 P0 #2. Merged 3d4f603 + 5cbb214.
+- ✅ **#427** `v06-multi-combobox-enter-semantics` — pinned the multi-mode Enter contract with 4 source-shape regression guards (implementation already shipped in #390). Merged 7bc55e5.
+- ✅ **#431** `v06-editor-keyboard-navigation-polish` — `nextEditableCellAfterEdit` helper skips non-editable cells + disabled rows during Tab/Shift+Tab. 13 new behavioural tests. Merged cbb65fd.
 
-### Active now → `v06-multi-combobox-enter-semantics` (your planning doc §5, ~30 min)
+### Active now → `v06-prepareresult-preload-select-multi` (your planning doc §3, ~half day)
 
-`#421` and `#424` both merged. **In-cell editor RFC PRs (a) + (b) + (c) shipped.** **Default context menu editor + row actions wired.** **Editor visual contract consolidated.** Coordinator cut alpha.3 with the full v0.5 surface.
+`#427`, `#430`, and `#431` all merged. **In-cell editor RFC complete + cascade scoping closed + keyboard navigation polished + multi-Enter contract pinned.** Coordinator's already cut alpha.3 with the full v0.5 surface; alpha.4 cut imminent with this batch.
 
-The next v0.6 task is **§5 of `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`**: `v06-multi-combobox-enter-semantics`. Pure bug fix — the multi-mode Combobox `Enter` keydown routes through `updateSelection` (toggling the active option) before bubbling to the editor portal commit, undoing the user's last pick. The `editor-multi-select.pw.ts:111-114` workaround uses `Tab` and notes the sharp edge.
+The next v0.6 task is **§3 of `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`**: `v06-prepareresult-preload-select-multi`. Today autocomplete supports async-loaded options via `prepareResult.initialOptions`, but `select.tsx` and `multi-select.tsx` don't — consumers wanting "select editor with async-loaded options" have to either re-implement with a custom `cellEditor` or use autocomplete with all the free-text passthrough complexity they don't need.
+
+The dependency (`BcCellEditorPrepareParams.column`) was already added in #403, so this is unblocked.
 
 Implementation:
 
-1. **Split the Enter handler by mode** at `packages/editors/src/internal/combobox.tsx:273-282`:
-   - **Single mode**: keep current behaviour (Enter picks the active option, then Enter bubbles to commit).
-   - **Multi mode**: Enter does NOT toggle. It only bubbles up so the editor portal wrapper commits the current chip set. **`Space` stays as the toggle gesture.**
+1. **Add `initialOptions?: readonly EditorOption[]`** to the Combobox primitive's `ComboboxBaseProps` at `packages/editors/src/internal/combobox.tsx`. When set, the primitive uses these instead of (or in addition to) the `options` prop on first render.
 
-2. **Add an e2e assertion** in `apps/examples/tests/editor-multi-select.pw.ts` that the commit value after `Enter` contains all picked chips (not all-minus-the-active-one). Drop the Tab workaround comment now that Enter works.
+2. **Wire `prepare?: (params) => Promise<{ initialOptions: EditorOption[] }>`** on `selectEditor` and `multiSelectEditor` — same shape as autocomplete already uses. Each editor's `prepare` reads `column.fetchOptions` (if present) and resolves the first page; falls through to `column.options` if the column ships static options.
 
-3. **Pin the contract with a unit test** for the keyboard intercept in the existing combobox tests.
+3. **Graceful prepare-rejection** — let `prepare` resolve `undefined` (no preload, fall through to synchronous `column.options`) instead of bouncing back to Navigation. Matches the §3 risk note: a network failure shouldn't block edit entirely.
 
-**Branch:** `agent/worker3/v06-multi-combobox-enter-semantics`. **Effort:** ~30 min — small targeted change. **Risk note:** None — pure bug fix; current behaviour is the surprising one and consumers shouldn't be relying on it.
+4. **Test coverage** — unit tests for the prepare wiring on both editors + 1 Playwright spec showing async-loaded options paint on first render of select + multi-select editors.
 
-### Next-after → `v05-bsncraft-row-state-cascade-scoping` OR worker3-editor-keyboard-polish
+**Branch:** `agent/worker3/v06-prepareresult-preload-select-multi`. **Effort:** ~half day.
 
-Once §5 ships (it's a small task — likely done in a single sitting), pick whichever fits next:
+### Next-after → `v06-editor-tab-wraparound-polish` OR continue planning doc §7+
 
-**Option A (recommended): `v05-bsncraft-row-state-cascade-scoping` (RFC + implementation, ~half day)**
+Two candidates:
 
-Bsncraft P0 #2 — master `.bc-grid-row:hover` cascades into nested grid cells via descendant selectors. Detail panel renders INSIDE the master row's DOM (`grid.tsx:3519` — `<BcDetailPanelSlot>` inside the `bc-grid-row` div), so when cursor is over a nested grid cell, the master row matches `:hover` (cursor in descendant) AND the nested row matches `:hover`. Master row state-selector rules then paint nested cells too.
+**Option A: `v06-editor-tab-wraparound-polish` (~half day)** — followup to #431. The current helper clamps when Tab runs off the end (last editable cell of last row). Bsncraft asked about wraparound: should Tab from the very last editable cell wrap to the first editable cell of the first row? Default in spreadsheet editors (Excel / Google Sheets) is YES (wraparound) but with a subtle row-traversal restriction to keep within the active selection if any. RFC + small impl.
 
-Implementation: pick `@scope (.bc-grid) to (.bc-grid-detail-panel .bc-grid)` (cleanest, requires Chrome 118+ / Safari 17.4+ / Firefox 128+) vs `:not(:has(.bc-grid-detail-panel:hover))` per selector (more verbose, broader support). Apply symmetrically to `:hover`, `[data-bc-grid-focused-row="true"]`, `[aria-selected="true"]`, and their cell-level permutations (lines 214-234 + 817-862 + 874-933 in `packages/theming/src/styles.css`). Playwright spec at `apps/examples/tests/nested-grid-hover-isolation.pw.ts`.
-
-Your visual-contract token expertise from #424 is the natural fit. **Branch:** `agent/worker3/v05-bsncraft-row-state-cascade-scoping`. **Effort:** ~half day.
-
-**Option B: editor keyboard navigation polish**
-
-Tab on the LAST editable cell in a row should move to the FIRST editable cell of the NEXT row (currently moves to next column even if non-editable, then no-ops). Helper: `findNextEditableCell({ direction, currentRow, currentColumn, columns, rows })` in `useEditingController.ts` that skips non-editable columns + row-disabled rows. **Branch:** `agent/worker3/v06-editor-keyboard-navigation-polish`. **Effort:** ~half day.
-
-If worker2 has already picked up the bsncraft RFC, fall through to Option B.
-
-**Branch:** `agent/worker3/v06-editor-keyboard-navigation-polish`. **Effort:** ~half day.
+**Option B: continue down planning doc §7+** — your planning doc has additional editor + lookup polish items beyond §6. Pick the next at the top.
 
 ### Then-after → bsncraft migration co-pilot (consumer-paced)
 
-Same as before — when bsncraft's customers grid migration draft surfaces editor-side rough edges, your role is editor + lookup expertise.
-
-### Optionally pick up the bsncraft RFCs queued for v0.6
-
-If worker2 doesn't pick them up, the visual-contract token expertise from #424 is the natural fit for `v05-bsncraft-row-state-cascade-scoping` — flag if you'd rather pivot to that than popup editor verification.
+When bsncraft's customers grid migration draft surfaces editor-side rough edges, your role is editor + lookup expertise.
 
 ### Previously active → `v06-editor-visual-contract-consolidation` (DONE — #424 merged 21b86e5)
 
