@@ -72,6 +72,14 @@ interface PagedServerState<TRow> {
    * page before re-attempting the scroll.
    */
   awaitNextSettlement: () => Promise<PagedServerSettlement<TRow>>
+  /**
+   * Resolves when the model has zero in-flight requests. Re-checks
+   * after each settlement so newly-fired requests during a
+   * `whenIdle()` await also get drained. Used by
+   * `BcServerGridApi.whenIdle()` per `docs/design/server-mode-switch-rfc.md
+   * §6` Q1 hybrid resolution.
+   */
+  whenIdle: () => Promise<void>
   error: unknown
   getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
   gridShell: ServerPagedGridShell<TRow>
@@ -108,6 +116,8 @@ export interface ServerPagedGridShell<TRow> {
 
 interface InfiniteServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
+  /** See `PagedServerState.whenIdle`. */
+  whenIdle: () => Promise<void>
   error: unknown
   getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
   getModelState: () => ServerRowModelState<TRow>
@@ -134,6 +144,8 @@ interface ServerSortFilterState {
 
 interface TreeServerState<TRow> {
   applyRowUpdate: (update: ServerRowUpdate<TRow>) => void
+  /** See `PagedServerState.whenIdle`. */
+  whenIdle: () => Promise<void>
   columns: readonly BcReactGridColumn<TRow>[]
   error: unknown
   getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
@@ -274,6 +286,31 @@ export function resolveServerVisibleColumns<TRow>(
 export function resolvePrefetchAhead(prefetchAhead: number | undefined): number {
   if (typeof prefetchAhead !== "number" || !Number.isFinite(prefetchAhead)) return 1
   return Math.max(0, Math.floor(prefetchAhead))
+}
+
+/**
+ * Pure helper exported for unit testing. Resolves the active row-model
+ * mode given the consumer's optional `rowModel` prop and the controlled
+ * `groupBy` array.
+ *
+ * Today, `<BcServerGrid>` requires an explicit `rowModel`, so this
+ * helper short-circuits to it. Once the server-mode-switch RFC's
+ * stage 2+ ships (the `BcServerGridProps` collapse where `rowModel`
+ * becomes optional), the heuristic kicks in: `groupBy.length > 0` ⇒
+ * `"tree"`, else `"paged"`. Per `docs/design/server-mode-switch-rfc.md
+ * §6` and the Q2 ratification ("hard-coded heuristic with `rowModel`
+ * prop override").
+ *
+ * Consumers needing `infinite` mode under the heuristic must pass an
+ * explicit `rowModel="infinite"`.
+ */
+export function resolveActiveRowModelMode(input: {
+  rowModel: ServerRowModelMode | undefined
+  groupBy: readonly ColumnId[] | undefined
+}): ServerRowModelMode {
+  if (input.rowModel) return input.rowModel
+  if (input.groupBy && input.groupBy.length > 0) return "tree"
+  return "paged"
 }
 
 /**
@@ -594,11 +631,28 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         if (mode === "tree") return tree.getDiagnostics(selection)
         return paged.getDiagnostics(selection)
       },
+      getActiveRowModelMode() {
+        return resolveActiveRowModelMode({
+          rowModel: props.rowModel,
+          groupBy: props.groupBy,
+        })
+      },
+      async whenIdle() {
+        // Stage 1: each mode owns its own model instance, so route to
+        // the active mode. Stage 2+ (the structural reshape per
+        // server-mode-switch RFC §6) will collapse the three model
+        // instances into one shared instance, at which point this
+        // becomes a single `whenIdle` call.
+        if (mode === "paged") return paged.whenIdle()
+        if (mode === "infinite") return infinite.whenIdle()
+        if (mode === "tree") return tree.whenIdle()
+      },
     }
   }, [
     gridApiRef,
     infinite,
     paged,
+    props.groupBy,
     props.rowModel,
     queueServerRowMutation,
     settleServerRowMutation,
@@ -1036,9 +1090,16 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
     [props.rowModel, rowCount, view, viewKey],
   )
 
+  const whenIdle = useCallback(async () => {
+    while (modelRef.current.hasInFlightRequests()) {
+      await modelRef.current.awaitAllSettled()
+    }
+  }, [])
+
   return {
     applyRowUpdate,
     awaitNextSettlement,
+    whenIdle,
     error,
     getDiagnostics,
     gridShell,
@@ -1302,8 +1363,15 @@ function useInfiniteServerState<TRow>(
     [props.rowModel, rowCount, view, viewKey],
   )
 
+  const whenIdle = useCallback(async () => {
+    while (modelRef.current.hasInFlightRequests()) {
+      await modelRef.current.awaitAllSettled()
+    }
+  }, [])
+
   return {
     applyRowUpdate,
+    whenIdle,
     error,
     getDiagnostics,
     getModelState,
@@ -1630,8 +1698,15 @@ function useTreeServerState<TRow>(
     [props.rowModel, rows.length, view, viewKey],
   )
 
+  const whenIdle = useCallback(async () => {
+    while (modelRef.current.hasInFlightRequests()) {
+      await modelRef.current.awaitAllSettled()
+    }
+  }, [])
+
   return {
     applyRowUpdate,
+    whenIdle,
     columns,
     error,
     getDiagnostics,
