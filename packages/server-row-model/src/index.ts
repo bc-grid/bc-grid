@@ -955,6 +955,40 @@ class ServerRowModelController<TRow> {
     this.clearInfiniteQueueTimer()
   }
 
+  /**
+   * Synchronous probe — returns `true` when at least one request is
+   * in flight in any mode. Used by the React layer's `whenIdle()`
+   * implementation to short-circuit when the model is already
+   * quiescent. Per `docs/design/server-mode-switch-rfc.md §6` Q1
+   * hybrid resolution.
+   */
+  hasInFlightRequests(): boolean {
+    return this.#inFlightPaged.size + this.#inFlightInfinite.size + this.#inFlightTree.size > 0
+  }
+
+  /**
+   * Returns a Promise that resolves when every currently-in-flight
+   * request settles (success OR rejection — including aborts). New
+   * requests started after the call are NOT awaited; the React-layer
+   * `whenIdle()` loops on this until the in-flight maps are stable.
+   * Per `docs/design/server-mode-switch-rfc.md §6` Q1 hybrid
+   * resolution.
+   */
+  awaitAllSettled(): Promise<void> {
+    if (!this.hasInFlightRequests()) return Promise.resolve()
+    const promises: Promise<unknown>[] = []
+    for (const request of this.#inFlightPaged.values()) {
+      promises.push(request.promise.then(noop, noop))
+    }
+    for (const request of this.#inFlightInfinite.values()) {
+      promises.push(request.promise.then(noop, noop))
+    }
+    for (const request of this.#inFlightTree.values()) {
+      promises.push(request.promise.then(noop, noop))
+    }
+    return Promise.all(promises).then(noop)
+  }
+
   invalidate(
     invalidation: ServerInvalidation,
     input: InvalidateInput<TRow> = {},
@@ -1913,6 +1947,10 @@ function logServerError(scope: "paged" | "infinite" | "tree", error: unknown): v
 
 function createAbortError(): DOMException {
   return new DOMException("Aborted", "AbortError")
+}
+
+function noop(): void {
+  /* no-op */
 }
 
 function serverLoadErrorMessage(error: unknown): string {

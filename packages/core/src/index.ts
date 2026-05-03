@@ -624,6 +624,38 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   getServerRowModelState(): ServerRowModelState<TRow>
   getServerDiagnostics(): ServerRowModelDiagnostics
   /**
+   * Returns the currently active row-fetching strategy. Today this
+   * mirrors the explicit `BcServerGridProps.rowModel` literal because
+   * `rowModel` is required. Once `rowModel` becomes optional in a
+   * future stage of the server-mode-switch RFC (per
+   * `docs/design/server-mode-switch-rfc.md §6`), this resolves the
+   * heuristic: `groupBy.length > 0` ⇒ `"tree"`, else `"paged"`.
+   * Consumers branching imperative calls per mode read this rather
+   * than the prop directly.
+   */
+  getActiveRowModelMode(): ServerRowModelMode
+  /**
+   * Resolves when there are no in-flight server requests AND no
+   * pending state-change debounces. Consumers wanting `await`
+   * semantics after a sync state setter (e.g. a controlled `groupBy`
+   * change, `setSort`, `setFilter`) can:
+   *
+   * ```ts
+   * setGroupBy(["customerType"])
+   * await apiRef.current?.whenIdle()
+   * // model is settled; new mode's first response has landed.
+   * ```
+   *
+   * General-purpose, not mode-switch-specific: works after any state
+   * change. Resolves immediately if already idle. Resolves (does not
+   * reject) if the grid unmounts before settling — consumers don't
+   * need to wrap calls in try/catch.
+   *
+   * Per `docs/design/server-mode-switch-rfc.md §6` Q1 hybrid
+   * resolution.
+   */
+  whenIdle(): Promise<void>
+  /**
    * Scroll to a cell whose row may not currently be loaded. Returns a
    * Promise that resolves with `{ scrolled: true }` when the row was
    * found and scrolled into view, or `{ scrolled: false }` when the
