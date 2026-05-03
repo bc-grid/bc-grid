@@ -345,3 +345,72 @@ export function nextActiveCellAfterEdit(
   }
   return { row: rowIndex, col: colIndex }
 }
+
+/**
+ * Like `nextActiveCellAfterEdit` but skips non-editable cells for
+ * Tab / Shift+Tab moves. Down / up keep the same-column behaviour
+ * (mirrors AG Grid — the user pressed Enter / Shift+Enter so they
+ * want vertical motion regardless of editability).
+ *
+ * For `"right"` (Tab): scans forward through cells in linear order
+ * (across columns then rows) starting from the naive next cell;
+ * first editable cell wins. If no editable cell exists in the scan
+ * range, stays put. For `"left"` (Shift+Tab): same but backward.
+ *
+ * The `isCellEditableAt(rowIndex, colIndex)` callback encapsulates
+ * the editable / disabled / row-kind checks — the caller (in
+ * `<BcGrid>`) wires it from `rowEntries` + `resolvedColumns` +
+ * `isCellEditable` + `isRowDisabled` so this helper stays pure
+ * and unit-testable. Returns `false` for non-data rows (group
+ * rows), disabled rows, and non-editable cells.
+ *
+ * Closes the v0.6 follow-up: pre-fix, Tab on the last editable
+ * cell in a row advanced to the literal next column (often
+ * non-editable) and then no-oped, leaving the user stranded at a
+ * non-editable cell. Worker3 `v06-editor-keyboard-navigation-polish`.
+ */
+export function nextEditableCellAfterEdit(
+  rowIndex: number,
+  colIndex: number,
+  lastRow: number,
+  lastCol: number,
+  move: MoveOnSettle,
+  isCellEditableAt: (rowIndex: number, colIndex: number) => boolean,
+): { row: number; col: number } {
+  // Down / up stay in the same column even when the target row's
+  // cell at that column isn't editable. Same as pre-v0.6 behaviour
+  // and matches AG Grid's vertical-Enter semantics.
+  if (move !== "right" && move !== "left") {
+    return nextActiveCellAfterEdit(rowIndex, colIndex, lastRow, lastCol, move)
+  }
+
+  const direction = move === "right" ? 1 : -1
+  let r = rowIndex
+  let c = colIndex
+
+  // Walk one cell at a time in tab order. The first editable cell
+  // along the way is the destination; running off either end clamps
+  // back to the original cell (no-op).
+  for (;;) {
+    if (direction === 1) {
+      if (c < lastCol) {
+        c += 1
+      } else if (r < lastRow) {
+        r += 1
+        c = 0
+      } else {
+        return { row: rowIndex, col: colIndex }
+      }
+    } else {
+      if (c > 0) {
+        c -= 1
+      } else if (r > 0) {
+        r -= 1
+        c = lastCol
+      } else {
+        return { row: rowIndex, col: colIndex }
+      }
+    }
+    if (isCellEditableAt(r, c)) return { row: r, col: c }
+  }
+}

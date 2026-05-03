@@ -3,6 +3,7 @@ import type { BcCellPosition, RowId } from "@bc-grid/core"
 import {
   type EditState,
   nextActiveCellAfterEdit,
+  nextEditableCellAfterEdit,
   reduceEditState,
 } from "../src/editingStateMachine"
 
@@ -261,5 +262,147 @@ describe("nextActiveCellAfterEdit — Tab/Shift+Tab wrap per editing-rfc §Keybo
 
   test("'stay' is a no-op", () => {
     expect(nextActiveCellAfterEdit(3, 2, 9, 4, "stay")).toEqual({ row: 3, col: 2 })
+  })
+})
+
+describe("nextEditableCellAfterEdit — Tab/Shift+Tab skip non-editable cells", () => {
+  // Worker3 v06-editor-keyboard-navigation-polish — pre-fix Tab on
+  // the last editable cell in a row advanced to the literal next
+  // column (often non-editable) and then no-oped, leaving the user
+  // stranded at a non-editable cell. The new helper scans in linear
+  // tab order and skips non-editable cells + disabled rows. Down /
+  // up keep the same-column behaviour (mirrors AG Grid).
+  //
+  // Cell editability is encoded in a callback; tests use simple
+  // grid layouts and assert the destination row/col index.
+
+  // 5×5 grid with editable columns 0, 2, 4 (odd columns are
+  // non-editable display-only). All rows are data rows.
+  const allRowsEditable = (_r: number, c: number): boolean => c % 2 === 0
+
+  test("Tab skips an immediate non-editable column", () => {
+    // Row 2, col 0 (editable) → naive next is col 1 (non-editable),
+    // helper scans forward to col 2 (editable).
+    expect(nextEditableCellAfterEdit(2, 0, 4, 4, "right", allRowsEditable)).toEqual({
+      row: 2,
+      col: 2,
+    })
+  })
+
+  test("Tab from the last editable cell of a row wraps to first editable cell of next row", () => {
+    // Row 1, col 4 (last editable) → wraps to row 2, col 0 (first
+    // editable). Pre-fix this would have moved to row 2 col 0
+    // because col 4 is the last col anyway, so this case happens
+    // to work — but the next test exposes the actual bug.
+    expect(nextEditableCellAfterEdit(1, 4, 4, 4, "right", allRowsEditable)).toEqual({
+      row: 2,
+      col: 0,
+    })
+  })
+
+  test("Tab from the LAST EDITABLE cell of a row (not the last col) wraps to next row, skipping trailing non-editable cols", () => {
+    // 5×6 grid where editable cols are [0, 1, 2, 3] — cols 4 + 5
+    // are read-only display columns. Row 2, col 3 (last editable)
+    // should wrap to row 3, col 0 (first editable in next row),
+    // NOT advance to col 4 (non-editable) and no-op there.
+    const editableLeft = (_r: number, c: number): boolean => c <= 3
+    expect(nextEditableCellAfterEdit(2, 3, 4, 5, "right", editableLeft)).toEqual({
+      row: 3,
+      col: 0,
+    })
+  })
+
+  test("Tab through multiple non-editable rows advances to the next editable row", () => {
+    // Rows 0, 2, 4 are editable; rows 1 and 3 are disabled (entire
+    // row reads as non-editable for every column). Tab from row 0
+    // col 4 should wrap to row 2 col 0 (skipping disabled row 1).
+    const skipDisabledRows = (r: number, _c: number): boolean => r % 2 === 0
+    expect(nextEditableCellAfterEdit(0, 4, 4, 4, "right", skipDisabledRows)).toEqual({
+      row: 2,
+      col: 0,
+    })
+  })
+
+  test("Shift+Tab is symmetrical — skips non-editable cols backwards", () => {
+    // Row 2 col 2 (editable) → naive prev is col 1 (non-editable),
+    // helper scans backward to col 0 (editable).
+    expect(nextEditableCellAfterEdit(2, 2, 4, 4, "left", allRowsEditable)).toEqual({
+      row: 2,
+      col: 0,
+    })
+  })
+
+  test("Shift+Tab from the FIRST EDITABLE cell wraps to the previous row's last editable col", () => {
+    const editableLeft = (_r: number, c: number): boolean => c <= 3
+    expect(nextEditableCellAfterEdit(2, 0, 4, 5, "left", editableLeft)).toEqual({
+      row: 1,
+      col: 3,
+    })
+  })
+
+  test("Tab clamps when no editable cell exists ahead (stays put)", () => {
+    // Row 9 col 4 with NO editable cells anywhere — would scan past
+    // the end and clamp back to the original cell (no-op).
+    const noneEditable = (_r: number, _c: number): boolean => false
+    expect(nextEditableCellAfterEdit(2, 2, 9, 4, "right", noneEditable)).toEqual({
+      row: 2,
+      col: 2,
+    })
+  })
+
+  test("Shift+Tab clamps when no editable cell exists behind (stays put)", () => {
+    const noneEditable = (_r: number, _c: number): boolean => false
+    expect(nextEditableCellAfterEdit(2, 2, 9, 4, "left", noneEditable)).toEqual({
+      row: 2,
+      col: 2,
+    })
+  })
+
+  test("down move keeps current behaviour — same column even when target cell is non-editable", () => {
+    // Mirrors AG Grid: Enter / Shift+Enter is a vertical move; the
+    // user pressed down, so they want to land on the next row's
+    // same column regardless of editability. The bug we're fixing
+    // is Tab/Shift+Tab specifically.
+    const allRowsEditable = (_r: number, c: number): boolean => c % 2 === 0
+    // Row 4 col 2 (editable) + "down" → row 5 col 2 (still editable,
+    // delegates to nextActiveCellAfterEdit which doesn't skip).
+    expect(nextEditableCellAfterEdit(4, 2, 9, 4, "down", allRowsEditable)).toEqual({
+      row: 5,
+      col: 2,
+    })
+  })
+
+  test("up move keeps current behaviour — same column even when target cell is non-editable", () => {
+    const allRowsEditable = (_r: number, c: number): boolean => c % 2 === 0
+    expect(nextEditableCellAfterEdit(4, 2, 9, 4, "up", allRowsEditable)).toEqual({
+      row: 3,
+      col: 2,
+    })
+  })
+
+  test("'stay' move is delegated as a no-op (matches nextActiveCellAfterEdit)", () => {
+    // The predicate is never consulted — pin its absence.
+    const oracle = (_r: number, _c: number): boolean => {
+      throw new Error("predicate must not be consulted for 'stay' move")
+    }
+    expect(nextEditableCellAfterEdit(3, 2, 9, 4, "stay", oracle)).toEqual({ row: 3, col: 2 })
+  })
+
+  test("Tab clamps at the absolute last cell when no further editable cell exists", () => {
+    // Row 9 col 4 (the last cell) + "right" should clamp regardless
+    // of editability — there's nowhere to go.
+    const allRowsEditable = (_r: number, c: number): boolean => c % 2 === 0
+    expect(nextEditableCellAfterEdit(9, 4, 9, 4, "right", allRowsEditable)).toEqual({
+      row: 9,
+      col: 4,
+    })
+  })
+
+  test("Shift+Tab clamps at the absolute first cell when no further editable cell exists", () => {
+    const allRowsEditable = (_r: number, c: number): boolean => c % 2 === 0
+    expect(nextEditableCellAfterEdit(0, 0, 9, 4, "left", allRowsEditable)).toEqual({
+      row: 0,
+      col: 0,
+    })
   })
 })

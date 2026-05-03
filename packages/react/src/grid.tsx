@@ -53,7 +53,7 @@ import {
   detailRowHeight,
   resolveDetailPanelHeight,
 } from "./detailColumn"
-import { nextActiveCellAfterEdit } from "./editingStateMachine"
+import { nextEditableCellAfterEdit } from "./editingStateMachine"
 import { getEditorActivationIntent } from "./editorKeyboard"
 import {
   EditorMount,
@@ -1728,12 +1728,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     }
     const lastRow = rowEntries.length - 1
     const lastCol = resolvedColumns.length - 1
-    const { row: nextRow, col: nextCol } = nextActiveCellAfterEdit(
+    // Tab / Shift+Tab skip non-editable cells + disabled rows so the
+    // user lands at the next editable cell instead of stranding at
+    // a non-editable column. Down / up keep the same-column behaviour
+    // (mirrors AG Grid). Worker3
+    // `v06-editor-keyboard-navigation-polish`.
+    const isCellEditableAt = (r: number, c: number): boolean => {
+      const rowEntry = rowEntries[r]
+      if (!rowEntry || !isDataRowEntry(rowEntry)) return false
+      if (isRowDisabled(rowEntry.row)) return false
+      const column = resolvedColumns[c]
+      if (!column) return false
+      return isCellEditable(column, rowEntry.row)
+    }
+    const { row: nextRow, col: nextCol } = nextEditableCellAfterEdit(
       rowIndex,
       colIndex,
       lastRow,
       lastCol,
       next.move,
+      isCellEditableAt,
     )
     const targetRow = rowEntries[nextRow]
     const targetCol =
@@ -1750,6 +1764,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     rowIndexById,
     columnIndexById,
     cellFlashBudget,
+    isRowDisabled,
     props.flashOnEdit,
     domBaseId,
   ])
@@ -2370,19 +2385,39 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     const move = editState.mode === "committing" ? editState.moveOnSettle : editState.next.move
     const lastRow = rowEntries.length - 1
     const lastCol = resolvedColumns.length - 1
-    const { row: nextRow, col: nextCol } = nextActiveCellAfterEdit(
+    // Same isCellEditableAt predicate as the moveOnSettle effect so
+    // aria-activedescendant during the commit-in-progress window
+    // reflects the actual editable landing cell — not a non-editable
+    // intermediate that the user would be skipped past on settle.
+    const isCellEditableAt = (r: number, c: number): boolean => {
+      const rowEntry = rowEntries[r]
+      if (!rowEntry || !isDataRowEntry(rowEntry)) return false
+      if (isRowDisabled(rowEntry.row)) return false
+      const column = resolvedColumns[c]
+      if (!column) return false
+      return isCellEditable(column, rowEntry.row)
+    }
+    const { row: nextRow, col: nextCol } = nextEditableCellAfterEdit(
       rowIndex,
       colIndex,
       lastRow,
       lastCol,
       move,
+      isCellEditableAt,
     )
     const targetRow = rowEntries[nextRow]
     const targetCol =
       targetRow && isDataRowEntry(targetRow) ? resolvedColumns[nextCol] : resolvedColumns[0]
     if (!targetRow || !targetCol) return null
     return { rowId: targetRow.rowId, columnId: targetCol.columnId }
-  }, [columnIndexById, editController.editState, resolvedColumns, rowEntries, rowIndexById])
+  }, [
+    columnIndexById,
+    editController.editState,
+    isRowDisabled,
+    resolvedColumns,
+    rowEntries,
+    rowIndexById,
+  ])
   const activeDescendantCell = pendingEditNavigationCell ?? activeCell
   const activeCellId = editorOwnsFocus
     ? ""
