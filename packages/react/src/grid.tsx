@@ -2918,6 +2918,47 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (editController.editState.mode !== "navigation") return
       if (isEditableKeyTarget(event.target)) return
 
+      // Per-row undo/redo gesture (v0.6 §1 `v06-editor-cell-undo-redo`).
+      // Cmd/Ctrl+Z reverts the most recent commit on the focused row;
+      // Cmd+Shift+Z (or Ctrl+Y) re-applies. Bypasses the activation
+      // logic below so 'z' isn't treated as a printable seed when the
+      // modifier is held. No-op when there's no focused row or the
+      // row's history stack is empty.
+      const isUndoKey =
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        (event.key === "z" || event.key === "Z")
+      const isRedoKey =
+        ((event.metaKey || event.ctrlKey) &&
+          !event.altKey &&
+          event.shiftKey &&
+          (event.key === "z" || event.key === "Z")) ||
+        ((event.ctrlKey || event.metaKey) &&
+          !event.altKey &&
+          !event.shiftKey &&
+          (event.key === "y" || event.key === "Y"))
+      if (isUndoKey || isRedoKey) {
+        const focusRowId = activeCell?.rowId
+        if (focusRowId == null) return
+        const rowEntry = rowsById.get(focusRowId)
+        if (!rowEntry || rowEntry.kind !== "data") return
+        const entry = isRedoKey
+          ? editController.redoLastEdit(focusRowId)
+          : editController.undoLastEdit(focusRowId)
+        if (!entry) return
+        const column = resolvedColumns.find((c) => c.columnId === entry.columnId)
+        if (!column) return
+        event.preventDefault()
+        editController.applyHistoryEntry({
+          rowId: focusRowId,
+          row: rowEntry.row,
+          column: column.source,
+          entry,
+          mode: isRedoKey ? "redo" : "undo",
+        })
+        return
+      }
+
       const currentRow = activeCell ? (rowIndexById.get(activeCell.rowId) ?? 0) : 0
       const currentCol = activeCell ? (columnIndexById.get(activeCell.columnId) ?? 0) : 0
 
@@ -3085,6 +3126,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       resolvedColumns,
       rowEntries,
       rowIndexById,
+      rowsById,
       selectionState,
       setRangeSelectionState,
       setSelectionState,

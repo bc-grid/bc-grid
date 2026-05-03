@@ -1583,10 +1583,14 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
    * the in-cell editor mode RFC) fires when the editing row scrolls
    * out of the virtualizer's render window AND the grid's
    * `editScrollOutAction === "commit"` (the default for in-cell
-   * editors). Consumer telemetry can split scroll-out commits from
-   * deliberate keyboard / pointer commits via this discriminator.
+   * editors). `"undo"` / `"redo"` (v0.6 §1) fire when the user
+   * presses Cmd/Ctrl+Z (or Cmd+Shift+Z / Ctrl+Y) on a focused row to
+   * revert / re-apply the most recent commit on that row — see
+   * `docs/recipes/editor-undo-redo.md`. Consumer telemetry can split
+   * scroll-out / undo / redo commits from deliberate keyboard /
+   * pointer commits via this discriminator.
    */
-  source: "keyboard" | "pointer" | "api" | "paste" | "fill" | "scroll-out"
+  source: "keyboard" | "pointer" | "api" | "paste" | "fill" | "scroll-out" | "undo" | "redo"
 }
 
 /**

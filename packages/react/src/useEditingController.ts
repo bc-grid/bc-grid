@@ -38,6 +38,20 @@ export interface BcCellEditEntry {
 export type BcEditState = Map<RowId, Map<ColumnId, BcCellEditEntry>>
 
 /**
+ * Per-cell history entry for the editing controller's per-row
+ * undo/redo stacks (v0.6 §1 `v06-editor-cell-undo-redo`). Captures
+ * the value flip a single commit produced; undo applies
+ * `previousValue` back, redo re-applies `appliedValue`.
+ */
+export interface BcEditHistoryEntry {
+  columnId: ColumnId
+  previousValue: unknown
+  appliedValue: unknown
+  /** Wall-clock timestamp; used for telemetry / consumer dedup. */
+  timestamp: number
+}
+
+/**
  * Per-row patch overlay (`editing-rfc §Row-model ownership`). Cell renderers
  * read patched values transparently; consumers see commits via
  * `onCellEditCommit` and can mirror into their own state.
@@ -131,6 +145,37 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
   const editEntriesRef = useRef<BcEditState>(new Map())
   const overlayRef = useRef<BcEditOverlay>({ patches: new Map() })
   const [, forceRender] = useReducer((x: number) => x + 1, 0)
+
+  // Per-row commit history for Cmd/Ctrl+Z undo/redo (v0.6 §1
+  // `v06-editor-cell-undo-redo`). Each entry captures the
+  // (previousValue, appliedValue) pair at commit time so undo can
+  // restore previousValue and redo can re-apply appliedValue. Capped
+  // at 10 entries per row to bound memory; older entries are shifted
+  // out when the cap is reached. Redo stack is cleared on every NEW
+  // (non-undo/redo) commit per spreadsheet UX convention.
+  const HISTORY_CAP = 10
+  const editHistoryRef = useRef<Map<RowId, BcEditHistoryEntry[]>>(new Map())
+  const editRedoRef = useRef<Map<RowId, BcEditHistoryEntry[]>>(new Map())
+  const recordCommitHistory = useCallback(
+    (rowId: RowId, columnId: ColumnId, previousValue: unknown, appliedValue: unknown) => {
+      const entry: BcEditHistoryEntry = {
+        columnId,
+        previousValue,
+        appliedValue,
+        timestamp: Date.now(),
+      }
+      const stack = editHistoryRef.current.get(rowId) ?? []
+      stack.push(entry)
+      while (stack.length > HISTORY_CAP) stack.shift()
+      editHistoryRef.current.set(rowId, stack)
+      // A new (non-undo/redo) commit invalidates pending redos —
+      // matches spreadsheet UX (typing a new value clears the redo
+      // stack). The undo stack is preserved so the user can still
+      // walk back through prior commits.
+      editRedoRef.current.delete(rowId)
+    },
+    [],
+  )
 
   // AbortController for the in-flight async validator. Nulled out at
   // each new commit / cancel.
@@ -461,6 +506,21 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
         mutationId,
       })
       editEntriesRef.current.set(candidate.rowId, rowEntries)
+      // Per-row commit history for Cmd/Ctrl+Z undo (v0.6 §1
+      // `v06-editor-cell-undo-redo`). Push the (previousValue,
+      // appliedValue) pair onto this row's history stack so the user
+      // can revert this commit later. Skip recording when the commit
+      // source is "undo" / "redo" — those paths manage the stacks
+      // directly to avoid infinite loops + preserve redo semantics.
+      const recordableSource = candidate.source !== "undo" && candidate.source !== "redo"
+      if (recordableSource) {
+        recordCommitHistory(
+          candidate.rowId,
+          candidate.columnId,
+          candidate.previousValue,
+          parsedValue,
+        )
+      }
       forceRender()
 
       const announceCommitted = () =>
@@ -572,8 +632,143 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       options.announce,
       setLatestValidationError,
       clearValidationErrorIfFor,
+      recordCommitHistory,
     ],
   )
+
+  /**
+   * Per-row undo/redo (v0.6 §1 `v06-editor-cell-undo-redo`). Pop the
+   * top of the row's history stack and apply its `previousValue` to
+   * the overlay; fire `onCellEditCommit` with `source: "undo"` so the
+   * consumer can mirror the reversion into their server-side state.
+   * Push the popped entry to the redo stack so the user can re-apply
+   * with `redoLastEdit`. Returns `{ undone: false }` when the row has
+   * no history.
+   *
+   * Bypasses `column.valueParser` + `column.validate` — the value
+   * being restored was already valid at the time of the original
+   * commit, and re-validating could spuriously reject (consider a
+   * uniqueness check where another row now holds that value). The
+   * consumer's `onCellEditCommit` handler is still the gatekeeper
+   * for the round-trip to the server.
+   *
+   * Stays in Navigation mode (does not enter the editor state
+   * machine — undo is an out-of-band programmatic write).
+   */
+  const applyHistoryEntry = useCallback(
+    (params: {
+      rowId: RowId
+      row: TRow
+      column: BcReactGridColumn<TRow, unknown>
+      entry: BcEditHistoryEntry
+      mode: "undo" | "redo"
+    }): void => {
+      const { rowId, row, column, entry, mode } = params
+      const valueToApply = mode === "undo" ? entry.previousValue : entry.appliedValue
+      const previousValue = mode === "undo" ? entry.appliedValue : entry.previousValue
+
+      // Cancel any in-flight async validation — undo/redo writes are
+      // authoritative; a stale validation must not flip the cell back.
+      validateAbortRef.current?.abort()
+      validateAbortRef.current = null
+
+      // Overlay write — mirrors the post-validate path of `commit`.
+      const rowPatch = overlayRef.current.patches.get(rowId) ?? new Map()
+      rowPatch.set(entry.columnId, valueToApply)
+      overlayRef.current.patches.set(rowId, rowPatch)
+      const mutationId = `m-${++mutationCounterRef.current}`
+      const rowEntries = editEntriesRef.current.get(rowId) ?? new Map()
+      rowEntries.set(entry.columnId, {
+        pending: false,
+        previousValue,
+        mutationId,
+      })
+      editEntriesRef.current.set(rowId, rowEntries)
+      // Push to the OPPOSITE stack so the user can walk forward/back.
+      const oppositeRef = mode === "undo" ? editRedoRef : editHistoryRef
+      const oppositeStack = oppositeRef.current.get(rowId) ?? []
+      oppositeStack.push(entry)
+      while (oppositeStack.length > HISTORY_CAP) oppositeStack.shift()
+      oppositeRef.current.set(rowId, oppositeStack)
+      forceRender()
+
+      // Fire onCellEditCommit so the consumer mirrors into server
+      // state. Sync hooks announce immediately; async hooks (Promise
+      // return) flow through the same pending lifecycle as a normal
+      // commit. Async settle / rollback is intentionally NOT wired
+      // here for the v0.6 cut — undo's value was previously
+      // accepted, so server rejection is unexpected. Follow-up if
+      // consumer feedback shows otherwise.
+      const consumerHook = options.onCellEditCommit
+      const event: BcCellEditCommitEvent<TRow> = {
+        rowId,
+        row,
+        columnId: entry.columnId,
+        column,
+        previousValue: previousValue as never,
+        nextValue: valueToApply as never,
+        source: mode,
+      }
+      try {
+        consumerHook?.(event)
+      } catch {
+        // Swallow — undo/redo's whole point is "can't fail." Consumer
+        // surfaces own error UI if they want.
+      }
+      options.announce?.({
+        kind: "committed",
+        column,
+        row,
+        rowId,
+        nextValue: valueToApply,
+      })
+    },
+    [options.onCellEditCommit, options.announce],
+  )
+
+  /**
+   * Pop the top of the row's history stack and apply the previous
+   * value. Returns `{ undone: true, entry }` on success or
+   * `{ undone: false }` when the row has no history. Caller
+   * (typically `grid.tsx`'s Cmd+Z handler) is responsible for
+   * resolving `row` + `column` from the rowId / entry.columnId
+   * because the controller does not own the row model.
+   */
+  const undoLastEdit = useCallback((rowId: RowId): BcEditHistoryEntry | null => {
+    const stack = editHistoryRef.current.get(rowId)
+    if (!stack || stack.length === 0) return null
+    const entry = stack.pop() as BcEditHistoryEntry
+    if (stack.length === 0) editHistoryRef.current.delete(rowId)
+    return entry
+  }, [])
+
+  /**
+   * Pop the top of the row's redo stack. Returns the entry or
+   * `null`. Caller applies it via `applyHistoryEntry` with
+   * `mode: "redo"`.
+   */
+  const redoLastEdit = useCallback((rowId: RowId): BcEditHistoryEntry | null => {
+    const stack = editRedoRef.current.get(rowId)
+    if (!stack || stack.length === 0) return null
+    const entry = stack.pop() as BcEditHistoryEntry
+    if (stack.length === 0) editRedoRef.current.delete(rowId)
+    return entry
+  }, [])
+
+  /**
+   * Read-only views into the per-row history stacks. Used by
+   * `grid.tsx`'s Cmd+Z handler to gate the keyboard shortcut on
+   * "is there anything to undo on this row?" and surface
+   * undo/redo affordances in chrome (e.g. a status segment, a
+   * context-menu item). Returns the stack length, not the entries —
+   * keeps the public API narrow.
+   */
+  const getEditHistoryDepth = useCallback((rowId: RowId): { undo: number; redo: number } => {
+    return {
+      undo: editHistoryRef.current.get(rowId)?.length ?? 0,
+      redo: editRedoRef.current.get(rowId)?.length ?? 0,
+    }
+  }, [])
 
   /**
    * Programmatically clear a cell value, bypassing the editor portal.
@@ -1133,6 +1328,10 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     commitFromRowPatchPlan,
     cancel,
     discardRowEdits,
+    undoLastEdit,
+    redoLastEdit,
+    applyHistoryEntry,
+    getEditHistoryDepth,
     dispatchMounted,
     dispatchUnmounted,
   }
