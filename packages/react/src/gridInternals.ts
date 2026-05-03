@@ -117,6 +117,9 @@ export interface ResolvedColumn<TRow> {
   columnId: ColumnId
   left: number
   width: number
+  flex: number | undefined
+  minWidth: number
+  maxWidth: number
   align: "left" | "right" | "center"
   pinned: "left" | "right" | null
   position: number
@@ -165,6 +168,7 @@ export interface ViewportSize {
 export function resolveColumns<TRow>(
   columns: readonly BcReactGridColumn<TRow>[],
   columnState: readonly BcColumnStateEntry[],
+  availableWidth?: number,
 ): ResolvedColumn<TRow>[] {
   const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
   const resolved = flattenColumnDefinitions(columns).flatMap(
@@ -173,7 +177,15 @@ export function resolveColumns<TRow>(
       if (state?.hidden ?? column.hidden) return []
 
       const pinned = state?.pinned === null ? null : (state?.pinned ?? column.pinned ?? null)
-      const requestedWidth = state?.width ?? column.width ?? DEFAULT_COL_WIDTH
+      const stateWidth = state?.width
+      const stateFlex = state?.flex
+      const flex =
+        typeof stateFlex === "number" && stateFlex > 0
+          ? stateFlex
+          : typeof column.flex === "number" && column.flex > 0
+            ? column.flex
+            : undefined
+      const requestedWidth = stateWidth ?? column.width ?? DEFAULT_COL_WIDTH
       const minWidth = column.minWidth ?? 48
       const maxWidth = column.maxWidth ?? Number.POSITIVE_INFINITY
       const width = clamp(requestedWidth, minWidth, maxWidth)
@@ -181,7 +193,10 @@ export function resolveColumns<TRow>(
         {
           align: column.align ?? "left",
           columnId,
+          flex,
           left: 0,
+          maxWidth,
+          minWidth,
           pinned,
           position: state?.position ?? originalIndex,
           source: column,
@@ -197,6 +212,64 @@ export function resolveColumns<TRow>(
     ...resolved.filter((column) => column.pinned === null).sort(byPosition),
     ...resolved.filter((column) => column.pinned === "right").sort(byPosition),
   ]
+
+  // Distribute available width across columns with `flex` set.
+  // bsncraft v0.5.0-alpha.1 consumer review (2026-05-03) flagged that
+  // column.flex was a typed-but-dormant prop — `<BcGrid>` ignored it,
+  // so flex columns rendered at their explicit width and never grew
+  // to fill the container. Most visible inside `renderDetailPanel`
+  // where the panel width exceeds the columns sum and the unfilled
+  // space reads as a broken row hover. Algorithm: in each pass,
+  // compute proportional targets for the active flex columns and
+  // commit only those that hit a min/max clamp; their consumed
+  // width leaves the remainder, and unclamped columns are revisited
+  // in the next pass with the updated remainder + flex sum. Worst
+  // case: every column clamps on its own pass (8 cap is loose).
+  if (
+    typeof availableWidth === "number" &&
+    Number.isFinite(availableWidth) &&
+    availableWidth > 0 &&
+    ordered.some((column) => column.flex !== undefined)
+  ) {
+    const distributed = ordered.map((column) => ({ ...column }))
+    const fixedWidth = distributed
+      .filter((column) => column.flex === undefined)
+      .reduce((sum, column) => sum + column.width, 0)
+    let remainder = availableWidth - fixedWidth
+    let active = distributed.filter((column) => column.flex !== undefined)
+    for (let pass = 0; pass < 8 && active.length > 0; pass++) {
+      const flexSum = active.reduce((sum, column) => sum + (column.flex ?? 0), 0)
+      if (flexSum <= 0) break
+      const stillActive: typeof active = []
+      let consumedByClamps = 0
+      for (const column of active) {
+        const target = (column.flex ?? 0) * (remainder / flexSum)
+        if (target >= column.maxWidth) {
+          column.width = column.maxWidth
+          consumedByClamps += column.maxWidth
+        } else if (target <= column.minWidth) {
+          column.width = column.minWidth
+          consumedByClamps += column.minWidth
+        } else {
+          stillActive.push(column)
+        }
+      }
+      if (stillActive.length === active.length) {
+        for (const column of active) {
+          column.width = (column.flex ?? 0) * (remainder / flexSum)
+        }
+        break
+      }
+      remainder -= consumedByClamps
+      active = stillActive
+    }
+    let left = 0
+    return distributed.map((column) => {
+      const next = { ...column, left }
+      left += column.width
+      return next
+    })
+  }
 
   let left = 0
   return ordered.map((column) => {

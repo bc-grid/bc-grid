@@ -368,6 +368,31 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [viewportFitHeight, setViewportFitHeight] = useState<number | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
+  // Available width feeds `resolveColumns` so columns with `flex` set
+  // can distribute the spare space between fixed-width siblings. We
+  // need this BEFORE `useViewportSync` runs (which itself sits late
+  // in the function because it depends on the virtualizer, which
+  // depends on the resolved-column count). Initial value 0 means
+  // "no flex distribution" — the first paint uses explicit widths;
+  // after the scroller mounts, ResizeObserver fires and the
+  // resolved-column memo re-runs with the real width. Surfaced
+  // 2026-05-03 by bsncraft: nested grid in renderDetailPanel rendered
+  // with empty space because column.flex was a typed-but-dormant prop.
+  const [availableGridWidth, setAvailableGridWidth] = useState<number>(0)
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    const sync = () => setAvailableGridWidth(scroller.clientWidth)
+    sync()
+    if (typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(() => {
+      sync()
+    })
+    observer.observe(scroller)
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
   // Transient visible toast for clear-rejection feedback (audit
   // P1-W3 / v0.5 → v0.6 §6). When `editController.clearCell` /
   // `commit` rejects validation, the assertive live region tells AT
@@ -643,8 +668,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [columns],
   )
   const consumerResolvedColumns = useMemo(
-    () => resolveColumns(columns, columnState),
-    [columns, columnState],
+    () => resolveColumns(columns, columnState, availableGridWidth || undefined),
+    [columns, columnState, availableGridWidth],
   )
   // Persist the consumer-supplied column state only — the synthetic
   // selection-checkbox column (added later when `checkboxSelection` is on)
@@ -1011,10 +1036,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     paginationWindow.endIndex,
     paginationWindow.startIndex,
   ])
+  const visibleLeafRowIdSet = useMemo(
+    () =>
+      isManualPagination || !paginationEnabled
+        ? undefined
+        : new Set(leafRowEntries.map((entry) => entry.rowId)),
+    [isManualPagination, leafRowEntries, paginationEnabled],
+  )
   const groupedRowModel = useMemo(
     () =>
       buildGroupedRowModel({
-        rows: leafRowEntries,
+        rows: allRowEntries,
         columns: consumerResolvedColumns,
         // Manual row processing skips client grouping so server-owned
         // pages render in the order the host returned. Grouping
@@ -1023,14 +1055,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         groupBy: isManualRowProcessing ? [] : groupByState,
         expansionState,
         locale,
+        visibleRowIds: visibleLeafRowIdSet,
       }),
     [
+      allRowEntries,
       consumerResolvedColumns,
       expansionState,
       groupByState,
       isManualRowProcessing,
-      leafRowEntries,
       locale,
+      visibleLeafRowIdSet,
     ],
   )
   const rowEntries = groupedRowModel.rows
@@ -1136,8 +1170,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () =>
       layoutColumnDefinitions === columns
         ? consumerResolvedColumns
-        : resolveColumns(layoutColumnDefinitions, columnState),
-    [columnState, columns, consumerResolvedColumns, layoutColumnDefinitions],
+        : resolveColumns(layoutColumnDefinitions, columnState, availableGridWidth || undefined),
+    [availableGridWidth, columnState, columns, consumerResolvedColumns, layoutColumnDefinitions],
   )
   const rangeInteractionModel = useMemo(
     () => createRangeInteractionModel(rangeRowIds, resolvedColumns),

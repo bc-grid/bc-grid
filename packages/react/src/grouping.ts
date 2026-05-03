@@ -14,6 +14,7 @@ export interface BuildGroupedRowModelParams<TRow> {
   groupBy: readonly ColumnId[]
   expansionState: ReadonlySet<RowId>
   locale?: string | undefined
+  visibleRowIds?: ReadonlySet<RowId> | undefined
 }
 
 interface GroupBucket<TRow> {
@@ -33,6 +34,7 @@ export function buildGroupedRowModel<TRow>({
   groupBy,
   expansionState,
   locale,
+  visibleRowIds,
 }: BuildGroupedRowModelParams<TRow>): GroupedRowModel<TRow> {
   const columnsById = new Map(columns.map((column) => [column.columnId, column]))
   const groupColumns = groupBy.flatMap((columnId) => {
@@ -41,9 +43,10 @@ export function buildGroupedRowModel<TRow>({
   })
 
   if (groupColumns.length === 0) {
+    const visibleRows = filterVisibleRows(rows, visibleRowIds)
     return {
       active: false,
-      rows: rows.map((entry, index) => ({ ...entry, index })),
+      rows: visibleRows.map((entry, index) => ({ ...entry, index })),
       allGroupRowIds: [],
     }
   }
@@ -60,7 +63,7 @@ export function buildGroupedRowModel<TRow>({
     const column = groupColumns[depth]
     if (!column) {
       if (visible) {
-        for (const entry of levelRows) {
+        for (const entry of filterVisibleRows(levelRows, visibleRowIds)) {
           output.push({ ...entry, level: depth + 1 })
         }
       }
@@ -71,8 +74,11 @@ export function buildGroupedRowModel<TRow>({
       const nextPath = [...path, bucket.pathEntry]
       const groupRowId = groupRowIdForPath(nextPath)
       const expanded = expansionState.has(groupRowId)
+      const visibleBucketRows = filterVisibleRows(bucket.rows, visibleRowIds)
+      const hasVisibleDescendants = visibleBucketRows.length > 0
+      const renderGroup = visible && hasVisibleDescendants
       allGroupRowIds.push(groupRowId)
-      if (visible) {
+      if (renderGroup) {
         output.push({
           kind: "group",
           rowId: groupRowId,
@@ -85,7 +91,7 @@ export function buildGroupedRowModel<TRow>({
         } satisfies GroupRowEntry)
       }
 
-      appendLevel(bucket.rows, depth + 1, nextPath, visible && expanded)
+      appendLevel(bucket.rows, depth + 1, nextPath, renderGroup && expanded)
     }
   }
 
@@ -96,6 +102,14 @@ export function buildGroupedRowModel<TRow>({
     rows: output.map((entry, index) => ({ ...entry, index })),
     allGroupRowIds,
   }
+}
+
+function filterVisibleRows<TRow>(
+  rows: readonly DataRowEntry<TRow>[],
+  visibleRowIds: ReadonlySet<RowId> | undefined,
+): readonly DataRowEntry<TRow>[] {
+  if (!visibleRowIds) return rows
+  return rows.filter((entry) => visibleRowIds.has(entry.rowId))
 }
 
 function groupRowsByColumn<TRow>(
