@@ -24,6 +24,7 @@ import {
   removeColumnFromFilter,
   setFilterValueKeys,
 } from "../src/filter"
+import { registerReactFilterDefinition } from "../src/filterRegistry"
 
 describe("buildGridFilter", () => {
   test("empty input → null", () => {
@@ -34,6 +35,23 @@ describe("buildGridFilter", () => {
 
   test("trims whitespace; whitespace-only is ignored", () => {
     expect(buildGridFilter({ name: "   " })).toBeNull()
+  })
+
+  test("registered filter inputs use the registry parser instead of pretending to be text", () => {
+    registerReactFilterDefinition({
+      type: "registry-prefix-filter",
+      predicate: (value, criteria) => value.formattedValue.startsWith(String(criteria)),
+      serialize: (criteria) => String(criteria),
+      parse: (serialized) => serialized.trim(),
+    })
+
+    expect(buildGridFilter({ code: " VIP " }, { code: "registry-prefix-filter" })).toEqual({
+      kind: "column",
+      columnId: "code",
+      type: "registry-prefix-filter",
+      op: "custom",
+      value: "VIP",
+    })
   })
 
   test("single non-empty input → bare ServerColumnFilter", () => {
@@ -400,6 +418,26 @@ describe("columnFilterTextFromGridFilter", () => {
   test("treats null as a cleared filter state", () => {
     expect(columnFilterTextFromGridFilter(null)).toEqual({})
     expect(buildGridFilter(columnFilterTextFromGridFilter(null))).toBeNull()
+  })
+
+  test("registered filters round-trip through inline filter text projection", () => {
+    registerReactFilterDefinition({
+      type: "registry-projection-filter",
+      predicate: (value, criteria) => value.formattedValue.startsWith(String(criteria)),
+      serialize: (criteria) => String(criteria),
+      parse: (serialized) => serialized.trim(),
+    })
+
+    const filter = {
+      kind: "column" as const,
+      columnId: "code",
+      type: "registry-projection-filter",
+      op: "custom",
+      value: "VIP",
+    }
+
+    expect(columnFilterTextFromGridFilter(filter)).toEqual({ code: "VIP" })
+    expect(buildGridFilter({ code: "VIP" }, { code: "registry-projection-filter" })).toEqual(filter)
   })
 
   test("projects supported filters into inline filter input state", () => {
@@ -1138,6 +1176,37 @@ describe("matchesGridFilter — column", () => {
   test("set filter value keys flatten array values for option loading", () => {
     expect(setFilterValueKeys(["erp", "", " ", "ops", "erp", null])).toEqual(["erp", "ops"])
     expect(setFilterValueKeys([["nested"], "flat"])).toEqual(["nested", "flat"])
+  })
+
+  test("registered filters participate in controlled predicate evaluation", () => {
+    registerReactFilterDefinition({
+      type: "registry-match-filter",
+      predicate: (value, criteria) => value.formattedValue.startsWith(String(criteria)),
+      serialize: (criteria) => String(criteria),
+      parse: (serialized) => serialized.trim(),
+    })
+    const filter = {
+      kind: "column" as const,
+      columnId: "code",
+      type: "registry-match-filter",
+      op: "custom",
+      value: "VIP",
+    }
+
+    expect(matchesGridFilter(filter, lookup({ code: "VIP-001" }))).toBe(true)
+    expect(matchesGridFilter(filter, lookup({ code: "STD-001" }))).toBe(false)
+  })
+
+  test("unknown registered filter types are a safe no-match", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "code",
+      type: "registry-missing-filter",
+      op: "custom",
+      value: "VIP",
+    }
+
+    expect(matchesGridFilter(filter, lookup({ code: "VIP-001" }))).toBe(false)
   })
 
   test("unknown op is rejected (Q2 follow-up)", () => {

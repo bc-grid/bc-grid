@@ -1,5 +1,5 @@
 import type { BcCellPosition, BcValidationResult, ColumnId, RowId } from "@bc-grid/core"
-import { useCallback, useReducer, useRef } from "react"
+import { useCallback, useEffect, useReducer, useRef } from "react"
 import {
   type ActivationSource,
   type EditEvent,
@@ -13,6 +13,7 @@ import type {
   BcCellEditCommitHandler,
   BcCellEditCommitResult,
   BcCellEditor,
+  BcLatestValidationError,
   BcReactGridColumn,
 } from "./types"
 import { getCellValue } from "./value"
@@ -140,6 +141,69 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
   // `editing-rfc §Lifecycle` open question on prepare-rejection.
   const prepareTokenRef = useRef(0)
 
+  // Latest validation rejection — drives the built-in `"latestError"`
+  // status-bar segment + the cell flash. Two independent timers because
+  // the two surfaces have different decay windows: the cell flash is a
+  // 600 ms animation pulse; the status-bar entry lingers for 8 s so the
+  // user can read it after they move on. Audit P1-W3-4. The risk-note
+  // from the v0.6 §1 planning doc — flash auto-clearing must not fight
+  // a re-edit on the same cell — is honoured by the
+  // `clearValidationErrorIfFor(rowId, columnId)` helper, called from
+  // every successful commit / clearCell path so a clean re-commit
+  // immediately retires both timers.
+  const VALIDATION_FLASH_DURATION_MS = 600
+  const VALIDATION_STATUS_TIMEOUT_MS = 8000
+  const latestValidationErrorRef = useRef<BcLatestValidationError | null>(null)
+  const validationStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const validationFlashCellRef = useRef<{ rowId: RowId; columnId: ColumnId } | null>(null)
+  const validationFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const setLatestValidationError = useCallback((entry: BcLatestValidationError) => {
+    latestValidationErrorRef.current = entry
+    if (validationStatusTimerRef.current) clearTimeout(validationStatusTimerRef.current)
+    validationStatusTimerRef.current = setTimeout(() => {
+      latestValidationErrorRef.current = null
+      validationStatusTimerRef.current = null
+      forceRender()
+    }, VALIDATION_STATUS_TIMEOUT_MS)
+    validationFlashCellRef.current = { rowId: entry.rowId, columnId: entry.columnId }
+    if (validationFlashTimerRef.current) clearTimeout(validationFlashTimerRef.current)
+    validationFlashTimerRef.current = setTimeout(() => {
+      validationFlashCellRef.current = null
+      validationFlashTimerRef.current = null
+      forceRender()
+    }, VALIDATION_FLASH_DURATION_MS)
+    forceRender()
+  }, [])
+
+  const clearValidationErrorIfFor = useCallback((rowId: RowId, columnId: ColumnId) => {
+    const latest = latestValidationErrorRef.current
+    let changed = false
+    if (latest && latest.rowId === rowId && latest.columnId === columnId) {
+      if (validationStatusTimerRef.current) clearTimeout(validationStatusTimerRef.current)
+      latestValidationErrorRef.current = null
+      validationStatusTimerRef.current = null
+      changed = true
+    }
+    const flash = validationFlashCellRef.current
+    if (flash && flash.rowId === rowId && flash.columnId === columnId) {
+      if (validationFlashTimerRef.current) clearTimeout(validationFlashTimerRef.current)
+      validationFlashCellRef.current = null
+      validationFlashTimerRef.current = null
+      changed = true
+    }
+    if (changed) forceRender()
+  }, [])
+
+  // Cleanup outstanding timers on unmount so an unmounted grid doesn't
+  // schedule a forceRender after teardown.
+  useEffect(() => {
+    return () => {
+      if (validationStatusTimerRef.current) clearTimeout(validationStatusTimerRef.current)
+      if (validationFlashTimerRef.current) clearTimeout(validationFlashTimerRef.current)
+    }
+  }, [])
+
   // ------- Read API for cell renderers + grid JSX --------------------------
 
   const getOverlayValue = useCallback((rowId: RowId, columnId: ColumnId): unknown => {
@@ -168,6 +232,16 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
    * — audit `in-cell-editor-mode-rfc.md` §5 (scroll-out detection).
    */
   const getEditMode = useCallback((): EditState<unknown>["mode"] => editStateRef.current.mode, [])
+
+  const getLatestValidationError = useCallback(
+    (): BcLatestValidationError | null => latestValidationErrorRef.current,
+    [],
+  )
+
+  const isCellFlashing = useCallback((rowId: RowId, columnId: ColumnId): boolean => {
+    const flash = validationFlashCellRef.current
+    return flash !== null && flash.rowId === rowId && flash.columnId === columnId
+  }, [])
 
   // ------- Imperative API for activation / commit / cancel -----------------
 
@@ -327,8 +401,21 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           column: candidate.column,
           error: result.error,
         })
+        setLatestValidationError({
+          rowId: candidate.rowId,
+          columnId: candidate.columnId,
+          columnHeader: resolveColumnHeader(candidate.column),
+          error: result.error,
+        })
         return
       }
+
+      // A successful commit on a previously-rejected cell retires both
+      // the status-bar segment and the flash window for that cell —
+      // the user fixed the value, so the rejection signal is stale.
+      // Honours the v0.6 §1 risk note: "flash class auto-clearing
+      // must not fight a re-edit on the same cell."
+      clearValidationErrorIfFor(candidate.rowId, candidate.columnId)
 
       // Optimistic overlay update — stored as the parsed value.
       const rowPatch = overlayRef.current.patches.get(candidate.rowId) ?? new Map()
@@ -454,7 +541,13 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
         announceCommitted()
       }
     },
-    [options.validate, options.onCellEditCommit, options.announce],
+    [
+      options.validate,
+      options.onCellEditCommit,
+      options.announce,
+      setLatestValidationError,
+      clearValidationErrorIfFor,
+    ],
   )
 
   /**
@@ -511,20 +604,29 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       if (validateAbortRef.current === ac) validateAbortRef.current = null
 
       if (!result.valid) {
-        // No editor portal mounted to display the error inline; the
-        // assertive live-region announce still informs AT users.
-        // Sighted users won't see anything — Delete on a required
-        // field is a no-op for them today. v0.6 follow-up: surface
-        // a transient toast / status-bar slot for clear-rejection
-        // feedback (cross-references the validation visual passive
-        // finding from the audit).
+        // The assertive live-region announce still informs AT users.
+        // Sighted users see the cell flash + the `"latestError"` status
+        // segment populated below — the v0.6 §1 visible-feedback story
+        // covers what the v0.4 audit flagged as the "Delete on a
+        // required field is a no-op for sighted users" gap (P1-W3-4 +
+        // worker3 #378's clear-rejection follow-up).
         options.announce?.({
           kind: "validationError",
           column: candidate.column,
           error: result.error,
         })
+        setLatestValidationError({
+          rowId: candidate.rowId,
+          columnId: candidate.columnId,
+          columnHeader: resolveColumnHeader(candidate.column),
+          error: result.error,
+        })
         return
       }
+
+      // Same as `commit` — a successful clear on a previously-rejected
+      // cell retires both the status-bar segment and the flash window.
+      clearValidationErrorIfFor(candidate.rowId, candidate.columnId)
 
       // Overlay update — same shape as `commit` but without the
       // state-machine dispatches. Reuses `mutationCounterRef` so
@@ -633,7 +735,13 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
         announceCommitted()
       }
     },
-    [options.validate, options.onCellEditCommit, options.announce],
+    [
+      options.validate,
+      options.onCellEditCommit,
+      options.announce,
+      setLatestValidationError,
+      clearValidationErrorIfFor,
+    ],
   )
 
   const rollbackPasteCommit = useCallback(
@@ -856,6 +964,8 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     getCellEditEntry,
     getRowEditState,
     getEditMode,
+    getLatestValidationError,
+    isCellFlashing,
     pruneOverlay,
     start,
     commit,
@@ -866,6 +976,20 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     dispatchMounted,
     dispatchUnmounted,
   }
+}
+
+/**
+ * Stringify a column's header for the `latestValidationError` status
+ * segment. Pulled from `column.header` when it's a string; falls back
+ * to `column.field` then `column.columnId` for non-string headers
+ * (consumer-supplied React nodes can't render as plain text). Pure so
+ * the resolution can be unit-tested without React.
+ */
+export function resolveColumnHeader<TRow>(column: BcReactGridColumn<TRow, unknown>): string {
+  if (typeof column.header === "string") return column.header
+  if (typeof column.field === "string") return column.field
+  if (typeof column.columnId === "string") return column.columnId
+  return ""
 }
 
 // ---------------------------------------------------------------------------

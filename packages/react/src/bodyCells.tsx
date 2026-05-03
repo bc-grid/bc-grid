@@ -77,25 +77,24 @@ interface RenderBodyCellParams<TRow> {
   getRowEditState?: (rowId: RowId) => { pending: boolean; error?: string } | null
   /**
    * In-cell editor mount slot (audit `in-cell-editor-mode-rfc.md` §3).
-   * `<BcGrid>` builds this once per render via `useCallback`,
-   * capturing the editing controller + supporting props (validation
-   * messages toggle, blur action, escDiscardsRow, scroll-out action,
-   * virtualizer + index lookups). Returns the `<EditorMount
-   * mountStyle="in-cell">` JSX when the cell at `(rowId, columnId)`
-   * is the active edit target AND its editor is non-popup; returns
-   * `null` otherwise (popup editors are mounted by `<EditorPortal>`
-   * in the overlay sibling, and read-only cells return null trivially).
-   *
-   * bodyCells calls this when `editingCell` matches the cell — the
-   * factory's null-return branch is what falls the cell back to its
-   * normal renderer output. Standalone bodyCell consumers that don't
-   * supply the slot get the v0.5 read-only behaviour automatically.
+   * `<BcGrid>` builds this once per render via `useCallback` capturing
+   * the editing controller + supporting props. Returns the `<EditorMount
+   * mountStyle="in-cell">` JSX when the cell at `(rowId, columnId)` is
+   * the active edit target AND its editor is non-popup; returns `null`
+   * otherwise (popup editors mount via `<EditorPortal>`).
    */
   renderInCellEditor?: (
     cell: BcCellPosition,
     column: ResolvedColumn<TRow>,
     rowEntry: DataRowEntry<TRow>,
   ) => ReactNode
+  /**
+   * Validation-rejection flash predicate. When true for `(rowId,
+   * columnId)`, the cell renders `data-bc-grid-error-flash="true"`
+   * that the theming package pairs with a 600 ms keyframe pulse so
+   * sighted users see which cell was just rejected. Audit P1-W3-4.
+   */
+  isCellFlashing?: (rowId: RowId, columnId: ColumnId) => boolean
 }
 
 interface RenderGroupRowCellParams<TRow> {
@@ -136,6 +135,7 @@ export function renderBodyCell<TRow>({
   getOverlayValue,
   getCellEditEntry,
   getRowEditState,
+  isCellFlashing,
   renderInCellEditor,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
@@ -183,6 +183,11 @@ export function renderBodyCell<TRow>({
       : isDirty
         ? "dirty"
         : undefined
+  // Flash window for the most-recent validation rejection (audit
+  // P1-W3-4). Theming pairs `data-bc-grid-error-flash="true"` with a
+  // ~600 ms keyframe pulse so sighted users see WHICH cell was just
+  // rejected when several stripes are stacked on screen.
+  const errorFlashing = isCellFlashing?.(entry.rowId, column.columnId) ?? false
 
   const isEditingThisCell =
     editingCell?.rowId === entry.rowId && editingCell?.columnId === column.columnId
@@ -250,6 +255,7 @@ export function renderBodyCell<TRow>({
         aria-current={isEditingThisCell ? "true" : undefined}
         data-bc-grid-active-cell={active || undefined}
         data-bc-grid-cell-state={cellEditState}
+        data-bc-grid-error-flash={errorFlashing ? "true" : undefined}
         data-column-id={column.columnId}
         style={{
           ...cellStyle({
