@@ -1641,6 +1641,19 @@ select.bc-grid-editor-input {
   z-index: 1;
 }
 
+.bc-grid-fill-handle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--bc-grid-bg);
+  background: var(--bc-grid-range-overlay-border);
+  cursor: crosshair;
+  pointer-events: auto;
+}
+
 .bc-grid-filter-row .bc-grid-cell {
   background: var(--bc-grid-header-bg);
   box-shadow: none;
@@ -4155,6 +4168,11 @@ table.bc-grid-detail-nested-grid {
     min-width: var(--bc-grid-hit-target-min);
     min-height: var(--bc-grid-hit-target-min);
   }
+
+  .bc-grid-fill-handle {
+    min-width: var(--bc-grid-hit-target-min);
+    min-height: var(--bc-grid-hit-target-min);
+  }
 }
 
 @media (forced-colors: active) {
@@ -4222,6 +4240,12 @@ table.bc-grid-detail-nested-grid {
     --bc-grid-detail-loading-accent: CanvasText;
     --bc-grid-detail-error-bg: Canvas;
     --bc-grid-detail-error-border: ButtonText;
+  }
+
+  .bc-grid-fill-handle {
+    border-color: Canvas;
+    background: Highlight;
+    forced-color-adjust: none;
   }
 
   .bc-grid,

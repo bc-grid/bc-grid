@@ -54,7 +54,7 @@ describe("public type surface — popup + editScrollOutAction + scroll-out sourc
     // consumer telemetry can split scroll-out commits from explicit
     // keyboard/pointer ones. RFC §5 calls this out explicitly.
     expect(typesSource).toMatch(
-      /source:\s*"keyboard"\s*\|\s*"pointer"\s*\|\s*"api"\s*\|\s*"paste"\s*\|\s*"scroll-out"/,
+      /source:\s*"keyboard"\s*\|\s*"pointer"\s*\|\s*"api"\s*\|\s*"paste"\s*\|\s*"fill"\s*\|\s*"scroll-out"/,
     )
   })
 })

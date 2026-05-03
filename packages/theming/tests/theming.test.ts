@@ -1646,6 +1646,24 @@ describe("@bc-grid/theming", () => {
     expect(inputRule).toContain("background: color-mix")
   })
 
+  test("range fill handle is an 8px pointer target with forced-colors support", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-fill-handle {")
+    expect(idx).toBeGreaterThan(-1)
+    const rule = css.slice(idx, css.indexOf("}", idx))
+
+    expect(rule).toContain("width: 8px")
+    expect(rule).toContain("height: 8px")
+    expect(rule).toContain("background: var(--bc-grid-range-overlay-border)")
+    expect(rule).toContain("pointer-events: auto")
+
+    const forcedIdx = css.indexOf(".bc-grid-fill-handle {", css.indexOf("@media (forced-colors"))
+    expect(forcedIdx).toBeGreaterThan(-1)
+    const forcedRule = css.slice(forcedIdx, css.indexOf("}", forcedIdx))
+    expect(forcedRule).toContain("background: Highlight")
+    expect(forcedRule).toContain("forced-color-adjust: none")
+  })
+
   test("inline filter row containers carry a min-height floor so compact density stays readable", () => {
     // The row container's `height: 70%` keeps the controls
     // proportional to the cell, but compact density would crunch
