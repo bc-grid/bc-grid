@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -76,3 +76,29 @@ jobs:
             (cd "$pkg" && bun publish --access restricted)
             echo "::endgroup::"
           done
+
+      - name: Create GitHub Release entry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Mirror every successful tag publish onto the GitHub Releases
+          # surface so downstream consumers / changelogs see the cadence
+          # at github.com/bc-grid/bc-grid/releases. The publish step above
+          # is the load-bearing gate; this entry is a documentation
+          # surface only.
+          TAG="${{ github.ref_name }}"
+          # Pre-release marker for tags containing "-alpha" / "-beta" / "-rc"
+          # so the GitHub UI marks them clearly. Stable tags like "v0.5.0"
+          # become full releases.
+          if [[ "$TAG" == *-alpha* || "$TAG" == *-beta* || "$TAG" == *-rc* ]]; then
+            PRERELEASE="--prerelease"
+          else
+            PRERELEASE=""
+          fi
+          # Use the most recent stable / pre-release tag's commit
+          # message subject + body if no explicit notes file is present.
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            $PRERELEASE \
+            || echo "Release entry for $TAG already exists or creation failed (non-fatal)"

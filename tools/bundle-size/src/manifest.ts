@@ -47,21 +47,17 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
-      // Bumped 2026-05-03 for v0.5.0-alpha.3 cut from 88.44 KiB →
-      // 90.38 KiB. Accepted feature work since alpha.2: layout
-      // architecture pass PRs (a/b/c) (#415/#416/#418) — net additions
-      // and removals roughly cancel; default context menu wiring
-      // (server #420 + chrome #419 + editor #421) added the Server /
-      // Column / View / Editor submenus + row-action items + dismiss-
-      // latest-error + in-memory `BcUserSettings` fallback; saved-view
-      // DTO + helpers (#423); editor visual-contract consolidation
-      // (#424) introduced the canonical `data-bc-grid-edit-state`
-      // attribute + six `--bc-grid-edit-state-*` tokens + dual-
-      // attribute helper for one-release migration; bsncraft alpha.2
-      // P0 #1/#3 + P1 #10 fixes (#425) — opaque row-hover token +
-      // cellEditor-implies-editable default. 150 KiB hard cap
-      // unchanged; ~50 KiB headroom for v0.6 + v0.7 + v0.8 work.
-      baselineGzipBytes: 92544,
+      // Bumped 2026-05-03 for v0.5.0 GA cut from 90.38 KiB →
+      // 91.53 KiB. Accepted feature work since alpha.3: prefetch
+      // budget + Server submenu prefetch radio (#428); ERP filter
+      // operators (text not-equals/does-not-contain, date relative
+      // tokens incl. fiscal periods, current-user/team predicates)
+      // (#429); row-state cascade scoping (#430 — :not() guards on
+      // 16 selectors so master row hover doesn't bleed into nested
+      // grids); editor keyboard navigation polish (#431 — Tab skips
+      // non-editable cells + disabled rows). 150 KiB hard cap
+      // unchanged; ~58 KiB headroom for v0.6 + v0.7 + v0.8 work.
+      baselineGzipBytes: 93725,
     },
   ],
 }

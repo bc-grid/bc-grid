@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/server-row-model",
-  "version": "0.5.0-alpha.3",
+  "version": "0.5.0",
   "description": "Paged + infinite + tree server row models for bc-grid",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
