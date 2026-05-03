@@ -84,14 +84,19 @@ describe("viewportStyle", () => {
 })
 
 describe("headerBandStyle", () => {
-  test("pins the header band at the viewport's top edge with z-index above body cells", () => {
+  test("pins the header band at the viewport's top edge above body pinned lanes", () => {
     expect(headerBandStyle(960, 72)).toMatchObject({
       height: 72,
       minWidth: "100%",
       position: "sticky",
       top: 0,
       width: 960,
-      zIndex: 3,
+      // z-index 4 must be > body pinnedLaneStyle's z-index (3) so
+      // body pinned cells don't paint over the sticky header on
+      // vertical scroll. Bsncraft v0.5.0 GA P0 regression — pre-fix,
+      // both used z-index 3 and DOM-order tie-break put body rows
+      // (later in DOM) above the header.
+      zIndex: 4,
     })
   })
 
@@ -107,6 +112,9 @@ describe("pinnedLaneStyle", () => {
       height: 36,
       position: "sticky",
       width: 120,
+      // z-index 3 must be < headerBandStyle's z-index (4) so the
+      // sticky header band paints above body pinned lanes on
+      // vertical scroll. Bsncraft v0.5.0 GA P0 regression.
       zIndex: 3,
       left: 0,
     })
@@ -123,6 +131,17 @@ describe("pinnedLaneStyle", () => {
       right: 0,
     })
     expect(style).not.toHaveProperty("left")
+  })
+
+  test("header band z-index strictly greater than body pinned lane z-index", () => {
+    // Pin the cross-helper invariant so a future refactor that bumps
+    // one without the other catches in CI. Bsncraft v0.5.0 GA P0
+    // regression — they used to tie at 3.
+    const headerZ = headerBandStyle(960, 36).zIndex as number
+    const leftLaneZ = pinnedLaneStyle("left", 36, 120).zIndex as number
+    const rightLaneZ = pinnedLaneStyle("right", 36, 120).zIndex as number
+    expect(headerZ).toBeGreaterThan(leftLaneZ)
+    expect(headerZ).toBeGreaterThan(rightLaneZ)
   })
 })
 

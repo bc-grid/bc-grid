@@ -1,7 +1,7 @@
 import { normaliseRange } from "@bc-grid/core"
 import type { BcRangeSelection, ColumnId, RowId } from "@bc-grid/core"
 import type { Virtualizer } from "@bc-grid/virtualizer"
-import type { CSSProperties } from "react"
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react"
 import { classNames, pinnedClassName } from "./gridInternals"
 
 export interface RangeOverlayColumn {
@@ -32,6 +32,14 @@ export interface ComputeRangeOverlayRectsInput {
   totalWidth: number
   viewportWidth: number
   virtualizer: RangeOverlayVirtualizer
+}
+
+export interface BcRangeOverlayProps extends ComputeRangeOverlayRectsInput {
+  fillHandleEnabled?: boolean
+  onFillHandlePointerDown?: (
+    event: ReactPointerEvent<HTMLDivElement>,
+    rect: RangeOverlayRect,
+  ) => void
 }
 
 interface ColumnSegment {
@@ -91,24 +99,50 @@ export function rangeOverlayRectStyle(rect: RangeOverlayRect): CSSProperties {
   }
 }
 
-export function BcRangeOverlay(props: ComputeRangeOverlayRectsInput) {
+export function BcRangeOverlay(props: BcRangeOverlayProps) {
   const rects = computeRangeOverlayRects(props)
   if (rects.length === 0) return null
+  const fillHandleRect =
+    props.fillHandleEnabled === true && props.rangeSelection.ranges.length === 1
+      ? rects.length === 1
+        ? rects[0]
+        : undefined
+      : undefined
   const bodyRects = rects.filter((rect) => rect.pinned === null)
   const pinnedRects = rects.filter((rect) => rect.pinned !== null)
 
   return (
     <>
-      {bodyRects.length > 0 ? <RangeOverlayLayer rects={bodyRects} variant="body" /> : null}
-      {pinnedRects.length > 0 ? <RangeOverlayLayer rects={pinnedRects} variant="pinned" /> : null}
+      {bodyRects.length > 0 ? (
+        <RangeOverlayLayer
+          fillHandleRect={fillHandleRect}
+          onFillHandlePointerDown={props.onFillHandlePointerDown}
+          rects={bodyRects}
+          variant="body"
+        />
+      ) : null}
+      {pinnedRects.length > 0 ? (
+        <RangeOverlayLayer
+          fillHandleRect={fillHandleRect}
+          onFillHandlePointerDown={props.onFillHandlePointerDown}
+          rects={pinnedRects}
+          variant="pinned"
+        />
+      ) : null}
     </>
   )
 }
 
 function RangeOverlayLayer({
+  fillHandleRect,
+  onFillHandlePointerDown,
   rects,
   variant,
 }: {
+  fillHandleRect: RangeOverlayRect | undefined
+  onFillHandlePointerDown:
+    | ((event: ReactPointerEvent<HTMLDivElement>, rect: RangeOverlayRect) => void)
+    | undefined
   rects: readonly RangeOverlayRect[]
   variant: "body" | "pinned"
 }) {
@@ -121,16 +155,27 @@ function RangeOverlayLayer({
       )}
       data-bc-grid-range-overlay-layer={variant}
     >
-      {rects.map((rect) => (
-        <div
-          key={rect.key}
-          className={classNames("bc-grid-range-overlay", pinnedClassName(rect.pinned))}
-          data-bc-grid-range-active="true"
-          data-bc-grid-range-overlay="true"
-          data-bc-grid-range-pinned={rect.pinned ?? undefined}
-          style={rangeOverlayRectStyle(rect)}
-        />
-      ))}
+      {rects.map((rect) => {
+        const showFillHandle = fillHandleRect?.key === rect.key
+        return (
+          <div
+            key={rect.key}
+            className={classNames("bc-grid-range-overlay", pinnedClassName(rect.pinned))}
+            data-bc-grid-range-active="true"
+            data-bc-grid-range-overlay="true"
+            data-bc-grid-range-pinned={rect.pinned ?? undefined}
+            style={rangeOverlayRectStyle(rect)}
+          >
+            {showFillHandle ? (
+              <div
+                className="bc-grid-fill-handle"
+                data-bc-grid-fill-handle="true"
+                onPointerDown={(event) => onFillHandlePointerDown?.(event, rect)}
+              />
+            ) : null}
+          </div>
+        )
+      })}
     </div>
   )
 }

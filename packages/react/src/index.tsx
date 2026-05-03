@@ -1,8 +1,15 @@
+export {
+  forEachSelectedRowId,
+  isAllSelection,
+  isExplicitSelection,
+  isFilteredSelection,
+} from "@bc-grid/core"
 export { useAggregations } from "./aggregations"
 export { DEFAULT_CONTEXT_MENU_ITEMS } from "./contextMenu"
 export { BcEditGrid } from "./editGrid"
 export { registerReactFilterDefinition } from "./filterRegistry"
 export { BcGrid, useBcGridApi } from "./grid"
+export { BC_GRID_ROW_DRAG_MIME } from "./rowDragDrop"
 export {
   BC_SAVED_VIEW_VERSION,
   applySavedViewLayout,
@@ -73,6 +80,7 @@ export type {
 export type {
   BcAggregationFormatterParams,
   BcAggregationScope,
+  BcBulkActionsContext,
   BcCellEditCommitEvent,
   BcCellEditor,
   BcCellEditorPrepareParams,
@@ -135,8 +143,18 @@ export type {
   BcRangeCopyHook,
   BcRangeKeyAction,
   BcRangeSelection,
+  BcRangeSelectionOptions,
   BcReactFilterDefinition,
   BcReactGridColumn,
+  BcRowDragOverEvent,
+  BcRowDragOverHandler,
+  BcRowDropAction,
+  BcRowDropEvent,
+  BcRowDropHandler,
+  BcRowPatch,
+  BcRowPatchFailure,
+  BcRowPatchFailureCode,
+  BcRowPatchResult,
   BcSelection,
   BcServerGridApi,
   BcServerGridProps,

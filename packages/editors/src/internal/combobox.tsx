@@ -67,9 +67,26 @@ type BcGridComboboxButton = HTMLButtonElement & {
 interface ComboboxBaseProps {
   /**
    * Available options. Editor types resolve these via
-   * `resolveEditorOptions(column.options, row)`.
+   * `resolveEditorOptions(column.options, row)`. Falls through to
+   * `[]` when the editor wires `initialOptions` instead (the
+   * prepare-resolved-async-options pattern from
+   * `v06-prepareresult-preload-select-multi`).
    */
   options: readonly EditorOption[]
+  /**
+   * Pre-resolved option list from the editor's `prepare()` hook —
+   * mirrors the `SearchCombobox` shape (combobox-search.tsx). When
+   * set, the primitive uses `initialOptions` as the source of truth
+   * for first render and subsequent renders, ignoring the `options`
+   * prop. Lets the select / multi-select editors lazy-load options
+   * from `column.fetchOptions` without re-implementing the editor.
+   *
+   * Per `v06-prepareresult-preload-select-multi`. The editor
+   * resolves the options via `column.fetchOptions("", signal)` in
+   * its `prepare` hook and passes the result here as
+   * `prepareResult.initialOptions`.
+   */
+  initialOptions?: readonly EditorOption[] | undefined
   /** Printable seed key from the activation event, if any. Same semantics as native editors. */
   seedKey?: string | undefined
   /** Validation error string. Triggers error-state chrome. */
@@ -151,7 +168,8 @@ export function readComboboxTypedValue(element: HTMLElement | null): unknown {
 
 export function Combobox(props: ComboboxProps): ReactNode {
   const {
-    options,
+    options: optionsProp,
+    initialOptions,
     seedKey,
     error,
     pending,
@@ -163,6 +181,10 @@ export function Combobox(props: ComboboxProps): ReactNode {
     renderCreateOption,
     kind = "combobox",
   } = props
+  // `initialOptions` from the editor's `prepare` hook overrides the
+  // static `options` prop when present — see ComboboxBaseProps JSDoc.
+  // Per `v06-prepareresult-preload-select-multi`.
+  const options = initialOptions ?? optionsProp
   const isMulti = props.mode === "multi"
 
   const buttonRef = useRef<HTMLButtonElement | null>(null)

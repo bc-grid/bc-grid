@@ -1,7 +1,16 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useCallback, useState } from "react"
-import { editorAccessibleName, resolveEditorOptions } from "./chrome"
+import { type EditorOption, editorAccessibleName, resolveEditorOptions } from "./chrome"
 import { Combobox } from "./internal/combobox"
+
+interface MultiSelectPrepareResult {
+  initialOptions: readonly EditorOption[]
+}
+
+type MultiSelectFetchOptions = (
+  query: string,
+  signal: AbortSignal,
+) => Promise<readonly EditorOption[]>
 
 /**
  * Multi-select editor — `kind: "multi-select"`. Default for
@@ -44,6 +53,18 @@ export const multiSelectEditor: BcCellEditor<unknown, unknown> = {
   Component: MultiSelectEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
   kind: "multi-select",
   popup: true,
+  // Same async-loaded options path as `selectEditor` (mirrors the
+  // autocomplete editor's prepare hook from #403). When the column
+  // has no `fetchOptions`, prepare resolves `undefined` and the
+  // Component falls through to the synchronous `column.options` path.
+  // Per `v06-prepareresult-preload-select-multi` (planning doc §3).
+  async prepare({ column }) {
+    const fetchOptions = (column as { fetchOptions?: MultiSelectFetchOptions }).fetchOptions
+    if (!fetchOptions) return undefined
+    const controller = new AbortController()
+    const initialOptions = await fetchOptions("", controller.signal)
+    return { initialOptions } satisfies MultiSelectPrepareResult
+  },
 }
 
 function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
@@ -58,9 +79,14 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
     disabled,
     column,
     row,
+    prepareResult,
   } = props
   const optionsSource = (column as { options?: unknown }).options
-  const options = resolveEditorOptions(optionsSource, row)
+  // `prepareResult.initialOptions` from the prepare hook above wins
+  // when `column.fetchOptions` is wired; falls through to
+  // `resolveEditorOptions(column.options, row)` for the static path.
+  const initialOptions = (prepareResult as MultiSelectPrepareResult | undefined)?.initialOptions
+  const options = initialOptions ?? resolveEditorOptions(optionsSource, row)
   const accessibleName = editorAccessibleName(column, "Select values")
 
   // Mirror the picked array into local state so the trigger's chip
