@@ -18,6 +18,7 @@ import {
   resolveServerVisibleColumns,
   resolveTreeChildCount,
   resolveTreeRowCount,
+  resolveViewChangeReset,
   shouldResetServerPagedPage,
 } from "../src/serverGrid"
 import type { BcReactGridColumn } from "../src/types"
@@ -1225,5 +1226,107 @@ describe("resolveMissingLoaderMessage (server-mode-switch RFC §6 stage 2 mount 
       hasLoadChildren: false,
     })
     expect(message).toContain("loadPage")
+  })
+})
+
+describe("resolveViewChangeReset (worker1 audit P1 §1)", () => {
+  // The view-change reset matrix: when the resolved viewKey changes,
+  // the grid resets scroll-to-top + selection + active cell focus by
+  // default unless the consumer opts out. When the viewKey did NOT
+  // change (e.g. a refresh fired with the same view), no resets fire.
+
+  test("viewKey unchanged → no resets regardless of opt-out flags", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: false })).toEqual({
+      resetScroll: false,
+      resetSelection: false,
+      resetFocus: false,
+    })
+    expect(
+      resolveViewChangeReset({
+        viewKeyChanged: false,
+        preserveScroll: true,
+        preserveSelection: true,
+        preserveFocus: true,
+      }),
+    ).toEqual({ resetScroll: false, resetSelection: false, resetFocus: false })
+    // Even if all preserve flags are false (the default), no viewKey
+    // change → no resets.
+    expect(
+      resolveViewChangeReset({
+        viewKeyChanged: false,
+        preserveScroll: false,
+        preserveSelection: false,
+        preserveFocus: false,
+      }),
+    ).toEqual({ resetScroll: false, resetSelection: false, resetFocus: false })
+  })
+
+  test("viewKey changed + no opt-outs → reset all three (NetSuite/Salesforce default)", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: true })).toEqual({
+      resetScroll: true,
+      resetSelection: true,
+      resetFocus: true,
+    })
+  })
+
+  test("preserveScroll opts out of scroll reset only", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: true, preserveScroll: true })).toEqual({
+      resetScroll: false,
+      resetSelection: true,
+      resetFocus: true,
+    })
+  })
+
+  test("preserveSelection opts out of selection reset only", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: true, preserveSelection: true })).toEqual({
+      resetScroll: true,
+      resetSelection: false,
+      resetFocus: true,
+    })
+  })
+
+  test("preserveFocus opts out of focus reset only", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: true, preserveFocus: true })).toEqual({
+      resetScroll: true,
+      resetSelection: true,
+      resetFocus: false,
+    })
+  })
+
+  test("all three preserve flags → no resets even when viewKey changed", () => {
+    expect(
+      resolveViewChangeReset({
+        viewKeyChanged: true,
+        preserveScroll: true,
+        preserveSelection: true,
+        preserveFocus: true,
+      }),
+    ).toEqual({ resetScroll: false, resetSelection: false, resetFocus: false })
+  })
+
+  test("undefined preserve flag is treated as falsy (reset fires) — matches default", () => {
+    // Consumers who don't pass the prop get the default reset
+    // behaviour. The helper does not distinguish undefined from false.
+    expect(
+      resolveViewChangeReset({
+        viewKeyChanged: true,
+        preserveScroll: undefined,
+        preserveSelection: undefined,
+        preserveFocus: undefined,
+      }),
+    ).toEqual({ resetScroll: true, resetSelection: true, resetFocus: true })
+  })
+
+  test("explicit false preserve flag is identical to undefined (defensive contract)", () => {
+    // Both `false` and `undefined` resolve to "do reset" — the absence
+    // of opt-out is the same as explicit non-opt-out.
+    const explicitFalse = resolveViewChangeReset({
+      viewKeyChanged: true,
+      preserveScroll: false,
+      preserveSelection: false,
+      preserveFocus: false,
+    })
+    const undefinedFlags = resolveViewChangeReset({ viewKeyChanged: true })
+    expect(explicitFalse).toEqual(undefinedFlags)
   })
 })

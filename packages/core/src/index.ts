@@ -667,6 +667,32 @@ export interface BcGridApi<TRow = unknown> {
   setVisibleSetting(key: string, value: boolean): void
 
   /**
+   * Clear the row selection — sets selection to an empty explicit set.
+   * Surfaced for view-change reset flows on `<BcServerGrid>` (worker1
+   * audit P1 §1) where the prior view's selected rowIds become "ghost
+   * selection" once a filter / sort / search / groupBy change shifts
+   * the visible row set. Consumers can also call this from custom
+   * "Clear selection" affordances.
+   */
+  clearSelection(): void
+  /**
+   * Clear the active cell focus — sets the active cell to `null` and
+   * blurs any cell-level focus indicator. Use after a view change when
+   * the previously-focused cell's row no longer participates in the
+   * new query result. Pairs with `focusCell` (which sets a position).
+   * Worker1 audit P1 §1.
+   */
+  clearActiveCell(): void
+  /**
+   * Scroll the grid viewport to the top — sets `scrollTop` to 0 on the
+   * scroll container. Companion to `scrollToRow` (which scrolls to a
+   * specific rowId) for the "scroll to top of view" flow that doesn't
+   * need a row identifier. Surfaced for view-change reset on
+   * `<BcServerGrid>` per worker1 audit P1 §1.
+   */
+  scrollToTop(): void
+
+  /**
    * Read the persisted server-infinite prefetch budget (number of
    * blocks to fetch ahead of the visible viewport on each
    * `onVisibleRowRangeChange`). Returns `undefined` when no
