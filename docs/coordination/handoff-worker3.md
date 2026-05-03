@@ -65,7 +65,32 @@ Three editor-portal items that ride on the toggle props you just shipped (#395).
 
 **Branch:** `agent/worker3/v05-editor-portal-polish-bundle-1`. **Effort:** ~60-90 min.
 
-### After bundle-1 → `v05-prepare-result-preload` (worker3-editors §3 pulled forward, ~half day)
+### After bundle-1 → `v05-on-cell-edit-commit-result-aware` (~45-60 min)
+
+bsncraft v0.5 alpha.1 editing-pass review (2026-05-03) flagged that `<BcGrid onCellEditCommit>` is fire-and-forget while `<BcServerGrid onServerRowMutation>` is full optimistic / rollback / stale-gate lifecycle. ERP child-CRUD grids that call a server action on every cell commit re-implement the optimistic/rollback dance bc-grid already owns server-side.
+
+**Widen `onCellEditCommit` (additive, backwards-compatible):**
+
+```ts
+// Before:
+onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
+
+// After:
+onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) =>
+  | void
+  | Promise<void>
+  | Promise<{ status: "accepted" | "rejected"; reason?: string; row?: TRow }>
+```
+
+When the host returns `{ status, reason?, row? }`, `<BcGrid>` runs the same cell-overlay lifecycle as `<BcServerGrid>` already does for `ServerMutationResult`: optimistic update on mount, await handler, roll back on rejected and surface `reason` as the cell error overlay (existing #356 popover). Returning `void | Promise<void>` keeps fire-and-forget behavior unchanged.
+
+The implementation lives in `useEditingController` — the commit path already routes through there. Reuse the optimistic-overlay state machine the server-row-model edit pathway uses. `BcCellEditCommitEvent<TRow>` shape stays the same.
+
+Tests: unit case for each return shape (void / undefined / Promise<void> / Promise<accepted> / Promise<rejected>), assertions on cell overlay state + `aria-invalid` after rejection, optimistic state during the await window.
+
+**Branch:** `agent/worker3/v05-on-cell-edit-commit-result-aware`. **Effort:** ~45-60 min.
+
+### After commit-widening → `v05-prepare-result-preload` (worker3-editors §3 pulled forward, ~half day)
 
 Pull the v0.6 §3 task forward from `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`: autocomplete editor preloads the first page of options via `editor.prepare()` so the dropdown paints with options on first frame instead of a blank "Loading…" state. Small `BcCellEditorPrepareParams` extension (add `column: BcColumn` so prepare callbacks can branch on column metadata) — flag the API change in the PR description so coordinator catches it during the api-surface diff review.
 
