@@ -27,6 +27,7 @@ import {
 } from "./examples"
 import { featureDiscoveryRows, featureShortcuts } from "./featureDiscovery"
 import { type CustomerContactPanelState, customerContactPanelState } from "./masterDetailExample"
+import { ServerModeSwitchExample } from "./server-mode-switch.example"
 import { ServerEditGridExample } from "./serverEditExample"
 
 type ThemeMode = "light" | "dark"
@@ -149,9 +150,28 @@ async function fetchCollectorOptions(
   return matches.slice(0, 10).map((name) => ({ value: name, label: name }))
 }
 
+function isServerModeSwitchOnly(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("serverModeSwitch") === "1"
+}
+
 export function App() {
   const [theme, setTheme] = useState<ThemeMode>("light")
   const [density, setDensity] = useState<BcGridDensity>("normal")
+
+  // `?serverModeSwitch=1` mounts only the server-mode-switch demo so the
+  // Playwright spec at `apps/examples/tests/server-mode-switch.pw.ts` has
+  // a deterministic single-grid surface to drive without competing
+  // examples on the page.
+  if (isServerModeSwitchOnly()) {
+    return (
+      <main className={theme === "dark" ? "app-shell dark" : "app-shell"}>
+        <section className="workspace">
+          <ServerModeSwitchExample />
+        </section>
+      </main>
+    )
+  }
 
   return (
     <main className={theme === "dark" ? "app-shell dark" : "app-shell"}>
