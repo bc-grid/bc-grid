@@ -82,6 +82,7 @@ function buildGridChromeContextMenuItemsForContext<TRow>(
 ): readonly BcContextMenuItem<TRow>[] {
   const hasFiltersPanel = sidebarPanels.some((panel) => panel.id === "filters")
   const headerColumnId = headerColumnIdForContext(context)
+  const contextColumnId = columnIdForContext(context)
   const groupableColumnIdSet = new Set(groupableColumnIds)
   const canGroupHeaderColumn = headerColumnId != null && groupableColumnIdSet.has(headerColumnId)
   const filterItems: BcContextMenuItem<TRow>[] = [
@@ -92,9 +93,17 @@ function buildGridChromeContextMenuItemsForContext<TRow>(
       disabled: !hasFiltersPanel,
       onSelect: () => onSidebarPanelChange("filters"),
     },
+  ]
+  const columnItems: readonly BcContextMenuItem<TRow>[] = [
+    "pin-column-left",
+    "pin-column-right",
+    "unpin-column",
+    "hide-column",
+    "autosize-column",
     "separator",
+    "show-all-columns",
+    "autosize-all-columns",
     "clear-column-filter",
-    "clear-all-filters",
   ]
   const viewItems: BcContextMenuItem<TRow>[] = [
     {
@@ -169,6 +178,19 @@ function buildGridChromeContextMenuItemsForContext<TRow>(
     "copy-row",
     "copy-with-headers",
     "separator",
+    "clear-all-filters",
+  ]
+
+  if (contextColumnId) {
+    items.push({
+      kind: "submenu",
+      id: "column",
+      label: "Column",
+      items: columnItems,
+    })
+  }
+
+  items.push(
     {
       kind: "submenu",
       id: "filter",
@@ -181,7 +203,7 @@ function buildGridChromeContextMenuItemsForContext<TRow>(
       label: "View",
       items: viewItems,
     },
-  ]
+  )
 
   const rowItems = buildRowActionItems(context, rowActions)
   if (rowItems.length > 0) {
@@ -214,17 +236,12 @@ function buildGridChromeContextMenuItemsForContext<TRow>(
     })
   }
 
-  if (headerColumnId) {
-    items.push({
-      kind: "submenu",
-      id: "pin",
-      label: "Pin",
-      items: ["pin-column-left", "pin-column-right", "unpin-column"],
-    })
-  }
-
   items.push("separator", "clear-selection", "clear-range")
   return items
+}
+
+function columnIdForContext<TRow>(context: BcContextMenuContext<TRow>): ColumnId | undefined {
+  return context.column && context.columnId ? context.columnId : undefined
 }
 
 function headerColumnIdForContext<TRow>(context: BcContextMenuContext<TRow>): ColumnId | undefined {

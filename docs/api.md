@@ -1158,9 +1158,15 @@ export type BcContextMenuItem<TRow = unknown> =
 
 For a worked recipe combining these built-ins with a custom destructive item, see [`apps/docs/src/pages/context-menu-recipe.astro`](https://github.com/bc-grid/bc-grid/blob/main/apps/docs/src/pages/context-menu-recipe.astro) (rendered at `/context-menu-recipe/` in the docs site).
 
-The default `contextMenuItems` set is `["copy", "copy-row", "copy-with-headers", "separator", "clear-selection", "clear-range"]`. Every other built-in below is **consumer-opt-in** — pass it explicitly via `contextMenuItems` to surface it. See `docs/design/context-menu-command-map.md` for the full v0.3 command map.
+When `contextMenuItems` is omitted, `<BcGrid>` renders the bundled contextual
+menu: clipboard commands, top-level `clear-all-filters`, a `Column` submenu for
+column-bound clicks, a `Filter` submenu, a `View` submenu for chrome toggles,
+and selection/range cleanup. The exported `DEFAULT_CONTEXT_MENU_ITEMS` constant
+is the primitive clipboard/range seed for consumers who explicitly provide
+`contextMenuItems`: `["copy", "copy-row", "copy-with-headers", "separator",
+"clear-selection", "clear-range"]`.
 
-The opt-in groups consumers most often layer on top of the defaults are:
+The groups consumers most often layer onto an explicit custom menu are:
 
 - **Filter-clearing** — `clear-column-filter`, `clear-all-filters`. Wired to `BcGridApi.clearFilter`.
 - **Column shape** — `pin-column-left`, `pin-column-right`, `unpin-column`, `hide-column`, `show-all-columns`, `autosize-column`, `autosize-all-columns`. Wired to `BcGridApi.setColumnPinned` / `setColumnHidden` / `setColumnState` / `autoSizeColumn`.
@@ -1175,7 +1181,7 @@ These groups never need extra runtime dependencies or a custom factory — the b
 | `copy-row` | Copies every visible-column cell of the right-clicked row, joined as a TSV line. | No cell or row context |
 | `copy-with-headers` | Same shape as `copy` but prepends the column-header row. | No cell context AND no range selection |
 | `clear-all-filters` | Calls `BcGridApi.clearFilter()` (clears every column filter) | No filter is active |
-| `clear-column-filter` | Calls `BcGridApi.clearFilter(columnId)` for the right-clicked cell | No cell context, or that column has no filter entry |
+| `clear-column-filter` | Calls `BcGridApi.clearFilter(columnId)` for the right-clicked column | No column context, or that column has no filter entry |
 | `pin-column-left` | Calls `BcGridApi.setColumnPinned(columnId, "left")` | No column context, or the column is already pinned left |
 | `pin-column-right` | Calls `BcGridApi.setColumnPinned(columnId, "right")` | No column context, or the column is already pinned right |
 | `unpin-column` | Calls `BcGridApi.setColumnPinned(columnId, null)` | No column context, or the column is not pinned |
@@ -1190,8 +1196,9 @@ The icon set rendered next to these items is shipped by `@bc-grid/react` itself
 — consumers don't need to install lucide / heroicons / radix-icons to get the
 default look.
 
-To extend the default menu without rewriting it from scratch, spread the default
-list and append column / filter built-ins or a custom item factory:
+To replace the bundled contextual menu without rewriting primitives from
+scratch, spread the default seed and append column / filter built-ins or a
+custom item factory:
 
 ```ts
 import { DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
