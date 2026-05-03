@@ -60,25 +60,25 @@
     },
     "packages/aggregations": {
       "name": "@bc-grid/aggregations",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/animations": {
       "name": "@bc-grid/animations",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/core": {
       "name": "@bc-grid/core",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
     },
     "packages/editors": {
       "name": "@bc-grid/editors",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -92,7 +92,7 @@
     },
     "packages/enterprise": {
       "name": "@bc-grid/enterprise",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -103,7 +103,7 @@
     },
     "packages/export": {
       "name": "@bc-grid/export",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
@@ -118,14 +118,14 @@
     },
     "packages/filters": {
       "name": "@bc-grid/filters",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/react": {
       "name": "@bc-grid/react",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/aggregations": "workspace:*",
         "@bc-grid/animations": "workspace:*",
@@ -148,21 +148,21 @@
     },
     "packages/server-row-model": {
       "name": "@bc-grid/server-row-model",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/theming": {
       "name": "@bc-grid/theming",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/virtualizer": {
       "name": "@bc-grid/virtualizer",
-      "version": "0.5.0-alpha.1",
+      "version": "0.5.0-alpha.2",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },

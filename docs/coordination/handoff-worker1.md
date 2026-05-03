@@ -40,11 +40,15 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 **RFC delivered** at `docs/design/layout-architecture-pass-rfc.md`. Read end-to-end before you start; §3 has the new render graph, §5 covers the z-index intersection rule (the only sharp edge), §8 is the PR sequencing.
 
-**PR (a) scope (yours):** structural DOM rewrite — single `.bc-grid-viewport` (replaces the header-viewport + body-scroller pair), `position: sticky; top: 0` on the three header rows (group, leaf, filter), `position: sticky; left: 0 / right: 0` on `.bc-grid-cell-pinned-left/right`. Z-index 4 on the top-left intersection cells per §5. Delete `headerScrollTransform`, `pinnedTransformValue`, `headerViewportStyle`, `autoHeightHeaderViewportStyle`, `headerRowStyle`, `syncHeaderRowsScroll`, `pinnedLaneStyle`, the per-cell `transform` from `cellStyle`. The body scroll handler shrinks to just feeding the virtualizer (~5 lines). Existing pinned-cell shading layering (5341af3) composes naturally because sticky positioning is per-cell.
+**PR (a) scope (yours):** structural DOM rewrite — single `.bc-grid-viewport` (**hard-renamed** from `.bc-grid-scroller` per §10 Q2 — no alias), `position: sticky; top: 0` on the three header rows (group, leaf, filter), `position: sticky; left: 0 / right: 0` on `.bc-grid-cell-pinned-left/right`. Z-index 4 on the top-left intersection cells per §5. Delete `headerScrollTransform`, `pinnedTransformValue`, `headerViewportStyle`, `autoHeightHeaderViewportStyle`, `headerRowStyle`, `syncHeaderRowsScroll`, `pinnedLaneStyle`, the per-cell `transform` from `cellStyle`. **No `legacy: true` toggle** (§10 Q5). The body scroll handler shrinks to just feeding the virtualizer (~5 lines). Existing pinned-cell shading layering (5341af3) composes naturally because sticky positioning is per-cell.
+
+**Ship with PR (a):**
+- `tests/forced-colors-sticky.pw.ts` (§10 Q3 ratified) — verifies sticky positioning composes with the existing forced-colors fallbacks.
+- Migration notes (§10 Q4 ratified) — `docs/migration/v0.6.md` (create if missing) covers (a) the `.bc-grid-scroller` → `.bc-grid-viewport` hard-rename for consumer style overrides + (b) the iOS Safari caveat: sticky positioning breaks if a transformed ancestor wraps `<BcGrid>` (CSS slide-in animations, drawer transitions). Bsncraft doesn't currently wrap the grid in a transform; future consumers might.
 
 Closes memo 5 (header lag) immediately and memo 1 (pinned shading) preserved. Your lane because you have the most React layout context from the mode-switch RFC and the broadest read across `grid.tsx`.
 
-**Branch:** `agent/worker1/v06-layout-architecture-pass-pr-a`. **Effort:** ~12-16h structural rewrite, ~600-900 LOC net diff.
+**Branch:** `agent/worker1/v06-layout-architecture-pass-pr-a`. **Effort:** ~12-16h structural rewrite, ~600-900 LOC net diff (plus ~80 LOC for the forced-colors spec + ~40 LOC migration doc).
 
 ### After PR (a) → `v05-server-mode-switch` stage 3.3 — RFC §9 test sweep + Playwright (~3-4h)
 

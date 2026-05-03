@@ -83,7 +83,7 @@ export function resolveVisibleSegments<TRow>(
 }
 
 function renderBuiltInSegment<TRow>(
-  id: "total" | "filtered" | "activeFilters" | "selected" | "aggregations",
+  id: "total" | "filtered" | "activeFilters" | "selected" | "aggregations" | "latestError",
   ctx: BcStatusBarContext<TRow>,
   index: number,
 ): ResolvedSegment | null {
@@ -120,6 +120,18 @@ function renderBuiltInSegment<TRow>(
       id: "selected",
       align: "left",
       content: <SelectedSegment ctx={ctx} />,
+    }
+  }
+  if (id === "latestError") {
+    // Auto-clear is handled inside `useEditingController`; the segment
+    // simply hides itself when the controller has retired the entry
+    // (8 s timeout or earlier on a successful commit on the same cell).
+    if (!ctx.latestValidationError) return null
+    return {
+      key: `latestError-${index}`,
+      id: "latestError",
+      align: "right",
+      content: <LatestErrorSegment ctx={ctx} />,
     }
   }
   if (ctx.aggregations.length === 0) return null
@@ -195,6 +207,26 @@ function SelectedSegment<TRow>({ ctx }: { ctx: BcStatusBarContext<TRow> }): Reac
   return (
     <span className="bc-grid-statusbar-segment-text">
       {formatCount(ctx.selectedRowCount)} selected
+    </span>
+  )
+}
+
+function LatestErrorSegment<TRow>({ ctx }: { ctx: BcStatusBarContext<TRow> }): ReactNode {
+  // The controller guarantees `ctx.latestValidationError` is non-null
+  // when this segment renders (the renderBuiltInSegment branch above
+  // gates on it) — pin the assertion locally so the JSX stays
+  // unconditional.
+  const err = ctx.latestValidationError
+  if (!err) return null
+  return (
+    <span
+      className="bc-grid-statusbar-segment-text bc-grid-statusbar-latest-error"
+      data-bc-grid-row-id={err.rowId}
+      data-bc-grid-column-id={err.columnId}
+    >
+      <span className="bc-grid-statusbar-latest-error-column">{err.columnHeader}</span>
+      <span aria-hidden="true">: </span>
+      <span className="bc-grid-statusbar-latest-error-message">{err.error}</span>
     </span>
   )
 }

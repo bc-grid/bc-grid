@@ -145,6 +145,36 @@ describe("grid state persistence", () => {
     })
   })
 
+  test("registered filter type strings round-trip through localStorage and URL state", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "code",
+      type: "registered-priority",
+      op: "custom",
+      value: { prefix: "VIP" },
+    }
+    const storage = new MemoryStorage()
+
+    writePersistedGridState("accounts", { filter }, storage)
+    expect(readPersistedGridState("accounts", storage).filter).toEqual(filter)
+
+    const historyCalls: string[] = []
+    const history: HistoryLike = {
+      replaceState(_state, _unused, url) {
+        historyCalls.push(String(url))
+      },
+    }
+    const location: LocationLike = { pathname: "/customers", search: "", hash: "#grid" }
+
+    writeUrlPersistedGridState({ searchParam: "grid" }, { filter }, history, location)
+    const writtenUrl = historyCalls.at(-1)
+    if (!writtenUrl) throw new Error("expected URL write")
+    const search = writtenUrl.slice(writtenUrl.indexOf("?"), writtenUrl.indexOf("#"))
+    expect(
+      readUrlPersistedGridState({ searchParam: "grid" }, { ...location, search }).filter,
+    ).toEqual(filter)
+  })
+
   test("ignores malformed or unsupported persisted values", () => {
     const storage = new MemoryStorage()
     const gridId = "accounts"
