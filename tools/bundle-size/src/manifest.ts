@@ -47,22 +47,21 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
-      // Reset 2026-05-02 evening after the v0.5 audit-refactor train
-      // landed: useBcGridState (#359), apiRef expansion (#361/#366/#377),
-      // server-hook trio (#363/#368/#371), Combobox migrations (#364/
-      // #370/#372), four hero spike grids (#364/#367/#374/#375), and
-      // Bumped 2026-05-03 for v0.5.0-alpha.2 cut. Accepted feature
-      // work from chrome bundles 1+2 (#396/#399), row actions (#404),
-      // mode-switch RFC stages 1-3.2 (#397/#400/#402/#406), editor-
-      // toggle props + portal polish (#395/#398), result-aware
-      // onCellEditCommit (#401), prepareResult preload (#403),
-      // group-before-paginate (#405), bsncraft paper-cut fixes (pinned
-      // shading, DOM-rect editor, flex distribution), and
-      // rowClassName/rowStyle. 100 KiB hard cap unchanged
-      // (currently at 99.11 KiB total — only ~900 bytes headroom; the
-      // v0.6 layout-architecture-pass deletes ~250 LOC of JS scroll-
-      // sync and should reclaim ~5-8 KiB gzip).
-      baselineGzipBytes: 90562,
+      // Bumped 2026-05-03 for v0.5.0-alpha.3 cut from 88.44 KiB →
+      // 90.38 KiB. Accepted feature work since alpha.2: layout
+      // architecture pass PRs (a/b/c) (#415/#416/#418) — net additions
+      // and removals roughly cancel; default context menu wiring
+      // (server #420 + chrome #419 + editor #421) added the Server /
+      // Column / View / Editor submenus + row-action items + dismiss-
+      // latest-error + in-memory `BcUserSettings` fallback; saved-view
+      // DTO + helpers (#423); editor visual-contract consolidation
+      // (#424) introduced the canonical `data-bc-grid-edit-state`
+      // attribute + six `--bc-grid-edit-state-*` tokens + dual-
+      // attribute helper for one-release migration; bsncraft alpha.2
+      // P0 #1/#3 + P1 #10 fixes (#425) — opaque row-hover token +
+      // cellEditor-implies-editable default. 150 KiB hard cap
+      // unchanged; ~50 KiB headroom for v0.6 + v0.7 + v0.8 work.
+      baselineGzipBytes: 92544,
     },
   ],
 }

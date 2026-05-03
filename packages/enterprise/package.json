@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/enterprise",
-  "version": "0.5.0-alpha.2",
+  "version": "0.5.0-alpha.3",
   "description": "Enterprise-only bc-grid extensions (planned; v0.1 ships placeholder)",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
