@@ -161,12 +161,21 @@ describe("@bc-grid/theming", () => {
       return css.slice(idx, ruleEnd)
     }
 
-    const focusedRow = ruleFor('.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell {')
+    // Selector strings reflect the post-cascade-scoping shape:
+    // each row+cell rule is gated with `:not(.bc-grid-detail-panel
+    // .bc-grid-cell)` per RFC `row-state-cascade-scoping-rfc.md`,
+    // and biome's CSS formatter wraps the long selectors onto
+    // multiple lines. The token contracts (color-mix percentages,
+    // active-cell outline) are unchanged — the guard adds +2
+    // specificity uniformly so cascade ordering is preserved.
+    const focusedRow = ruleFor(
+      '.bc-grid-row[data-bc-grid-focused-row="true"]\n  .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {',
+    )
     expect(focusedRow).toContain("var(--bc-grid-focus-ring) 7%")
     expect(focusedRow).toContain("var(--bc-grid-bg)")
 
     const selectedFocusedRow = ruleFor(
-      '.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell {',
+      '.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"]\n  .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {',
     )
     expect(selectedFocusedRow).toContain("var(--bc-grid-row-selected) 84%")
     expect(selectedFocusedRow).toContain("var(--bc-grid-focus-ring)")
@@ -181,7 +190,7 @@ describe("@bc-grid/theming", () => {
     expect(activeCell).not.toContain("box-shadow")
 
     const selectedActiveCell = ruleFor(
-      '.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-bc-grid-active-cell="true"],',
+      '.bc-grid-row[aria-selected="true"]\n  .bc-grid-cell[data-bc-grid-active-cell="true"]:not(.bc-grid-detail-panel .bc-grid-cell),',
     )
     expect(selectedActiveCell).toContain("var(--bc-grid-focus-ring) 12%")
     expect(selectedActiveCell).toContain("var(--bc-grid-row-selected)")
@@ -196,17 +205,27 @@ describe("@bc-grid/theming", () => {
       return value
     }
 
+    // Selector strings now reflect the post-cascade-scoping form
+    // (RFC `row-state-cascade-scoping-rfc.md`). The relative
+    // ordering invariants are unchanged — what shifts is the
+    // selector text the cascade order is computed against.
     const base = idx(".bc-grid-row .bc-grid-cell {")
-    const focused = idx('.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell {')
-    const hover = idx(".bc-grid-row:hover .bc-grid-cell {")
-    const selected = idx('.bc-grid-row[aria-selected="true"] .bc-grid-cell,')
-    const selectedHover = idx('.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell {')
+    const focused = idx(
+      '.bc-grid-row[data-bc-grid-focused-row="true"]\n  .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {',
+    )
+    const hover = idx(".bc-grid-row:hover .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {")
+    const selected = idx(
+      '.bc-grid-row[aria-selected="true"] .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell),',
+    )
+    const selectedHover = idx(
+      '.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {',
+    )
     const selectedFocused = idx(
-      '.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell {',
+      '.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"]\n  .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {',
     )
     const active = idx(".bc-grid-cell:focus-visible,")
     const selectedActive = idx(
-      '.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-bc-grid-active-cell="true"],',
+      '.bc-grid-row[aria-selected="true"]\n  .bc-grid-cell[data-bc-grid-active-cell="true"]:not(.bc-grid-detail-panel .bc-grid-cell),',
     )
     const error = idx('.bc-grid-cell[aria-invalid="true"],')
     const dirty = idx('.bc-grid-cell[data-bc-grid-dirty="true"],')
@@ -267,25 +286,33 @@ describe("@bc-grid/theming", () => {
     const header = ruleFor(".bc-grid-header .bc-grid-cell-pinned-left,")
     expect(header).toContain("background-color: var(--bc-grid-pinned-header-bg)")
 
-    const hover = ruleFor(".bc-grid-row:hover .bc-grid-cell-pinned-left,")
+    // Pinned-cell selectors gained the `:not(.bc-grid-detail-panel
+    // .bc-grid-cell-pinned-{left,right})` cascade-scoping guard per
+    // RFC `row-state-cascade-scoping-rfc.md`. Biome wraps the long
+    // selectors onto multiple lines.
+    const hover = ruleFor(
+      ".bc-grid-row:hover .bc-grid-cell-pinned-left:not(.bc-grid-detail-panel .bc-grid-cell-pinned-left),",
+    )
     expect(hover).toContain(
       "background-image: linear-gradient(var(--bc-grid-row-hover), var(--bc-grid-row-hover))",
     )
 
     const focused = ruleFor(
-      '.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-left,',
+      '.bc-grid-row[data-bc-grid-focused-row="true"]\n  .bc-grid-cell-pinned-left:not(.bc-grid-detail-panel .bc-grid-cell-pinned-left),',
     )
     expect(focused).toContain("background-image: linear-gradient(")
     expect(focused).toContain("var(--bc-grid-row-focused-bg)")
 
-    const selected = ruleFor('.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left,')
+    const selected = ruleFor(
+      '.bc-grid-row[aria-selected="true"]\n  .bc-grid-cell-pinned-left:not(.bc-grid-detail-panel .bc-grid-cell-pinned-left),',
+    )
     expect(selected).toContain(
       "background-image: linear-gradient(var(--bc-grid-row-selected), var(--bc-grid-row-selected))",
     )
     expect(selected).toContain("color: var(--bc-grid-row-selected-fg)")
 
     const selectedHover = ruleFor(
-      '.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-left,',
+      '.bc-grid-row[aria-selected="true"]:hover\n  .bc-grid-cell-pinned-left:not(.bc-grid-detail-panel .bc-grid-cell-pinned-left),',
     )
     expect(selectedHover).toContain("background-image: linear-gradient(")
     expect(selectedHover).toContain("var(--bc-grid-row-selected-hover-bg)")
@@ -1099,8 +1126,11 @@ describe("@bc-grid/theming", () => {
 
     // Detail panel: dropped the inset 1px highlight box-shadow that
     // competed with the new master-row stripe. Just border-top /
-    // border-bottom + the muted-tinted bg.
-    const panelRule = ruleFor(".bc-grid-detail-panel ")
+    // border-bottom + the muted-tinted bg. Selector pinned via the
+    // open-brace form so the cascade-scoping rationale comment
+    // (which mentions `.bc-grid-detail-panel ...` as prose, not a
+    // rule) doesn't trip the `indexOf` lookup.
+    const panelRule = ruleFor(".bc-grid-detail-panel {")
     expect(panelRule).not.toMatch(/box-shadow:/)
     // Border-top + border-bottom remain the only visual separators.
     expect(panelRule).toMatch(/border-top:\s*1px\s+solid\s+var\(--bc-grid-border\)/)
