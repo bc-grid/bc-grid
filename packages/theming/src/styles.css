@@ -1826,8 +1826,10 @@ select.bc-grid-editor-input {
 
 .bc-grid-filter-set-menu {
   display: flex;
+  min-inline-size: 0;
   max-height: min(20rem, calc(100vh - 16px));
   flex-direction: column;
+  margin: 0;
   overflow: hidden;
   border: 1px solid var(--bc-grid-context-menu-border);
   border-radius: var(--bc-grid-radius);
@@ -1921,6 +1923,21 @@ select.bc-grid-editor-input {
   overflow: auto;
   max-height: 14rem;
   padding: 0.25rem;
+}
+
+.bc-grid-filter-set-selected-outside {
+  border-bottom: 1px solid var(--bc-grid-context-menu-border);
+  margin-bottom: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.bc-grid-filter-set-section-label {
+  color: var(--bc-grid-muted-fg);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  padding: 0.25rem 0.5rem;
+  text-transform: uppercase;
 }
 
 .bc-grid-filter-set-footer {

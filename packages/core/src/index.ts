@@ -70,6 +70,32 @@ export type BcBuiltInColumnFilterType =
 
 export type BcColumnFilterType = BcBuiltInColumnFilterType | "custom" | (string & {})
 
+export interface SetFilterOption {
+  value: string
+  label: string
+}
+
+export interface SetFilterOptionLoadParams {
+  columnId: ColumnId
+  search: string
+  selectedValues: readonly string[]
+  filterWithoutSelf: BcGridFilter | null
+  signal: AbortSignal
+  limit: number
+  offset: number
+}
+
+export interface SetFilterOptionLoadResult {
+  options: readonly SetFilterOption[]
+  totalCount?: number
+  selectedOptions?: readonly SetFilterOption[]
+  hasMore?: boolean
+}
+
+export type SetFilterOptionProvider = (
+  params: SetFilterOptionLoadParams,
+) => Promise<SetFilterOptionLoadResult>
+
 export type BcColumnFilter =
   | (BcColumnFilterBase & {
       type: "text"
@@ -94,8 +120,9 @@ export type BcColumnFilter =
     })
   | (BcColumnFilterBase & {
       type: "set"
-      options?: readonly string[]
-      loadOptions?: () => Promise<readonly string[]>
+      options?: readonly (string | SetFilterOption)[]
+      loadOptions?: () => Promise<readonly (string | SetFilterOption)[]>
+      loadSetFilterOptions?: SetFilterOptionProvider
     })
   | (BcColumnFilterBase & {
       type: "boolean"

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { ColumnId } from "@bc-grid/core"
 import {
   buildGridFilter,
+  buildSetFilterOptionLoadResult,
   columnFilterTextEqual,
   columnFilterTextFromGridFilter,
   decodeDateFilterInput,
@@ -21,6 +22,7 @@ import {
   filterSetFilterOptions,
   matchesGridFilter,
   nextSetFilterValuesOnToggleAll,
+  normaliseSetFilterOptions,
   removeColumnFromFilter,
   setFilterValueKeys,
 } from "../src/filter"
@@ -1929,6 +1931,59 @@ describe("filterSetFilterOptions", () => {
     // "past_due", "draft", "closed" values. All three returned.
     const result = filterSetFilterOptions(options, "d")
     expect(result.map((o) => o.value)).toEqual(["past_due", "closed", "draft"])
+  })
+})
+
+describe("set-filter option provider helpers", () => {
+  test("normalises strings and option objects while dropping blanks and duplicates", () => {
+    expect(
+      normaliseSetFilterOptions([
+        "open",
+        { value: "open", label: "Open duplicate" },
+        { value: "closed", label: "" },
+        "",
+        "   ",
+      ]),
+    ).toEqual([
+      { value: "open", label: "open" },
+      { value: "closed", label: "closed" },
+    ])
+  })
+
+  test("caps loaded options while preserving total count and selected hydration", () => {
+    const options = Array.from({ length: 1_000 }, (_, index) => ({
+      value: `customer-${index}`,
+      label: `Customer ${index}`,
+    }))
+    const result = buildSetFilterOptionLoadResult(options, {
+      search: "customer",
+      selectedValues: ["customer-999", "legacy-customer"],
+      limit: 25,
+      offset: 50,
+    })
+
+    expect(result.options).toHaveLength(25)
+    expect(result.options[0]).toEqual({ value: "customer-50", label: "Customer 50" })
+    expect(result.totalCount).toBe(1_000)
+    expect(result.hasMore).toBe(true)
+    expect(result.selectedOptions).toEqual([
+      { value: "customer-999", label: "Customer 999" },
+      { value: "legacy-customer", label: "legacy-customer" },
+    ])
+  })
+
+  test("handles 10k local options without returning the full list for one menu page", () => {
+    const options = Array.from({ length: 10_000 }, (_, index) => `item-${index}`)
+    const result = buildSetFilterOptionLoadResult(options, {
+      search: "item-99",
+      selectedValues: [],
+      limit: 10,
+      offset: 0,
+    })
+
+    expect(result.options).toHaveLength(10)
+    expect(result.totalCount).toBe(111)
+    expect(result.hasMore).toBe(true)
   })
 })
 
