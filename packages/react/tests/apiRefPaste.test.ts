@@ -70,6 +70,7 @@ function stubApi(): BcGridApi {
     commitEdit: noop,
     cancelEdit: noop,
     applyRowPatches: () => Promise.resolve({ ok: true as const, applied: 0, rowsAffected: 0 }),
+    getScrollOffset: () => ({ top: 0, left: 0 }),
     refresh: noop,
   }
 }

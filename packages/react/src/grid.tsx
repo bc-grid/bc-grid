@@ -497,6 +497,23 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     scrollOffsetRef.current = next
     setScrollOffset(next)
   }, [])
+  // initialScrollOffset: one-time restore at mount. Read once, applied
+  // on first paint after the scroller is in the DOM. Subsequent updates
+  // are ignored (mirrors the initialLayout pattern). Per
+  // `v06-scroll-state-controlled-prop`.
+  const initialScrollOffsetRef = useRef(props.initialScrollOffset)
+  useEffect(() => {
+    const target = initialScrollOffsetRef.current
+    const scroller = scrollerRef.current
+    if (!target || !scroller) return
+    if (target.top !== 0) scroller.scrollTop = target.top
+    if (target.left !== 0) scroller.scrollLeft = target.left
+    // Mirror into the internal state so the virtualizer + ref agree
+    // with the DOM scroll position immediately. The native scroll
+    // event won't fire for programmatic scrollTop / scrollLeft sets
+    // that happen before the user interacts.
+    updateScrollOffset({ top: scroller.scrollTop, left: scroller.scrollLeft })
+  }, [updateScrollOffset])
   const isRowDisabled = useCallback((row: TRow) => rowIsDisabled?.(row) ?? false, [rowIsDisabled])
 
   const [sortState, setSortState] = useControlledState<readonly BcGridSort[]>(
@@ -2249,6 +2266,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       getActiveCell() {
         return activeCell
       },
+      getScrollOffset() {
+        // Read from the live ref so consumers calling getScrollOffset()
+        // mid-scroll see the latest pixel position, not the last
+        // committed React state (which lags one frame).
+        return { top: scrollOffsetRef.current.top, left: scrollOffsetRef.current.left }
+      },
       getSelection() {
         return selectionState
       },
@@ -2692,14 +2715,43 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // and the existing root flex column already enforces that.
   const bodyHeight: number | undefined = undefined
 
+  // onScrollChange debounce — pin the interval as a constant so a
+  // future tuning becomes a deliberate change. ~120ms is the
+  // "consumer persistence" sweet spot: long enough to coalesce a
+  // continuous scroll into one save, short enough that the user
+  // doesn't notice a sticky-restore lag if they refresh mid-scroll.
+  // Per `v06-scroll-state-controlled-prop`.
+  const SCROLL_CHANGE_DEBOUNCE_MS = 120
+  const onScrollChange = props.onScrollChange
+  const scrollChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (scrollChangeTimerRef.current) clearTimeout(scrollChangeTimerRef.current)
+    },
+    [],
+  )
   const handleScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
       const target = event.currentTarget
-      virtualizer.setScrollTop(target.scrollTop)
-      virtualizer.setScrollLeft(target.scrollLeft)
-      updateScrollOffset({ top: target.scrollTop, left: target.scrollLeft })
+      const next = { top: target.scrollTop, left: target.scrollLeft }
+      virtualizer.setScrollTop(next.top)
+      virtualizer.setScrollLeft(next.left)
+      updateScrollOffset(next)
+      if (onScrollChange) {
+        if (scrollChangeTimerRef.current) clearTimeout(scrollChangeTimerRef.current)
+        scrollChangeTimerRef.current = setTimeout(() => {
+          scrollChangeTimerRef.current = null
+          // Read from the live ref so the persisted value reflects
+          // where the user finally settled, not the position at the
+          // tick that started the debounce.
+          onScrollChange({
+            top: scrollOffsetRef.current.top,
+            left: scrollOffsetRef.current.left,
+          })
+        }, SCROLL_CHANGE_DEBOUNCE_MS)
+      }
     },
-    [updateScrollOffset, virtualizer],
+    [onScrollChange, updateScrollOffset, virtualizer],
   )
 
   const focusGroupRow = useCallback(

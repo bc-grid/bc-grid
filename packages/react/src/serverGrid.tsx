@@ -670,6 +670,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       getActiveCell() {
         return gridApiRef.current?.getActiveCell() ?? null
       },
+      getScrollOffset() {
+        return gridApiRef.current?.getScrollOffset() ?? { top: 0, left: 0 }
+      },
       getSelection() {
         return gridApiRef.current?.getSelection() ?? createEmptySelection()
       },

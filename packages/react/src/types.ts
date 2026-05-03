@@ -932,6 +932,32 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    */
   onCellEditCommit?: BcCellEditCommitHandler<TRow>
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+
+  /**
+   * Restore the viewport's scroll position once at mount. Mirrors the
+   * `initialLayout` pattern — the prop is read on first render only;
+   * subsequent updates are ignored. Pair with `onScrollChange` (and
+   * `apiRef.current?.getScrollOffset()`) to persist + restore the
+   * exact pixel position the user left the grid at.
+   *
+   * v0.6.0-alpha.1 critical (maintainer ask 2026-05-03): "would it be
+   * possible for a consumer to maintain the state of bc-grid, such as
+   * where it is scrolled at, and what child panels are open, so when
+   * they click back onto a page containing a bc-grid, it looks exactly
+   * the same as when navigating away?" Per
+   * `docs/recipes/grid-state-persistence.md` for the full state-restore
+   * pattern.
+   */
+  initialScrollOffset?: { top: number; left: number }
+  /**
+   * Fires when the user scrolls. Debounced ~120ms so the consumer can
+   * persist without firing on every scroll tick. Receives the current
+   * `{ top, left }` pixel position.
+   *
+   * Pair with `initialScrollOffset` to round-trip scroll position
+   * across mounts. Per `docs/recipes/grid-state-persistence.md`.
+   */
+  onScrollChange?: (next: { top: number; left: number }) => void
   /**
    * Behaviour flags for range-selection affordances. Existing keyboard
    * range selection remains available by default; set
