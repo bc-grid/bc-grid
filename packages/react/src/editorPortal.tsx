@@ -83,7 +83,13 @@ export function EditorPortal<TRow>({
   const column = resolvedColumns.find((c) => c.columnId === activeCell.columnId)
   if (!rowEntry || !column) return null
 
-  const editorSpec: BcCellEditor<TRow> | undefined = column.source.cellEditor ?? defaultEditor
+  // The column type widens `cellEditor` to `BcCellEditor<TRow> | BcCellEditor<unknown>`
+  // so consumers can drop in the row-agnostic built-in editors (textEditor,
+  // numberEditor, etc., declared with TRow=unknown) without casting at every
+  // column site. Cast back to `BcCellEditor<TRow>` here: at runtime props.row
+  // is the actual TRow regardless of which arm we pulled, and the editor that
+  // declared TRow=unknown structurally treats it as unknown anyway. Safe.
+  const editorSpec = (column.source.cellEditor ?? defaultEditor) as BcCellEditor<TRow> | undefined
   if (!editorSpec) return null
 
   // Resolve indices for in-flight retention. If the lookup maps weren't

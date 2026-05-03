@@ -841,6 +841,16 @@ export interface ServerRowPatch {
 export interface ServerMutationResult<TRow> {
   mutationId: string
   status: "accepted" | "rejected" | "conflict"
+  /**
+   * Post-update canonical row, same shape as `LoadServerPage.rows[number]` /
+   * `LoadServerBlock.rows[number]` / `LoadServerTreeChildren.rows[number].data`.
+   * Merged into the block cache with **replacement semantics** — the value
+   * entirely supplants the cached row at this `rowId`, not a partial patch.
+   * Hosts that only want to update changed columns should still return the
+   * full row (re-fetched or merged client-side from the prior cached row +
+   * the patch). Omit when the mutation didn't change the row (e.g. a
+   * `status: "rejected"` result with `reason` but no new row data).
+   */
   row?: TRow
   previousRowId?: RowId
   rowId?: RowId

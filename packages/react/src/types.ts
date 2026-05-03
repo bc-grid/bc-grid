@@ -241,7 +241,23 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
    * level `showColumnMenu` setting enabled for other columns.
    */
   columnMenu?: boolean
-  cellEditor?: BcCellEditor<TRow, TValue>
+  /**
+   * Cell editor for this column. Accepts either:
+   *   - `BcCellEditor<TRow, TValue>` — row-aware editor (consumer-supplied,
+   *     reads `props.row` for typed access to other columns of the same row)
+   *   - `BcCellEditor<unknown, TValue>` — row-agnostic editor (the built-in
+   *     `textEditor` / `numberEditor` / `selectEditor` / etc., which only
+   *     consume `props.initialValue` and don't introspect the row shape)
+   *
+   * The second arm exists because TypeScript's strict variance treats
+   * `BcCellEditor<unknown>` as not assignable to `BcCellEditor<CustomerRow>`
+   * (the React component prop position is contravariant). Built-in editors
+   * are intentionally row-agnostic; declaring them with `<unknown>` and
+   * accepting that arm here means consumers can drop them straight into
+   * typed columns without a cast at every column site. Surfaced 2026-05-03
+   * by bsncraft v0.5 alpha.1 consumer editing-pass review.
+   */
+  cellEditor?: BcCellEditor<TRow, TValue> | BcCellEditor<unknown, TValue>
   aggregationFormatter?: (params: BcAggregationFormatterParams<TRow, TValue>) => ReactNode
   /**
    * Static or per-row option list for `editor-select` / `editor-multi-select`
