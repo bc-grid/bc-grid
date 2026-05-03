@@ -8,7 +8,14 @@ import {
   reduceEditState,
 } from "./editingStateMachine"
 import type { RangeTsvPasteApplyPlan } from "./rangeClipboard"
-import type { BcCellEditCommitEvent, BcCellEditor, BcReactGridColumn } from "./types"
+import type {
+  BcCellEditCommitEvent,
+  BcCellEditCommitHandler,
+  BcCellEditCommitResult,
+  BcCellEditor,
+  BcReactGridColumn,
+} from "./types"
+import { getCellValue } from "./value"
 
 /**
  * Per-cell edit metadata. Held in a nested map (RowId → ColumnId → entry)
@@ -54,8 +61,14 @@ export interface UseEditingControllerOptions<TRow> {
    * Consumer commit hook. Invoked after the overlay update lands. May
    * return a Promise — the cell stays `pending: true` until it settles.
    * Promise rejection rolls back the overlay and surfaces the error.
+   *
+   * Optionally resolves with `BcCellEditCommitResult<TRow>` — `{ status:
+   * "rejected", reason }` rolls back the overlay (mirroring a thrown
+   * exception) and `{ status: "accepted", row? }` keeps the overlay,
+   * optionally replacing the cell's overlay value with the value
+   * extracted from the server-confirmed `row`.
    */
-  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
+  onCellEditCommit?: BcCellEditCommitHandler<TRow>
 
   /**
    * Cell-edit live-region announcer per `editing-rfc §Live Regions`.
@@ -339,17 +352,48 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           if (entry) entry.pending = true
           forceRender()
           try {
-            await settle
-            const after = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
+            const settled = await (settle as Promise<unknown>)
             // Stale-settle guard: if a newer commit superseded this
             // one, the entry's mutationId no longer matches what we
             // started with. Don't touch the entry — the newer commit
             // owns its own pending lifecycle.
-            if (after && after.mutationId === mutationId) {
-              after.pending = false
-              forceRender()
-              announceCommitted()
+            const after = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
+            if (!after || after.mutationId !== mutationId) return
+
+            // Result-shaped resolution (`{ status, reason?, row? }`)
+            // mirrors a thrown rejection or a server-confirmed accept.
+            // Returning `void | undefined` keeps the legacy
+            // fire-and-forget settle path.
+            if (isCellEditCommitResult<TRow>(settled)) {
+              if (settled.status === "rejected") {
+                applyAsyncCommitRollback({
+                  patches: overlayRef.current.patches,
+                  entry: after,
+                  rowId: candidate.rowId,
+                  columnId: candidate.columnId,
+                  reason: settled.reason,
+                })
+                forceRender()
+                options.announce?.({
+                  kind: "serverError",
+                  column: candidate.column,
+                  error: after.error ?? "Server rejected the edit.",
+                })
+                return
+              }
+              if (settled.row !== undefined) {
+                const serverValue = getCellValue(settled.row, candidate.column)
+                if (serverValue !== undefined) {
+                  overlayRef.current.patches
+                    .get(candidate.rowId)
+                    ?.set(candidate.columnId, serverValue)
+                }
+              }
             }
+
+            after.pending = false
+            forceRender()
+            announceCommitted()
           } catch (err) {
             // Roll back the overlay on server-side rejection — but only
             // if this settle still represents the cell's current state.
@@ -362,16 +406,18 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
               .get(candidate.rowId)
               ?.get(candidate.columnId)
             if (!rollbackEntry || rollbackEntry.mutationId !== mutationId) return
-            const patches = overlayRef.current.patches.get(candidate.rowId)
-            patches?.delete(candidate.columnId)
-            const rollbackError = err instanceof Error ? err.message : "Server rejected the edit."
-            rollbackEntry.pending = false
-            rollbackEntry.error = rollbackError
+            applyAsyncCommitRollback({
+              patches: overlayRef.current.patches,
+              entry: rollbackEntry,
+              rowId: candidate.rowId,
+              columnId: candidate.columnId,
+              reason: err instanceof Error ? err.message : undefined,
+            })
             forceRender()
             options.announce?.({
               kind: "serverError",
               column: candidate.column,
-              error: rollbackError,
+              error: rollbackEntry.error ?? "Server rejected the edit.",
             })
           }
         } else {
@@ -495,33 +541,64 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
         if (settle && typeof (settle as Promise<void>).then === "function") {
           // Same async-settle + stale-settle + rollback semantics as
           // `commit` so Delete-then-immediately-edit-the-same-cell
-          // doesn't race the server reject of the older clear.
+          // doesn't race the server reject of the older clear. Also
+          // mirrors `commit`'s `BcCellEditCommitResult<TRow>` opt-in
+          // (see `commit` for the result-shape contract).
           const entry = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
           if (entry) entry.pending = true
           forceRender()
           try {
-            await settle
+            const settled = await (settle as Promise<unknown>)
             const after = editEntriesRef.current.get(candidate.rowId)?.get(candidate.columnId)
-            if (after && after.mutationId === mutationId) {
-              after.pending = false
-              forceRender()
-              announceCommitted()
+            if (!after || after.mutationId !== mutationId) return
+
+            if (isCellEditCommitResult<TRow>(settled)) {
+              if (settled.status === "rejected") {
+                applyAsyncCommitRollback({
+                  patches: overlayRef.current.patches,
+                  entry: after,
+                  rowId: candidate.rowId,
+                  columnId: candidate.columnId,
+                  reason: settled.reason,
+                })
+                forceRender()
+                options.announce?.({
+                  kind: "serverError",
+                  column: candidate.column,
+                  error: after.error ?? "Server rejected the edit.",
+                })
+                return
+              }
+              if (settled.row !== undefined) {
+                const serverValue = getCellValue(settled.row, candidate.column)
+                if (serverValue !== undefined) {
+                  overlayRef.current.patches
+                    .get(candidate.rowId)
+                    ?.set(candidate.columnId, serverValue)
+                }
+              }
             }
+
+            after.pending = false
+            forceRender()
+            announceCommitted()
           } catch (err) {
             const rollbackEntry = editEntriesRef.current
               .get(candidate.rowId)
               ?.get(candidate.columnId)
             if (!rollbackEntry || rollbackEntry.mutationId !== mutationId) return
-            const patches = overlayRef.current.patches.get(candidate.rowId)
-            patches?.delete(candidate.columnId)
-            const rollbackError = err instanceof Error ? err.message : "Server rejected the edit."
-            rollbackEntry.pending = false
-            rollbackEntry.error = rollbackError
+            applyAsyncCommitRollback({
+              patches: overlayRef.current.patches,
+              entry: rollbackEntry,
+              rowId: candidate.rowId,
+              columnId: candidate.columnId,
+              reason: err instanceof Error ? err.message : undefined,
+            })
             forceRender()
             options.announce?.({
               kind: "serverError",
               column: candidate.column,
-              error: rollbackError,
+              error: rollbackEntry.error ?? "Server rejected the edit.",
             })
           }
         } else {
@@ -603,7 +680,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           source: "paste",
         }
 
-        let settle: void | Promise<void>
+        let settle: ReturnType<typeof consumerHook>
         try {
           settle = consumerHook(event)
         } catch (err) {
@@ -611,7 +688,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           continue
         }
 
-        if (!settle || typeof (settle as Promise<void>).then !== "function") continue
+        if (!settle || typeof (settle as Promise<unknown>).then !== "function") continue
 
         const entry = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
         if (entry) {
@@ -619,13 +696,37 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           pendingChanged = true
         }
 
-        void (settle as Promise<void>)
-          .then(() => {
+        void (settle as Promise<unknown>)
+          .then((settled) => {
             const after = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
-            if (after && after.mutationId === mutationId) {
-              after.pending = false
-              forceRender()
+            if (!after || after.mutationId !== mutationId) return
+
+            // Result-shaped resolution mirrors `commit` / `clearCell`:
+            // `{ status: "rejected", reason }` rolls back exactly like a
+            // thrown error; `{ status: "accepted", row? }` keeps the
+            // overlay and (when `row` is supplied) re-extracts this
+            // cell's value from the server-confirmed row.
+            if (isCellEditCommitResult<TRow>(settled)) {
+              if (settled.status === "rejected") {
+                rollbackPasteCommit(
+                  commitEntry,
+                  mutationId,
+                  settled.reason ? new Error(settled.reason) : undefined,
+                )
+                return
+              }
+              if (settled.row !== undefined) {
+                const serverValue = getCellValue(settled.row, commitEntry.column)
+                if (serverValue !== undefined) {
+                  overlayRef.current.patches
+                    .get(commitEntry.rowId)
+                    ?.set(commitEntry.columnId, serverValue)
+                }
+              }
             }
+
+            after.pending = false
+            forceRender()
           })
           .catch((err) => rollbackPasteCommit(commitEntry, mutationId, err))
       }
@@ -838,3 +939,41 @@ export function discardRowOverlayEdits(
 }
 
 export type EditingController<TRow> = ReturnType<typeof useEditingController<TRow>>
+
+/**
+ * Discriminator for the opt-in `BcCellEditCommitResult<TRow>` async-settle
+ * shape. A consumer hook that returns `Promise<{ status, reason?, row? }>`
+ * lets `<BcGrid>` run the same optimistic / rollback / overlay lifecycle
+ * `<BcServerGrid>` already runs through `onServerRowMutation` — see
+ * `BcCellEditCommitResult` JSDoc. Pure so concurrency edge cases stay
+ * unit-testable without React.
+ */
+export function isCellEditCommitResult<TRow>(
+  value: unknown,
+): value is BcCellEditCommitResult<TRow> {
+  if (!value || typeof value !== "object") return false
+  const status = (value as { status?: unknown }).status
+  return status === "accepted" || status === "rejected"
+}
+
+/**
+ * Roll back a single overlay patch + flip its entry into the error state.
+ * Shared by `commit` / `clearCell` between the catch-block (thrown
+ * exception) and the `BcCellEditCommitResult<TRow>` rejected path so both
+ * touch the entry in lockstep — same patch deletion, same `pending=false`,
+ * same default error message. Pure (mutates in place); the calling hook
+ * runs `forceRender()` and the `serverError` announce after this returns.
+ */
+export function applyAsyncCommitRollback(args: {
+  patches: Map<RowId, Map<ColumnId, unknown>>
+  entry: BcCellEditEntry
+  rowId: RowId
+  columnId: ColumnId
+  reason: string | undefined
+}): void {
+  const rowPatches = args.patches.get(args.rowId)
+  rowPatches?.delete(args.columnId)
+  if (rowPatches && rowPatches.size === 0) args.patches.delete(args.rowId)
+  args.entry.pending = false
+  args.entry.error = args.reason ?? "Server rejected the edit."
+}

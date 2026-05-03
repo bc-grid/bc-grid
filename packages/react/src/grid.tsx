@@ -183,7 +183,7 @@ import {
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
 import { BcStatusBar } from "./statusBar"
 import type {
-  BcCellEditCommitEvent,
+  BcCellEditCommitHandler,
   BcCellEditor,
   BcGridDensity,
   BcGridLayoutState,
@@ -1481,11 +1481,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // off props since it's declared on `BcEditGridProps` and reaches us via
   // spread). Sync + async per-column `validate` runs through the
   // controller before the overlay updates.
-  const onCellEditCommitProp = (
-    props as {
-      onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
-    }
-  ).onCellEditCommit
+  const onCellEditCommitProp = (props as { onCellEditCommit?: BcCellEditCommitHandler<TRow> })
+    .onCellEditCommit
   const editController = useEditingController<TRow>({
     ...(onCellEditCommitProp ? { onCellEditCommit: onCellEditCommitProp } : {}),
     validate: (value, row, columnId, signal) => {

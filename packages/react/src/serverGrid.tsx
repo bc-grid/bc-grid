@@ -41,6 +41,7 @@ import {
 } from "./pagination"
 import type {
   BcCellEditCommitEvent,
+  BcCellEditCommitHandler,
   BcGridProps,
   BcReactGridColumn,
   BcServerEditMutationHandler,
@@ -391,11 +392,18 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
     [infinite, paged, props.rowModel, tree],
   )
 
-  const handleCellEditCommit = useCallback(
-    async (event: BcCellEditCommitEvent<TRow>) => {
-      if (!props.onServerRowMutation) return props.onCellEditCommit?.(event)
+  const handleCellEditCommit = useCallback<BcCellEditCommitHandler<TRow>>(
+    async (event) => {
+      if (!props.onServerRowMutation) {
+        // Coerce a sync `void` return from the consumer hook to
+        // `undefined` so this bridge's return type lines up with
+        // `BcCellEditCommitHandler<TRow>`'s `Promise<undefined | Result>`.
+        // Runtime is unchanged: `await` of `void` resolves to `undefined`,
+        // and `await` of a Promise<X> resolves to X.
+        return (await props.onCellEditCommit?.(event)) ?? undefined
+      }
 
-      return commitServerEditMutation({
+      await commitServerEditMutation({
         createServerRowPatch: props.createServerRowPatch,
         event,
         mutationId: `server-edit:${++mutationCounterRef.current}`,
@@ -403,6 +411,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         queueServerRowMutation,
         settleServerRowMutation,
       })
+      return undefined
     },
     [
       props.createServerRowPatch,

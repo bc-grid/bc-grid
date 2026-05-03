@@ -623,8 +623,17 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * Fires after the editing overlay commits a cell value. Client grids can
    * mirror the value into their own state; server grids can convert the event
    * into a `ServerRowPatch` and settle it after persistence completes.
+   *
+   * Returning `Promise<BcCellEditCommitResult<TRow>>` opts the cell into
+   * the same optimistic / rollback / overlay lifecycle `<BcServerGrid>`
+   * already runs through `onServerRowMutation` — `{ status: "rejected",
+   * reason }` rolls back the overlay and surfaces `reason` as the cell
+   * error; `{ status: "accepted", row? }` keeps the overlay and (when
+   * `row` is provided) re-extracts the cell's overlay value from the
+   * server-confirmed row. Returning `void | Promise<void>` keeps
+   * fire-and-forget behaviour unchanged.
    */
-  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
+  onCellEditCommit?: BcCellEditCommitHandler<TRow>
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
@@ -1034,6 +1043,50 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   nextValue: TValue
   source: "keyboard" | "pointer" | "api" | "paste"
 }
+
+/**
+ * Optional result-shaped resolution for `BcGridProps.onCellEditCommit`.
+ * Returning `Promise<BcCellEditCommitResult<TRow>>` from the commit hook
+ * opts the cell into the same optimistic / rollback / overlay lifecycle
+ * `<BcServerGrid>` already runs through `onServerRowMutation` —
+ * surfaced 2026-05-03 by the bsncraft v0.5 alpha.1 editing-pass review
+ * (ERP child-CRUD grids that re-implement the optimistic dance for
+ * every server-action commit).
+ *
+ * Returning `void | Promise<void>` keeps fire-and-forget behaviour
+ * unchanged — this is purely an opt-in widening of the handler.
+ *
+ *   - `status: "rejected"`: the optimistic overlay rolls back; `reason`
+ *     surfaces as the cell's `error` entry (the existing assertive
+ *     announce + cell-level error styling).
+ *   - `status: "accepted"`: the overlay stays. When `row` is provided,
+ *     the cell's overlay value is replaced with the value extracted
+ *     from `row` via `column.valueGetter` / `column.field` — useful when
+ *     the server normalised the input ("1.5 " → 1.5), computed derived
+ *     fields, or assigned a server-side id. Other cells on the row are
+ *     not touched (each cell owns its own overlay; server-derived
+ *     fields on different columns are the consumer's responsibility to
+ *     mirror via the `data` prop).
+ */
+export interface BcCellEditCommitResult<TRow> {
+  status: "accepted" | "rejected"
+  reason?: string
+  row?: TRow
+}
+
+/**
+ * Public signature for `BcGridProps.onCellEditCommit`. The outer `void`
+ * arm keeps sync `(event) => {}` consumers working. Async consumers
+ * resolve with `undefined` (legacy fire-and-forget — `async () => {}`
+ * which returns `Promise<void>` flows through transparently because the
+ * grid only inspects the resolved value when it discriminates on the
+ * `BcCellEditCommitResult` shape). The result-shape opt-in is the third
+ * arm. Surfaced 2026-05-03 by the bsncraft v0.5 alpha.1 editing-pass
+ * review.
+ */
+export type BcCellEditCommitHandler<TRow> = (
+  event: BcCellEditCommitEvent<TRow>,
+) => void | Promise<undefined | BcCellEditCommitResult<TRow>>
 
 export interface BcFilterDefinition<TValue = unknown> {
   type: string
