@@ -213,6 +213,13 @@ export interface BcStatusBarContext<TRow = unknown> {
   clearColumnFilter(columnId: ColumnId): void
   clearAllFilters(): void
   api: BcGridApi<TRow>
+  /**
+   * Most recent validation rejection on any cell. `null` until a
+   * rejection fires; auto-clears 8s after a rejection or immediately
+   * on a successful commit on the same cell. Drives the built-in
+   * `"latestError"` segment. Audit P1-W3-4.
+   */
+  latestValidationError: BcLatestValidationError | null
 }
 
 export interface BcActiveFilterSummaryItem {
@@ -230,12 +237,36 @@ export interface BcStatusBarCustomSegment<TRow = unknown> {
 }
 
 /**
+ * Most recent validation rejection on any cell. Surfaced through
+ * `BcStatusBarContext` so the built-in `"latestError"` segment can
+ * render "{column header}: {error}" without the consumer wiring its
+ * own announce listener. Auto-clears 8s after the rejection or
+ * immediately on a successful commit on the same cell — see
+ * `useEditingController` for the lifecycle. Audit P1-W3-4.
+ */
+export interface BcLatestValidationError {
+  rowId: RowId
+  columnId: ColumnId
+  /**
+   * Pre-resolved column header for status-bar rendering. Pulled from
+   * `column.header` when it's a string; falls back to
+   * `column.field` / `column.columnId` for non-string headers
+   * (consumer-supplied React nodes can't render inside the segment
+   * text). Lets the built-in segment stay dependency-free.
+   */
+  columnHeader: string
+  error: string
+}
+
+/**
  * Status-bar segment shape per `chrome-rfc §Status bar`. Strings
  * resolve to built-ins; objects render the consumer-supplied node.
  * Built-ins: `total` always shown when listed; `filtered` shows only
  * when a filter is active; `activeFilters` shows removable filter
  * chips when any column filter is active; `selected` shows only when
- * selectionSize > 0; `aggregations` shows when results are non-empty.
+ * selectionSize > 0; `aggregations` shows when results are non-empty;
+ * `latestError` shows the most recent validation rejection (audit
+ * P1-W3-4) and auto-clears via the editing controller.
  */
 export type BcStatusBarSegment<TRow = unknown> =
   | "total"
@@ -243,6 +274,7 @@ export type BcStatusBarSegment<TRow = unknown> =
   | "activeFilters"
   | "selected"
   | "aggregations"
+  | "latestError"
   | BcStatusBarCustomSegment<TRow>
 
 export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
