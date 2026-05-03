@@ -140,7 +140,9 @@ Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both docume
 - `[ready: worker1]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant per the ratified RFC above. Two-spike-confirmed. ~1-2 days.
 - `[done: worker2 #436]` **v06-fill-handle** — drag-to-fill handle on the active range (range-rfc §6). Branch `agent/worker2/v06-fill-handle`.
 - `[review: worker2 #456]` **v06-fill-handle-series-detection** — series-aware fill handle follow-up: numeric arithmetic, date, weekday/month/quarter detection, and `column.fillSeries` overrides. Branch `agent/worker2/v06-fill-handle-series-detection`.
-- `[review: worker2 #458]` **v06-erp-filter-operators-pass-2** — text regex/fuzzy operators, number `between` exclusive-bound shortcuts, and MTD/QTD/YTD/last-fiscal-week date tokens. Branch `agent/worker2/v06-erp-filter-operators-pass-2`.
+- `[done: worker1 #438]` **v06-client-tree-rowmodel-rfc** (worker1, doc-only) — RFC drafted at `docs/design/client-tree-rowmodel-rfc.md` covering the v0.6 headline client tree row model. Merged 16869e3.
+- `[ready: worker1]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant per the ratified RFC above. Two-spike-confirmed. ~1-2 days.
+- `[review: worker2 #436]` **v06-fill-handle** — drag-to-fill handle on the active range (range-rfc §6). Branch `agent/worker2/v06-fill-handle`.
 - `[ready: worker3]` **v06-prepareresult-preload-select-multi** — async-loaded options on select + multi-select via `column.fetchOptions`. ~half day.
 - `[ready: worker3]` **v06-row-drag-drop-hooks** — `onRowDragOver` / `onRowDrop` callbacks. **Two-spike-confirmed**. ~1 day.
 - `[ready: worker3]` **v06-bcselection-narrowing** — `isExplicitSelection` / `isAllSelection` / `isFilteredSelection` type guards + `forEachSelectedRowId` iterator. **Two-spike-confirmed**. ~half day.
