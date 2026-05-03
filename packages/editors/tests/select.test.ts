@@ -1,11 +1,20 @@
 import { describe, expect, test } from "bun:test"
+import type { BcCellEditorPrepareParams, BcReactGridColumn } from "@bc-grid/react"
 import {
+  type EditorOption,
   editorAccessibleName,
   editorOptionToString,
   findOptionIndexBySeed,
   resolveEditorOptions,
   resolveSelectEditorState,
 } from "../src/chrome"
+import { selectEditor } from "../src/select"
+
+interface OptionRow {
+  id: string
+}
+
+type FetchOptions = (query: string, signal: AbortSignal) => Promise<readonly EditorOption[]>
 
 const options = [
   { value: "open", label: "Open" },
@@ -123,5 +132,77 @@ describe("select-style editor helpers", () => {
     expect(state.hasSelectedOption).toBe(false)
     expect(state.seedMatched).toBe(false)
     expect(state.selectOptionValues).toEqual([undefined, "open", "closed", 3])
+  })
+})
+
+describe("selectEditor.prepare — first-page preload (v06-prepareresult-preload-select-multi)", () => {
+  // Mirrors the autocomplete editor's prepare hook (#403). The hook
+  // calls `column.fetchOptions("", signal)` once at activation so the
+  // Combobox dropdown paints with async-loaded options on first frame
+  // instead of forcing consumers to roll a custom `cellEditor` for
+  // remote enums. The Component reads the result via
+  // `prepareResult.initialOptions` and falls through to
+  // `column.options` when the column has no `fetchOptions`.
+
+  function makeColumn(fetchOptions?: FetchOptions): BcReactGridColumn<OptionRow, unknown> {
+    return {
+      columnId: "status",
+      header: "Status",
+      ...(fetchOptions ? { fetchOptions } : {}),
+    } as unknown as BcReactGridColumn<OptionRow, unknown>
+  }
+
+  function makeParams(
+    column: BcReactGridColumn<OptionRow, unknown>,
+  ): BcCellEditorPrepareParams<OptionRow> {
+    return {
+      row: { id: "row-1" },
+      rowId: "row-1" as never,
+      columnId: "status" as never,
+      column,
+    }
+  }
+
+  test("preloads via column.fetchOptions and returns { initialOptions }", async () => {
+    const calls: Array<{ query: string }> = []
+    const column = makeColumn(async (query) => {
+      calls.push({ query })
+      return [
+        { value: "open", label: "Open" },
+        { value: "closed", label: "Closed" },
+      ]
+    })
+
+    expect(selectEditor.prepare).toBeDefined()
+    const result = await selectEditor.prepare?.(makeParams(column) as never)
+
+    expect(calls).toEqual([{ query: "" }])
+    expect(result).toEqual({
+      initialOptions: [
+        { value: "open", label: "Open" },
+        { value: "closed", label: "Closed" },
+      ],
+    })
+  })
+
+  test("resolves to undefined when the column has no fetchOptions", async () => {
+    // Static-`column.options` columns don't need a preload; the
+    // framework forwards `prepareResult: undefined` and the Component
+    // resolves options synchronously via `resolveEditorOptions`.
+    const result = await selectEditor.prepare?.(makeParams(makeColumn()) as never)
+    expect(result).toBeUndefined()
+  })
+
+  test("propagates fetchOptions rejection so the framework's graceful path can mount", async () => {
+    // fetchOptions throwing must reject the prepare Promise — the
+    // framework's prepareRejected path then mounts the editor with
+    // `prepareResult: undefined` (audit P1-W3-2 graceful degradation,
+    // pinned in editingStateMachine.test.ts). The editor still works;
+    // the user just doesn't get the preload.
+    const column = makeColumn(async () => {
+      throw new Error("offline")
+    })
+
+    await expect(selectEditor.prepare?.(makeParams(column) as never)).rejects.toThrow("offline")
   })
 })
