@@ -2,6 +2,17 @@
 
 **Last updated:** 2026-05-03 by Claude coordinator
 
+## ⚡ Fresh items added 2026-05-04 (post bsncraft-issues sweep)
+
+The bsncraft-issues.md tasks assigned earlier today **all merged**: dev-mode error surface (#474), ServerMutationResult.row doc (#475), flex-resize fix (#476), dual-output RFC (#477), cellEditor union widen (#478), Option B P0 fix (#479), createTextEditor (#480), multi-cell delete (#471), paste-into-cell (#467), error boundary (#468), keyboard shortcuts (#464). All three workers' queues drained almost entirely.
+
+Pickups remaining in this handoff are queued below. **Pull main and rebase any in-flight branches before continuing — main has moved a lot today.**
+
+**Coordinator note:** worker3's caveat from the pinned-lane RFC verdict still needs verification — `<BcServerGrid rowModel="tree">` group rows under the new 3-track template (Option B). Queued as `v06-tree-mode-option-b-regression-test` on worker1 since group rows live in the server-tree path.
+
+---
+
+
 ## ⏸ URGENT: review needed on pinned-lane positioning RFC
 
 **Maintainer asked for a group decision** on the v0.6.0-alpha.1 pinned-right CSS architecture before coordinator picks a fix. Read `docs/coordination/pinned-lane-positioning-decision.md` and add your verdict at the bottom (~30 sec — pick option A/B/C/D/E + 2-4 lines on why for your lane). Coordinator merges + ships once all 3 workers have weighed in.
@@ -48,9 +59,35 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 You crushed the previous queue — **all 5 v0.6 server-perf items + the client-tree-rowmodel headline merged**: #433 stale-response-flood, #434 stale-viewkey-fetches, #438 client-tree RFC + #447 client-tree phase 1 (HEADLINE), #444 view-change-reset, #445 rollback-vs-invalidate. Updated queue below picks up where your planning doc left off + adds three consumer-facing follow-ons.
 
-**bsncraft consumer issues triage 2026-05-04** (`docs/coordination/bsncraft-issues.md`): three items on this lane. Pulled forward into the queue.
+**bsncraft consumer issues triage 2026-05-04** (`docs/coordination/bsncraft-issues.md`): three items on this lane (all SHIPPED — see the Fresh items notice above for PR numbers). New active task below.
 
-### Active now → `v06-tree-validator-error-surfacing` (bsncraft P1 #12, ~30 min, dev-mode only)
+### Active now → `v06-tree-mode-option-b-regression-test` (~half day, worker3 caveat from pinned-lane RFC)
+
+Worker3 flagged in their pinned-lane RFC verdict (#473): "verify `<BcServerGrid rowModel="tree">` group rows still render correctly under Option B" (the new 3-track template `auto minmax(0, 1fr) auto` shipped in #479). Group rows currently rely on `renderGroupRowCell` rendering a single full-width cell that spans all data columns; the v0.5 implementation used `aria-colspan` + a row-spanning track via the old `--bc-grid-columns` template.
+
+**Verify, then ship:**
+
+1. **Visual + DOM check** — open `apps/examples/?serverModeSwitch=1` (or the closest server-tree demo), expand a group, inspect the group row's DOM. Group cells should still span the full row width with no visual layout shift from the 3-track template.
+
+2. **If broken**: add `.bc-grid-row[data-bc-grid-row-kind="group"]` rule with `display: block` (or a row-spanning grid track) on top of Option B. Per worker1's verdict caveat. Pin the contract with a Playwright spec at `apps/examples/tests/server-tree-group-rows.pw.ts`.
+
+3. **If correct**: ADD the Playwright spec anyway as a regression guard so this exact bug doesn't return when someone next touches the row template. Bsncraft v0.6.0-alpha.1 P0 is the case study for "fix-for-X breaks-for-Y" architecture failures.
+
+**Branch:** `agent/worker1/v06-tree-mode-option-b-regression-test`. **Effort:** ~half day.
+
+### Next-after → `v06-use-server-tree-grid-dual-output` IMPLEMENTATION (~1 day, after #477 RFC ratifies)
+
+The dual-output RFC #477 just merged. Now implement: `bound` output for plain `<BcGrid>` + `serverProps` output for `<BcServerGrid>` on `useServerTreeGrid`, `useServerPagedGrid`, `useServerInfiniteGrid`. Per the RFC sequencing.
+
+**Branch:** `agent/worker1/v06-use-server-grid-hooks-dual-output-impl`. **Effort:** ~1 day.
+
+### Then-after → `v06-server-paged-cursor-pagination` IMPLEMENTATION (~1 day, after #462 RFC)
+
+Cursor-pagination RFC merged. Implement: `LoadServerPageCursor<TRow>` signature + internal pagination state machine + recipe. Per `docs/design/server-paged-cursor-pagination-rfc.md`.
+
+**Branch:** `agent/worker1/v06-server-paged-cursor-pagination-impl`. **Effort:** ~1 day.
+
+### After-that → `v06-tree-validator-error-surfacing` (bsncraft P1 #12, ~30 min, dev-mode only)
 
 Bsncraft consumer report: `validateTreeResult` correctly throws on shape mismatches in `server-row-model/src/index.ts`, but the throw is caught silently in `loadTreeChildren`'s `.catch()` and surfaces only as a blank grid with no console message. A real consumer lost ~30 minutes diagnosing because the contract ("`childCount` echoes the *requested* size, not the returned row count") is non-obvious.
 

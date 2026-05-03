@@ -2,6 +2,17 @@
 
 **Last updated:** 2026-05-03 by Claude coordinator
 
+## ⚡ Fresh items added 2026-05-04 (post bsncraft-issues sweep)
+
+The bsncraft-issues.md tasks assigned earlier today **all merged**: dev-mode error surface (#474), ServerMutationResult.row doc (#475), flex-resize fix (#476), dual-output RFC (#477), cellEditor union widen (#478), Option B P0 fix (#479), createTextEditor (#480), multi-cell delete (#471), paste-into-cell (#467), error boundary (#468), keyboard shortcuts (#464). All three workers' queues drained almost entirely.
+
+Pickups remaining in this handoff are queued below. **Pull main and rebase any in-flight branches before continuing — main has moved a lot today.**
+
+**Coordinator note:** worker3's caveat from the pinned-lane RFC verdict still needs verification — `<BcServerGrid rowModel="tree">` group rows under the new 3-track template (Option B). Queued as `v06-tree-mode-option-b-regression-test` on worker1 since group rows live in the server-tree path.
+
+---
+
+
 ## ⏸ URGENT: review needed on pinned-lane positioning RFC
 
 **Maintainer asked for a group decision** on the v0.6.0-alpha.1 pinned-right CSS architecture before coordinator picks a fix. Read `docs/coordination/pinned-lane-positioning-decision.md` and add your verdict at the bottom (~30 sec — pick option A/B/C/D/E + 2-4 lines on why for your lane). Coordinator merges + ships once all 3 workers have weighed in.
