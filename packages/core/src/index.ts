@@ -757,6 +757,32 @@ export interface BcGridApi<TRow = unknown> {
   setVisibleSetting(key: string, value: boolean): void
 
   /**
+   * Clear the row selection — sets selection to an empty explicit set.
+   * Surfaced for view-change reset flows on `<BcServerGrid>` (worker1
+   * audit P1 §1) where the prior view's selected rowIds become "ghost
+   * selection" once a filter / sort / search / groupBy change shifts
+   * the visible row set. Consumers can also call this from custom
+   * "Clear selection" affordances.
+   */
+  clearSelection(): void
+  /**
+   * Clear the active cell focus — sets the active cell to `null` and
+   * blurs any cell-level focus indicator. Use after a view change when
+   * the previously-focused cell's row no longer participates in the
+   * new query result. Pairs with `focusCell` (which sets a position).
+   * Worker1 audit P1 §1.
+   */
+  clearActiveCell(): void
+  /**
+   * Scroll the grid viewport to the top — sets `scrollTop` to 0 on the
+   * scroll container. Companion to `scrollToRow` (which scrolls to a
+   * specific rowId) for the "scroll to top of view" flow that doesn't
+   * need a row identifier. Surfaced for view-change reset on
+   * `<BcServerGrid>` per worker1 audit P1 §1.
+   */
+  scrollToTop(): void
+
+  /**
    * Read the persisted server-infinite prefetch budget (number of
    * blocks to fetch ahead of the visible viewport on each
    * `onVisibleRowRangeChange`). Returns `undefined` when no
@@ -780,6 +806,27 @@ export interface BcGridApi<TRow = unknown> {
 export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   refreshServerRows(opts?: { purge?: boolean }): void
   invalidateServerRows(invalidation: ServerInvalidation): void
+  /**
+   * Convenience wrapper around `invalidateServerRows({ scope: "rows",
+   * rowIds: [rowId] })`. Surfaces the single-row invalidate path so
+   * `onServerRowMutation` rejection branches (worker1 audit P1 §11)
+   * can mark a row's cache stale without constructing the
+   * `ServerInvalidation` shape inline.
+   *
+   * **Rollback ≠ invalidate.** The grid's managed-overlay rollback
+   * (which fires when `onServerRowMutation` resolves with
+   * `{ status: "rejected" }`) restores the canonical row from the
+   * model's snapshot at queue time — it does NOT refetch from the
+   * server. If the server has accepted other changes for the same row
+   * during the rejected mutation's lifetime (e.g. another user's
+   * commit landed), the rollback's snapshot is stale relative to the
+   * server's current state. Consumers who care about post-rollback
+   * server-truth should call `invalidateRowCache(rowId)` from their
+   * rejection branch — the next `loadPage` / `loadBlock` /
+   * `loadChildren` for the affected row's page will refetch the
+   * canonical state, and the rollback's snapshot will be replaced.
+   */
+  invalidateRowCache(rowId: RowId): void
   retryServerBlock(blockKey: ServerBlockKey): void
   applyServerRowUpdate(update: ServerRowUpdate<TRow>): void
   queueServerRowMutation(patch: ServerRowPatch): void

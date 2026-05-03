@@ -127,21 +127,16 @@ Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both docume
 ### v0.6 headlines (one per worker)
 
 - `[done: worker1 #438]` **v06-client-tree-rowmodel-rfc** (worker1, doc-only) — RFC drafted at `docs/design/client-tree-rowmodel-rfc.md` covering the v0.6 headline client tree row model. Merged 16869e3.
-- `[in-flight: worker1]` **v06-client-tree-rowmodel-phase-1** (worker1, foundation) — phase 1 of the v0.6 headline per ratified RFC #438. New `packages/react/src/clientTree.ts` with `buildClientTree(data, getRowParentId, rowId): ClientTreeIndex<TRow>` + `flattenClientTree({ index, expansionState, visibleRowIds }): readonly DataRowEntry<TRow>[]` + filter helpers `expandVisibleAncestors` / `compactVisibleAncestors`. Public type `BcClientTreeData<TRow>` exported from `@bc-grid/react`. Additive `BcGridProps.treeData?: BcClientTreeData<TRow>` + `BcGridColumn.outline?: boolean`. 18 unit tests covering build (root-only, parent/child, deep tree, cycle, orphan, stable order, multi-root) + flatten (none/all/partial expansion, contiguous DOM index, visibleRowIds filter, kind=data invariant) + ancestor helpers. Branch `agent/worker1/v06-client-tree-rowmodel-phase-1`.
-- `[ready: worker1]` **v06-client-tree-rowmodel-phase-2** — phase 2: `<BcGrid>` integration (consume `treeData`, build the index in a memo, swap the rows pipeline through `flattenClientTree`), outline column variant rendering with chevron + indent in `bodyCells.tsx`, sort+filter through tree (per-subtree sort, `keepAncestors` filter), aggregations on parent rows via `@bc-grid/aggregations`, demo at `apps/examples/src/client-tree.example.tsx`, Playwright happy-path at `tests/client-tree-rowmodel.pw.ts`. Gated on phase 1 merging.
+- `[done: worker1 #438]` **v06-client-tree-rowmodel-rfc** (worker1, doc-only) — RFC drafted at `docs/design/client-tree-rowmodel-rfc.md` covering the v0.6 headline client tree row model. Merged 16869e3.
+- `[ready: worker1]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant per the ratified RFC above. Two-spike-confirmed. ~1-2 days.
 - `[review: worker2 #436]` **v06-fill-handle** — drag-to-fill handle on the active range (range-rfc §6). Branch `agent/worker2/v06-fill-handle`.
 - `[ready: worker3]` **v06-bulk-row-patch-primitive** — `BcGridApi.applyRowPatches(patches[])` atomic bulk update with validate-all-then-apply semantics. The primitive every "fill down" / "shift dates" / "set status to Approved" toolbar wants. **Two-spike-confirmed** (doc-mgmt #6, production-estimating #4). ~1 day.
 
 ### v0.6 supporting work (in worker queues)
 
-- `[review: worker1 #433]` **v06-stale-response-flood-test** (planning doc §9, tests-only) — 3 new model-layer tests pinning the existing flood contract: `lastLoad` ends at the FINAL request, every prior `controller.signal.aborted === true`, and a stale-loadPage-after-abortExcept race scenario.
-- `[in-flight: worker1]` **v06-server-tree-stale-viewkey-fetches** (worker1, planning doc §10) — extracts the existing React-layer viewKey gate at `serverGrid.tsx:1745-1755` (shipped in #391) into a pure exported helper `shouldMergeTreeResult({ resultViewKey, fallbackViewKey, currentViewKey })`. Updates the React caller to use the helper. 6 new unit tests pin the gate contract: result.viewKey echo path, fallback path, stale-with-undefined-echo path, stale-with-stale-echo path, empty-string edge case. Branch `agent/worker1/v06-server-tree-stale-viewkey-fetches`.
-- `[ready: worker1]` **v06-server-view-change-reset-policy** (planning doc §1, ~half day).
-- `[ready: worker1]` **v06-optimistic-rollback-vs-invalidate** (planning doc §11, ~half day).
-- `[done: worker2 #432]` **v05-bsncraft-pinned-scroll-shadow-overlay** — bsncraft P0 #4 carry-over: `mix-blend-mode: multiply` on the pinned-edge pseudo. Merged e73e271.
-- `[review: worker2 #439]` **v06-bulk-action-toolbar-primitive** — `<BcGridBulkActions>` slot. Doc-mgmt spike finding #2. Branch `agent/worker2/v06-bulk-action-toolbar-primitive`.
-- `[ready: worker2]` **v06-saved-view-storage-recipe** — consumer-side persistence layer composing with #423 DTO. ~half day.
-- `[ready: worker2]` **v06-grouping-tristate-totals-row** — pinned `pinnedTotals: "bottom" | "top" | "both"` aggregation row. ~half day.
+- `[done: worker1 #438]` **v06-client-tree-rowmodel-rfc** (worker1, doc-only) — RFC drafted at `docs/design/client-tree-rowmodel-rfc.md` covering the v0.6 headline client tree row model. Merged 16869e3.
+- `[ready: worker1]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant per the ratified RFC above. Two-spike-confirmed. ~1-2 days.
+- `[review: worker2 #436]` **v06-fill-handle** — drag-to-fill handle on the active range (range-rfc §6). Branch `agent/worker2/v06-fill-handle`.
 - `[ready: worker3]` **v06-prepareresult-preload-select-multi** — async-loaded options on select + multi-select via `column.fetchOptions`. ~half day.
 - `[ready: worker3]` **v06-row-drag-drop-hooks** — `onRowDragOver` / `onRowDrop` callbacks. **Two-spike-confirmed**. ~1 day.
 - `[ready: worker3]` **v06-bcselection-narrowing** — `isExplicitSelection` / `isAllSelection` / `isFilteredSelection` type guards + `forEachSelectedRowId` iterator. **Two-spike-confirmed**. ~half day.

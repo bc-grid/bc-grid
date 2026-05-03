@@ -66,8 +66,16 @@ import type {
   BcFilterUserContext as BcEngineFilterUserContext,
   BcFiscalCalendar as BcEngineFiscalCalendar,
 } from "@bc-grid/filters"
-import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
+import type {
+  CSSProperties,
+  ComponentType,
+  MouseEvent,
+  DragEvent as ReactDragEvent,
+  ReactNode,
+  RefObject,
+} from "react"
 import type { BcClientTreeData } from "./clientTree"
+import type { BcRowDropAction } from "./rowDragDrop"
 
 export type BcGridDensity = "compact" | "normal" | "comfortable"
 
@@ -246,6 +254,45 @@ export interface BcRangeCopyEvent {
 }
 
 export type BcRangeCopyHook = (event: BcRangeCopyEvent) => void
+
+/**
+ * `dragover` event payload — the live position handler. Returns a
+ * `BcRowDropAction` to tell the grid where the drop will land.
+ *
+ * `sourceRowIds` carries every dragged row id (multi-row drag — the
+ * grid drags the full selection if the drag origin was inside the
+ * selection). The consumer uses this to reject drops onto the source
+ * row itself (`if (sourceRowIds.includes(rowId)) return "none"`)
+ * or to validate cross-parent drops in tree models.
+ *
+ * v0.6 §1 row-drag-drop-hooks.
+ */
+export interface BcRowDragOverEvent<TRow> {
+  row: TRow
+  rowId: RowId
+  sourceRowIds: readonly RowId[]
+  event: ReactDragEvent<HTMLElement>
+}
+
+export type BcRowDragOverHandler<TRow> = (event: BcRowDragOverEvent<TRow>) => BcRowDropAction
+
+/**
+ * `drop` event payload. `position` is the last value returned by
+ * `onRowDragOver`. Consumer reorders / re-parents and updates its own
+ * state; the grid does not mutate `data` on its own (consumer-owned
+ * ordering, mirrors how `<BcServerGrid>` treats the row model).
+ *
+ * v0.6 §1 row-drag-drop-hooks.
+ */
+export interface BcRowDropEvent<TRow> {
+  row: TRow
+  rowId: RowId
+  sourceRowIds: readonly RowId[]
+  position: BcRowDropAction
+  event: ReactDragEvent<HTMLElement>
+}
+
+export type BcRowDropHandler<TRow> = (event: BcRowDropEvent<TRow>) => void
 
 /**
  * Render context handed to status-bar segment renderers. Rebuilt per
@@ -697,6 +744,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    */
   rowProcessingMode?: "client" | "manual"
   aggregationScope?: BcAggregationScope
+  /**
+   * Placement for the aggregation totals row when at least one column
+   * declares `aggregation`. Defaults to `"bottom"` to preserve the
+   * existing footer-row behavior; use `"top"` or `"both"` for ERP
+   * screens that need the grand total pinned near the header.
+   */
+  pinnedTotals?: "top" | "bottom" | "both"
 
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
   groupsExpandedByDefault?: boolean
@@ -811,6 +865,56 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   onRowClick?: (row: TRow, event: MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: MouseEvent) => void
+
+  /**
+   * Fires on every `dragover` over a row while a row drag is in
+   * flight. Return a `BcRowDropAction` to tell the grid where the
+   * drop will land relative to the hovered row — `"before"`,
+   * `"after"`, `"into"`, or `"none"` to reject. The grid surfaces
+   * the live position via `data-bc-grid-row-drop="<position>"` on
+   * the hovered row so consumers can paint indicators in their
+   * theme (top/bottom border for before/after, row highlight for
+   * into).
+   *
+   * Returning `"none"` (or omitting the handler) prevents drop on
+   * this row. Defaults to `"none"` when only `onRowDrop` is wired
+   * without `onRowDragOver` — consumers must opt into the position
+   * UX by returning a non-none action.
+   *
+   * `event.sourceRowIds` carries every dragged row id (multi-row
+   * drag — the grid drags the full selection together if the drag
+   * origin was inside the selection). v0.6 §1 row-drag-drop-hooks
+   * (two-spike-confirmed: doc-mgmt #1 + production-estimating #5).
+   */
+  onRowDragOver?: BcRowDragOverHandler<TRow>
+  /**
+   * Fires on `drop` after `onRowDragOver` last returned a non-`"none"`
+   * action. Consumer reorders rows / re-parents the source rows /
+   * updates whatever consumer-owned state ranks the data; the grid
+   * does not mutate `data` on its own.
+   *
+   * `event.sourceRowIds` is the dragged set; `event.position` is
+   * the last position returned by `onRowDragOver` (so a tree drop
+   * onto a folder fires with `position: "into"`).
+   *
+   * v0.6 §1 row-drag-drop-hooks.
+   */
+  onRowDrop?: BcRowDropHandler<TRow>
+  /**
+   * Fires on `dragstart`, before any `dragover` events. Useful for
+   * snapshotting consumer state, custom drag images, or telemetry.
+   * The grid sets `dataTransfer.effectAllowed = "move"` and writes
+   * the source rowIds into `dataTransfer` automatically; consumers
+   * customising the drag preview can call `event.dataTransfer.setDragImage`
+   * here.
+   *
+   * v0.6 §1 row-drag-drop-hooks.
+   */
+  onRowDragStart?: (
+    row: TRow,
+    sourceRowIds: readonly RowId[],
+    event: ReactDragEvent<HTMLElement>,
+  ) => void
   onCellFocus?: (position: BcCellPosition) => void
   /**
    * Fires after the editing overlay commits a cell value. Client grids can
@@ -1090,6 +1194,18 @@ export interface BcServerEditMutationProps<TRow> {
    * converts cell edits into `ServerRowPatch` values, queues the optimistic
    * server-row-model mutation, awaits this callback, settles the mutation, and
    * rejects the edit overlay for rejected/conflict results.
+   *
+   * **Rollback ≠ invalidate (worker1 audit P1 §11).** When this
+   * handler resolves with `{ status: "rejected" }`, the grid restores
+   * the affected row from the model's snapshot at queue time — it
+   * does NOT refetch from the server. If the server has accepted
+   * other changes for the same row during the rejected mutation's
+   * lifetime (e.g. another user's commit landed via a separate
+   * `invalidate` cycle), the rollback's snapshot may be stale
+   * relative to the server's current state. Consumers who care about
+   * post-rollback server-truth should call
+   * `apiRef.current?.invalidateRowCache(rowId)` from their rejection
+   * branch — the next fetch will refetch the canonical state.
    */
   onServerRowMutation?: BcServerEditMutationHandler<TRow>
   /**
@@ -1181,6 +1297,34 @@ export interface BcServerGridProps<TRow>
    * fetch.
    */
   initialRootChildCount?: number
+
+  /**
+   * View-change reset opt-out (worker1 audit P1 §1). When the
+   * resolved viewKey changes (filter / sort / search / groupBy /
+   * visibleColumns), `<BcServerGrid>` resets scroll-to-top by default
+   * so users see the new query result from row 0 — matches the
+   * NetSuite / Salesforce LWC datatable / Excel-table convention.
+   * Set to `true` to preserve scroll position across view changes.
+   */
+  preserveScrollOnViewChange?: boolean
+  /**
+   * View-change reset opt-out for selection (worker1 audit P1 §1).
+   * When the viewKey changes, `<BcServerGrid>` clears the row
+   * selection by default so the prior view's selected rowIds don't
+   * become "ghost selection" (rowIds that may not exist in the new
+   * query result). Set to `true` to preserve selection across view
+   * changes; consumers wanting per-view selection persistence should
+   * mirror the selection into their own state keyed by viewKey.
+   */
+  preserveSelectionOnViewChange?: boolean
+  /**
+   * View-change reset opt-out for active cell focus (worker1 audit P1
+   * §1). When the viewKey changes, `<BcServerGrid>` clears the active
+   * cell by default so the prior view's focused cell (whose row may
+   * not be in the new query result) doesn't strand. Set to `true` to
+   * preserve focus across view changes.
+   */
+  preserveFocusOnViewChange?: boolean
 
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
 }
@@ -1509,6 +1653,8 @@ export type {
 }
 
 export type { BcNormalisedRange, BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
+export type { BcRowDropAction } from "./rowDragDrop"
+export { BC_GRID_ROW_DRAG_MIME } from "./rowDragDrop"
 export type {
   BcRowPatch,
   BcRowPatchFailure,
