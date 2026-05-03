@@ -797,6 +797,27 @@ export interface BcGridApi<TRow = unknown> {
 export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   refreshServerRows(opts?: { purge?: boolean }): void
   invalidateServerRows(invalidation: ServerInvalidation): void
+  /**
+   * Convenience wrapper around `invalidateServerRows({ scope: "rows",
+   * rowIds: [rowId] })`. Surfaces the single-row invalidate path so
+   * `onServerRowMutation` rejection branches (worker1 audit P1 §11)
+   * can mark a row's cache stale without constructing the
+   * `ServerInvalidation` shape inline.
+   *
+   * **Rollback ≠ invalidate.** The grid's managed-overlay rollback
+   * (which fires when `onServerRowMutation` resolves with
+   * `{ status: "rejected" }`) restores the canonical row from the
+   * model's snapshot at queue time — it does NOT refetch from the
+   * server. If the server has accepted other changes for the same row
+   * during the rejected mutation's lifetime (e.g. another user's
+   * commit landed), the rollback's snapshot is stale relative to the
+   * server's current state. Consumers who care about post-rollback
+   * server-truth should call `invalidateRowCache(rowId)` from their
+   * rejection branch — the next `loadPage` / `loadBlock` /
+   * `loadChildren` for the affected row's page will refetch the
+   * canonical state, and the rollback's snapshot will be replaced.
+   */
+  invalidateRowCache(rowId: RowId): void
   retryServerBlock(blockKey: ServerBlockKey): void
   applyServerRowUpdate(update: ServerRowUpdate<TRow>): void
   queueServerRowMutation(patch: ServerRowPatch): void

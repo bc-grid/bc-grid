@@ -1170,6 +1170,18 @@ export interface BcServerEditMutationProps<TRow> {
    * converts cell edits into `ServerRowPatch` values, queues the optimistic
    * server-row-model mutation, awaits this callback, settles the mutation, and
    * rejects the edit overlay for rejected/conflict results.
+   *
+   * **Rollback ≠ invalidate (worker1 audit P1 §11).** When this
+   * handler resolves with `{ status: "rejected" }`, the grid restores
+   * the affected row from the model's snapshot at queue time — it
+   * does NOT refetch from the server. If the server has accepted
+   * other changes for the same row during the rejected mutation's
+   * lifetime (e.g. another user's commit landed via a separate
+   * `invalidate` cycle), the rollback's snapshot may be stale
+   * relative to the server's current state. Consumers who care about
+   * post-rollback server-truth should call
+   * `apiRef.current?.invalidateRowCache(rowId)` from their rejection
+   * branch — the next fetch will refetch the canonical state.
    */
   onServerRowMutation?: BcServerEditMutationHandler<TRow>
   /**

@@ -802,6 +802,12 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         else if (mode === "infinite") infinite.invalidate(invalidation)
         else if (mode === "tree") tree.invalidate(invalidation)
       },
+      invalidateRowCache(rowId) {
+        const invalidation: ServerInvalidation = { scope: "rows", rowIds: [rowId] }
+        if (mode === "paged") paged.invalidate(invalidation)
+        else if (mode === "infinite") infinite.invalidate(invalidation)
+        else if (mode === "tree") tree.invalidate(invalidation)
+      },
       retryServerBlock(blockKey) {
         if (mode === "paged") paged.retryBlock(blockKey)
         else if (mode === "infinite") infinite.retryBlock(blockKey)
