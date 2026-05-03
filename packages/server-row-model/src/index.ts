@@ -989,6 +989,17 @@ class ServerRowModelController<TRow> {
     return Promise.all(promises).then(noop)
   }
 
+  /**
+   * Snapshot of currently-pending mutation IDs. Used by the React
+   * layer's mode-switch flow per `docs/design/server-mode-switch-rfc.md
+   * §4 item 13` to drive the 100ms grace + force-settle pipeline.
+   * Returns a fresh array each call so iteration during a settle loop
+   * does not skip entries.
+   */
+  pendingMutationIds(): readonly string[] {
+    return [...this.#pendingMutations.keys()]
+  }
+
   invalidate(
     invalidation: ServerInvalidation,
     input: InvalidateInput<TRow> = {},

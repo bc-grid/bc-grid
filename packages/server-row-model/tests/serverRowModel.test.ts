@@ -2052,3 +2052,90 @@ describe("hasInFlightRequests + awaitAllSettled (server-mode-switch RFC §6)", (
     expect(model.hasInFlightRequests()).toBe(false)
   })
 })
+
+describe("pendingMutationIds (server-mode-switch RFC §4 item 13)", () => {
+  test("returns empty array on a fresh model", () => {
+    const model = createServerRowModel<Row>()
+    expect(model.pendingMutationIds()).toEqual([])
+  })
+
+  test("returns the IDs of currently-pending mutations in insertion order", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "Acme" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "first" }, mutationId: "m-1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    model.queueMutation({
+      patch: { changes: { name: "second" }, mutationId: "m-2", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    expect(model.pendingMutationIds()).toEqual(["m-1", "m-2"])
+  })
+
+  test("returns a fresh array each call so iteration during settle does not skip entries", () => {
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:1",
+      rows: [{ id: "a", name: "Acme" }],
+      size: 1,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "x" }, mutationId: "m-1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+
+    const snapshot = model.pendingMutationIds()
+    // Settle the mutation in the snapshot — new pendingMutationIds()
+    // should return [] but the captured snapshot still contains the
+    // settled id.
+    model.settleMutation({
+      result: { mutationId: "m-1", reason: "test", status: "rejected" },
+      rowId: (row) => row.id,
+    })
+    expect(snapshot).toEqual(["m-1"])
+    expect(model.pendingMutationIds()).toEqual([])
+  })
+
+  test("force-settle pattern: iterate pendingMutationIds() and settle each as rejected", () => {
+    // Mirrors the React-layer mode-switch grace flow: get the current
+    // ID set, settle each as rejected with reason="mode switch", verify
+    // pending count returns to zero.
+    const model = createServerRowModel<Row>()
+    model.cache.markLoaded({
+      blockKey: "paged:v1:page:0:size:2",
+      rows: [
+        { id: "a", name: "Acme" },
+        { id: "b", name: "Beta" },
+      ],
+      size: 2,
+      start: 0,
+      viewKey: "v1",
+    })
+    model.queueMutation({
+      patch: { changes: { name: "x" }, mutationId: "m-1", rowId: "a" },
+      rowId: (row) => row.id,
+    })
+    model.queueMutation({
+      patch: { changes: { name: "y" }, mutationId: "m-2", rowId: "b" },
+      rowId: (row) => row.id,
+    })
+    expect(model.pendingMutationIds()).toHaveLength(2)
+
+    for (const mutationId of model.pendingMutationIds()) {
+      model.settleMutation({
+        result: { mutationId, reason: "mode switch", status: "rejected" },
+        rowId: (row) => row.id,
+      })
+    }
+    expect(model.pendingMutationIds()).toEqual([])
+  })
+})
