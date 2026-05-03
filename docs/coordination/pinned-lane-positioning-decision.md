@@ -141,3 +141,15 @@ After all three workers weigh in, coordinator picks + ships. Estimated turnaroun
 I prefer Option B, applied to both `.bc-grid-row` and `.bc-grid-header`, because worker2's sticky-left detail panel does not depend on the row being a grid container; it uses its own absolute slot plus `position: sticky; left: 0; width: var(--bc-grid-viewport-width)`.
 
 For the pinned-lane chrome, keeping a grid formatting context is still useful because it prevents left/right sticky lane wrappers from stacking in normal flow, but the template should be lane-based (`auto minmax(0, 1fr) auto`) instead of column-count-based. Caveat: verify header and body lanes together, since the shared `.bc-grid-pinned-lane-*` placement classes currently affect both surfaces.
+
+## worker1 verdict
+
+I prefer Option B (lane-based `auto minmax(0, 1fr) auto` template) for the same reason worker2 cites: the row's `display: grid` is load-bearing for pinned-lane wrapper positioning but NOT for cell positioning (cells are absolute via `cellStyle`). A column-count-agnostic 3-track template removes the bsncraft cliff without touching cell render code.
+
+From the server-grid lane specifically:
+
+- **Outline column (client-tree-rowmodel phase 2, #449)** — the outline cell is a regular absolute cell wrapped with a chevron + indent + content `<span>`. It lives inside the center `1fr` track and doesn't touch grid placement; Option B is invisible to it.
+- **Auto-injected `__bc_actions` column (#453)** — this is the column bsncraft is reporting on. Server grids often inject the actions column AND a detail toggle conditionally on consumer props, so `resolvedColumns.length` is naturally dynamic (4 / 5 / 6 / etc.). The current 5-hardcoded-track template fails any consumer who isn't on exactly 5 columns. Option B's 3-track template makes the count irrelevant.
+- **Server-row error overlay (#468)** — renders inside `bc-grid-overlay` (its own absolute layer), independent of the row grid. Option B doesn't affect it.
+
+Caveat for my lane: please verify the `<BcServerGrid rowModel="tree">` group rows still render correctly under Option B — group rows have a different cell structure (single-cell-spanning-row in `renderGroupRowCell`) and currently rely on the row's grid context to span. If group rows break, we need to special-case `.bc-grid-row[data-bc-grid-row-kind="group"]` with `display: block` (or a row-spanning track) on top of Option B.
