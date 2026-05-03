@@ -15,6 +15,7 @@ import type {
   BcPivotState,
   BcRange,
   BcRangeSelection,
+  BcRowPatchResult,
   BcSelection,
   ColumnId,
   RowId,
@@ -28,6 +29,7 @@ import {
   type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
   type RefObject,
   Suspense,
   type UIEvent,
@@ -41,6 +43,7 @@ import {
 } from "react"
 import { BcGridAggregationFooterRow, useAggregations } from "./aggregations"
 import { renderBodyCell, renderGroupRowCell } from "./bodyCells"
+import { BcGridBulkActions, resolveBulkActionSelectedRowIds } from "./bulkActions"
 import { computeAutosizeWidth, measureColumnWidths, upsertColumnStateEntry } from "./columnCommands"
 import {
   type ColumnVisibilityItem,
@@ -160,6 +163,7 @@ import {
   normaliseClipboardPayload,
   writeClipboardPayload,
 } from "./rangeClipboard"
+import { type RangeFillProjection, buildLiteralRangeFillTsv, projectRangeFill } from "./rangeFill"
 import {
   createRangeInteractionModel,
   shouldClearRangeSelectionForModelChange,
@@ -175,8 +179,10 @@ import {
   resolveDragSourceRowIds,
   serializeRowDragPayload,
 } from "./rowDragDrop"
+import { buildRowPatchApplyPlan } from "./rowPatchPlan"
 import { matchesSearchText } from "./search"
 import {
+  clearSelection,
   headerCheckboxState,
   isRowSelected,
   selectOnly,
@@ -266,6 +272,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     rowIsDisabled,
     locale,
     toolbar,
+    bulkActions,
     footer,
     loading,
     loadingOverlay,
@@ -581,6 +588,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultRangeSelection ?? emptyBcRangeSelection,
     props.onRangeSelectionChange,
   )
+  const [rangeFillPreview, setRangeFillPreview] = useState<RangeFillProjection | null>(null)
   const emptyExpansion = useMemo(() => new Set<RowId>(), [])
   const expansionControlled = hasProp(props, "expansion")
   const defaultExpansionProvided = hasProp(props, "defaultExpansion")
@@ -2076,6 +2084,143 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ],
   )
 
+  const getRangeFillSourceValue = useCallback(
+    (position: BcCellPosition): unknown => {
+      if (editController.hasOverlayValue(position.rowId, position.columnId)) {
+        return editController.getOverlayValue(position.rowId, position.columnId)
+      }
+
+      const rowEntry = rowsById.get(position.rowId)
+      const columnIndex = columnIndexById.get(position.columnId)
+      const column = columnIndex == null ? undefined : resolvedColumns[columnIndex]
+      if (!rowEntry || !column) return ""
+      return getCellValue(rowEntry.row, column.source)
+    },
+    [columnIndexById, editController, resolvedColumns, rowsById],
+  )
+
+  const commitRangeFill = useCallback(
+    async (projection: RangeFillProjection): Promise<void> => {
+      if (editController.editState.mode !== "navigation") {
+        announceAssertive(
+          messages.pasteRejectedAnnounce({
+            error: "Finish the active cell edit before filling a range.",
+          }),
+        )
+        return
+      }
+
+      const tsv = buildLiteralRangeFillTsv({
+        projection,
+        columns: resolvedColumns,
+        rowIds: rangeRowIds,
+        getSourceValue: getRangeFillSourceValue,
+      })
+      const applyResult = await buildRangeTsvPasteApplyPlan({
+        range: projection.fillRange,
+        tsv,
+        columns: resolvedColumns,
+        rowEntries,
+        rowIds: rangeRowIds,
+        overflow: "clip",
+        allowEmptyCells: true,
+        skipReadOnlyTargets: true,
+        isRowReadOnly: isRowDisabled,
+      })
+
+      if (!applyResult.ok) {
+        const error = pasteFailureFromApplyFailure(applyResult.error)
+        announceAssertive(messages.pasteRejectedAnnounce({ error: error.message }))
+        return
+      }
+
+      editController.commitFromPasteApplyPlan(applyResult.plan, { source: "fill" })
+      const result = pasteSuccessFromApplyPlan(applyResult.plan)
+      announcePolite(messages.pasteCommittedAnnounce({ count: result.appliedCount }))
+    },
+    [
+      announceAssertive,
+      announcePolite,
+      editController,
+      getRangeFillSourceValue,
+      isRowDisabled,
+      messages,
+      rangeRowIds,
+      resolvedColumns,
+      rowEntries,
+    ],
+  )
+
+  const handleRangeFillPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const sourceRange =
+        rangeSelectionState.ranges.length === 1 ? rangeSelectionState.ranges[0] : undefined
+      if (!sourceRange) return
+      if (editController.editState.mode !== "navigation") return
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+
+      const root = rootRef.current
+      let currentProjection: RangeFillProjection | null = null
+
+      const updateProjection = (clientX: number, clientY: number) => {
+        const target = cellPositionFromPoint(clientX, clientY, root)
+        const projection = target
+          ? projectRangeFill({
+              sourceRange,
+              target,
+              columns: resolvedColumns,
+              rowIds: rangeRowIds,
+            })
+          : null
+        currentProjection = projection
+        setRangeFillPreview(projection)
+      }
+
+      const cleanup = () => {
+        window.removeEventListener("pointermove", handlePointerMove)
+        window.removeEventListener("pointerup", handlePointerUp)
+        window.removeEventListener("pointercancel", handlePointerCancel)
+      }
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        updateProjection(moveEvent.clientX, moveEvent.clientY)
+      }
+      const handlePointerCancel = () => {
+        cleanup()
+        currentProjection = null
+        setRangeFillPreview(null)
+      }
+      const handlePointerUp = (upEvent: PointerEvent) => {
+        updateProjection(upEvent.clientX, upEvent.clientY)
+        cleanup()
+        const projection = currentProjection
+        setRangeFillPreview(null)
+        if (!projection) return
+
+        setRangeSelectionState({
+          ranges: [projection.targetRange],
+          anchor: projection.sourceRange.start,
+        })
+        rootRef.current?.focus({ preventScroll: true })
+        void commitRangeFill(projection).catch(() => undefined)
+      }
+
+      window.addEventListener("pointermove", handlePointerMove)
+      window.addEventListener("pointerup", handlePointerUp)
+      window.addEventListener("pointercancel", handlePointerCancel)
+    },
+    [
+      commitRangeFill,
+      editController.editState.mode,
+      rangeRowIds,
+      rangeSelectionState.ranges,
+      resolvedColumns,
+      setRangeSelectionState,
+    ],
+  )
+
   const api = useMemo<BcGridApi<TRow>>(() => {
     const nextApi: BcGridApi<TRow> = {
       scrollToRow(targetRowId, opts) {
@@ -2158,6 +2303,27 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         return copyRangeToClipboard(range, nextApi)
       },
       pasteTsv,
+      async applyRowPatches(patches): Promise<BcRowPatchResult<TRow>> {
+        // Atomic bulk update — see BcGridApi.applyRowPatches docs.
+        // Validate-all-then-apply lives in `buildRowPatchApplyPlan`;
+        // the editing controller's `commitFromRowPatchPlan` runs the
+        // batched overlay write + per-cell `onCellEditCommit` with
+        // `source: "api"`. Per `v06-bulk-row-patch-primitive`.
+        const applyResult = await buildRowPatchApplyPlan({
+          patches,
+          columns: resolvedColumns,
+          rowEntries,
+        })
+        if (!applyResult.ok) {
+          return { ok: false, failures: applyResult.failures }
+        }
+        editController.commitFromRowPatchPlan(applyResult.plan)
+        return {
+          ok: true,
+          applied: applyResult.plan.commits.length,
+          rowsAffected: applyResult.plan.rowsAffected,
+        }
+      },
       clearRangeSelection() {
         setRangeSelectionState(rangeClear(rangeSelectionState))
       },
@@ -2287,6 +2453,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     rangeSelectionState,
     requestRender,
     resolvedColumns,
+    rowEntries,
     rowIndexById,
     rowsById,
     scrollToCell,
@@ -2304,6 +2471,32 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   useEffect(() => assignRef(apiRef, api), [apiRef, api])
 
+  const allKnownRowIds = useMemo(
+    () => data.map((row, index) => ({ rowId: rowId(row, index) })),
+    [data, rowId],
+  )
+  const selectedRowCount = computeSelectedRowCount(
+    selectionState,
+    data.length,
+    allRowEntries.length,
+  )
+  const bulkActionSelectedRowIds = useMemo(
+    () => resolveBulkActionSelectedRowIds(selectionState, allKnownRowIds, allRowEntries),
+    [allKnownRowIds, allRowEntries, selectionState],
+  )
+  const clearBulkSelection = useCallback(() => {
+    selectionAnchorRef.current = null
+    setSelectionState(clearSelection())
+  }, [setSelectionState])
+  const bulkActionsContext = useMemo(
+    () => ({
+      selectedRowIds: bulkActionSelectedRowIds,
+      selectedRowCount,
+      clearSelection: clearBulkSelection,
+    }),
+    [bulkActionSelectedRowIds, clearBulkSelection, selectedRowCount],
+  )
+
   // Status-bar render context per `chrome-rfc §Status bar`. The
   // `aggregations` segment consumes the same `useAggregations` output
   // already feeding the in-grid aggregation footer row, so the segment
@@ -2319,7 +2512,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       api,
       totalRowCount: data.length,
       filteredRowCount: allRowEntries.length,
-      selectedRowCount: computeSelectedRowCount(selectionState, data.length, allRowEntries.length),
+      selectedRowCount,
       aggregations: aggregationResults,
       activeFilters: activeFilterSummaryItems,
       clearColumnFilter: clearColumnFilterText,
@@ -2335,7 +2528,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       clearColumnFilterText,
       data.length,
       latestValidationError,
-      selectionState,
+      selectedRowCount,
     ],
   )
   const activeFilterSummaryVisible =
@@ -3017,6 +3210,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       data-bc-grid-fit={fit}
       data-bc-grid-height-mode={isAutoHeight ? "auto" : "fixed"}
     >
+      {bulkActions ? <BcGridBulkActions actions={bulkActions} ctx={bulkActionsContext} /> : null}
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
 
       <div className="bc-grid-main">
@@ -3754,7 +3948,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               })}
               <BcRangeOverlay
                 columns={resolvedColumns}
-                rangeSelection={rangeSelectionState}
+                fillHandleEnabled={
+                  rangeFillPreview == null &&
+                  editController.editState.mode === "navigation" &&
+                  isRangeFillHandleEnabled(props.rangeSelectionOptions)
+                }
+                onFillHandlePointerDown={handleRangeFillPointerDown}
+                rangeSelection={
+                  rangeFillPreview
+                    ? {
+                        ranges: [rangeFillPreview.targetRange],
+                        anchor: rangeFillPreview.sourceRange.start,
+                      }
+                    : rangeSelectionState
+                }
                 rowIds={rangeRowIds}
                 scrollLeft={scrollOffset.left}
                 totalWidth={virtualWindow.totalWidth}
@@ -4009,6 +4216,32 @@ function publicPasteSkippedCell(cell: BcGridPasteTsvSkippedCell): BcGridPasteTsv
 function isEditableKeyTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   return target.isContentEditable || editableKeyTargetTags.has(target.tagName)
+}
+
+function cellPositionFromPoint(
+  clientX: number,
+  clientY: number,
+  root: HTMLElement | null,
+): BcCellPosition | null {
+  if (typeof document === "undefined") return null
+  const target = document.elementFromPoint(clientX, clientY)
+  if (!(target instanceof Element)) return null
+  if (root && !root.contains(target)) return null
+
+  const cell = target.closest<HTMLElement>(".bc-grid-cell[data-column-id]")
+  const row = cell?.closest<HTMLElement>(".bc-grid-row[data-row-id]")
+  const rowId = row?.dataset.rowId
+  const columnId = cell?.dataset.columnId
+  if (!rowId || !columnId) return null
+  return { rowId: rowId as RowId, columnId: columnId as ColumnId }
+}
+
+function isRangeFillHandleEnabled(
+  options: BcGridProps<unknown>["rangeSelectionOptions"] | undefined,
+): boolean {
+  if (options === false) return false
+  if (typeof options === "object" && options.fillHandle === false) return false
+  return true
 }
 
 /**

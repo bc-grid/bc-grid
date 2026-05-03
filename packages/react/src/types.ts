@@ -380,6 +380,18 @@ export type BcStatusBarSegment<TRow = unknown> =
   | "latestError"
   | BcStatusBarCustomSegment<TRow>
 
+export interface BcBulkActionsContext {
+  /**
+   * Selected row IDs resolved against rows currently known to this
+   * client grid. For explicit selection this is the selected set; for
+   * all/filtered selection modes it is the known row population minus
+   * `selection.except`.
+   */
+  selectedRowIds: readonly RowId[]
+  selectedRowCount: number
+  clearSelection(): void
+}
+
 export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
   value: unknown
   formattedValue: string
@@ -615,6 +627,30 @@ export interface BcSidebarContext<TRow = unknown> {
   pivot?: unknown
 }
 
+export interface BcRangeSelectionOptions {
+  /**
+   * Allow multiple disjoint ranges. The current interaction layer only
+   * renders the active range; the option is reserved for the range RFC's
+   * multi-range path.
+   */
+  multiRange?: boolean
+  /**
+   * Show the active-range fill handle. Defaults to true when range
+   * selection is otherwise active.
+   */
+  fillHandle?: boolean
+  /**
+   * Cap future pointer-created range selections. Keyboard-created ranges
+   * already clamp to the current row/column model.
+   */
+  maxCellCount?: number
+  /**
+   * Future pointer-range option: when true, pointer range selection will
+   * not also update row selection.
+   */
+  preventRowSelection?: boolean
+}
+
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   data: readonly TRow[]
   columns: readonly BcReactGridColumn<TRow>[]
@@ -733,6 +769,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   rowIsDisabled?: (row: TRow) => boolean
 
   toolbar?: ReactNode
+  /**
+   * Consumer-owned action slot rendered as a grid-supplied bulk-actions
+   * bar whenever one or more rows are selected. The grid owns the bar,
+   * selected-count label, and clear-selection button; the slot supplies
+   * domain actions such as "Mark paid", "Move to folder", or "Delete".
+   */
+  bulkActions?: ReactNode | ((ctx: BcBulkActionsContext) => ReactNode)
   footer?: ReactNode
   /**
    * Footer status bar segments rendered below the body, above any
@@ -865,6 +908,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    */
   onCellEditCommit?: BcCellEditCommitHandler<TRow>
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+  /**
+   * Behaviour flags for range-selection affordances. Existing keyboard
+   * range selection remains available by default; set
+   * `rangeSelectionOptions={false}` or `{ fillHandle: false }` to hide
+   * the spreadsheet-style fill handle.
+   */
+  rangeSelectionOptions?: boolean | BcRangeSelectionOptions
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
 
@@ -1418,7 +1468,7 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
    * editors). Consumer telemetry can split scroll-out commits from
    * deliberate keyboard / pointer commits via this discriminator.
    */
-  source: "keyboard" | "pointer" | "api" | "paste" | "scroll-out"
+  source: "keyboard" | "pointer" | "api" | "paste" | "fill" | "scroll-out"
 }
 
 /**
@@ -1541,3 +1591,9 @@ export type {
 export type { BcNormalisedRange, BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
 export type { BcRowDropAction } from "./rowDragDrop"
 export { BC_GRID_ROW_DRAG_MIME } from "./rowDragDrop"
+export type {
+  BcRowPatch,
+  BcRowPatchFailure,
+  BcRowPatchFailureCode,
+  BcRowPatchResult,
+} from "@bc-grid/core"

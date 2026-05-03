@@ -174,3 +174,27 @@ test("multiSelectEditor mounts in popup mode (in-cell-editor-mode-rfc §4: dropd
   await expect(wrapper).toBeAttached()
   await expect(wrapper).toHaveAttribute("data-bc-grid-editor-mount", "popup")
 })
+
+// First-page preload via `column.fetchOptions("", signal)` —
+// `v06-prepareresult-preload-select-multi`. The
+// `multiSelectEditor.prepare` hook resolves async options before
+// mount; the Component reads `prepareResult.initialOptions` and
+// feeds the Combobox primitive's new `initialOptions` prop. Demo
+// column `flags` uses static options today; this stub is `test.skip`
+// pending a demo column wired with `fetchOptions`. Coordinator:
+// unskip once the example app exposes a remote-enum multi-select
+// column (see PR description for the fixture requirement).
+test.skip("multiSelectEditor preloads options from column.fetchOptions on first paint", async ({
+  page,
+}) => {
+  await page.goto(URL)
+  await focusBodyCell(page, 0, MULTI_SELECT_COLUMN)
+  await page.keyboard.press("F2")
+
+  const trigger = page.locator(TRIGGER_SELECTOR).first()
+  // Options PRESENT on first paint (no "Loading…" / blank lane)
+  // because the framework awaits `prepare()` before mount.
+  await expect(trigger).toHaveAttribute("data-bc-grid-editor-option-count", /[1-9]\d*/)
+  const options = page.locator('[role="listbox"] [role="option"]')
+  await expect(options.first()).toBeVisible()
+})

@@ -129,6 +129,49 @@ describe("BcRangeOverlay", () => {
     expect(html).toContain('data-bc-grid-range-active="true"')
     expect(html).toContain('data-bc-grid-range-pinned="left"')
   })
+
+  test("renders a fill handle on an unsplit single active range", () => {
+    const html = renderToStaticMarkup(
+      <BcRangeOverlay
+        columns={[column("name"), column("amount")]}
+        fillHandleEnabled={true}
+        rangeSelection={selection(range("r1", "name", "r2", "amount"))}
+        rowIds={rowIds}
+        scrollLeft={0}
+        totalWidth={200}
+        viewportWidth={200}
+        virtualizer={virtualizer({
+          colWidths: [100, 100],
+          rowCount: 3,
+          rowHeight: 30,
+        })}
+      />,
+    )
+
+    expect(html).toContain("bc-grid-fill-handle")
+    expect(html).toContain('data-bc-grid-fill-handle="true"')
+  })
+
+  test("does not render a fill handle when the active range splits across pinned regions", () => {
+    const html = renderToStaticMarkup(
+      <BcRangeOverlay
+        columns={[column("account", "left"), column("name")]}
+        fillHandleEnabled={true}
+        rangeSelection={selection(range("r1", "account", "r1", "name"))}
+        rowIds={rowIds}
+        scrollLeft={32}
+        totalWidth={180}
+        viewportWidth={140}
+        virtualizer={virtualizer({
+          colWidths: [80, 100],
+          rowCount: 3,
+          rowHeight: 30,
+        })}
+      />,
+    )
+
+    expect(html).not.toContain("bc-grid-fill-handle")
+  })
 })
 
 function virtualizer({

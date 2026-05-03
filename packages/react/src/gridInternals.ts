@@ -653,6 +653,12 @@ export function pinnedLaneStyle(
   height: number,
   width: number,
 ): CSSProperties {
+  // Pinned lanes paint above body cells (z-index 1-2) but BELOW the
+  // sticky header band (z-index 4 in `headerBandStyle`). Ties at
+  // z-index 3 caused body pinned lanes to cover the header when
+  // scrolling vertically (bsncraft v0.5.0 GA P0). The header band's
+  // own pinned lanes get z-index 5 (band's z-index + 1) inside the
+  // band so they paint above the band's center header cells.
   const base: CSSProperties = {
     height,
     position: "sticky",
@@ -759,13 +765,19 @@ export function headerRowStyle(width: number, height: number): CSSProperties {
  * (composed natively at the compositor level — no JS scroll handler).
  */
 export function headerBandStyle(width: number, height: number): CSSProperties {
+  // Header band must paint ABOVE body pinned lanes (z-index 3 in
+  // `pinnedLaneStyle`) so vertical scroll doesn't reveal body pinned
+  // cells covering the sticky header. Bsncraft v0.5.0 GA P0 — pinned
+  // body cells overlapped column headers when scrolling down because
+  // the body lane wrapper z-index (3) tied with the header band (3),
+  // and DOM-order tie-break put body rows on top.
   return {
     height,
     minWidth: "100%",
     position: "sticky",
     top: 0,
     width: Math.max(width, 1),
-    zIndex: 3,
+    zIndex: 4,
   }
 }
 
