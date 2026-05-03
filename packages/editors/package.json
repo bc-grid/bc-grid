@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/editors",
-  "version": "0.5.0-alpha.1",
+  "version": "0.5.0-alpha.2",
   "description": "Cell editor framework for bc-grid (planned; v0.1 ships placeholder)",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
