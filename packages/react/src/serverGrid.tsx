@@ -665,6 +665,22 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
           })
         )
       },
+      applyRowPatches(patches) {
+        // Atomic bulk update — see BcGridApi.applyRowPatches docs.
+        // Routes through the inner BcGrid so each cell flows through
+        // the existing editing controller + onCellEditCommit →
+        // onServerRowMutation pipeline (per-cell pending overlays,
+        // batched server resolve). The whole point: server-row consumers
+        // get the same atomic-validate-then-apply semantics as
+        // BcGridApi.applyRowPatches without bypassing onServerRowMutation.
+        return (
+          gridApiRef.current?.applyRowPatches(patches) ??
+          Promise.resolve({
+            ok: false,
+            failures: [],
+          })
+        )
+      },
       clearRangeSelection() {
         gridApiRef.current?.clearRangeSelection()
       },
