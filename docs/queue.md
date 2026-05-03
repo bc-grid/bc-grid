@@ -137,7 +137,7 @@ Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both docume
 - `[ready: worker1]` **v06-server-view-change-reset-policy** (planning doc §1, ~half day).
 - `[ready: worker1]` **v06-optimistic-rollback-vs-invalidate** (planning doc §11, ~half day).
 - `[done: worker2 #432]` **v05-bsncraft-pinned-scroll-shadow-overlay** — bsncraft P0 #4 carry-over: `mix-blend-mode: multiply` on the pinned-edge pseudo. Merged e73e271.
-- `[in-flight: worker2]` **v06-bulk-action-toolbar-primitive** — `<BcGridBulkActions>` slot. Doc-mgmt spike finding #2. Branch `agent/worker2/v06-bulk-action-toolbar-primitive`.
+- `[review: worker2 #439]` **v06-bulk-action-toolbar-primitive** — `<BcGridBulkActions>` slot. Doc-mgmt spike finding #2. Branch `agent/worker2/v06-bulk-action-toolbar-primitive`.
 - `[ready: worker2]` **v06-saved-view-storage-recipe** — consumer-side persistence layer composing with #423 DTO. ~half day.
 - `[ready: worker2]` **v06-grouping-tristate-totals-row** — pinned `pinnedTotals: "bottom" | "top" | "both"` aggregation row. ~half day.
 - `[ready: worker3]` **v06-prepareresult-preload-select-multi** — async-loaded options on select + multi-select via `column.fetchOptions`. ~half day.
