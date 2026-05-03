@@ -8,6 +8,7 @@ import {
   reduceEditState,
 } from "./editingStateMachine"
 import type { RangeTsvPasteApplyPlan } from "./rangeClipboard"
+import type { RowPatchApplyPlan } from "./rowPatchPlan"
 import type {
   BcCellEditCommitEvent,
   BcCellEditCommitHandler,
@@ -893,6 +894,136 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     [options.onCellEditCommit, rollbackPasteCommit],
   )
 
+  const rollbackRowPatchCommit = useCallback(
+    (commitEntry: RowPatchApplyPlan<TRow>["commits"][number], mutationId: string, err: unknown) => {
+      const rollbackEntry = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
+      if (!rollbackEntry || rollbackEntry.mutationId !== mutationId) return
+
+      const patches = overlayRef.current.patches.get(commitEntry.rowId)
+      patches?.delete(commitEntry.columnId)
+      if (patches && patches.size === 0) overlayRef.current.patches.delete(commitEntry.rowId)
+
+      const rollbackError = err instanceof Error ? err.message : "Server rejected the edit."
+      rollbackEntry.pending = false
+      rollbackEntry.error = rollbackError
+      forceRender()
+      options.announce?.({
+        kind: "serverError",
+        column: commitEntry.column,
+        error: rollbackError,
+      })
+    },
+    [options.announce],
+  )
+
+  /**
+   * Apply a pre-validated bulk-patch plan in one render pass + fire one
+   * `onCellEditCommit` per cell with `source: "api"`. Mirrors
+   * `commitFromPasteApplyPlan` (paste-pipeline batched commit) — same
+   * mutationId stamping for stale-settle protection, same async-settle
+   * rollback semantics — but kept as a parallel method so the
+   * source-tracking on `BcCellEditCommitEvent.source` stays accurate
+   * (paste vs api are different surfaces in consumer telemetry).
+   *
+   * Atomic-validate-then-apply lives upstream in `buildRowPatchApplyPlan`
+   * (`rowPatchPlan.ts`); by the time this method is called, every cell
+   * has cleared `column.validate`. Per `v06-bulk-row-patch-primitive`
+   * (HEADLINE / two-spike-confirmed).
+   */
+  const commitFromRowPatchPlan = useCallback(
+    (plan: RowPatchApplyPlan<TRow>): void => {
+      validateAbortRef.current?.abort()
+      validateAbortRef.current = null
+
+      const appliedCommits: Array<{
+        commit: (typeof plan.commits)[number]
+        mutationId: string
+      }> = []
+
+      for (const commitEntry of plan.commits) {
+        const rowPatch = overlayRef.current.patches.get(commitEntry.rowId) ?? new Map()
+        rowPatch.set(commitEntry.columnId, commitEntry.nextValue)
+        overlayRef.current.patches.set(commitEntry.rowId, rowPatch)
+
+        const mutationId = `m-${++mutationCounterRef.current}`
+        const rowEntries = editEntriesRef.current.get(commitEntry.rowId) ?? new Map()
+        rowEntries.set(commitEntry.columnId, {
+          pending: false,
+          previousValue: commitEntry.previousValue,
+          mutationId,
+        })
+        editEntriesRef.current.set(commitEntry.rowId, rowEntries)
+        appliedCommits.push({ commit: commitEntry, mutationId })
+      }
+
+      forceRender()
+
+      const consumerHook = options.onCellEditCommit
+      if (!consumerHook) return
+
+      let pendingChanged = false
+      for (const { commit: commitEntry, mutationId } of appliedCommits) {
+        const event: BcCellEditCommitEvent<TRow> = {
+          rowId: commitEntry.rowId,
+          row: commitEntry.row,
+          columnId: commitEntry.columnId,
+          column: commitEntry.column,
+          previousValue: commitEntry.previousValue as never,
+          nextValue: commitEntry.nextValue as never,
+          source: "api",
+        }
+
+        let settle: ReturnType<typeof consumerHook>
+        try {
+          settle = consumerHook(event)
+        } catch (err) {
+          rollbackRowPatchCommit(commitEntry, mutationId, err)
+          continue
+        }
+
+        if (!settle || typeof (settle as Promise<unknown>).then !== "function") continue
+
+        const entry = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
+        if (entry) {
+          entry.pending = true
+          pendingChanged = true
+        }
+
+        void (settle as Promise<unknown>)
+          .then((settled) => {
+            const after = editEntriesRef.current.get(commitEntry.rowId)?.get(commitEntry.columnId)
+            if (!after || after.mutationId !== mutationId) return
+
+            if (isCellEditCommitResult<TRow>(settled)) {
+              if (settled.status === "rejected") {
+                rollbackRowPatchCommit(
+                  commitEntry,
+                  mutationId,
+                  settled.reason ? new Error(settled.reason) : undefined,
+                )
+                return
+              }
+              if (settled.row !== undefined) {
+                const serverValue = getCellValue(settled.row, commitEntry.column)
+                if (serverValue !== undefined) {
+                  overlayRef.current.patches
+                    .get(commitEntry.rowId)
+                    ?.set(commitEntry.columnId, serverValue)
+                }
+              }
+            }
+
+            after.pending = false
+            forceRender()
+          })
+          .catch((err) => rollbackRowPatchCommit(commitEntry, mutationId, err))
+      }
+
+      if (pendingChanged) forceRender()
+    },
+    [options.onCellEditCommit, rollbackRowPatchCommit],
+  )
+
   // ------- Lifecycle dispatch shortcuts (called from editor portal) --------
 
   const dispatchMounted = useCallback(() => dispatch({ type: "mounted" }), [])
@@ -996,6 +1127,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     commit,
     clearCell,
     commitFromPasteApplyPlan,
+    commitFromRowPatchPlan,
     cancel,
     discardRowEdits,
     dispatchMounted,
