@@ -67,6 +67,7 @@ import type {
   BcFiscalCalendar as BcEngineFiscalCalendar,
 } from "@bc-grid/filters"
 import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
+import type { BcClientTreeData } from "./clientTree"
 
 export type BcGridDensity = "compact" | "normal" | "comfortable"
 
@@ -608,6 +609,22 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   data: readonly TRow[]
   columns: readonly BcReactGridColumn<TRow>[]
   rowId: BcRowId<TRow>
+
+  /**
+   * Opt-in client-side tree row model. When supplied, the grid builds
+   * a parent → children adjacency from `data` via `getRowParentId`
+   * and renders rows with hierarchical indentation per the
+   * `expansion` controlled state. Independent of `<BcServerGrid
+   * rowModel="tree">` (which fetches children lazily). Per
+   * `docs/design/client-tree-rowmodel-rfc.md`.
+   *
+   * Implementation status: pure helpers + types ship in
+   * v06-client-tree-rowmodel-phase-1; full `<BcGrid>` integration
+   * (outline column rendering, sort + filter through the tree,
+   * aggregations on parent rows) follows in phase 2. Setting
+   * `treeData` before phase 2 lands has no rendering effect.
+   */
+  treeData?: BcClientTreeData<TRow>
 
   density?: BcGridDensity
   height?: "auto" | number
