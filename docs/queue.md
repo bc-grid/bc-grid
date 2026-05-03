@@ -359,6 +359,7 @@ Spec: `docs/design/chrome-rfc.md` (PR #46).
 Spec pending: `docs/design/filter-registry-rfc.md` (c2 to author).
 
 - `[done: c2 #48]` **filter-registry-rfc** — extension protocol; `BcFilterDefinition` / `BcReactFilterDefinition`; persistence shape; 7 built-in filter specs. **Effort**: 1 day.
+- `[review: worker2 #410]` **v06-filter-registry-implementation** — implement `@bc-grid/filters` registry + built-in predicate definitions, wire React predicate dispatch and registered editor lookup through the registry, and preserve registered filter type strings through localStorage/URL state. Branch `agent/worker2/v06-filter-registry-implementation`.
 - `[done: c1 #145]` **filter-popup-variant** ⭐ — When `column.filter.variant === "popup"`, render a header-icon (funnel) that opens a shadcn `Popover` with the existing text/number/date/boolean filter editor inside, instead of the inline-row input. Active state: solid/blue funnel + underline on the header, cleared by an `×` in the popover footer. The inline row collapses for that column when popup is active; if every column is popup-variant the row disappears entirely. AG-Grid-feel. Reuses existing filter editors — no logic duplication. **Demo-critical** (week 2). **Effort**: M.
 - `[review: worker1 #156]` **filter-set-impl** ⭐ — multi-select dropdown of distinct values. Lazy-loaded on first open. **Demo-critical** (week 2). **Effort**: M.
 - `[review: worker1 #175]` **filter-multi-impl** — same as set but for multi-select columns (already-array values). **Effort**: M.

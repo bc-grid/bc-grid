@@ -1,7 +1,9 @@
 import type { AggregationResult } from "@bc-grid/aggregations"
 import type {
+  BcBuiltInColumnFilterType,
   BcCellPosition,
   BcColumnFilter,
+  BcColumnFilterType,
   BcColumnFormat,
   BcColumnStateEntry,
   BcGridColumn as BcCoreGridColumn,
@@ -54,6 +56,7 @@ import type {
   ServerTreeRow,
   ServerViewDiagnostics,
 } from "@bc-grid/core"
+import type { BcFilterDefinition as BcEngineFilterDefinition } from "@bc-grid/filters"
 import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
 
 export type BcGridDensity = "compact" | "normal" | "comfortable"
@@ -1251,12 +1254,7 @@ export type BcCellEditCommitHandler<TRow> = (
   event: BcCellEditCommitEvent<TRow>,
 ) => void | Promise<undefined | BcCellEditCommitResult<TRow>>
 
-export interface BcFilterDefinition<TValue = unknown> {
-  type: string
-  predicate: (value: TValue, criteria: unknown) => boolean
-  serialize: (criteria: unknown) => string
-  parse: (serialized: string) => unknown
-}
+export type BcFilterDefinition<TValue = unknown> = BcEngineFilterDefinition<TValue>
 
 export interface BcReactFilterDefinition<TValue = unknown> extends BcFilterDefinition<TValue> {
   Editor?: ComponentType<BcFilterEditorProps<TValue>>
@@ -1266,12 +1264,15 @@ export interface BcFilterEditorProps<TValue = unknown> {
   value: TValue | null
   commit(next: TValue | null): void
   clear(): void
+  column?: unknown
   locale?: string
 }
 
 export type {
   BcCellPosition,
+  BcBuiltInColumnFilterType,
   BcColumnFilter,
+  BcColumnFilterType,
   BcColumnFormat,
   BcColumnStateEntry,
   BcGridApi,

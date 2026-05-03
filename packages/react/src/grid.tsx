@@ -3330,6 +3330,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             return (
               <FilterPopup
                 anchor={filterPopupState.anchor}
+                column={popupColumn.source}
                 columnId={popupColumnId}
                 filterType={popupFilter.type}
                 filterText={columnFilterText[popupColumnId] ?? ""}

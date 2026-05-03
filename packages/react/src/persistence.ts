@@ -478,16 +478,7 @@ function parseSidebarPanel(value: unknown): string | null | undefined {
 }
 
 function isColumnFilterType(value: unknown): value is ServerColumnFilter["type"] {
-  return (
-    value === "text" ||
-    value === "number" ||
-    value === "number-range" ||
-    value === "date" ||
-    value === "date-range" ||
-    value === "set" ||
-    value === "boolean" ||
-    value === "custom"
-  )
+  return typeof value === "string" && value.length > 0
 }
 
 function isBuiltInAggregationType(
