@@ -41,6 +41,7 @@ import {
 } from "./pagination"
 import type {
   BcCellEditCommitEvent,
+  BcCellEditCommitHandler,
   BcGridProps,
   BcReactGridColumn,
   BcServerEditMutationHandler,
@@ -449,11 +450,18 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
     [activeMode, infinite, paged, tree],
   )
 
-  const handleCellEditCommit = useCallback(
-    async (event: BcCellEditCommitEvent<TRow>) => {
-      if (!props.onServerRowMutation) return props.onCellEditCommit?.(event)
+  const handleCellEditCommit = useCallback<BcCellEditCommitHandler<TRow>>(
+    async (event) => {
+      if (!props.onServerRowMutation) {
+        // Coerce a sync `void` return from the consumer hook to
+        // `undefined` so this bridge's return type lines up with
+        // `BcCellEditCommitHandler<TRow>`'s `Promise<undefined | Result>`.
+        // Runtime is unchanged: `await` of `void` resolves to `undefined`,
+        // and `await` of a Promise<X> resolves to X.
+        return (await props.onCellEditCommit?.(event)) ?? undefined
+      }
 
-      return commitServerEditMutation({
+      await commitServerEditMutation({
         createServerRowPatch: props.createServerRowPatch,
         event,
         mutationId: `server-edit:${++mutationCounterRef.current}`,
@@ -461,6 +469,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         queueServerRowMutation,
         settleServerRowMutation,
       })
+      return undefined
     },
     [
       props.createServerRowPatch,
@@ -472,10 +481,15 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   )
   const cellEditCommitHandler =
     props.onServerRowMutation || props.onCellEditCommit ? handleCellEditCommit : undefined
+  // `showPagination === false` hides the pager chrome — same contract
+  // as the inner `<BcGrid>`. `<BcServerGrid>` paged mode renders its
+  // own footer (because the inner grid is in `paginationMode="manual"`
+  // and never auto-renders a pager), so the gate has to live here too.
+  const showServerPaginationChrome = props.showPagination !== false
   const pagedFooter =
     activeMode === "paged"
       ? (props.footer ??
-        (paged.gridShell.paginationEnabled ? (
+        (paged.gridShell.paginationEnabled && showServerPaginationChrome ? (
           <BcGridPagination
             page={paged.gridShell.paginationWindow.page}
             pageCount={paged.gridShell.paginationWindow.pageCount}

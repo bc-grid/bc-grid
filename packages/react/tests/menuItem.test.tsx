@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
-import { BcGridMenuCheckItem, BcGridMenuItem } from "../src/internal/menu-item"
+import {
+  BcGridMenuCheckItem,
+  BcGridMenuItem,
+  BcGridMenuToggleItem,
+} from "../src/internal/menu-item"
 
 function countMatches(haystack: string, needle: string): number {
   let count = 0
@@ -157,6 +161,42 @@ describe("BcGridMenuCheckItem", () => {
 
     expect(countMatches(html, "bc-grid-menu-item-leading")).toBe(1)
     expect(countMatches(html, "bc-grid-menu-item-label")).toBe(1)
+  })
+})
+
+describe("BcGridMenuToggleItem", () => {
+  test("renders a div checkbox menuitem for context-menu toggles", () => {
+    const html = renderToStaticMarkup(<BcGridMenuToggleItem checked={false} label="Show sidebar" />)
+
+    expect(html).toContain('role="menuitemcheckbox"')
+    expect(html).toContain('aria-checked="false"')
+    expect(html).toContain('data-state="unchecked"')
+    expect(html).toContain("bc-grid-menu-item")
+    expect(html).toContain("bc-grid-context-menu-item")
+    expect(html).toContain(">Show sidebar<")
+  })
+
+  test("checked toggles the checkmark glyph and data-state", () => {
+    const checked = renderToStaticMarkup(<BcGridMenuToggleItem checked label="Show status bar" />)
+    const unchecked = renderToStaticMarkup(
+      <BcGridMenuToggleItem checked={false} label="Show status bar" />,
+    )
+
+    expect(checked).toContain('aria-checked="true"')
+    expect(checked).toContain('data-state="checked"')
+    expect(checked).toContain("M3 8.5 6.5 12 13 4.5")
+
+    expect(unchecked).toContain('aria-checked="false"')
+    expect(unchecked).toContain('data-state="unchecked"')
+    expect(unchecked).not.toContain("M3 8.5 6.5 12 13 4.5")
+  })
+
+  test("disabled state uses aria-disabled like action context-menu items", () => {
+    const html = renderToStaticMarkup(
+      <BcGridMenuToggleItem checked={false} label="Show filter row" disabled />,
+    )
+
+    expect(html).toContain('aria-disabled="true"')
   })
 })
 

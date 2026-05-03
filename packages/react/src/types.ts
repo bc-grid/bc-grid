@@ -75,6 +75,38 @@ export interface BcGridLayoutState {
   sidebarPanel?: string | null
 }
 
+// Reserved for v0.6+. Kept so the v0.5 draft persistence shape can
+// accept column-scoped settings without a breaking type rename later.
+export type BcUserColumnSettings = Record<string, never>
+
+export interface BcUserSettings {
+  version: 1
+  /**
+   * TODO(vanilla-rfc): these draft `visible.*` field names mirror
+   * `docs/design/vanilla-and-context-menu-rfc.md`; coordinator owns the
+   * final naming sweep when the RFC is ratified.
+   */
+  visible?: {
+    columnMenu?: boolean
+    filterRow?: boolean
+    sidebar?: boolean
+    statusBar?: boolean
+    activeFilterSummary?: boolean
+    flashOnEdit?: boolean
+    checkboxSelection?: boolean
+  }
+  density?: BcGridDensity
+  layout?: BcGridLayoutState
+  sidebarPanel?: string | null
+  perColumn?: Record<ColumnId, BcUserColumnSettings>
+}
+
+export interface BcUserSettingsStore {
+  read(): BcUserSettings | undefined
+  write(next: BcUserSettings): void
+  subscribe?(listener: (next: BcUserSettings) => void): () => void
+}
+
 export interface BcGridMessages {
   noRowsLabel: string
   loadingLabel: string
@@ -333,6 +365,7 @@ export type BcContextMenuBuiltinItem =
   | "separator"
 
 export interface BcContextMenuCustomItem<TRow = unknown> {
+  kind?: "item"
   id: string
   label: string
   onSelect: (ctx: BcContextMenuContext<TRow>) => void
@@ -349,13 +382,40 @@ export interface BcContextMenuCustomItem<TRow = unknown> {
   variant?: "default" | "destructive"
 }
 
+export interface BcContextMenuToggleItem<TRow = unknown> {
+  kind: "toggle"
+  id: string
+  label: string
+  selection?: "checkbox" | "radio"
+  checked: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+  onToggle: (ctx: BcContextMenuContext<TRow>, next: boolean) => void
+  disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+}
+
+export interface BcContextMenuSubmenuItem<TRow = unknown> {
+  kind: "submenu"
+  id: string
+  label: string
+  items:
+    | readonly (BcContextMenuItem<TRow> | false | null | undefined)[]
+    | ((
+        ctx: BcContextMenuContext<TRow>,
+      ) => readonly (BcContextMenuItem<TRow> | false | null | undefined)[])
+  disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
+}
+
 export type BcContextMenuItem<TRow = unknown> =
   | BcContextMenuBuiltinItem
   | BcContextMenuCustomItem<TRow>
+  | BcContextMenuToggleItem<TRow>
+  | BcContextMenuSubmenuItem<TRow>
 
 export interface BcContextMenuContext<TRow = unknown> {
   cell: BcCellPosition | null
+  columnId?: ColumnId | undefined
   row: TRow | null
+  rowId?: RowId | undefined
+  rowIndex?: number | undefined
   column: BcReactGridColumn<TRow> | null
   selection: BcSelection
   api: BcGridApi<TRow>
@@ -539,6 +599,12 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   onSidebarPanelChange?: (next: string | null, prev: string | null) => void
   sidebarWidth?: number
   contextMenuItems?: BcContextMenuItems<TRow>
+  /**
+   * Draft v0.5 user-preference store for context-menu driven chrome
+   * toggles. TODO(vanilla-rfc): coordinator owns final field names and
+   * debounce/composition semantics when the RFC is ratified.
+   */
+  userSettings?: BcUserSettingsStore
 
   /**
    * Master-detail render hook. When supplied, the grid renders a pinned-left
@@ -560,8 +626,17 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * Fires after the editing overlay commits a cell value. Client grids can
    * mirror the value into their own state; server grids can convert the event
    * into a `ServerRowPatch` and settle it after persistence completes.
+   *
+   * Returning `Promise<BcCellEditCommitResult<TRow>>` opts the cell into
+   * the same optimistic / rollback / overlay lifecycle `<BcServerGrid>`
+   * already runs through `onServerRowMutation` — `{ status: "rejected",
+   * reason }` rolls back the overlay and surfaces `reason` as the cell
+   * error; `{ status: "accepted", row? }` keeps the overlay and (when
+   * `row` is provided) re-extracts the cell's overlay value from the
+   * server-confirmed row. Returning `void | Promise<void>` keeps
+   * fire-and-forget behaviour unchanged.
    */
-  onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
+  onCellEditCommit?: BcCellEditCommitHandler<TRow>
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
@@ -617,12 +692,105 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   showColumnMenu?: boolean
 
   /**
+   * Controls the built-in pagination footer chrome
+   * (`<BcGridPagination>`). Default `undefined` — chrome shows
+   * automatically when pagination is enabled. Set to `false` to hide
+   * the pager UI without disabling pagination semantics: page-window
+   * slicing, `paginationMode`, `aria-rowcount`, and the
+   * `onPaginationChange` callback all continue to work. Useful for
+   * vanilla / chromeless layouts and for the future right-click
+   * `View → Show pagination` toggle (vanilla-and-context-menu RFC
+   * §4 and §3 default-off proposal).
+   *
+   * Mirrors `showFilterRow` / `showColumnMenu` shape so consumer
+   * code reads consistently across visibility toggles.
+   */
+  showPagination?: boolean
+
+  /**
    * Flash the cell briefly when an edit commits, per
    * `editing-rfc §Edit-cell paint perf`. Off by default. Uses the
    * `flash` primitive from `@bc-grid/animations`, which already
    * respects `prefers-reduced-motion`.
    */
   flashOnEdit?: boolean
+
+  /**
+   * Grid-level editing master switch. When `false`, every editor
+   * activation path is suppressed regardless of `column.editable`:
+   * keyboard (F2 / Enter / printable / Backspace / Delete), pointer
+   * (double-click), and the `apiRef.startEdit` programmatic path.
+   * Validation, server commit, and the editing controller remain
+   * available so that paste-in-flight or pending-mutation rollback
+   * paths still settle.
+   *
+   * Defaults to `true` (current behaviour). Forward-compatible with
+   * the v0.5 vanilla-and-context-menu RFC's "Edit mode" toggle —
+   * the right-click menu will read / write this prop through the
+   * `BcUserSettings` persistence layer once that ratifies.
+   */
+  editingEnabled?: boolean
+
+  /**
+   * Show the visible inline validation popover (introduced in #356)
+   * under the editor input on validation rejection. When `false`,
+   * the popover is suppressed; the AT contract (assertive live
+   * region announce + `aria-invalid` on the input) is unchanged so
+   * screen-reader users still get the rejection signal.
+   *
+   * Defaults to `true`. Forward-compatible with the RFC's View →
+   * "Show validation messages" toggle.
+   */
+  showValidationMessages?: boolean
+
+  /**
+   * Render a small dim caption at the bottom of the editor portal
+   * showing the keyboard contract — `F2 / Enter / Esc / Tab` — for
+   * users learning the bc-grid edit model. Off by default; turning
+   * on adds ~20px of vertical chrome inside the portal. Forward-
+   * compatible with the RFC's Editor → "Show keyboard hints"
+   * toggle.
+   */
+  showEditorKeyboardHints?: boolean
+
+  /**
+   * Pointer-driven editor activation mode. Keyboard activation
+   * (`F2` / `Enter` / printable / `Backspace` / `Delete`) is
+   * unaffected — this prop controls only mouse-driven entry.
+   *
+   *   - `"double-click"` (default) — today's behaviour; double-click
+   *     on an editable cell opens the editor. Mirrors the AG-Grid
+   *     default and is the right call for table-of-data screens
+   *     where accidental clicks shouldn't enter edit.
+   *   - `"single-click"` — single-click activates edit on editable
+   *     cells. The common pattern for forms-style ERP screens.
+   *   - `"f2-only"` — pointer never activates edit; keyboard only.
+   *     Right for read-mostly grids where the rare edit is
+   *     deliberately keyboard-driven.
+   */
+  editorActivation?: "f2-only" | "single-click" | "double-click"
+
+  /**
+   * Click-outside semantics for the active editor.
+   *
+   *   - `"commit"` (default) — clicking outside commits via the same
+   *     path as Tab / Enter (validate + onCellEditCommit).
+   *   - `"reject"` — clicking outside cancels the edit (mirrors Esc).
+   *   - `"ignore"` — clicking outside neither commits nor cancels;
+   *     editor stays open until explicit Tab/Enter or Escape.
+   */
+  editorBlurAction?: "commit" | "reject" | "ignore"
+
+  /**
+   * When `true`, Escape inside the active editor cancels the active
+   * edit AND calls `editController.discardRowEdits(rowId)` — rolling
+   * back every uncommitted overlay patch on the row including cells
+   * edited via prior Tab progressions. `<BcEditGrid>` overrides this
+   * default to `true` since its action column already exposes the
+   * row-discard surface; the keyboard shortcut completes the symmetry.
+   * Audit P1-W3-3 follow-up to #381.
+   */
+  escDiscardsRow?: boolean
 }
 
 export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
@@ -633,6 +801,9 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
   onDelete?: (row: TRow) => void
   canEdit?: (row: TRow) => boolean
   canDelete?: (row: TRow) => boolean
+  onInsertRow?: (params: BcEditGridInsertRowParams<TRow>) => void
+  onDuplicateRow?: (params: BcEditGridRowActionParams<TRow>) => void
+  confirmDelete?: (params: BcEditGridRowActionParams<TRow>) => boolean | Promise<boolean>
 
   /**
    * Multi-cell row rollback handler — surfaced as a "Discard" action
@@ -658,6 +829,17 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
   /** Discard-action label. Defaults to "Discard". */
   discardLabel?: string
   DeleteIcon?: ComponentType<{ className?: string }>
+}
+
+export interface BcEditGridRowActionParams<TRow> {
+  row: TRow
+  rowId: RowId
+  rowIndex: number
+}
+
+export interface BcEditGridInsertRowParams<TRow> extends BcEditGridRowActionParams<TRow> {
+  at: number
+  placement: "above" | "below"
 }
 
 export interface BcEditGridAction<TRow> {
@@ -843,6 +1025,17 @@ export interface BcCellEditorPrepareParams<TRow> {
   row: TRow
   rowId: RowId
   columnId: ColumnId
+  /**
+   * Resolved column metadata. Lets `prepare` callbacks branch on
+   * column-level configuration (e.g. read `column.options` for
+   * synchronous lookups, or invoke `column.fetchOptions` to preload
+   * the first page of an async lookup so the dropdown paints with
+   * options on first frame). Audit P1-W3-2.
+   *
+   * Pre-existing `prepare` consumers that didn't read `column` see
+   * no behaviour change — this is an additive surface widening.
+   */
+  column: BcReactGridColumn<TRow>
 }
 
 /**
@@ -952,6 +1145,50 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   nextValue: TValue
   source: "keyboard" | "pointer" | "api" | "paste"
 }
+
+/**
+ * Optional result-shaped resolution for `BcGridProps.onCellEditCommit`.
+ * Returning `Promise<BcCellEditCommitResult<TRow>>` from the commit hook
+ * opts the cell into the same optimistic / rollback / overlay lifecycle
+ * `<BcServerGrid>` already runs through `onServerRowMutation` —
+ * surfaced 2026-05-03 by the bsncraft v0.5 alpha.1 editing-pass review
+ * (ERP child-CRUD grids that re-implement the optimistic dance for
+ * every server-action commit).
+ *
+ * Returning `void | Promise<void>` keeps fire-and-forget behaviour
+ * unchanged — this is purely an opt-in widening of the handler.
+ *
+ *   - `status: "rejected"`: the optimistic overlay rolls back; `reason`
+ *     surfaces as the cell's `error` entry (the existing assertive
+ *     announce + cell-level error styling).
+ *   - `status: "accepted"`: the overlay stays. When `row` is provided,
+ *     the cell's overlay value is replaced with the value extracted
+ *     from `row` via `column.valueGetter` / `column.field` — useful when
+ *     the server normalised the input ("1.5 " → 1.5), computed derived
+ *     fields, or assigned a server-side id. Other cells on the row are
+ *     not touched (each cell owns its own overlay; server-derived
+ *     fields on different columns are the consumer's responsibility to
+ *     mirror via the `data` prop).
+ */
+export interface BcCellEditCommitResult<TRow> {
+  status: "accepted" | "rejected"
+  reason?: string
+  row?: TRow
+}
+
+/**
+ * Public signature for `BcGridProps.onCellEditCommit`. The outer `void`
+ * arm keeps sync `(event) => {}` consumers working. Async consumers
+ * resolve with `undefined` (legacy fire-and-forget — `async () => {}`
+ * which returns `Promise<void>` flows through transparently because the
+ * grid only inspects the resolved value when it discriminates on the
+ * `BcCellEditCommitResult` shape). The result-shape opt-in is the third
+ * arm. Surfaced 2026-05-03 by the bsncraft v0.5 alpha.1 editing-pass
+ * review.
+ */
+export type BcCellEditCommitHandler<TRow> = (
+  event: BcCellEditCommitEvent<TRow>,
+) => void | Promise<undefined | BcCellEditCommitResult<TRow>>
 
 export interface BcFilterDefinition<TValue = unknown> {
   type: string

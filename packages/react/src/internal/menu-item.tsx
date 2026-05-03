@@ -61,6 +61,68 @@ export interface BcGridMenuItemProps
   onActivate?: () => void
 }
 
+export interface BcGridMenuToggleItemProps
+  extends Omit<MenuItemBaseProps, "leading">,
+    Omit<HTMLAttributes<HTMLDivElement>, "role" | "aria-disabled" | "aria-checked" | "children"> {
+  checked: boolean
+  selection?: "checkbox" | "radio"
+  onActivate?: () => void
+}
+
+export function BcGridMenuToggleItem({
+  active,
+  checked,
+  disabled,
+  label,
+  selection = "checkbox",
+  trailing,
+  className,
+  onActivate,
+  onClick,
+  onKeyDown,
+  onMouseEnter,
+  ...rest
+}: BcGridMenuToggleItemProps): ReactNode {
+  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
+    onClick?.(event)
+    if (event.defaultPrevented || disabled) return
+    onActivate?.()
+  }
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    onKeyDown?.(event)
+    if (event.defaultPrevented || disabled) return
+    if (event.key !== "Enter" && event.key !== " ") return
+    event.preventDefault()
+    event.stopPropagation()
+    onActivate?.()
+  }
+  return (
+    <div
+      {...rest}
+      aria-checked={checked}
+      aria-disabled={disabled || undefined}
+      className={composeClassName("bc-grid-menu-item bc-grid-context-menu-item", className)}
+      data-active={active || undefined}
+      data-state={checked ? "checked" : "unchecked"}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      onMouseEnter={onMouseEnter}
+      role={selection === "radio" ? "menuitemradio" : "menuitemcheckbox"}
+      tabIndex={-1}
+    >
+      <span aria-hidden="true" className="bc-grid-menu-item-leading bc-grid-context-menu-icon">
+        {checked ? <CheckmarkIcon /> : null}
+      </span>
+      <span className="bc-grid-menu-item-label bc-grid-context-menu-label">{label}</span>
+      {trailing != null ? (
+        <span className="bc-grid-menu-item-trailing" aria-hidden="true">
+          {trailing}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 export function BcGridMenuItem({
   active,
   disabled,

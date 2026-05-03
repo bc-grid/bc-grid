@@ -46,6 +46,16 @@
       }
     },
     {
+      "include": ["packages/react/src/types.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConfusingVoidType": "off"
+          }
+        }
+      }
+    },
+    {
       "include": ["packages/*/tests/**/*.ts", "packages/*/tests/**/*.tsx"],
       "linter": {
         "rules": {
