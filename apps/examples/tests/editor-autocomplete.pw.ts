@@ -133,3 +133,18 @@ test("validation rejection keeps the editor open and announces via assertive reg
   const alert = page.locator('[data-bc-grid-alert="true"]').first()
   await expect(alert).toContainText(/Collector is required/i)
 })
+
+test("autocompleteEditor mounts in popup mode (in-cell-editor-mode-rfc §4: async dropdown overflows)", async ({
+  page,
+}) => {
+  // Per `in-cell-editor-mode-rfc.md` §4: autocomplete sets
+  // `popup: true` because the async-option dropdown panel
+  // (5-15 fetched rows + loading + no-matches rows) overflows the
+  // cell box. Pin the popup wrapper attribute. Worker3 PR (c).
+  await page.goto(URL)
+  await focusBodyCell(page, 0, AUTOCOMPLETE_COLUMN)
+  await page.keyboard.press("F2")
+  const wrapper = page.locator("[data-bc-grid-editor-mount]").first()
+  await expect(wrapper).toBeAttached()
+  await expect(wrapper).toHaveAttribute("data-bc-grid-editor-mount", "popup")
+})

@@ -101,3 +101,21 @@ test("commit persists the new selection to the cell display", async ({ page }) =
     .first()
   await expect(cell).toContainText("Disputed")
 })
+
+test("selectEditor mounts in popup mode (in-cell-editor-mode-rfc §4: dropdown overflows)", async ({
+  page,
+}) => {
+  // Per `in-cell-editor-mode-rfc.md` §4: the select dropdown listbox
+  // overflows the cell box, so the editor sets `popup: true` and the
+  // framework mounts it via `<EditorPortal>` in the overlay sibling.
+  // Pin the wrapper attribute so a regression that flips select to
+  // in-cell mounts catches in CI rather than slipping into production
+  // (the listbox would clip against the cell's `overflow: hidden`).
+  // Worker3 PR (c) per `docs/coordination/handoff-worker3.md`.
+  await page.goto(URL)
+  await focusBodyCell(page, 0, SELECT_COLUMN)
+  await page.keyboard.press("F2")
+  const wrapper = page.locator("[data-bc-grid-editor-mount]").first()
+  await expect(wrapper).toBeAttached()
+  await expect(wrapper).toHaveAttribute("data-bc-grid-editor-mount", "popup")
+})

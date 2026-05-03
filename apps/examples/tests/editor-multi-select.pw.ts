@@ -158,3 +158,19 @@ test("validation rejection keeps the editor open and announces via assertive reg
   const alert = page.locator('[data-bc-grid-alert="true"]').first()
   await expect(alert).toContainText(/VIP and Manual Review/i)
 })
+
+test("multiSelectEditor mounts in popup mode (in-cell-editor-mode-rfc §4: dropdown + chip lane overflow)", async ({
+  page,
+}) => {
+  // Per `in-cell-editor-mode-rfc.md` §4: multi-select sets
+  // `popup: true` because BOTH the dropdown listbox AND the chip
+  // lane on the trigger overflow the cell box (chips routinely wrap
+  // beyond the trigger's width for ERP many-of-many columns). Pin
+  // the popup wrapper attribute. Worker3 PR (c).
+  await page.goto(URL)
+  await focusBodyCell(page, 0, MULTI_SELECT_COLUMN)
+  await page.keyboard.press("F2")
+  const wrapper = page.locator("[data-bc-grid-editor-mount]").first()
+  await expect(wrapper).toBeAttached()
+  await expect(wrapper).toHaveAttribute("data-bc-grid-editor-mount", "popup")
+})

@@ -7,6 +7,16 @@ import { Combobox } from "./internal/combobox"
  * Multi-select editor — `kind: "multi-select"`. Default for
  * many-of-many columns per `editing-rfc §editor-multi-select`.
  *
+ * **Mount mode:** popup (`popup: true` per
+ * `in-cell-editor-mode-rfc.md` §4 — both the dropdown listbox AND
+ * the chip lane on the trigger overflow the cell box). The
+ * Combobox in multi-mode renders a chip per selected option, which
+ * for ERP many-of-many columns (tags, categories, regions) routinely
+ * overflows the trigger's width even before the dropdown opens. The
+ * framework mounts this editor via `<EditorPortal>` in the overlay
+ * sibling so chips wrap freely and the listbox can paint above
+ * adjacent rows without `overflow: hidden` clipping.
+ *
  * v0.5 (audit P0-4 / synthesis P0-4): replaces the v0.1 native
  * `<select multiple>` shell with the shadcn-native Combobox primitive
  * in `mode: "multi"`. Each option toggles on click; the trigger
@@ -33,6 +43,7 @@ import { Combobox } from "./internal/combobox"
 export const multiSelectEditor: BcCellEditor<unknown, unknown> = {
   Component: MultiSelectEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
   kind: "multi-select",
+  popup: true,
 }
 
 function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
