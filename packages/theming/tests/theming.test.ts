@@ -65,6 +65,20 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain("hsl(var(")
   })
 
+  test("bulk-actions bar has themed surface, action buttons, and coarse-pointer hit targets", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain(".bc-grid-bulk-actions {")
+    expect(css).toContain(
+      "background: color-mix(in srgb, var(--bc-grid-accent) 8%, var(--bc-grid-bg))",
+    )
+    expect(css).toContain(".bc-grid-bulk-actions-slot button,")
+    expect(css).toContain(".bc-grid-bulk-actions-clear")
+    expect(css).toContain(".bc-grid-bulk-actions-slot button:focus-visible,")
+    expect(css).toContain(".bc-grid-bulk-actions-slot button,\n.bc-grid-bulk-actions-clear,")
+    expect(css).toContain(".bc-grid-bulk-actions-slot button:hover:not(:disabled),")
+  })
+
   test("row-hover token mixes accent with --bc-grid-bg (opaque) so body and pinned composite to the same pixels", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     // Body cells paint hover via `background: var(--bc-grid-row-hover)`

@@ -73,6 +73,7 @@ export type {
 export type {
   BcAggregationFormatterParams,
   BcAggregationScope,
+  BcBulkActionsContext,
   BcCellEditCommitEvent,
   BcCellEditor,
   BcCellEditorPrepareParams,

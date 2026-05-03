@@ -176,6 +176,7 @@ export const apiSurfaceManifest = [
       "BcAggregationFormatterParams",
       "BcAggregationScope",
       "BcBuiltInColumnFilterType",
+      "BcBulkActionsContext",
       "BcCellEditCommitEvent",
       "BcCellEditor",
       "BcCellEditorPrepareParams",

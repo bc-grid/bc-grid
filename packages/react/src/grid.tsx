@@ -41,6 +41,7 @@ import {
 } from "react"
 import { BcGridAggregationFooterRow, useAggregations } from "./aggregations"
 import { renderBodyCell, renderGroupRowCell } from "./bodyCells"
+import { BcGridBulkActions, resolveBulkActionSelectedRowIds } from "./bulkActions"
 import { computeAutosizeWidth, measureColumnWidths, upsertColumnStateEntry } from "./columnCommands"
 import {
   type ColumnVisibilityItem,
@@ -168,6 +169,7 @@ import { applyKeyboardRangeExtension } from "./rangeNavigation"
 import { BcRangeOverlay } from "./rangeOverlay"
 import { matchesSearchText } from "./search"
 import {
+  clearSelection,
   headerCheckboxState,
   isRowSelected,
   selectOnly,
@@ -257,6 +259,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     rowIsDisabled,
     locale,
     toolbar,
+    bulkActions,
     footer,
     loading,
     loadingOverlay,
@@ -2277,6 +2280,32 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
   useEffect(() => assignRef(apiRef, api), [apiRef, api])
 
+  const allKnownRowIds = useMemo(
+    () => data.map((row, index) => ({ rowId: rowId(row, index) })),
+    [data, rowId],
+  )
+  const selectedRowCount = computeSelectedRowCount(
+    selectionState,
+    data.length,
+    allRowEntries.length,
+  )
+  const bulkActionSelectedRowIds = useMemo(
+    () => resolveBulkActionSelectedRowIds(selectionState, allKnownRowIds, allRowEntries),
+    [allKnownRowIds, allRowEntries, selectionState],
+  )
+  const clearBulkSelection = useCallback(() => {
+    selectionAnchorRef.current = null
+    setSelectionState(clearSelection())
+  }, [setSelectionState])
+  const bulkActionsContext = useMemo(
+    () => ({
+      selectedRowIds: bulkActionSelectedRowIds,
+      selectedRowCount,
+      clearSelection: clearBulkSelection,
+    }),
+    [bulkActionSelectedRowIds, clearBulkSelection, selectedRowCount],
+  )
+
   // Status-bar render context per `chrome-rfc §Status bar`. The
   // `aggregations` segment consumes the same `useAggregations` output
   // already feeding the in-grid aggregation footer row, so the segment
@@ -2292,7 +2321,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       api,
       totalRowCount: data.length,
       filteredRowCount: allRowEntries.length,
-      selectedRowCount: computeSelectedRowCount(selectionState, data.length, allRowEntries.length),
+      selectedRowCount,
       aggregations: aggregationResults,
       activeFilters: activeFilterSummaryItems,
       clearColumnFilter: clearColumnFilterText,
@@ -2308,7 +2337,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       clearColumnFilterText,
       data.length,
       latestValidationError,
-      selectionState,
+      selectedRowCount,
     ],
   )
   const activeFilterSummaryVisible =
@@ -2990,6 +3019,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       data-bc-grid-fit={fit}
       data-bc-grid-height-mode={isAutoHeight ? "auto" : "fixed"}
     >
+      {bulkActions ? <BcGridBulkActions actions={bulkActions} ctx={bulkActionsContext} /> : null}
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
 
       <div className="bc-grid-main">
