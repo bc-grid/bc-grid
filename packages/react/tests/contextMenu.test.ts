@@ -377,7 +377,7 @@ describe("context menu — filter clear built-ins", () => {
     ).toBe(false)
   })
 
-  test("clear-column-filter is disabled when no cell context is available", () => {
+  test("clear-column-filter is disabled when no column context is available", () => {
     // Shift+F10 with no active cell: there's no column to target.
     expect(
       contextMenuItemDisabled(

@@ -334,7 +334,14 @@ follows the toolbar's default; the active filter survives.
 ## Context menu column commands
 
 The `contextMenuItems` prop accepts an array of built-in IDs (or a factory
-that returns one). The bundled defaults cover clipboard + range:
+that returns one). When the prop is omitted, `<BcGrid>` renders the bundled
+contextual menu: clipboard commands, top-level Clear all filters, a Column
+submenu for column-bound clicks, a Filter submenu, a View submenu for chrome
+toggles, and selection/range cleanup.
+
+The exported `DEFAULT_CONTEXT_MENU_ITEMS` constant is the primitive clipboard
+and range seed for consumers who explicitly provide `contextMenuItems` and
+want to build their own menu:
 
 ```ts
 import { DEFAULT_CONTEXT_MENU_ITEMS } from "@bc-grid/react"
@@ -344,13 +351,11 @@ DEFAULT_CONTEXT_MENU_ITEMS
 //  "separator", "clear-selection", "clear-range"]
 ```
 
-Column commands (pin / hide / autosize) and filter-clearing are
-**consumer-opt-in** — they're not in the defaults because every grid has a
-slightly different idea of what belongs in the right-click menu. Spread the
-defaults and append the column commands you want; everything below is wired
-to existing `BcGridApi` methods and renders through the same
-`BcGridMenuItem` primitive as the bundled items, so no extra install or
-custom item is needed:
+If you supply `contextMenuItems`, that prop replaces the bundled contextual
+menu. Spread the default seed and append the column commands you want;
+everything below is wired to existing `BcGridApi` methods and renders through
+the same `BcGridMenuItem` primitive as the bundled items, so no extra install
+or custom item is needed:
 
 ```tsx
 import {
@@ -407,7 +412,7 @@ manually. The grid re-evaluates each item every time the menu opens.
 - `autosize-column` — disabled when the column has no DOM to measure (no
   context or hidden).
 - `autosize-all-columns` — disabled when every column is hidden.
-- `clear-column-filter` — disabled when there's no cell context, or when
+- `clear-column-filter` — disabled when there's no column context, or when
   that column has no active filter entry.
 - `clear-all-filters` — disabled when no filter is active across the grid.
 - `copy` / `copy-with-headers` — disabled when there's neither a cell

@@ -20,9 +20,16 @@ const portalSource = readFileSync(`${here}../src/editorPortal.tsx`, "utf8")
 const editGridSource = readFileSync(`${here}../src/editGrid.tsx`, "utf8")
 
 describe("editorActivation prop", () => {
-  test("BcGrid reads the prop with double-click default (current behaviour)", () => {
+  test("BcGrid resolves editorActivation through the prop → userSettings → default chain", () => {
+    // Updated for worker3 v05-default-context-menu-wiring: the
+    // resolution order is now (1) `BcGridProps.editorActivation`
+    // when set (locked-by-prop), (2) `BcUserSettings.editorActivation`
+    // from the persistence layer, (3) the v0.5 default `"double-click"`.
+    // Pin the resolved-value shape and the prop capture so a
+    // refactor that flips the chain catches loudly.
+    expect(gridSource).toMatch(/const editorActivationProp = props\.editorActivation/)
     expect(gridSource).toMatch(
-      /editorActivation:\s*"f2-only"\s*\|\s*"single-click"\s*\|\s*"double-click"\s*=\s*\n?\s*props\.editorActivation\s*\?\?\s*"double-click"/,
+      /editorActivation:\s*"f2-only"\s*\|\s*"single-click"\s*\|\s*"double-click"\s*=\s*\n?\s*editorActivationProp\s*\?\?\s*userSettingsState\?\.editorActivation\s*\?\?\s*"double-click"/,
     )
   })
 
@@ -47,9 +54,12 @@ describe("editorActivation prop", () => {
 })
 
 describe("editorBlurAction prop", () => {
-  test("BcGrid reads the prop with commit default (current behaviour)", () => {
+  test("BcGrid resolves editorBlurAction through the prop → userSettings → default chain", () => {
+    // Same prop → userSettings → default chain as editorActivation
+    // (worker3 v05-default-context-menu-wiring).
+    expect(gridSource).toMatch(/const editorBlurActionProp = props\.editorBlurAction/)
     expect(gridSource).toMatch(
-      /editorBlurAction:\s*"commit"\s*\|\s*"reject"\s*\|\s*"ignore"\s*=\s*\n?\s*props\.editorBlurAction\s*\?\?\s*"commit"/,
+      /editorBlurAction:\s*"commit"\s*\|\s*"reject"\s*\|\s*"ignore"\s*=\s*\n?\s*editorBlurActionProp\s*\?\?\s*userSettingsState\?\.editorBlurAction\s*\?\?\s*"commit"/,
     )
   })
 
@@ -74,8 +84,16 @@ describe("editorBlurAction prop", () => {
 })
 
 describe("escDiscardsRow prop", () => {
-  test("BcGrid reads the prop with false default", () => {
-    expect(gridSource).toMatch(/const\s+escDiscardsRow\s*=\s*props\.escDiscardsRow\s*===\s*true/)
+  test("BcGrid resolves escDiscardsRow through the prop → userSettings → default chain", () => {
+    // Boolean toggle: prop wins (locked-by-prop), else
+    // `BcUserSettings.visible.escDiscardsRow`, else `false`. The
+    // chrome context menu's `Editor → Esc reverts row` toggle writes
+    // through to userSettings via `setEscDiscardsRowPreference`.
+    // Worker3 v05-default-context-menu-wiring.
+    expect(gridSource).toMatch(/const escDiscardsRowProp = props\.escDiscardsRow/)
+    expect(gridSource).toMatch(
+      /escDiscardsRow\s*=\s*\n?\s*escDiscardsRowProp\s*!==\s*undefined[\s\S]*?userVisibleSettings\?\.escDiscardsRow\s*\?\?\s*false/,
+    )
   })
 
   test("EditorPortal forwards the prop", () => {

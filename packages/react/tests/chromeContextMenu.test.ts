@@ -146,9 +146,10 @@ describe("buildGridChromeContextMenuItems", () => {
       "copy-row",
       "copy-with-headers",
       "separator-3",
+      "clear-all-filters",
       "filter",
       "view",
-      "separator-6",
+      "separator-7",
       "clear-selection",
       "clear-range",
     ])
@@ -222,6 +223,7 @@ describe("buildGridChromeContextMenuItems", () => {
     const filterItems = submenu(items, "filter").items as readonly BcContextMenuItem<Row>[]
     const openFilters = filterItems[0]
 
+    expect(itemIds(filterItems)).toEqual(["open-filters-panel"])
     if (!openFilters || typeof openFilters !== "object" || openFilters.kind !== "item") {
       throw new Error("open filters action not found")
     }
@@ -230,10 +232,31 @@ describe("buildGridChromeContextMenuItems", () => {
     expect(panel).toBe("filters")
   })
 
-  test("header context adds Group and Pin submenus after View", () => {
+  test("column context adds Column submenu for body and header triggers", () => {
+    const bodyItems = buildItems({}, rowContext())
+    expect(itemIds(bodyItems)).toContain("column")
+    expect(
+      itemIds(submenu(bodyItems, "column").items as readonly BcContextMenuItem<Row>[]),
+    ).toEqual([
+      "pin-column-left",
+      "pin-column-right",
+      "unpin-column",
+      "hide-column",
+      "autosize-column",
+      "separator-5",
+      "show-all-columns",
+      "autosize-all-columns",
+      "clear-column-filter",
+    ])
+
+    const headerItems = buildItems({}, headerContext())
+    expect(itemIds(headerItems)).toContain("column")
+  })
+
+  test("header context adds Group submenu after View", () => {
     const bodyItems = buildItems({ groupableColumnIds: ["status"] })
     expect(itemIds(bodyItems)).not.toContain("group")
-    expect(itemIds(bodyItems)).not.toContain("pin")
+    expect(itemIds(bodyItems)).not.toContain("column")
 
     const headerItems = buildItems({ groupableColumnIds: ["status"] }, headerContext())
     expect(itemIds(headerItems)).toEqual([
@@ -241,11 +264,12 @@ describe("buildGridChromeContextMenuItems", () => {
       "copy-row",
       "copy-with-headers",
       "separator-3",
+      "clear-all-filters",
+      "column",
       "filter",
       "view",
       "group",
-      "pin",
-      "separator-8",
+      "separator-9",
       "clear-selection",
       "clear-range",
     ])
@@ -257,9 +281,6 @@ describe("buildGridChromeContextMenuItems", () => {
       checked: false,
       disabled: false,
     })
-    expect(itemIds(submenu(headerItems, "pin").items as readonly BcContextMenuItem<Row>[])).toEqual(
-      ["pin-column-left", "pin-column-right", "unpin-column"],
-    )
   })
 
   test("body row context omits Row submenu until edit-grid row actions are supplied", () => {
@@ -286,10 +307,12 @@ describe("buildGridChromeContextMenuItems", () => {
       "copy-row",
       "copy-with-headers",
       "separator-3",
+      "clear-all-filters",
+      "column",
       "filter",
       "view",
       "row",
-      "separator-7",
+      "separator-9",
       "clear-selection",
       "clear-range",
     ])
