@@ -222,26 +222,19 @@ export function BcGridContextMenu<TRow>({
     if (isContextMenuSubmenuItem(item)) {
       const subItems = resolveContextMenuSubmenuItems(item, context)
       return (
-        <div className="bc-grid-context-menu-submenu" data-open={active || undefined} key={key}>
-          <BcGridMenuItem
-            active={active}
-            aria-haspopup="menu"
-            aria-expanded={active || undefined}
-            disabled={disabled}
-            id={nested ? undefined : `${menuId}-item-${index}`}
-            label={label}
-            leading={null}
-            trailing={<DisclosureChevron className="bc-grid-context-menu-chevron" />}
-            onClick={(event) => event.stopPropagation()}
-            onActivate={() => activate(item)}
-            onMouseEnter={() => {
-              if (!nested) setActiveIndex(index)
-            }}
-          />
-          <div className="bc-grid-context-menu-submenu-content" role="menu">
-            {subItems.map((child, childIndex) => renderItem(child, childIndex, `${key}-`, true))}
-          </div>
-        </div>
+        <Submenu
+          active={active}
+          disabled={disabled}
+          id={nested ? undefined : `${menuId}-item-${index}`}
+          key={key}
+          label={label}
+          onActivate={() => activate(item)}
+          onMouseEnter={() => {
+            if (!nested) setActiveIndex(index)
+          }}
+        >
+          {subItems.map((child, childIndex) => renderItem(child, childIndex, `${key}-`, true))}
+        </Submenu>
       )
     }
 
@@ -439,4 +432,88 @@ function contextMenuStyle(position: BcGridContextMenuAnchor): CSSProperties {
     left: position.x,
     top: position.y,
   }
+}
+
+interface SubmenuProps {
+  active: boolean
+  disabled: boolean
+  id: string | undefined
+  label: string
+  onActivate: () => void
+  onMouseEnter: () => void
+  children: ReactNode
+}
+
+/**
+ * Submenu wrapper with viewport-collision flip. Default opens to the
+ * RIGHT (`left: 100%` of the trigger). When the trigger is near the
+ * viewport's right edge, the submenu would overflow offscreen — we
+ * detect that on open and flip to the LEFT (`right: 100%`) via
+ * `data-flip="left"` so CSS swaps the offset.
+ *
+ * Surfaced 2026-05-04 by bsncraft consumer: their grid is rendered
+ * full-width, so submenus on the rightmost columns went invisible
+ * past the viewport's right edge.
+ */
+function Submenu({
+  active,
+  disabled,
+  id,
+  label,
+  onActivate,
+  onMouseEnter,
+  children,
+}: SubmenuProps): ReactNode {
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const [flipSide, setFlipSide] = useState<"right" | "left">("right")
+
+  // Measure the submenu's projected right edge against the viewport
+  // when it opens. Use the unflipped width so we can decide left-vs-
+  // right deterministically; subsequent measurements (after a flip)
+  // would show fits-on-left even when fits-on-right is also true.
+  useLayoutEffect(() => {
+    if (!active) {
+      // Reset to default direction when submenu closes so the next
+      // open re-measures from the correct (right-side) baseline.
+      setFlipSide("right")
+      return
+    }
+    const wrapper = wrapperRef.current
+    const content = contentRef.current
+    if (!wrapper || !content || typeof window === "undefined") return
+    const triggerRect = wrapper.getBoundingClientRect()
+    const contentWidth = content.offsetWidth
+    const margin = 8
+    const projectedRightEdge = triggerRect.right + contentWidth + margin
+    const overflowsRight = projectedRightEdge > window.innerWidth
+    const fitsOnLeft = triggerRect.left - contentWidth - margin >= 0
+    setFlipSide(overflowsRight && fitsOnLeft ? "left" : "right")
+  }, [active])
+
+  return (
+    <div
+      ref={wrapperRef}
+      className="bc-grid-context-menu-submenu"
+      data-open={active || undefined}
+      data-flip={flipSide === "left" ? "left" : undefined}
+    >
+      <BcGridMenuItem
+        active={active}
+        aria-haspopup="menu"
+        aria-expanded={active || undefined}
+        disabled={disabled}
+        id={id}
+        label={label}
+        leading={null}
+        trailing={<DisclosureChevron className="bc-grid-context-menu-chevron" />}
+        onClick={(event) => event.stopPropagation()}
+        onActivate={onActivate}
+        onMouseEnter={onMouseEnter}
+      />
+      <div ref={contentRef} className="bc-grid-context-menu-submenu-content" role="menu">
+        {children}
+      </div>
+    </div>
+  )
 }

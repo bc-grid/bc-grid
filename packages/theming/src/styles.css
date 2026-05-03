@@ -2414,6 +2414,17 @@ select.bc-grid-editor-input {
   padding: 0.25rem;
 }
 
+/* Viewport-collision flip: when the submenu trigger is near the
+   viewport's right edge, the React `Submenu` component (`internal/
+   context-menu.tsx`) measures the projected right edge on open and
+   sets `data-flip="left"` on the wrapper. CSS swaps the horizontal
+   offset so the submenu opens to the LEFT instead of overflowing
+   offscreen. Surfaced 2026-05-04 by bsncraft full-width grids. */
+.bc-grid-context-menu-submenu[data-flip="left"] > .bc-grid-context-menu-submenu-content {
+  left: auto;
+  right: calc(100% + 0.25rem);
+}
+
 .bc-grid-context-menu-submenu:hover > .bc-grid-context-menu-submenu-content,
 .bc-grid-context-menu-submenu:focus-within > .bc-grid-context-menu-submenu-content,
 .bc-grid-context-menu-submenu[data-open="true"] > .bc-grid-context-menu-submenu-content {
