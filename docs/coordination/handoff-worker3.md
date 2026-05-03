@@ -38,7 +38,31 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 - ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
 
-### Active now → `v06-in-cell-editor-mode` PR (c) — verify popup editors (~3-4h)
+### Active now → `v06-layout-architecture-pass` PR (c) — cleanup + editor portal simplification (~4-6h, NOW UNGATED — worker1's PR (a) shipped)
+
+**In-cell editor PR (c) shipped as #414** (68a84e4) — selectEditor / multiSelectEditor / autocompleteEditor pinned with `popup: true`; categorisation regression guards in place. **In-cell editor RFC fully implemented** across PRs a/b/c (#408 / #412 / #414).
+
+**Layout pass PR (a) shipped as #415** (760de4c) — single `.bc-grid-viewport` container with sticky-positioned headers + pinned cells; ~250 LOC of JS scroll-sync deleted. Your PR (c) is now unblocked.
+
+PR (c) closes the layout RFC: delete the `availableGridWidth` ResizeObserver from `grid.tsx:381-395` (consolidate flex source-of-truth onto `viewport.width` from `useViewportSync`); simplify `editorCellRect` (remove the `expansionState` invalidation-only dep at `grid.tsx:1713` and the lint suppression at `:1672`); update `docs/design.md §4.2 / §4.3` to describe the new render graph + add a row to the §13 decisions table. Closes layout RFC §4 memos 3 (editor portal mispositioning band-aid → structural) and 4 (flex distribution single source of truth).
+
+**Branch:** `agent/worker3/v06-layout-architecture-pass-pr-c`. **Effort:** ~4-6h.
+
+### After layout PR (c) → `v06-editor-visual-contract-consolidation` (planning doc §4, ~half day)
+
+Pull §4 forward from `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`. Cell-state styling lives in two places (`data-bc-grid-cell-state="error"` on the cell + `.bc-grid-validation-popover` chrome) — different visual contracts; consumer overrides must touch both. Consolidate into one cell-state contract with the popover composing on top. Pair the migration note with the layout pass's `.bc-grid-scroller` → `.bc-grid-viewport` rename note in `docs/migration/v0.6.md`.
+
+**Branch:** `agent/worker3/v06-editor-visual-contract-consolidation`. **Effort:** ~half day.
+
+### After visual-contract consolidation → bsncraft migration co-pilot (editor side, consumer-paced)
+
+When bsncraft's customers grid migration draft surfaces editor-side rough edges, your role is editor + lookup expertise. Until then, if you want to keep momentum, pull a v0.7 follow-up from the in-cell editor RFC's open questions (e.g. Radix-backed hybrid date/datetime picker if cross-browser variance bites, `popup: "auto"` mode for select editors, `BcEditorOverlay.Anchor` primitive).
+
+### Previously active → `v06-in-cell-editor-mode` PR (c) (DONE — #414)
+
+68a84e4: selectEditor / multiSelectEditor / autocompleteEditor categorised as popup; in-cell editor RFC fully implemented.
+
+### Old anchor: `v06-in-cell-editor-mode` PR (c) — verify popup editors (~3-4h)
 
 **PR (a) shipped as #408** (51dd7c2 — framework + popup flag + scroll-out semantics + text/number/checkbox/time migration). **PR (b) shipped as #412** (edee30a — date/datetime hybrid annotations: in-cell mount with OS-chrome popovers, JSDoc `Mount mode: in-cell` markers + `popup intentionally unset` export-site comments). **#407 validation-flash-and-status-segment** (f12c270, audit P1-W3-4) also landed: `data-bc-grid-error-flash="true"` 600ms keyframe pulse + `latestError` status-bar segment + 8s decay.
 

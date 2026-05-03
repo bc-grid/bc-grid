@@ -35,11 +35,32 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
-### Active now → `v06-set-filter-option-provider` (your planning doc §4, ~half day)
+### Active now → `v06-layout-architecture-pass` PR (b) — detail panel sticky-left (~2-3h, NOW UNGATED — worker1's PR (a) shipped)
 
-**Filter registry shipped as #410** (ec6f6d5): `@bc-grid/filters` is no longer a placeholder — built-in filter definitions (text/number/date/set/boolean) are first-class registry entries; `matchesFilter` predicate dispatch + `registerFilter` API + dev-mode console.error for unknown filter types + URL/localStorage round-trip via the registry. Closes audit P1-W2-1.
+**Set filter option provider shipped as #413** (724a4af): `loadSetFilterOptions({ columnId, search, selectedValues, filterWithoutSelf, signal, limit, offset }) => Promise<{ options, totalCount?, selectedOptions?, hasMore? }>` shape per planning doc §4. Async option loading + abort-on-keystroke + selected-value preservation across searches + virtualized menu body for large option sets. Audit P1-W2-2 closed.
 
-The next active task continues from your planning doc §4 (set filter scales to thousands via async option provider — see spec below).
+**Layout pass PR (a) shipped as #415** (760de4c) — single `.bc-grid-viewport` container with sticky-positioned headers + pinned cells. Your PR (b) is now unblocked: detail panel composes as `position: sticky; left: 0` with `width: var(--bc-grid-viewport-width)` set as a CSS custom property by `useViewportSync` (per layout RFC §4 memo 2 closure). Pinned-left disclosure column ▶ alignment is preserved because both anchor to `left: 0` in the viewport coordinate space.
+
+Acceptance criteria from the original consumer thread (preserved):
+- Horizontal scroll on master leaves the detail panel anchored to the visible viewport.
+- Detail panel content keeps its own horizontal scroll if it overflows the viewport width.
+- Vertical scroll on master scrolls the detail row off-screen as expected (no sticky-vertical).
+- `detailPanelHeight` (and the row-fn variant) is still honored.
+- Pinned-left disclosure column ▶ button still visually connects to the detail row's left edge.
+
+**Branch:** `agent/worker2/v06-layout-architecture-pass-pr-b`. **Effort:** ~2-3h including a Playwright spec (coordinator runs the spec).
+
+### After PR (b) → `v06-saved-view-dto-recipe` (your planning doc §5, ~half day)
+
+Pull §5 forward from `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md` (audit P1-W2-3). Publish the canonical `BcSavedView` DTO + helpers (`createSavedView`, `applySavedViewLayout`, `migrateSavedViewLayout`) + a toolbar recipe doc. No runtime UI required — the DTO + helpers + recipe are the deliverable. Composes naturally with the filter-registry + set-filter-option-provider work since saved views serialize through the registry.
+
+Spec details in your planning doc; recommend: nest `BcGridLayoutState` rather than duplicating fields, add a `version` field for schema migration, document the URL-state vs persistent-view boundary.
+
+**Branch:** `agent/worker2/v06-saved-view-dto-recipe`. **Effort:** ~half day.
+
+### Previously active → `v06-set-filter-option-provider` (DONE — #413)
+
+### Old anchor: `v06-set-filter-option-provider` (your planning doc §4, ~half day)
 
 ### Previously active → `v06-filter-registry-implementation` (DONE — #410)
 

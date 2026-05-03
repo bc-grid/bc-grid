@@ -32,9 +32,19 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
 - ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
 
-### Active now → `v06-layout-architecture-pass` PR (a) — single scroll container + sticky header/pinned (~12-16h)
+### Active now → `v05-server-mode-switch` stage 3.3 — RFC §9 test sweep + Playwright (~3-4h)
 
-**Polymorphic `useServerGrid` hook shipped as #409** (928d9d7) — alpha.3 / GA scope per RFC §6 + §7 + Q6 ratification. Single `useServerGrid({ gridId, rowId, loadPage?, loadBlock?, loadChildren?, ... })` that owns one apiRef, one debounce, one mutation-id stream, one controlled `groupBy` pair; routes to whichever loader matches the resolved active mode. Three single-mode hooks remain as escape hatches per RFC §7. Stage 3.3 (RFC §9 carry-over test sweep) still queued as a small follow-up — see below.
+**Layout pass PR (a) shipped as #415** (760de4c, ~2-week single-PR train of structural rewrite) and **polymorphic `useServerGrid` hook shipped as #409** (928d9d7, alpha.3 / GA scope per RFC §6 + §7 + Q6). The layout pass deleted ~250 LOC of JS scroll-sync (`syncHeaderRowsScroll`, `pinnedTransformValue`, `headerScrollTransform`, `pinnedLaneStyle`, `headerViewportStyle`, `autoHeightHeaderViewportStyle`, `headerRowStyle`, the per-cell `transform` from `cellStyle`); single `.bc-grid-viewport` container; sticky-positioned headers + pinned cells. **Bundle hard cap raised 100 → 150 KiB** to absorb the v0.6 feature train (decision in design.md §13).
+
+Stage 3.3 closes the mode-switch RFC: 14 unit cases covering each carry-over dimension per RFC §9 (sort / filter / searchText / groupBy / columnState / pageSize / expansion-drop / selection / rangeSelection-drop / focusedRowId / scroll / viewKey / pending-mutations-settled / block-cache-dropped) + 1 Playwright happy-path covering the bsncraft case (paged↔tree switch with filter / sort / focused-cell / selection all carried). Runtime behavior already in main from stages 1-3.2; stage 3.3 pins the contract.
+
+**Branch:** `agent/worker1/v05-server-mode-switch-stage-3-3`. **Effort:** ~3-4h.
+
+### After stage 3.3 → bsncraft migration co-pilot (consumer-paced) OR pull v0.6 server-perf items forward
+
+bsncraft is now consuming v0.5.0-alpha.2 + can adopt the polymorphic `useServerGrid` hook. When their migration draft opens, your role is server-grid expertise. Until then, pull a v0.6 server-perf item forward from `docs/coordination/v05-audit-followups/worker1-server-perf.md` if you want to keep momentum (LRU eviction tuning under realistic ERP scroll patterns, prefetch-ahead budget calibration, optimistic-edit rollback under concurrent invalidations, etc.).
+
+### Old anchor: `v06-layout-architecture-pass` PR (a) — single scroll container + sticky header/pinned (~12-16h)
 
 ### Old anchor: `v06-layout-architecture-pass` PR (a) — single scroll container + sticky header/pinned (~12-16h)
 
