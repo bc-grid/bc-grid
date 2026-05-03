@@ -5,6 +5,13 @@ export {
   isFilteredSelection,
 } from "@bc-grid/core"
 export { useAggregations } from "./aggregations"
+export {
+  buildClientTree,
+  compactVisibleAncestors,
+  expandVisibleAncestors,
+  flattenClientTree,
+} from "./clientTree"
+export type { BcClientTreeData, ClientTreeIndex } from "./clientTree"
 export { DEFAULT_CONTEXT_MENU_ITEMS } from "./contextMenu"
 export { BcEditGrid } from "./editGrid"
 export { registerReactFilterDefinition } from "./filterRegistry"

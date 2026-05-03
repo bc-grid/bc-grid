@@ -52,6 +52,15 @@ export interface BcGridColumn<TRow, TValue = unknown> {
 
   tooltip?: string | ((row: TRow) => string | undefined)
   rowHeader?: boolean
+
+  /**
+   * Mark this column as the tree-outline column. The cell renderer
+   * wraps the value with a chevron + indent + level affordance.
+   * Active only when `BcGridProps.treeData` is set; ignored
+   * otherwise. At most one column should be `outline: true` per grid;
+   * the first wins. Per `docs/design/client-tree-rowmodel-rfc.md §4`.
+   */
+  outline?: boolean
 }
 
 interface BcColumnFilterBase {
