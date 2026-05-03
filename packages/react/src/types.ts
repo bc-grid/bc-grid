@@ -476,22 +476,36 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
    */
   columnMenu?: boolean
   /**
-   * Cell editor for this column. Accepts either:
+   * Cell editor for this column. Accepts three shapes:
    *   - `BcCellEditor<TRow, TValue>` — row-aware editor (consumer-supplied,
    *     reads `props.row` for typed access to other columns of the same row)
-   *   - `BcCellEditor<unknown, TValue>` — row-agnostic editor (the built-in
-   *     `textEditor` / `numberEditor` / `selectEditor` / etc., which only
-   *     consume `props.initialValue` and don't introspect the row shape)
+   *   - `BcCellEditor<unknown, TValue>` — row-agnostic editor that knows the
+   *     value type (e.g. a consumer-built typed editor that doesn't read row)
+   *   - `BcCellEditor<unknown, unknown>` — fully type-agnostic editor (the
+   *     built-in `textEditor` / `numberEditor` / `selectEditor` / etc.
+   *     exports, which only consume `props.initialValue` generically)
    *
-   * The second arm exists because TypeScript's strict variance treats
-   * `BcCellEditor<unknown>` as not assignable to `BcCellEditor<CustomerRow>`
-   * (the React component prop position is contravariant). Built-in editors
-   * are intentionally row-agnostic; declaring them with `<unknown>` and
-   * accepting that arm here means consumers can drop them straight into
-   * typed columns without a cast at every column site. Surfaced 2026-05-03
-   * by bsncraft v0.5 alpha.1 consumer editing-pass review.
+   * The second + third arms exist because TypeScript's strict variance
+   * treats `BcCellEditor<unknown, unknown>` as not assignable to
+   * `BcCellEditor<CustomerRow, string>` — the React component prop
+   * position uses `Partial<P>` (via `ComponentClass.defaultProps`) which
+   * is invariant in P, so even contravariant inputs become rigid.
+   *
+   * Built-in editors are intentionally row+value-agnostic; declaring them
+   * with `<unknown, unknown>` and accepting that arm here means consumers
+   * can drop them straight into typed columns without a cast at every
+   * column site (`cellEditor: textEditor` instead of
+   * `cellEditor: textEditor as BcCellEditor<CustomerRow>`).
+   *
+   * Two-bsncraft-confirmed: surfaced 2026-05-03 by v0.5 alpha.1 review
+   * (TRow widening landed via the second arm) and re-surfaced 2026-05-04
+   * by P1 #13 (TValue widening landed via the third arm — this iteration).
+   * The contract is pinned by `packages/editors/src/__typing_contract.ts`.
    */
-  cellEditor?: BcCellEditor<TRow, TValue> | BcCellEditor<unknown, TValue>
+  cellEditor?:
+    | BcCellEditor<TRow, TValue>
+    | BcCellEditor<unknown, TValue>
+    | BcCellEditor<unknown, unknown>
   aggregationFormatter?: (params: BcAggregationFormatterParams<TRow, TValue>) => ReactNode
   /**
    * Static or per-row option list for `editor-select` / `editor-multi-select`
