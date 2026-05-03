@@ -37,40 +37,45 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#382** `BcCellEditor.getValue?` hook for custom editors (audit P1-W3-6) + custom-editor recipe doc
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 - ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
+- ✅ **#414** `v06-in-cell-editor-mode-pr-c` — popup categorisation for select/multi/autocomplete (framework migration closed)
 - ✅ **#421** `v05-default-context-menu-wiring` editor + row-action slice — `Editor` submenu (edit mode / show validation / show keyboard hints / activation / blur / esc-discards-row) + row actions + dismiss-latest-error
 - ✅ **#424** `v06-editor-visual-contract-consolidation` — `data-bc-grid-edit-state` canonical attribute + six `--bc-grid-edit-state-*` tokens + dual-attribute helper for one-release migration
 
-### Active now → `v06-popup-editor-verification-pr-c` (in-cell editor RFC closure)
+### Active now → `v06-multi-combobox-enter-semantics` (your planning doc §5, ~30 min)
 
-`#421` and `#424` both merged. **In-cell editor RFC PRs (a) + (b) shipped.** **Default context menu editor + row actions wired.** **Editor visual contract consolidated.** Coordinator cut alpha.3 with the full v0.5 surface.
+`#421` and `#424` both merged. **In-cell editor RFC PRs (a) + (b) + (c) shipped.** **Default context menu editor + row actions wired.** **Editor visual contract consolidated.** Coordinator cut alpha.3 with the full v0.5 surface.
 
-The next active task is **PR (c) of `v06-in-cell-editor-mode`** — verify popup editors (select / multi-select / autocomplete) under the in-cell editor framework introduced in PR (a). The framework already supports popup-mode mounting via the `popup: true` flag; PR (c) is the verification pass + regression test sweep so we can claim the full editor migration done.
-
-Implementation:
-
-1. **Audit each popup editor** (`packages/editors/src/select.tsx`, `packages/editors/src/multi-select.tsx`, `packages/editors/src/autocomplete.tsx`) and confirm:
-   - The `popup: true` flag is set in their `BcCellEditor` config so the framework mounts them in the popup wrapper.
-   - The dropdown panels still anchor correctly under the cell (use `editorCellRect` from the framework — DON'T compute their own positioning).
-   - Keyboard shortcuts (Esc / Enter / Tab) still route through the editor controller.
-   - The `data-bc-grid-edit-state` attribute (introduced in #424) lands on the popup wrapper AND the input.
-
-2. **Add a per-editor mount-mode regression test** under `packages/react/tests/inCellEditorMode.test.ts` (or extend the existing harness if one exists) — pins the `popup: true` declaration so a future refactor that drops the flag catches.
-
-3. **Document the closure** in `docs/design/in-cell-editor-rfc.md` §closure: PRs (a), (b), (c) shipped; framework migration complete; future editors default to in-cell unless they explicitly opt into popup.
-
-**Branch:** `agent/worker3/v06-popup-editor-verification-pr-c`. **Effort:** ~half day.
-
-### Next-after → `v06-editor-keyboard-navigation-polish` (planning doc §5, ~half day)
-
-Once popup editor verification ships, pull §5 forward — editor keyboard navigation polish. The current Tab / Shift+Tab / Enter / Esc routing through the editor portal works for the happy path, but bsncraft surfaced edge cases in the alpha.2 consumer pass: Tab on the LAST editable cell in a row should move to the FIRST editable cell of the NEXT row (it currently moves to the next column even if that column is non-editable, then no-ops); Shift+Tab on the FIRST editable cell of a row should move to the LAST editable cell of the PREVIOUS row.
+The next v0.6 task is **§5 of `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`**: `v06-multi-combobox-enter-semantics`. Pure bug fix — the multi-mode Combobox `Enter` keydown routes through `updateSelection` (toggling the active option) before bubbling to the editor portal commit, undoing the user's last pick. The `editor-multi-select.pw.ts:111-114` workaround uses `Tab` and notes the sharp edge.
 
 Implementation:
 
-1. **Editable-aware Tab routing** in `useEditingController.ts` — `findNextEditableCell({ direction, currentRow, currentColumn, columns, rows })` helper that skips non-editable columns AND row-disabled rows. Default to next-row wrap when at the row boundary.
+1. **Split the Enter handler by mode** at `packages/editors/src/internal/combobox.tsx:273-282`:
+   - **Single mode**: keep current behaviour (Enter picks the active option, then Enter bubbles to commit).
+   - **Multi mode**: Enter does NOT toggle. It only bubbles up so the editor portal wrapper commits the current chip set. **`Space` stays as the toggle gesture.**
 
-2. **Edge case: only one editable column** — Tab should round-trip to the next row's editable cell, not no-op or trap focus.
+2. **Add an e2e assertion** in `apps/examples/tests/editor-multi-select.pw.ts` that the commit value after `Enter` contains all picked chips (not all-minus-the-active-one). Drop the Tab workaround comment now that Enter works.
 
-3. **Test coverage:** unit tests for `findNextEditableCell` covering the wrap cases + 1 Playwright spec at `apps/examples/tests/editor-tab-navigation.pw.ts` demonstrating the wrap on a grid with mixed editable / read-only columns.
+3. **Pin the contract with a unit test** for the keyboard intercept in the existing combobox tests.
+
+**Branch:** `agent/worker3/v06-multi-combobox-enter-semantics`. **Effort:** ~30 min — small targeted change. **Risk note:** None — pure bug fix; current behaviour is the surprising one and consumers shouldn't be relying on it.
+
+### Next-after → `v05-bsncraft-row-state-cascade-scoping` OR worker3-editor-keyboard-polish
+
+Once §5 ships (it's a small task — likely done in a single sitting), pick whichever fits next:
+
+**Option A (recommended): `v05-bsncraft-row-state-cascade-scoping` (RFC + implementation, ~half day)**
+
+Bsncraft P0 #2 — master `.bc-grid-row:hover` cascades into nested grid cells via descendant selectors. Detail panel renders INSIDE the master row's DOM (`grid.tsx:3519` — `<BcDetailPanelSlot>` inside the `bc-grid-row` div), so when cursor is over a nested grid cell, the master row matches `:hover` (cursor in descendant) AND the nested row matches `:hover`. Master row state-selector rules then paint nested cells too.
+
+Implementation: pick `@scope (.bc-grid) to (.bc-grid-detail-panel .bc-grid)` (cleanest, requires Chrome 118+ / Safari 17.4+ / Firefox 128+) vs `:not(:has(.bc-grid-detail-panel:hover))` per selector (more verbose, broader support). Apply symmetrically to `:hover`, `[data-bc-grid-focused-row="true"]`, `[aria-selected="true"]`, and their cell-level permutations (lines 214-234 + 817-862 + 874-933 in `packages/theming/src/styles.css`). Playwright spec at `apps/examples/tests/nested-grid-hover-isolation.pw.ts`.
+
+Your visual-contract token expertise from #424 is the natural fit. **Branch:** `agent/worker3/v05-bsncraft-row-state-cascade-scoping`. **Effort:** ~half day.
+
+**Option B: editor keyboard navigation polish**
+
+Tab on the LAST editable cell in a row should move to the FIRST editable cell of the NEXT row (currently moves to next column even if non-editable, then no-ops). Helper: `findNextEditableCell({ direction, currentRow, currentColumn, columns, rows })` in `useEditingController.ts` that skips non-editable columns + row-disabled rows. **Branch:** `agent/worker3/v06-editor-keyboard-navigation-polish`. **Effort:** ~half day.
+
+If worker2 has already picked up the bsncraft RFC, fall through to Option B.
 
 **Branch:** `agent/worker3/v06-editor-keyboard-navigation-polish`. **Effort:** ~half day.
 

@@ -34,31 +34,39 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#420** `v05-default-context-menu-wiring` server slice — `Server` submenu (`Show pagination`, `Expand all groups`, `Collapse all groups`)
 - ✅ **#422** `v06-server-perf-block-cache-lru-tuning` — LRU eviction order unit tests + smoke-perf bench (your planning doc §5)
 
-### Active now → `v06-server-perf-prefetch-budget-tuning` (your planning doc §6, ~half day)
+### Active now → `v06-server-infinite-prefetch-budget` (your planning doc §8, ~half day)
 
 `#420`, `#421`, `#422`, `#423`, `#424` all merged. **Mode-switch RFC + layout pass + default context menu + saved-view DTO + editor visual-contract consolidation are complete.** Coordinator cut alpha.3 with the full v0.5 surface.
 
-The next v0.6 server-perf task is **§6 of `docs/coordination/v05-audit-followups/worker1-server-perf.md`**: prefetch-budget tuning. The current default `prefetchAhead: 1` (one block ahead) was a conservative initial value introduced in #391. The bench from #422 measured eviction-active workloads but didn't sweep prefetch budgets.
+The next v0.6 server-perf task is **§8 of `docs/coordination/v05-audit-followups/worker1-server-perf.md`**: `v06-server-infinite-prefetch-budget`. Today's prefetch is hard-coded to "ensure current visible range + one block ahead at `range.endIndex + blockSize`" (`packages/react/src/serverGrid.tsx:1140-1146` and `:1163-1172`). A fast scroller hits the cliff every block; a slow scroller wastes bandwidth fetching ahead too much.
 
 Implementation:
 
-1. **Add a prefetch budget sweep to the smoke-perf bench** at `apps/benchmarks/tests/perf.perf.pw.ts` — same 10k-row scroll, but sweep `prefetchAhead` over `0 / 1 / 2 / 3` and emit per-budget metrics (hit rate, fetches issued, queue depth, time-to-content-on-scroll).
+1. **Add `prefetchAhead?: number` (default 1) to `BcServerInfiniteProps`** (`@bc-grid/core` — additive). Wire through `<BcServerGrid rowModel="infinite">` to issue `ensureBlock(range.endIndex + blockSize * i)` for `i = 1..prefetchAhead`. Then expose the same option on `useServerInfiniteGrid` props.
 
-2. **Pin the prefetch-trigger contract with a unit test** in `packages/server-row-model/tests/serverRowModel.test.ts`. Today's contract: when the visible window approaches the bottom of the loaded range, prefetch the next `prefetchAhead` blocks. Test that the prefetch fires at the right scroll position and that block requests dedupe against in-flight fetches.
+2. **Sweep the bench** at `apps/benchmarks/tests/perf.perf.pw.ts` — same 10k-row scroll harness from #422, but parameterize over `prefetchAhead = 0 / 1 / 2 / 3` and emit per-budget metrics (hit rate, fetches issued, queue depth, time-to-content-on-scroll). Coordinator reads the numbers at merge to decide if the recommended default should bump to `2`.
 
-3. **Optionally add a `Prefetch budget` submenu to the default context menu's `Server` submenu** (deferred from #420 — needs `BcUserSettings.layout.prefetchAhead` field + serverGrid wiring). Mode-conditional: visible only when `getActiveRowModelMode() === "infinite"`. Submenu items: `0 (off)`, `1 (default)`, `2`, `3`. Mirrors the existing `Show pagination` toggle pattern from #420.
+3. **Pin the prefetch-trigger contract with a unit test** in `packages/server-row-model/tests/serverRowModel.test.ts`. The contract: when visible range approaches the bottom of loaded range, prefetch the next `prefetchAhead` blocks. Test that prefetch fires at the right scroll position and that block requests dedupe against in-flight fetches.
 
-**Branch:** `agent/worker1/v06-server-perf-prefetch-budget-tuning`. **Effort:** ~half day.
+4. **Optionally add a `Prefetch ahead` submenu to the default context menu's `Server` submenu** (deferred from #420 — needs `BcUserSettings.layout.prefetchAhead` field + serverGrid wiring). Mode-conditional: visible only when `getActiveRowModelMode() === "infinite"`. Submenu items: `0 (off)`, `1 (default)`, `2`, `3`. Mirrors the existing `Show pagination` toggle pattern from #420.
 
-### Next-after → `v06-server-perf-stale-response-handling` (planning doc §7, ~half day)
+**Branch:** `agent/worker1/v06-server-infinite-prefetch-budget`. **Effort:** ~half day.
 
-Once prefetch tuning ships, pull §7 forward — stale-response handling under requestId floods. The current orchestration cancels in-flight requests via the per-row request-id supersedure introduced in #391, but the pattern hasn't been stress-tested under request floods (e.g. user trackpad-scrolling rapidly through 10k rows with a 200ms server). Specifically: confirm dropped-response GC keeps the cache pressure bounded under floods, and pin the supersedure contract with a unit test that interleaves overlapping requests for the same block.
+### Next-after → `v06-stale-response-flood-test` (planning doc §9, ~half day)
 
-**Branch:** `agent/worker1/v06-server-perf-stale-response-handling`. **Effort:** ~half day.
+Once prefetch budget ships, pull §9 forward — stale-response flood test. The orchestration cancels in-flight requests via `abortExcept` in `packages/server-row-model/src/index.ts:919` and the React gate at `packages/react/src/serverGrid.tsx:790`. Existing test (`serverGridPaged.test.ts:374-688`) covers a single late response — not a flood. Add a model-layer test that fires 10+ paged requests in quick succession, defers each loadPage, resolves them out of order, and asserts: only the latest result lands in cache, `lastLoad.status === "success"` for the latest, and all prior requests have `controller.signal.aborted === true`.
 
-### Then-after → continue down planning doc §8 / §9
+**Branch:** `agent/worker1/v06-stale-response-flood-test`. **Effort:** ~half day. **Tests-only PR** (existing behavior is correct; this is contract pinning).
 
-Your planning doc has 11 v0.6 task proposals total; pick the next at the top of the unfinished list when you're ready. The prefetch-tuning + stale-response pair closes the v0.6 server-perf train; after that the natural next pickup is whichever bsncraft RFC is still queued OR the v0.6 saved-view persistence layer (composable with worker2's #423 saved-view DTO).
+### Then-after → `v06-server-tree-stale-viewkey-fetches` (planning doc §10, ~half day)
+
+Pick up §10 next — `loadTreeChildren` does NOT call `abortExcept` (only paged does at line 902). Tree fetches under stale viewKeys can leak into the cache after a filter change. Fix: gate `request.promise.then(...)` on `viewKey === viewKeyRef.current` (lower risk than full abort).
+
+**Branch:** `agent/worker1/v06-server-tree-stale-viewkey-fetches`. **Effort:** ~half day.
+
+### Optionally pick up the bsncraft RFCs queued for v0.6
+
+Two new bsncraft P0 items hit the queue 2026-05-03; chrome+CSS-heavy fixes — worker2 / worker3 are the natural fit. Flag only if they're saturated.
 
 ### Optionally pick up the bsncraft RFCs queued for v0.6
 
