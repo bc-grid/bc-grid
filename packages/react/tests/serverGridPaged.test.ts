@@ -10,6 +10,7 @@ import { createServerRowModel } from "@bc-grid/server-row-model"
 import {
   isActiveServerPagedResponse,
   resolveActiveRowModelMode,
+  resolveMissingLoaderMessage,
   resolvePrefetchAhead,
   resolveScrollToServerCellAction,
   resolveServerPagedGridShell,
@@ -1142,5 +1143,87 @@ describe("resolveActiveRowModelMode (server-mode-switch RFC §6 stage 1)", () =>
 
   test("heuristic defaults to 'paged' when both rowModel and groupBy are undefined", () => {
     expect(resolveActiveRowModelMode({ rowModel: undefined, groupBy: undefined })).toBe("paged")
+  })
+})
+
+describe("resolveMissingLoaderMessage (server-mode-switch RFC §6 stage 2 mount assertion)", () => {
+  test("returns null when the active mode's loader is present (paged + loadPage)", () => {
+    expect(
+      resolveMissingLoaderMessage({
+        activeMode: "paged",
+        hasLoadPage: true,
+        hasLoadBlock: false,
+        hasLoadChildren: false,
+      }),
+    ).toBeNull()
+  })
+
+  test("returns null when the active mode's loader is present (infinite + loadBlock)", () => {
+    expect(
+      resolveMissingLoaderMessage({
+        activeMode: "infinite",
+        hasLoadPage: false,
+        hasLoadBlock: true,
+        hasLoadChildren: false,
+      }),
+    ).toBeNull()
+  })
+
+  test("returns null when the active mode's loader is present (tree + loadChildren)", () => {
+    expect(
+      resolveMissingLoaderMessage({
+        activeMode: "tree",
+        hasLoadPage: false,
+        hasLoadBlock: false,
+        hasLoadChildren: true,
+      }),
+    ).toBeNull()
+  })
+
+  test("returns a dev-error message when paged mode is active but loadPage is missing", () => {
+    const message = resolveMissingLoaderMessage({
+      activeMode: "paged",
+      hasLoadPage: false,
+      hasLoadBlock: true,
+      hasLoadChildren: true,
+    })
+    expect(message).not.toBeNull()
+    expect(message).toContain('"paged"')
+    expect(message).toContain("loadPage")
+    expect(message).toContain("server-mode-switch-rfc")
+  })
+
+  test("returns a dev-error message when infinite mode is active but loadBlock is missing", () => {
+    const message = resolveMissingLoaderMessage({
+      activeMode: "infinite",
+      hasLoadPage: true,
+      hasLoadBlock: false,
+      hasLoadChildren: true,
+    })
+    expect(message).not.toBeNull()
+    expect(message).toContain('"infinite"')
+    expect(message).toContain("loadBlock")
+  })
+
+  test("returns a dev-error message when tree mode is active but loadChildren is missing", () => {
+    const message = resolveMissingLoaderMessage({
+      activeMode: "tree",
+      hasLoadPage: true,
+      hasLoadBlock: true,
+      hasLoadChildren: false,
+    })
+    expect(message).not.toBeNull()
+    expect(message).toContain('"tree"')
+    expect(message).toContain("loadChildren")
+  })
+
+  test("ignores loaders for inactive modes (paged active, loadBlock present but loadPage missing)", () => {
+    const message = resolveMissingLoaderMessage({
+      activeMode: "paged",
+      hasLoadPage: false,
+      hasLoadBlock: true, // present but irrelevant
+      hasLoadChildren: false,
+    })
+    expect(message).toContain("loadPage")
   })
 })

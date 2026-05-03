@@ -46,6 +46,7 @@ import type {
   ServerPagedResult,
   ServerQueryDiagnostics,
   ServerRowModelDiagnostics,
+  ServerRowModelMode,
   ServerRowPatch,
   ServerRowUpdate,
   ServerTreeQuery,
@@ -878,85 +879,120 @@ export interface BcServerEditMutationProps<TRow> {
   createServerRowPatch?: BcServerEditPatchFactory<TRow>
 }
 
-export type BcServerGridProps<TRow> =
-  | BcServerPagedProps<TRow>
-  | BcServerInfiniteProps<TRow>
-  | BcServerTreeProps<TRow>
-
-export interface BcServerPagedProps<TRow>
+/**
+ * Single converged interface for `<BcServerGrid>` props per
+ * `docs/design/server-mode-switch-rfc.md §6` stage 2 collapse. Every
+ * mode-specific field is now optional at the type level; the runtime
+ * contract is "the loader matching the active row-model mode is
+ * required." A dev-only mount assertion in `<BcServerGrid>` fires a
+ * `console.error` when the active mode's loader is missing.
+ *
+ * The legacy three interfaces (`BcServerPagedProps`,
+ * `BcServerInfiniteProps`, `BcServerTreeProps`) remain exported as
+ * **type aliases** that narrow `rowModel` to a literal and require
+ * the matching loader, so existing consumers' explicit type
+ * annotations keep type-checking. Stage 2 (this PR) is purely
+ * additive at the consumer level — code that previously satisfied
+ * `BcServerPagedProps<TRow>` still satisfies it.
+ *
+ * Stage 3 of the RFC enables runtime mode polymorphism: when
+ * `rowModel` is omitted, the active mode is derived from the
+ * controlled `groupBy` via `resolveActiveRowModelMode` (already
+ * shipped in stage 1, currently dormant because `rowModel` is
+ * effectively required by every consumer's loader pairing).
+ */
+export interface BcServerGridProps<TRow>
   extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
     BcServerEditMutationProps<TRow> {
-  rowModel: "paged"
   /**
-   * Current server page size. The server receives this as
-   * `ServerPagedQuery.pageSize`; the grid renders only the returned page rows
-   * and uses `ServerPagedResult.totalRows` for the footer/page count.
+   * Active row-fetching strategy. Optional — when omitted, the grid
+   * derives the mode from the controlled `groupBy` prop:
+   *   - `groupBy.length === 0` → `"paged"`
+   *   - `groupBy.length > 0`   → `"tree"`
+   * Pass an explicit `rowModel` to override the heuristic (e.g.
+   * force `"infinite"` while keeping `groupBy` empty, or force
+   * `"paged"` with a server-grouped query that the server flattens).
+   */
+  rowModel?: ServerRowModelMode
+
+  /** Required when the active mode is `"paged"`. */
+  loadPage?: LoadServerPage<TRow>
+  /**
+   * Current server page size for paged mode. The server receives this
+   * as `ServerPagedQuery.pageSize`; the grid renders only the
+   * returned page rows and uses `ServerPagedResult.totalRows` for the
+   * footer/page count.
    */
   pageSize?: number
-  /**
-   * Loads one server-owned page window for the active `ServerViewState`.
-   * The result's `rows` are the current page payload; `totalRows` is the
-   * count for the full matching server view.
-   */
-  loadPage: LoadServerPage<TRow>
   initialResult?: ServerPagedResult<TRow>
-  apiRef?: RefObject<BcServerGridApi<TRow> | null>
-}
 
-export interface BcServerInfiniteProps<TRow>
-  extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
-    BcServerEditMutationProps<TRow> {
-  rowModel: "infinite"
+  /** Required when the active mode is `"infinite"`. */
+  loadBlock?: LoadServerBlock<TRow>
   blockSize?: number
   maxCachedBlocks?: number
   blockLoadDebounceMs?: number
   maxConcurrentRequests?: number
   /**
    * Number of blocks to fetch ahead of the visible viewport on each
-   * `onVisibleRowRangeChange`. Default 1 — matches the prior implicit
-   * behavior of fetching exactly one block past `range.endIndex`.
-   * Higher values reduce scroll-cliff jank for fast scrollers at the
-   * cost of more bandwidth; `0` disables prefetch entirely. Clamped
-   * to a non-negative integer at the React boundary.
+   * `onVisibleRowRangeChange`. Default 1; `0` disables prefetch.
    */
   prefetchAhead?: number
-  loadBlock: LoadServerBlock<TRow>
-  apiRef?: RefObject<BcServerGridApi<TRow> | null>
-}
 
-export interface BcServerTreeProps<TRow>
-  extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
-    BcServerEditMutationProps<TRow> {
-  rowModel: "tree"
-  loadChildren: LoadServerTreeChildren<TRow>
-  loadRoots?: LoadServerTreeChildren<TRow>
-  apiRef?: RefObject<BcServerGridApi<TRow> | null>
+  /** Required when the active mode is `"tree"`. */
+  loadChildren?: LoadServerTreeChildren<TRow>
   /**
-   * Children fetched per `loadChildren` / `loadRoots` request. Default
-   * 100. Promotes the implicit block size to an explicit prop so
-   * consumers with deep trees can tune fetch granularity. Lower values
-   * reduce per-fetch payload at the cost of more round-trips when a
-   * group has many children.
+   * Optional separate loader for root rows. Defaults to `loadChildren`
+   * when omitted.
+   */
+  loadRoots?: LoadServerTreeChildren<TRow>
+  /**
+   * Children fetched per `loadChildren` / `loadRoots` request. Tree
+   * mode default 100. Lower values reduce per-fetch payload at the
+   * cost of more round-trips for groups with many children.
    */
   childCount?: number
   /**
-   * LRU cap on loaded tree blocks. When set, the model evicts the
-   * least-recently-used loaded blocks after each successful tree
-   * fetch so memory stays bounded for users who expand many groups
-   * across deep trees. Omit (default) for unbounded retention —
-   * appropriate when the tree fits comfortably in memory.
-   */
-  maxCachedBlocks?: number
-  /**
-   * Optional pre-seed for the chrome's known root child count. When
-   * supplied, `<BcServerGrid>` reports `rowCount` as this value before
-   * the first `loadChildren({ parentRowId: null, ... })` resolves so
-   * the scrollbar / status-bar / "Loading X rows" affordances can
-   * render immediately. Replaced by `result.totalChildCount` once the
-   * first fetch settles. Does not skip the fetch — the model still
-   * needs the actual root rows.
+   * Optional pre-seed for the chrome's known root child count for
+   * tree mode. Reported as `rowCount` before the first
+   * `loadChildren({ parentRowId: null })` resolves so scrollbar /
+   * status-bar affordances render at the right size; replaced by the
+   * actual count once the first fetch settles. Does not skip the
+   * fetch.
    */
   initialRootChildCount?: number
+
+  apiRef?: RefObject<BcServerGridApi<TRow> | null>
+}
+
+/**
+ * Legacy paged-mode interface kept as a type alias of the converged
+ * `BcServerGridProps`. Narrows `rowModel` to `"paged"` and makes
+ * `loadPage` required so existing consumer code that explicitly
+ * annotates against this type continues to type-check.
+ */
+export type BcServerPagedProps<TRow> = BcServerGridProps<TRow> & {
+  rowModel: "paged"
+  loadPage: LoadServerPage<TRow>
+}
+
+/**
+ * Legacy infinite-mode interface kept as a type alias of the
+ * converged `BcServerGridProps`. Narrows `rowModel` to `"infinite"`
+ * and makes `loadBlock` required.
+ */
+export type BcServerInfiniteProps<TRow> = BcServerGridProps<TRow> & {
+  rowModel: "infinite"
+  loadBlock: LoadServerBlock<TRow>
+}
+
+/**
+ * Legacy tree-mode interface kept as a type alias of the converged
+ * `BcServerGridProps`. Narrows `rowModel` to `"tree"` and makes
+ * `loadChildren` required.
+ */
+export type BcServerTreeProps<TRow> = BcServerGridProps<TRow> & {
+  rowModel: "tree"
+  loadChildren: LoadServerTreeChildren<TRow>
 }
 
 export interface BcCellEditor<TRow, TValue = unknown> {
@@ -1213,6 +1249,7 @@ export type {
   ServerPagedResult,
   ServerQueryDiagnostics,
   ServerRowModelDiagnostics,
+  ServerRowModelMode,
   ServerRowPatch,
   ServerRowUpdate,
   ServerTreeQuery,
