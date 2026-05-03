@@ -7,6 +7,17 @@ import { type Page, expect, test } from "@playwright/test"
 
 const URL = "/?edit=1"
 const EDITABLE_TEXT_COLUMN = "tradingName"
+const EDITABLE_NUMBER_COLUMN = "creditLimit"
+const EDITABLE_DATE_COLUMN = "lastInvoice"
+
+async function scrollGridLeft(page: Page, left: number) {
+  await page.evaluate((nextLeft) => {
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
+    if (scroller) scroller.scrollLeft = nextLeft
+  }, left)
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+}
 
 async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   const cell = bodyCell(page, rowIndex, columnId)
@@ -47,6 +58,16 @@ async function dragFillHandleToCell(page: Page, rowIndex: number, columnId: stri
     steps: 8,
   })
   await page.mouse.up()
+}
+
+async function setCellValue(page: Page, rowIndex: number, columnId: string, value: string) {
+  await focusBodyCell(page, rowIndex, columnId)
+  await page.keyboard.press("F2")
+  const input = page.locator('input[data-bc-grid-editor-input="true"]').first()
+  await expect(input).toBeVisible()
+  await input.fill(value)
+  await page.keyboard.press("Enter")
+  await expect(page.locator('input[data-bc-grid-editor-input="true"]')).toHaveCount(0)
 }
 
 test("fill handle repeats a single source cell down the target rows", async ({ page }) => {
@@ -102,4 +123,51 @@ test("fill handle skips non-editable cells and applies editable cells", async ({
 
   await expect(bodyCell(page, 0, "region")).toContainText(originalRegion)
   await expect(bodyCell(page, 0, "owner")).toContainText(sourceText)
+})
+
+test("fill handle extrapolates numeric arithmetic series down the target rows", async ({
+  page,
+}) => {
+  await page.goto(URL)
+  await scrollGridLeft(page, 900)
+  await setCellValue(page, 0, EDITABLE_NUMBER_COLUMN, "5")
+  await setCellValue(page, 1, EDITABLE_NUMBER_COLUMN, "7")
+
+  await focusBodyCell(page, 0, EDITABLE_NUMBER_COLUMN)
+  await page.keyboard.press("Shift+ArrowDown")
+  await expect(page.locator(".bc-grid-fill-handle").first()).toBeVisible()
+  await dragFillHandleToCell(page, 4, EDITABLE_NUMBER_COLUMN)
+
+  await expect(bodyCell(page, 2, EDITABLE_NUMBER_COLUMN)).toContainText("9")
+  await expect(bodyCell(page, 3, EDITABLE_NUMBER_COLUMN)).toContainText("11")
+  await expect(bodyCell(page, 4, EDITABLE_NUMBER_COLUMN)).toContainText("13")
+})
+
+test("fill handle increments date cells by one day from a single source date", async ({ page }) => {
+  await page.goto(URL)
+  await scrollGridLeft(page, 1800)
+  await setCellValue(page, 0, EDITABLE_DATE_COLUMN, "2024-05-01")
+
+  await selectSingleCellRange(page, 0, EDITABLE_DATE_COLUMN)
+  await dragFillHandleToCell(page, 2, EDITABLE_DATE_COLUMN)
+
+  const expectedSecond = await page.evaluate(() =>
+    new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date("2024-05-02")),
+  )
+  const expectedThird = await page.evaluate(() =>
+    new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date("2024-05-03")),
+  )
+  await expect(bodyCell(page, 1, EDITABLE_DATE_COLUMN)).toContainText(expectedSecond)
+  await expect(bodyCell(page, 2, EDITABLE_DATE_COLUMN)).toContainText(expectedThird)
+})
+
+test("fill handle continues weekday names from a single source cell", async ({ page }) => {
+  await page.goto(URL)
+  await setCellValue(page, 0, EDITABLE_TEXT_COLUMN, "Mon")
+
+  await selectSingleCellRange(page, 0, EDITABLE_TEXT_COLUMN)
+  await dragFillHandleToCell(page, 2, EDITABLE_TEXT_COLUMN)
+
+  await expect(bodyCell(page, 1, EDITABLE_TEXT_COLUMN)).toContainText("Tue")
+  await expect(bodyCell(page, 2, EDITABLE_TEXT_COLUMN)).toContainText("Wed")
 })
