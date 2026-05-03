@@ -94,6 +94,7 @@ import {
   type DataRowEntry,
   type GroupRowEntry,
   type ResolvedColumn,
+  type RowEntry,
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
@@ -1283,7 +1284,30 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => flattenGroupedRowTree(groupedRowTree, expansionState),
     [expansionState, groupedRowTree],
   )
-  const rowEntries = groupedRowModel.rows
+  // `<BcServerGrid rowModel="tree">` escape hatch: when the server
+  // returns rows with `kind: "group"` (e.g. bsncraft customers grouped
+  // by Customer Type), the React adapter strips the metadata when
+  // mapping flatNodes → flat data array. The overrides Map carries
+  // the metadata back here, keyed by rowId, so the render loop sees
+  // GroupRowEntry shape for those rows. Bsncraft v0.6.0-alpha.1 P1.
+  const rowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
+    const overrides = props.serverRowEntryOverrides
+    if (!overrides || overrides.size === 0) return groupedRowModel.rows
+    return groupedRowModel.rows.map((entry, idx) => {
+      const override = overrides.get(entry.rowId)
+      if (!override) return entry
+      return {
+        kind: "group" as const,
+        rowId: entry.rowId,
+        index: idx,
+        level: override.level,
+        label: override.label,
+        childCount: override.childCount,
+        childRowIds: override.childRowIds,
+        expanded: override.expanded,
+      } satisfies GroupRowEntry
+    })
+  }, [groupedRowModel.rows, props.serverRowEntryOverrides])
   const groupingActive = groupedRowModel.active
   const visibleDataRowEntries = useMemo(() => rowEntries.filter(isDataRowEntry), [rowEntries])
   const rangeRowIds = useMemo(() => rowEntries.map((entry) => entry.rowId), [rowEntries])
