@@ -1765,6 +1765,8 @@ Composes `<BcGrid>` plus a first-column detail link and a pinned-right actions c
 
 In Q1, `<BcEditGrid>` is `<BcGrid>` + the actions column + the link column. In Q2, the same component gains in-grid editing.
 
+The actions-column prop set is shared with `<BcServerGrid>` (v0.6 §1) — both grids extend `BcActionsColumnProps<TRow>` so server-paged / infinite / tree consumers get the same Edit / Delete / Discard / extras affordances without hand-rolling the column. See §5.3 for `<BcServerGrid>`'s wiring + the recipe at `docs/recipes/server-grid-actions.md`.
+
 ```tsx
 <BcEditGrid<TRow>
   // ... all BcGrid props plus:
@@ -1787,21 +1789,34 @@ In Q1, `<BcEditGrid>` is `<BcGrid>` + the actions column + the link column. In Q
 ```
 
 ```ts
-export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
+/**
+ * Shared by BcEditGridProps and BcServerGridProps. The grid auto-injects
+ * a pinned-right `__bc_actions` column when at least one handler is set
+ * AND `hideActions !== true`.
+ */
+export interface BcActionsColumnProps<TRow> {
+  onEdit?: (row: TRow) => void
+  onDelete?: (row: TRow) => void
+  canEdit?: (row: TRow) => boolean
+  canDelete?: (row: TRow) => boolean
+  onDiscardRowEdits?: (rowId: RowId, row: TRow) => void
+  extraActions?: BcEditGridAction<TRow>[] | ((row: TRow) => BcEditGridAction<TRow>[])
+  hideActions?: boolean
+  editLabel?: string
+  deleteLabel?: string
+  /** Discard-action label. Defaults to "Discard". */
+  discardLabel?: string
+}
+
+export interface BcEditGridProps<TRow> extends BcGridProps<TRow>, BcActionsColumnProps<TRow> {
   detailPath?: string
   linkField?: keyof TRow & string
 
-  onEdit?: (row: TRow) => void
-  onDelete?: (row: TRow) => void
-  // `onCellEditCommit` is inherited from BcGridProps.
-  canEdit?: (row: TRow) => boolean
-  canDelete?: (row: TRow) => boolean
+  // Row-mutation hooks (BcEditGrid only; not on BcServerGrid):
+  onInsertRow?: (params: BcEditGridInsertRowParams<TRow>) => void
+  onDuplicateRow?: (params: BcEditGridRowActionParams<TRow>) => void
+  confirmDelete?: (params: BcEditGridRowActionParams<TRow>) => boolean | Promise<boolean>
 
-  extraActions?: BcEditGridAction<TRow>[] | ((row: TRow) => BcEditGridAction<TRow>[])
-  hideActions?: boolean
-
-  editLabel?: string
-  deleteLabel?: string
   DeleteIcon?: React.ComponentType<{ className?: string }>
 }
 

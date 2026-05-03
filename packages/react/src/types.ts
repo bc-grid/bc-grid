@@ -1165,41 +1165,47 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   editScrollOutAction?: "commit" | "cancel" | "preserve"
 }
 
-export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
-  detailPath?: string
-  linkField?: keyof TRow & string
-
-  onEdit?: (row: TRow) => void
-  onDelete?: (row: TRow) => void
-  canEdit?: (row: TRow) => boolean
-  canDelete?: (row: TRow) => boolean
-  onInsertRow?: (params: BcEditGridInsertRowParams<TRow>) => void
-  onDuplicateRow?: (params: BcEditGridRowActionParams<TRow>) => void
-  confirmDelete?: (params: BcEditGridRowActionParams<TRow>) => boolean | Promise<boolean>
-
+/**
+ * Actions-column prop set shared by `<BcEditGrid>` and `<BcServerGrid>`.
+ * When any of these handlers is set (and `hideActions !== true`), the
+ * grid auto-injects the pinned-right `__bc_actions` column. Lifted out
+ * of `BcEditGridProps` 2026-05-03 so server grids can present the
+ * same row-action affordances without forcing consumers to hand-roll
+ * the column. Per `v06-server-grid-actions-column` (bsncraft P1).
+ *
+ * The typical wiring for `onDiscardRowEdits` is `(rowId) =>
+ * apiRef.current?.discardRowEdits(rowId)` which routes the rollback
+ * through `editController.discardRowEdits` — pending and errored
+ * cells are preserved per `editing-rfc §Concurrency`. Omit to skip
+ * the Discard action entirely.
+ */
+export interface BcActionsColumnProps<TRow> {
+  onEdit?: ((row: TRow) => void) | undefined
+  onDelete?: ((row: TRow) => void) | undefined
+  canEdit?: ((row: TRow) => boolean) | undefined
+  canDelete?: ((row: TRow) => boolean) | undefined
   /**
    * Multi-cell row rollback handler — surfaced as a "Discard" action
    * in the action column **only when the row is dirty** (any cell has
    * uncommitted edits). Audit P1-W3-3.
-   *
-   * The typical wiring is `onDiscardRowEdits={(rowId) =>
-   * apiRef.current?.discardRowEdits(rowId)}` which routes the rollback
-   * through `editController.discardRowEdits` — pending and errored
-   * cells are preserved per `editing-rfc §Concurrency`. Consumers that
-   * need to also clear server-mirror state (an upstream draft store,
-   * etc.) can extend the handler.
-   *
-   * Omit to skip the Discard action entirely.
    */
-  onDiscardRowEdits?: (rowId: RowId, row: TRow) => void
-
-  extraActions?: BcEditGridAction<TRow>[] | ((row: TRow) => BcEditGridAction<TRow>[])
-  hideActions?: boolean
-
-  editLabel?: string
-  deleteLabel?: string
+  onDiscardRowEdits?: ((rowId: RowId, row: TRow) => void) | undefined
+  extraActions?: BcEditGridAction<TRow>[] | ((row: TRow) => BcEditGridAction<TRow>[]) | undefined
+  hideActions?: boolean | undefined
+  editLabel?: string | undefined
+  deleteLabel?: string | undefined
   /** Discard-action label. Defaults to "Discard". */
-  discardLabel?: string
+  discardLabel?: string | undefined
+}
+
+export interface BcEditGridProps<TRow> extends BcGridProps<TRow>, BcActionsColumnProps<TRow> {
+  detailPath?: string
+  linkField?: keyof TRow & string
+
+  onInsertRow?: (params: BcEditGridInsertRowParams<TRow>) => void
+  onDuplicateRow?: (params: BcEditGridRowActionParams<TRow>) => void
+  confirmDelete?: (params: BcEditGridRowActionParams<TRow>) => boolean | Promise<boolean>
+
   DeleteIcon?: ComponentType<{ className?: string }>
 }
 
@@ -1287,7 +1293,8 @@ export interface BcServerEditMutationProps<TRow> {
  */
 export interface BcServerGridProps<TRow>
   extends Omit<BcGridProps<TRow>, "apiRef" | "data">,
-    BcServerEditMutationProps<TRow> {
+    BcServerEditMutationProps<TRow>,
+    BcActionsColumnProps<TRow> {
   /**
    * Active row-fetching strategy. Optional — when omitted, the grid
    * derives the mode from the controlled `groupBy` prop:
