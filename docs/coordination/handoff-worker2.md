@@ -55,27 +55,40 @@ Implementation:
 
 **Branch:** `agent/worker2/v06-erp-filter-operators`. **Effort:** ~half day.
 
-### Next-after → `v05-bsncraft-row-state-cascade-scoping` (RFC + implementation, ~half day)
+### Next-after → `v05-bsncraft-pinned-scroll-shadow-overlay` (RFC + implementation, ~half day)
 
-Once the filter operators ship, pick up bsncraft P0 #2 — master `.bc-grid-row:hover` cascades into nested grid cells via descendant selectors. The detail panel is rendered INSIDE the master row's DOM (`grid.tsx:3519` — `<BcDetailPanelSlot>` inside the `bc-grid-row` div), so when cursor is over a nested grid cell, the master row matches `:hover` (cursor in descendant) AND the nested row matches `:hover`. Master row state-selector rules then paint nested cells too.
+Once the filter operators ship, pick up bsncraft P0 #4 — pseudo-element gradient at pinned boundary (`bc-grid-cell-pinned-{left,right}-edge::after/::before` at `right: -8px`, `packages/theming/src/styles.css:3587-3611`) paints over row hover bg, creating visual artifacts at the seam. Likely fix: `mix-blend-mode: multiply` so the shadow darkens the row state below instead of replacing it; alternative is negative z-index on the pseudo.
 
 Implementation:
 
-1. **Pick the scoping mechanism:** evaluate `@scope (.bc-grid) to (.bc-grid-detail-panel .bc-grid)` (cleanest, requires Chrome 118+ / Safari 17.4+ / Firefox 128+ — bc-grid claims modern browsers) vs `:not(:has(.bc-grid-detail-panel:hover))` per selector (more verbose, broader support but uglier). Recommend the @scope path; document the deviation if you go with `:has()`.
+1. **Pick the stacking mechanism:** evaluate `mix-blend-mode: multiply` (composites the pseudo's gradient with the underlying row state — preserves hover/focused/selected colors with a darkened seam) vs `z-index: -1` on the pseudo (puts it behind the cell — works but may interact poorly with the row's own z-index stack). Recommend the `mix-blend-mode` path.
 
-2. **Apply symmetrically** to all state-cascade selectors: `:hover`, `[data-bc-grid-focused-row="true"]`, `[aria-selected="true"]`, and their cell-level `.bc-grid-row:hover .bc-grid-cell` etc. permutations (lines 214-234 + 817-862 + 874-933 in `packages/theming/src/styles.css`).
+2. **Verify forced-colors mode** doesn't regress — Windows High Contrast strips colors but the shadow position should still be sensible. The existing `apps/examples/tests/forced-colors-sticky.pw.ts` from #415 covers the pinned-edge area; confirm it still passes.
 
-3. **Test coverage:** Playwright spec at `apps/examples/tests/nested-grid-hover-isolation.pw.ts` — open a master row's detail panel containing a nested grid, hover a nested cell, assert master row's hover bg is NOT painted (compare computed background-color before/after hover entry).
-
-**Branch:** `agent/worker2/v05-bsncraft-row-state-cascade-scoping`. **Effort:** ~half day.
-
-### Then-after → `v05-bsncraft-pinned-scroll-shadow-overlay` (RFC + implementation, ~half day)
-
-Pick up bsncraft P0 #4 — pseudo-element gradient at pinned boundary (`bc-grid-cell-pinned-{left,right}-edge::after/::before` at `right: -8px`, `packages/theming/src/styles.css:3587-3611`) paints over row hover bg. Likely fix: `mix-blend-mode: multiply` so the shadow darkens the row state below instead of replacing it; alternative is negative z-index on the pseudo.
-
-Verify forced-colors mode + the existing `.bc-grid-cell-pinned-{left,right}-edge` Playwright spec from #415 doesn't regress.
+3. **Test coverage:** Playwright spec at `apps/examples/tests/pinned-scroll-shadow-row-state.pw.ts` — open a master row's detail panel with a long horizontal scroll, hover a row containing a pinned cell, assert the row hover background bleeds through under the shadow gradient (no opaque seam).
 
 **Branch:** `agent/worker2/v05-bsncraft-pinned-scroll-shadow-overlay`. **Effort:** ~half day.
+
+> **Note:** worker3 picked up `v05-bsncraft-row-state-cascade-scoping` ahead of you (RFC #426 + impl #430). One less item on your backlog — fall straight through to the scroll-shadow overlay.
+
+### Then-after → `v06-saved-view-storage-recipe` (consumer-side persistence layer, ~half day)
+
+Pull a consumer-side companion to your #423 saved-view DTO PR — a recipe doc + minimal storage helpers showing how to wire a `localStorage` / `IndexedDB` / server-backed implementation behind the `BcSavedView` shape. Composes naturally with the toolbar recipe at `docs/recipes/saved-views.md`. Bsncraft will need this when they wire saved views into their AR Customers grid.
+
+Implementation:
+
+1. **Add `docs/recipes/saved-view-persistence.md`** showing three reference adapters:
+   - `localStorage` (synchronous, single-tab) — simplest
+   - `IndexedDB` via a tiny inline helper — async, multi-tab, larger payloads
+   - Server-backed (`fetch`-based) — closes over the host's REST/GraphQL endpoint
+2. **Document the URL boundary** — `urlStatePersistence` carries the current ad-hoc layout blob; saved views are persisted server-side or in `localStorage` keyed by `gridId`. The consumer's URL parameter (e.g. `?activeSavedViewId=`) sits next to the grid payload.
+3. **Optional**: ship a tiny `createLocalStorageSavedViewStore({ gridId })` helper as a starter (still consumer-owned but skips boilerplate). Decide based on bundle cost — if it adds <250B gzip, ship; otherwise leave as recipe-only.
+
+**Branch:** `agent/worker2/v06-saved-view-storage-recipe`. **Effort:** ~half day.
+
+### After saved-view storage → continue down planning doc (§7+ of `worker2-grouping-and-filters.md`)
+
+Your planning doc has additional grouping + filter items beyond §6. Pick the next at the top when you're ready.
 
 Spec from your planning doc:
 
