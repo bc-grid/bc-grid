@@ -43,87 +43,76 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#426** + **#430** `v05-bsncraft-row-state-cascade-scoping` — RFC documenting the bug + recommending approach B (`:not()` selector guard) + 16 selectors swept + 17 source-shape regression guards. Closes bsncraft 2026-05-03 P0 #2. Merged 3d4f603 + 5cbb214.
 - ✅ **#427** `v06-multi-combobox-enter-semantics` — pinned the multi-mode Enter contract with 4 source-shape regression guards (implementation already shipped in #390). Merged 7bc55e5.
 - ✅ **#431** `v06-editor-keyboard-navigation-polish` — `nextEditableCellAfterEdit` helper skips non-editable cells + disabled rows during Tab/Shift+Tab. 13 new behavioural tests. Merged cbb65fd.
+- ✅ **#435** `v06-prepareresult-preload-select-multi` — async-loaded options on select + multi-select via `column.fetchOptions`.
+- ✅ **#437** `v06-bulk-row-patch-primitive` — `apiRef.applyRowPatches([...])` atomic bulk update. Two-spike-confirmed.
+- ✅ **#440** `v06-row-drag-drop-hooks` — `onRowDragOver` / `onRowDrop` callbacks + auto-scroll. Two-spike-confirmed.
+- ✅ **#442** `v06-bcselection-narrowing` — `isExplicitSelection` / `isAllSelection` / `isFilteredSelection` + `forEachSelectedRowId`. Two-spike-confirmed.
 
 ## v0.6 train — your queue (in priority order)
 
-**0.5.0 GA shipped 2026-05-03.** v0.6 is the consumer-feedback absorption + spreadsheet flows + bulk operations major release. Target ship date: ~2026-05-10.
+**0.5.0 GA shipped 2026-05-03.** v0.6 absorbs consumer feedback + adds spreadsheet flows + bulk operations + state-persistence. Target ship date: ~2026-05-10. **v0.6.0-alpha.1 cut imminent.**
 
-Your v0.6 train has **5 queued tasks**, headlined by the **bulk row patch primitive** (`apiRef.applyRowPatches([...])` — the primitive every "fill down" / "shift dates" / "set status to Approved" toolbar wants; two-spike-confirmed). Pick them up in order; if you finish ahead of schedule, top of the v0.6 deferred list waits.
+You've shipped 5 v0.6 PRs in this cycle (the bulk-row-patch headline + drag-drop + bcselection narrowing + prepareresult preload). Updated queue below adds three v0.6.0-alpha.1 critical items + two follow-ons.
 
-### Active now → `v06-prepareresult-preload-select-multi` (your planning doc §3, ~half day)
+### Active now → `v06-scroll-state-controlled-prop` (NEW from maintainer 2026-05-03; ~half day, **alpha.1 critical**)
 
-Today autocomplete supports async-loaded options via `prepareResult.initialOptions`, but `select.tsx` and `multi-select.tsx` don't — consumers wanting "select editor with async-loaded options" have to either re-implement with a custom `cellEditor` or use autocomplete with all the free-text passthrough complexity they don't need.
+Maintainer ask 2026-05-03: "would it be possible for a consumer to maintain the state of bc-grid, such as where it is scrolled at, and what child panels are open, so when they click back onto a page containing a bc-grid, it looks exactly the same as when navigating away?"
 
-The dependency (`BcCellEditorPrepareParams.column`) was already added in #403, so this is unblocked.
-
-**Implementation:**
-
-1. **Add `initialOptions?: readonly EditorOption[]`** to the Combobox primitive's `ComboboxBaseProps` at `packages/editors/src/internal/combobox.tsx`. When set, the primitive uses these instead of (or in addition to) the `options` prop on first render.
-
-2. **Wire `prepare?: (params) => Promise<{ initialOptions: EditorOption[] }>`** on `selectEditor` and `multiSelectEditor` — same shape as autocomplete already uses. Each editor's `prepare` reads `column.fetchOptions` (if present) and resolves the first page; falls through to `column.options` if the column ships static options.
-
-3. **Graceful prepare-rejection** — let `prepare` resolve `undefined` (no preload, fall through to synchronous `column.options`) instead of bouncing back to Navigation. A network failure shouldn't block edit entirely.
-
-4. **Test coverage** — unit tests for the prepare wiring on both editors + 1 Playwright spec showing async-loaded options paint on first render of select + multi-select editors.
-
-**Branch:** `agent/worker3/v06-prepareresult-preload-select-multi`. **Effort:** ~half day.
-
-### Next-after → `v06-bulk-row-patch-primitive` (HEADLINE, ~1 day, two-spike-confirmed)
-
-**This is your v0.6 headline.** Doc-management spike (#367) finding #6 + production-estimating spike (#374) finding #4: every CRUD-flavored grid wants a primitive for "patch N rows with M field updates atomically" — fill-down ("set status of selected to Approved"), shift-dates ("push due dates by 7 days"), bulk reassign ("move all to John"), copy-from-template. Today consumers have to either iterate calling `setRow` (loses atomicity, fires N validates, N renders) or wire ad-hoc bulk endpoints.
+Most state IS already controllable (`expansion` + `onExpansionChange`, `selection` + `onSelectionChange`, `layoutState` + `onLayoutStateChange`, `rangeSelection` + `onRangeSelectionChange`). **Scroll position is the gap** — `scrollOffset` is internal-only state at `grid.tsx:461`.
 
 **Implementation:**
 
-1. **`BcGridApi.applyRowPatches(patches: readonly BcRowPatch<TRow>[]): Promise<BcRowPatchResult<TRow>>`** — atomic bulk update. Each patch is `{ rowId: RowId, fields: Partial<TRow> }`. Validates each field through `column.validate` first; if any patch fails, returns `{ ok: false, failures }` and applies NONE (atomic semantics). If all pass, applies all in one render pass + fires one batched `onCellEditCommit` per cell.
+1. **`BcGridApi.getScrollOffset(): { top: number; left: number }`** — getter exposing the internal `scrollOffsetRef.current`. Forwarded through `BcServerGridApi` too.
 
-2. **`<BcServerGrid>` integration** — patches go through the existing `onServerRowMutation` lifecycle (managed cell-overlay rollback). Each patched cell becomes a pending overlay; on server resolve, the overlays clear in batch.
+2. **`BcGridProps.initialScrollOffset?: { top: number; left: number }`** — one-time restore at mount (matches the existing `initialLayout` pattern). Sets the viewport's `scrollTop` / `scrollLeft` after mount.
 
-3. **`<BcEditGrid>` integration** — same primitive; the `editRowsImperativeAdapter` exposes `applyRowPatches` so consumers can trigger from custom toolbar buttons.
+3. **`BcGridProps.onScrollChange?: (next: { top: number; left: number }) => void`** — debounced callback (~100ms via `useDebounce`) so consumer can persist without firing on every scroll tick. Pin the debounce interval as a constant; future tuning becomes a deliberate change.
 
-4. **Recipe doc** at `docs/recipes/bulk-row-patch.md` — three patterns:
-   - "Fill down" (copy active cell value to all selected rows in same column)
-   - "Set field on selection" ("Mark all selected as Paid")
-   - "Shift dates" (`row.dueDate = addDays(row.dueDate, 7)` for all selected)
+4. **Recipe doc** at `docs/recipes/grid-state-persistence.md` — pulls together the FULL state-restore pattern (layoutState, expansion, selection, rangeSelection, scrollOffset) so consumers see the complete picture in one place. Per the maintainer's "the grid can look the same as when the user left it" goal.
 
-5. **Test coverage:** unit tests for the validate-all-then-apply atomic semantics + 1 Playwright spec under `apps/examples/tests/bulk-row-patch.pw.ts` covering fill-down + reject-all-on-validation-failure.
+5. **Test coverage** — unit tests for the debounce + getter + initialScrollOffset; Playwright spec at `apps/examples/tests/scroll-state-restore.pw.ts` showing scroll → unmount → remount → scroll position restored.
 
-**Branch:** `agent/worker3/v06-bulk-row-patch-primitive`. **Effort:** ~1 day. **Two-spike-confirmed** (doc-mgmt #6, production-estimating #4).
+**Branch:** `agent/worker3/v06-scroll-state-controlled-prop`. **Effort:** ~half day. **alpha.1 critical** — pairs with the recipe doc to close the "all available state persistable" story.
 
-### Then-after → `v06-row-drag-drop-hooks` (~1 day, two-spike-confirmed)
+### Next-after → `v06-server-grid-actions-column` (HEADLINE, ~1-2 days, bsncraft P1)
 
-`BcGridProps.onRowDragOver(event, row)` + `onRowDrop(event, row, sourceRowIds)` callbacks for row-level drag-and-drop. Doc-management spike (#367) finding #1 + production-estimating spike (#374) finding #5: every consumer with sortable manual ordering, drag-into-folder, drag-to-reassign-status pattern hand-rolls the same DnD wiring outside the grid.
+**This is your second v0.6 headline.** Bsncraft 2026-05-03 P1: the actions-column abstraction (`onEdit`, `onDelete`, `extraActions`, `hideActions`, `canEdit`, `canDelete`, `confirmDelete`, `editLabel`, `deleteLabel`, `DeleteIcon`, `onDiscardRowEdits`) ONLY exists on `BcEditGridProps`. None of these props are on `BcServerPagedProps`, `BcServerInfiniteProps`, or `BcServerTreeProps`. Consumers with server-paged/tree grids — most ERP master tables — have to hand-roll the column instead of getting the first-class one. Bsncraft alone has ~150 LOC reimplementing `createActionsColumn` for their ServerEditGrid wrapper.
 
-**Implementation:**
-
-1. **HTML5 native drag-and-drop** (no library — keep bundle tight). The grid's row element gets `draggable={true}` when `onRowDragOver || onRowDrop` is set. Selected rows drag together (multi-row drag — `dataTransfer` carries the selected `rowIds` list).
-
-2. **Drop-zone detection** — `onRowDragOver` fires per row hovered; consumer returns `BcRowDropAction = "before" | "after" | "into" | "none"` and the grid renders the matching visual indicator (top/bottom border line for before/after; row highlight for into).
-
-3. **`onRowDrop(event, dropRow, sourceRowIds, position)`** — fires on release. Consumer reorders/relinks; the grid doesn't mutate state on its own (consumer-owned ordering).
-
-4. **Auto-scroll near edges** — when dragging near top/bottom of viewport, auto-scroll. Lifts existing keyboard auto-scroll math.
-
-5. **Recipe doc** at `docs/recipes/row-drag-drop.md` — task-list reorder + drag-to-folder patterns.
-
-6. **Test coverage:** unit tests for the drop-position math + 1 Playwright spec under `apps/examples/tests/row-drag-drop.pw.ts`.
-
-**Branch:** `agent/worker3/v06-row-drag-drop-hooks`. **Effort:** ~1 day. **Two-spike-confirmed** (doc-mgmt #1, production-estimating #5).
-
-### After-that → `v06-bcselection-narrowing` (~half day, two-spike-confirmed)
-
-Doc-management spike (#367) finding #3 + production-estimating spike (#374) finding #6: `BcSelection` is a discriminated union (`{ mode: "explicit" | "all" | "filtered", rowIds?: Set<RowId>, exceptions?: Set<RowId> }`); consumers writing `if (selection.mode === "explicit") { selection.rowIds.forEach(...) }` get TypeScript narrowing via the discriminator BUT downstream helpers (`getSelectedRows(selection, allRows)`) can't narrow because the param is the wide union. Adds ergonomic narrowing helpers.
+The recommended fix per the bsncraft memo is **Option A: add the prop set to all `BcServer*Props` types and have `<BcServerGrid>` auto-inject `__bc_actions` the same way `<BcEditGrid>` does.**
 
 **Implementation:**
 
-1. **`isExplicitSelection(s)` + `isAllSelection(s)` + `isFilteredSelection(s)`** — type guards exported from `@bc-grid/core`. Narrow in `if`-branches without requiring discriminator dance at every call site.
+1. **Lift `createActionsColumn` from `editGrid.tsx` to a shared module** (suggest `packages/react/src/actionsColumn.ts`) so both `<BcEditGrid>` and `<BcServerGrid>` can call it.
 
-2. **`forEachSelectedRowId(selection, visibleRowIds, callback)`** — consumer-friendly iteration helper that handles all three modes.
+2. **Add the actions-column prop set to `BcServerPagedProps`, `BcServerInfiniteProps`, `BcServerTreeProps`**. Mirror the BcEditGrid shape exactly: `onEdit`, `onDelete`, `extraActions`, `hideActions`, `canEdit`, `canDelete`, `confirmDelete`, `editLabel`, `deleteLabel`, `DeleteIcon`, `onDiscardRowEdits`.
 
-3. **Doc updates** — `docs/api.md` selection section pins the new helpers + shows the recipe.
+3. **Auto-inject `__bc_actions` in `<BcServerGrid>` when any actions prop is set** — same gate as `<BcEditGrid>` line 39 (`hasActions = Boolean(onEdit || onDelete || onDiscardRowEdits || extraActions)`). Inject after the consumer's columns array, before the synthetic columns prepended by `<BcGrid>`.
 
-**Branch:** `agent/worker3/v06-bcselection-narrowing`. **Effort:** ~half day.
+4. **Update `docs/api.md`** to document the new prop set on each server grid type. Cross-reference the existing `<BcEditGrid>` actions section.
 
-### Last → `v06-editor-tab-wraparound-polish` (~half day)
+5. **Recipe doc** at `docs/recipes/server-grid-actions.md` covering the migration story for consumers (e.g. bsncraft) currently hand-rolling. Include a before-after diff showing the LOC savings.
+
+6. **Test coverage:** unit tests + 1 Playwright spec under `apps/examples/tests/server-grid-actions.pw.ts`. Confirm the actions column appears on `<BcServerGrid rowModel="paged">` with the standard edit/delete affordances.
+
+**Branch:** `agent/worker3/v06-server-grid-actions-column`. **Effort:** ~1-2 days. **bsncraft consumer P1** — closing this lets bsncraft delete their entire `apps/web/components/edit-grid.tsx` wrapper (~150 LOC).
+
+### Then-after → `v06-editor-tab-wraparound-polish` (~half day)
+
+Followup to #431. Current helper clamps when Tab runs off the end of the last editable cell of last row. Bsncraft asked about wraparound: should Tab from the last editable cell wrap to first editable of first row? Default in spreadsheet editors (Excel / Google Sheets) is YES (wraparound) but with subtle row-traversal restriction to keep within active selection if any. Add `editorTabWraparound: "none" | "row-wrap" | "selection-wrap"` prop (default `"row-wrap"`).
+
+**Branch:** `agent/worker3/v06-editor-tab-wraparound-polish`. **Effort:** ~half day.
+
+### After-that → `v06-editor-cell-undo-redo` (~half day)
+
+Per-cell-edit undo/redo so a user who's typed in an edit-mode cell can press `Cmd/Ctrl+Z` to revert their typed-but-not-committed value (the input's own `undo` history is sufficient for the in-progress text, but Cmd+Z after blur should restore the previous committed value — that history doesn't exist today). Per-row scope, capped at last 10 commits per row to bound memory.
+
+**Branch:** `agent/worker3/v06-editor-cell-undo-redo`. **Effort:** ~half day.
+
+### Last → `v06-editor-focus-retention-on-rerender` (~half day)
+
+Editor portal focus can drop on parent re-renders that change keys or restructure children. Pin the contract: when an editor is mounted and the grid re-renders for an unrelated reason (e.g. data prop swap that doesn't affect the editing cell), focus stays on the input. Add a regression test pinning the contract with a forced-rerender scenario.
+
+**Branch:** `agent/worker3/v06-editor-focus-retention-on-rerender`. **Effort:** ~half day.
 
 Followup to #431. Current helper clamps when Tab runs off the end of the last editable cell of last row. Bsncraft asked about wraparound: should Tab from the last editable cell wrap to first editable of first row? Default in spreadsheet editors (Excel / Google Sheets) is YES (wraparound) but with subtle row-traversal restriction to keep within active selection if any. Add `editorTabWraparound: "none" | "row-wrap" | "selection-wrap"` prop (default `"row-wrap"`).
 
