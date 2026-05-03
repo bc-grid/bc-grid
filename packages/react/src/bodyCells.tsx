@@ -76,13 +76,23 @@ interface RenderBodyCellParams<TRow> {
    */
   getRowEditState?: (rowId: RowId) => { pending: boolean; error?: string } | null
   /**
-   * Validation-rejection flash predicate from the controller. When
-   * true for `(rowId, columnId)`, the cell renders the
-   * `data-bc-grid-error-flash="true"` attribute that the theming
-   * package pairs with a 600 ms keyframe pulse so sighted users see
-   * which cell was *just* rejected. The controller manages the timer
-   * + auto-clear (immediate clear on a successful re-commit on the
-   * same cell). Audit P1-W3-4.
+   * In-cell editor mount slot (audit `in-cell-editor-mode-rfc.md` §3).
+   * `<BcGrid>` builds this once per render via `useCallback` capturing
+   * the editing controller + supporting props. Returns the `<EditorMount
+   * mountStyle="in-cell">` JSX when the cell at `(rowId, columnId)` is
+   * the active edit target AND its editor is non-popup; returns `null`
+   * otherwise (popup editors mount via `<EditorPortal>`).
+   */
+  renderInCellEditor?: (
+    cell: BcCellPosition,
+    column: ResolvedColumn<TRow>,
+    rowEntry: DataRowEntry<TRow>,
+  ) => ReactNode
+  /**
+   * Validation-rejection flash predicate. When true for `(rowId,
+   * columnId)`, the cell renders `data-bc-grid-error-flash="true"`
+   * that the theming package pairs with a 600 ms keyframe pulse so
+   * sighted users see which cell was just rejected. Audit P1-W3-4.
    */
   isCellFlashing?: (rowId: RowId, columnId: ColumnId) => boolean
 }
@@ -126,6 +136,7 @@ export function renderBodyCell<TRow>({
   getCellEditEntry,
   getRowEditState,
   isCellFlashing,
+  renderInCellEditor,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
 
@@ -264,11 +275,21 @@ export function renderBodyCell<TRow>({
           onCellFocus?.(position)
         }}
       >
-        {column.source.cellRenderer
-          ? column.source.cellRenderer(params)
-          : searchText
-            ? highlightSearchText(formattedValue, searchText)
-            : formattedValue}
+        {(() => {
+          // In-cell editor takes over the cell content when the cell is
+          // the active edit target AND the active editor is non-popup
+          // (popup editors mount via <EditorPortal> in the overlay
+          // sibling — those cells keep their read-only renderer output
+          // visible underneath the popup). Per
+          // `in-cell-editor-mode-rfc.md` §3.
+          const inCellEditor = isEditingThisCell
+            ? renderInCellEditor?.(position, column, entry)
+            : null
+          if (inCellEditor) return inCellEditor
+          if (column.source.cellRenderer) return column.source.cellRenderer(params)
+          if (searchText) return highlightSearchText(formattedValue, searchText)
+          return formattedValue
+        })()}
         {errorId ? (
           <span id={errorId} style={visuallyHiddenCellErrorStyle}>
             {editError}

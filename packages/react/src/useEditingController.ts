@@ -222,6 +222,16 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     [],
   )
 
+  /**
+   * Live read of the state-machine mode at call time. The hook's
+   * `editState` return is a React snapshot captured per render and is
+   * stale inside `useLayoutEffect` cleanup closures. The in-cell
+   * `EditorMount` cleanup needs to know "did the cell unmount under
+   * an in-flight edit?" which requires the live mode at unmount time
+   * — audit `in-cell-editor-mode-rfc.md` §5 (scroll-out detection).
+   */
+  const getEditMode = useCallback((): EditState<unknown>["mode"] => editStateRef.current.mode, [])
+
   const getLatestValidationError = useCallback(
     (): BcLatestValidationError | null => latestValidationErrorRef.current,
     [],
@@ -952,6 +962,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     hasOverlayValue,
     getCellEditEntry,
     getRowEditState,
+    getEditMode,
     getLatestValidationError,
     isCellFlashing,
     pruneOverlay,
