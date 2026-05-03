@@ -38,7 +38,33 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 - ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
 
-### Active now → `v06-layout-architecture-pass` PR (c) — cleanup + editor portal simplification (~4-6h, NOW UNGATED — worker1's PR (a) shipped)
+### Active now → `v05-default-context-menu-wiring` — editor + row-action slice (~1.5-2h)
+
+**Layout pass PR (c) shipped as #418** (41ec5e0) — `availableGridWidth` ResizeObserver removed (consolidated onto `viewport.width`); `editorCellRect` simplified (no more `expansionState` invalidation dep + lint suppression); design.md §4.2 / §4.3 + §13 decisions table updated. Closes layout RFC §4 memos 3 + 4.
+
+**In-cell editor RFC fully shipped** across PRs a/b/c (#408 / #412 / #414).
+
+**New gap surfaced 2026-05-03 by bsncraft consumer screenshot:** `DEFAULT_CONTEXT_MENU_ITEMS` doesn't include any of the new toggles your lane shipped. The toggle PROPS (`editingEnabled`, `showValidationMessages`, `showEditorKeyboardHints`, `editorActivation`, `editorBlurAction`, `escDiscardsRow`) all work, but bsncraft can't reach them via right-click. Worker2's #404 row-actions also exist as built-ins but aren't in DEFAULT.
+
+**Your slice (editor + row-action lane):** wire the editor + row-action items into the default context menu.
+
+1. **Editor toggle submenu** (always present, when `<BcEditGrid>` is the active grid OR `editingEnabled !== false`): an `Editor` submenu with `Edit mode` (toggle reading `editingEnabled`), `Show validation messages` (reading `showValidationMessages`), `Show keyboard hints` (reading `showEditorKeyboardHints`), separator, `Activation` submenu (Single click / Double click / F2 only — radio reading `editorActivation`), `On blur` submenu (Commit / Reject / Ignore — radio reading `editorBlurAction`), `Esc reverts row` (toggle reading `escDiscardsRow`).
+
+2. **Row-action items** (when right-click target has `context.row` AND grid is `<BcEditGrid>`): top-level items `Insert row above`, `Insert row below`, `Duplicate row`, separator, `Delete row` (with the existing `confirmDelete` gate from #404). These are already built-ins from worker2's PR — your slice is wiring them into the default with the row-context guard.
+
+3. **Validation actions** (top-level when there's a latest validation error from #407 in the status-bar slot): `Dismiss latest error` action.
+
+worker1 (server toggles) + worker2 (column / view / filter) will own their own slices.
+
+**Branch:** `agent/worker3/v05-default-context-menu-wiring-editor`. **Effort:** ~1.5-2h.
+
+### After context-menu wiring → `v06-editor-visual-contract-consolidation` (planning doc §4, ~half day)
+
+(Same as before.)
+
+### Previously active → `v06-layout-architecture-pass` PR (c) (DONE — #418)
+
+### Old anchor: `v06-layout-architecture-pass` PR (c) — cleanup + editor portal simplification (~4-6h, NOW UNGATED — worker1's PR (a) shipped)
 
 **In-cell editor PR (c) shipped as #414** (68a84e4) — selectEditor / multiSelectEditor / autocompleteEditor pinned with `popup: true`; categorisation regression guards in place. **In-cell editor RFC fully implemented** across PRs a/b/c (#408 / #412 / #414).
 

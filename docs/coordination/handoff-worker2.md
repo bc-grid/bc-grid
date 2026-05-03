@@ -35,7 +35,35 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
-### Active now → `v06-layout-architecture-pass` PR (b) — detail panel sticky-left (~2-3h, NOW UNGATED — worker1's PR (a) shipped)
+### Active now → `v05-default-context-menu-wiring` — chrome slice (~1.5-2h)
+
+**Layout pass PR (b) shipped as #416** (e25b2b1) — detail panel composes as `position: sticky; left: 0` with `width: var(--bc-grid-viewport-width)`; horizontal master scroll leaves the detail panel anchored to the visible viewport. Closes layout RFC §4 memo 2.
+
+**Set filter option provider shipped as #413** (724a4af). **Filter registry shipped as #410** (ec6f6d5). Your v0.5 alpha.2 → GA work is structurally complete.
+
+**New gap surfaced 2026-05-03 by bsncraft consumer screenshot:** `DEFAULT_CONTEXT_MENU_ITEMS` is unchanged from v0.4 — only `copy / copy-row / copy-with-headers / clear-selection / clear-range`. Chrome bundles 1+2 (#396 / #399) added the `BcContextMenuToggleItem` + `BcContextMenuSubmenuItem` primitives + new column-context built-ins (`pin-column-left/right`, `unpin-column`, `hide-column`, `show-all-columns`, `autosize-column`, `autosize-all-columns`, `clear-column-filter`, `clear-all-filters`) — but **none of them are in DEFAULT**. Bsncraft (correctly) didn't write a custom `contextMenuItems` prop, so they see only the v0.4 baseline.
+
+The maintainer's vanilla+context-menu RFC (#392) intent — "vanilla grid by default + everything toggleable from right-click + consumer-supplied persistence API" — landed half. Workers built primitives + props; nothing wired the default menu.
+
+**Your slice (chrome lane):** wire the column commands + view toggles into `DEFAULT_CONTEXT_MENU_ITEMS`. Specifically:
+
+1. **Column-context items** (when right-click target has `context.column`): a `Column` submenu with `pin-column-left`, `pin-column-right`, `unpin-column`, `hide-column`, `autosize-column`, separator, `show-all-columns`, `autosize-all-columns`, `clear-column-filter`. Disabled-state predicates already exist in `contextMenu.ts:147-217`.
+
+2. **View toggles** (always present): a `View` submenu with `Show filter row`, `Show sidebar`, `Show status bar`, `Density` (Compact / Normal / Comfortable radio), `Show active filters` (the chip-strip toggle). These need an in-memory `BcUserSettings` default when the consumer doesn't supply a `userSettings` prop. Use the existing `BcUserSettingsStore` shape from #396; add an internal `useDefaultUserSettings` fallback.
+
+3. **Filter actions** (always present, top-level): `Clear all filters` action (existing built-in `clear-all-filters`).
+
+worker1 + worker3 will pull their own slices (server-side toggles + editor toggles respectively) into their handoffs — your slice is the chrome+filter+column commands.
+
+**Branch:** `agent/worker2/v05-default-context-menu-wiring-chrome`. **Effort:** ~1.5-2h.
+
+### After context-menu wiring → `v06-saved-view-dto-recipe` (your planning doc §5, ~half day)
+
+(Same as before — `BcSavedView` DTO + helpers + toolbar recipe doc.)
+
+### Previously active → `v06-layout-architecture-pass` PR (b) (DONE — #416)
+
+### Old anchor: `v06-layout-architecture-pass` PR (b) — detail panel sticky-left (~2-3h, NOW UNGATED — worker1's PR (a) shipped)
 
 **Set filter option provider shipped as #413** (724a4af): `loadSetFilterOptions({ columnId, search, selectedValues, filterWithoutSelf, signal, limit, offset }) => Promise<{ options, totalCount?, selectedOptions?, hasMore? }>` shape per planning doc §4. Async option loading + abort-on-keystroke + selected-value preservation across searches + virtualized menu body for large option sets. Audit P1-W2-2 closed.
 

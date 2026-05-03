@@ -32,7 +32,31 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
 - ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
 
-### Active now → `v05-server-mode-switch` stage 3.3 — RFC §9 test sweep + Playwright (~3-4h)
+### Active now → `v05-default-context-menu-wiring` — server + pagination slice (~1-1.5h)
+
+**Stage 3.3 shipped as #417** (178d9d7) — RFC §9 carry-over test sweep + 1 Playwright happy-path. Mode-switch RFC fully implemented across stages 1, 2, 3.1, 3.2, 3.3 (#397 / #400 / #402 / #406 / #417). **Polymorphic `useServerGrid` hook also shipped** as #409 (928d9d7). bsncraft can adopt either the legacy three-hook pattern OR the new polymorphic hook.
+
+**New gap surfaced 2026-05-03 by bsncraft consumer screenshot:** `DEFAULT_CONTEXT_MENU_ITEMS` is unchanged from v0.4. Chrome bundle PRs added the `BcContextMenuToggleItem` + `BcContextMenuSubmenuItem` primitives + new built-ins, but **none of them are in DEFAULT**. Your `showPagination` prop (#394) and `useServerTreeGrid().actions.expandAllGroups()` / `collapseAllGroups()` are reachable only via consumer-supplied `contextMenuItems`.
+
+**Your slice (server + pagination lane):** wire the server-side toggles into the default context menu.
+
+1. **Server submenu** (always present when grid is `<BcServerGrid>` — derive from `BcServerGridApi.getActiveRowModelMode()`): `Show pagination` (toggle reading `showPagination`), separator, server-tree-only items: `Expand all groups` / `Collapse all groups` (call `useServerTreeGrid` actions). Use the active-mode probe to gate the tree-mode items.
+
+2. **Prefetch budget submenu** (when the active mode is `infinite`): `Prefetch ahead` → `0 / 1 (default) / 2 / 3 blocks` radio. Reads + writes the `BcServerInfiniteProps.prefetchAhead` prop via `BcUserSettings`.
+
+3. **Pagination mode toggle** (when active mode is `paged`): `Server pagination` toggle — `Server-paged` (default) vs `Load all visible`. The latter calls `loadPage` with no pagination param so consumers can disable pagination on a small server.
+
+worker2 (chrome + column + view) + worker3 (editor + row actions) will own their own slices.
+
+**Branch:** `agent/worker1/v05-default-context-menu-wiring-server`. **Effort:** ~1-1.5h.
+
+### After context-menu wiring → bsncraft migration co-pilot (consumer-paced) OR pull v0.6 server-perf
+
+Same as before — when bsncraft's customer migration draft surfaces, your role is server-grid expertise. Until then, pull v0.6 server-perf items forward from your planning doc.
+
+### Previously active → `v05-server-mode-switch` stage 3.3 (DONE — #417)
+
+### Old anchor: `v05-server-mode-switch` stage 3.3 — RFC §9 test sweep + Playwright (~3-4h)
 
 **Layout pass PR (a) shipped as #415** (760de4c, ~2-week single-PR train of structural rewrite) and **polymorphic `useServerGrid` hook shipped as #409** (928d9d7, alpha.3 / GA scope per RFC §6 + §7 + Q6). The layout pass deleted ~250 LOC of JS scroll-sync (`syncHeaderRowsScroll`, `pinnedTransformValue`, `headerScrollTransform`, `pinnedLaneStyle`, `headerViewportStyle`, `autoHeightHeaderViewportStyle`, `headerRowStyle`, the per-cell `transform` from `cellStyle`); single `.bc-grid-viewport` container; sticky-positioned headers + pinned cells. **Bundle hard cap raised 100 → 150 KiB** to absorb the v0.6 feature train (decision in design.md §13).
 
