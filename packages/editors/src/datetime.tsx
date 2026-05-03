@@ -6,6 +6,16 @@ import { editorControlState, editorInputClassName } from "./chrome"
  * Datetime editor — `kind: "datetime"`. Default for date-with-time
  * columns per `editing-rfc §editor-datetime`.
  *
+ * **Mount mode:** in-cell (default `popup: false` per
+ * `in-cell-editor-mode-rfc.md` §4 hybrid table). Same rationale as
+ * `dateEditor`: the `<input type="datetime-local">` trigger fits
+ * the cell box; the browser's combined date+time picker is
+ * OS-chrome (rendered by the platform, not React) and unreachable
+ * to bc-grid's `data-bc-grid-editor-portal` markings. The
+ * framework's click-outside listener never sees clicks inside the
+ * native picker. v0.7 may revisit with a Radix-backed picker if
+ * cross-browser variance becomes a customer pain point.
+ *
  * Behaviour:
  *   - Native `<input type="datetime-local">` — browser provides a
  *     combined date + time picker. Locale-aware UI; the value emitted
@@ -29,13 +39,12 @@ import { editorControlState, editorInputClassName } from "./chrome"
  * UTC / offset-aware semantics should compose via `valueParser` on the
  * commit side.
  *
- * No library dep. Browser variance: Safari renders separate date +
- * time pickers stacked; Chrome a calendar with a time field; Firefox
- * a structured input. All emit ISO `YYYY-MM-DDTHH:mm`.
+ * No library dep.
  */
 export const datetimeEditor: BcCellEditor<unknown, unknown> = {
   Component: DatetimeEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
   kind: "datetime",
+  // popup intentionally unset (default false) — see JSDoc above.
 }
 
 function DatetimeEditor(props: BcCellEditorProps<unknown, unknown>) {

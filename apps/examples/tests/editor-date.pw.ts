@@ -123,3 +123,29 @@ test("validate rejects malformed dates", async ({ page }) => {
   await expect(input).toBeAttached()
   await expect(input).toHaveAttribute("aria-invalid", "true")
 })
+
+test("dateEditor mounts in-cell (in-cell-editor-mode-rfc §4 hybrid: native picker is OS-chrome)", async ({
+  page,
+}) => {
+  // Per `in-cell-editor-mode-rfc.md` §4 hybrid table — the date
+  // editor's `<input type="date">` trigger fits the cell box and the
+  // browser's calendar popover is OS-chrome (not React DOM, not
+  // reachable to bc-grid's `data-bc-grid-editor-portal` markings).
+  // Default `popup: false` carries it through the in-cell mount path.
+  // Pin the wrapper attribute so a regression that flips date to
+  // popup-mode mounts catches in CI rather than slipping into
+  // production. Worker3 PR (b) per `docs/coordination/handoff-worker3.md`.
+  await page.goto(URL)
+  await focusBodyCell(page, 0, DATE_COLUMN)
+  await page.keyboard.press("F2")
+  const wrapper = page.locator("[data-bc-grid-editor-mount]").first()
+  await expect(wrapper).toBeAttached()
+  await expect(wrapper).toHaveAttribute("data-bc-grid-editor-mount", "in-cell")
+  // Sanity-check: the in-cell wrapper renders inside the cell DOM,
+  // not as a sibling of the body row container. The cell with
+  // `data-column-id="lastInvoice"` should contain the wrapper.
+  const cellHostsWrapper = await wrapper.evaluate(
+    (el) => el.closest("[data-column-id]")?.getAttribute("data-column-id") ?? null,
+  )
+  expect(cellHostsWrapper).toBe(DATE_COLUMN)
+})

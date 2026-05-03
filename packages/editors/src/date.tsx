@@ -6,6 +6,20 @@ import { editorControlState, editorInputClassName } from "./chrome"
  * Date editor — `kind: "date"`. Default for date columns per
  * `editing-rfc §editor-date`.
  *
+ * **Mount mode:** in-cell (default `popup: false` per
+ * `in-cell-editor-mode-rfc.md` §4 hybrid table). The `<input
+ * type="date">` trigger fits the cell box; the browser's calendar
+ * popover is OS-chrome (rendered by the platform, not React) and
+ * therefore unreachable to bc-grid's `data-bc-grid-editor-portal`
+ * markings. The framework's click-outside listener never sees clicks
+ * inside the native popover (the picker doesn't dispatch document
+ * `pointerdown` events into the React tree), so the existing in-cell
+ * mount works without `popup: true` — no overlay sibling needed.
+ * Cross-browser variance: Safari opens on focus, Firefox opens on
+ * focus + arrow / spacebar, Chrome opens on click. All emit ISO
+ * `YYYY-MM-DD` regardless. v0.7 may revisit with a Radix-backed
+ * picker if cross-browser variance breaks a customer.
+ *
  * Behaviour:
  *   - Native `<input type="date">` — browser provides the calendar
  *     popover. Locale-aware formatting in the picker UI; the value
@@ -24,13 +38,12 @@ import { editorControlState, editorInputClassName } from "./chrome"
  *     `valueParser` if they need a Date instance or a different shape
  *     (e.g. epoch milliseconds).
  *
- * No library dep. Browser variance: Safari renders a contextual popover,
- * Chrome a calendar widget, Firefox a structured date picker. All emit
- * ISO `YYYY-MM-DD` regardless.
+ * No library dep.
  */
 export const dateEditor: BcCellEditor<unknown, unknown> = {
   Component: DateEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
   kind: "date",
+  // popup intentionally unset (default false) — see JSDoc above.
 }
 
 function DateEditor(props: BcCellEditorProps<unknown, unknown>) {

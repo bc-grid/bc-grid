@@ -279,21 +279,93 @@ describe("built-in editors — categorisation per RFC §4", () => {
 
   test("textEditor stays default (no popup field => in-cell)", () => {
     const source = readEditorSource("text.tsx")
-    expect(source).not.toMatch(/popup:\s*true/)
+    // Match `popup: true` only when it's a struct literal field (with
+    // a trailing comma or close-brace) so JSDoc prose like "without
+    // `popup: true`" doesn't trip the assertion.
+    expect(source).not.toMatch(/popup:\s*true\s*[,\n}]/)
   })
 
   test("numberEditor stays default", () => {
     const source = readEditorSource("number.tsx")
-    expect(source).not.toMatch(/popup:\s*true/)
+    // Match `popup: true` only when it's a struct literal field (with
+    // a trailing comma or close-brace) so JSDoc prose like "without
+    // `popup: true`" doesn't trip the assertion.
+    expect(source).not.toMatch(/popup:\s*true\s*[,\n}]/)
   })
 
   test("checkboxEditor stays default", () => {
     const source = readEditorSource("checkbox.tsx")
-    expect(source).not.toMatch(/popup:\s*true/)
+    // Match `popup: true` only when it's a struct literal field (with
+    // a trailing comma or close-brace) so JSDoc prose like "without
+    // `popup: true`" doesn't trip the assertion.
+    expect(source).not.toMatch(/popup:\s*true\s*[,\n}]/)
   })
 
   test("timeEditor stays default", () => {
     const source = readEditorSource("time.tsx")
-    expect(source).not.toMatch(/popup:\s*true/)
+    // Match `popup: true` only when it's a struct literal field (with
+    // a trailing comma or close-brace) so JSDoc prose like "without
+    // `popup: true`" doesn't trip the assertion.
+    expect(source).not.toMatch(/popup:\s*true\s*[,\n}]/)
+  })
+
+  test("dateEditor stays default (in-cell hybrid: native picker is OS-chrome)", () => {
+    // Per RFC §4: date editors are in-cell because the input fits the
+    // box; the calendar popover is OS-chrome (rendered by the
+    // browser, not React) and unreachable to bc-grid's
+    // `data-bc-grid-editor-portal` markings — the existing in-cell
+    // mount works without `popup: true`.
+    const source = readEditorSource("date.tsx")
+    // Match `popup: true` only when it's a struct literal field (with
+    // a trailing comma or close-brace) so JSDoc prose like "without
+    // `popup: true`" doesn't trip the assertion.
+    expect(source).not.toMatch(/popup:\s*true\s*[,\n}]/)
+  })
+
+  test("datetimeEditor stays default (in-cell hybrid: same rationale as dateEditor)", () => {
+    const source = readEditorSource("datetime.tsx")
+    // Match `popup: true` only when it's a struct literal field (with
+    // a trailing comma or close-brace) so JSDoc prose like "without
+    // `popup: true`" doesn't trip the assertion.
+    expect(source).not.toMatch(/popup:\s*true\s*[,\n}]/)
+  })
+})
+
+describe("date / datetime editors — in-cell hybrid annotation per RFC §4", () => {
+  // Pin the JSDoc annotation that documents the date / datetime editors
+  // as in-cell with OS-chrome popovers. The annotation is consumer-
+  // facing (`@bc-grid/editors` is a public package) and should match
+  // the RFC categorisation table so a doc reader doesn't reach for
+  // `popup: true` thinking the calendar overlay needs portal mounting.
+  function readEditorSource(file: string): string {
+    return readFileSync(
+      fileURLToPath(new URL(`../../editors/src/${file}`, import.meta.url)),
+      "utf8",
+    )
+  }
+
+  test("dateEditor JSDoc names it as in-cell with OS-chrome rationale", () => {
+    const source = readEditorSource("date.tsx")
+    expect(source).toMatch(/Mount mode:\*\*\s*in-cell/i)
+    expect(source).toMatch(/OS-chrome/i)
+  })
+
+  test("dateEditor explicitly notes the popup default at the export site", () => {
+    // A trailing comment on the BcCellEditor literal flags the unset
+    // popup as deliberate (vs. an oversight) — saves the next worker
+    // a round-trip to the RFC.
+    const source = readEditorSource("date.tsx")
+    expect(source).toMatch(/export const dateEditor[\s\S]*?popup intentionally unset[\s\S]*?\}/)
+  })
+
+  test("datetimeEditor JSDoc names it as in-cell with OS-chrome rationale", () => {
+    const source = readEditorSource("datetime.tsx")
+    expect(source).toMatch(/Mount mode:\*\*\s*in-cell/i)
+    expect(source).toMatch(/OS-chrome/i)
+  })
+
+  test("datetimeEditor explicitly notes the popup default at the export site", () => {
+    const source = readEditorSource("datetime.tsx")
+    expect(source).toMatch(/export const datetimeEditor[\s\S]*?popup intentionally unset[\s\S]*?\}/)
   })
 })
