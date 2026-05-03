@@ -82,7 +82,6 @@ import {
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
-  autoHeightHeaderViewportStyle,
   buildLayoutColumnState,
   rowStyle as buildRowStyle,
   canvasStyle,
@@ -96,8 +95,8 @@ import {
   flattenColumnDefinitions,
   hasDefinedProp,
   hasProp,
+  headerBandStyle,
   headerRowStyle,
-  headerViewportStyle,
   isDataRowEntry,
   mergeLayoutColumnState,
   overlayStyle,
@@ -115,15 +114,14 @@ import {
   resolveRowHeight,
   resolveViewportFitHeight,
   rootStyle,
-  scrollerStyle,
   shouldHandleSearchHotkey,
-  syncHeaderRowsScroll,
   useColumnReorder,
   useColumnResize,
   useControlledState,
   useFlipOnRowInsertion,
   useLiveRegionAnnouncements,
   useViewportSync,
+  viewportStyle,
   visuallyHiddenStyle,
 } from "./gridInternals"
 import { buildGroupedRowModel } from "./grouping"
@@ -1516,6 +1514,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const virtualRightPinnedCols = virtualWindow.cols.filter((col) => col.pinned === "right")
   const pinnedLeftWidth = virtualWindow.bodyLeft
   const pinnedRightWidth = Math.max(0, virtualWindow.totalWidth - virtualWindow.bodyRight)
+  // Header rows render every column (no virtualization), so pinned-lane
+  // wrappers in the header band size against the full pinned-side width
+  // and use full-column-list partitions. Body lanes still size against
+  // `pinnedLeftWidth` / `pinnedRightWidth` from the virtualizer's window.
+  const leafLeftPinnedColumns = resolvedColumns.filter((column) => column.pinned === "left")
+  const leafCenterColumns = resolvedColumns.filter((column) => column.pinned == null)
+  const leafRightPinnedColumns = resolvedColumns.filter((column) => column.pinned === "right")
+  const pinnedLeftFullWidth = leafLeftPinnedColumns.reduce((sum, column) => sum + column.width, 0)
+  const pinnedRightFullWidth = leafRightPinnedColumns.reduce((sum, column) => sum + column.width, 0)
+  // Canvas-X where the right pane begins. Cells inside the right lane are
+  // positioned absolutely relative to the lane wrapper, so each cell's
+  // canvas-X needs to be offset by the lane's start so the in-lane left
+  // begins at 0 for the leftmost right-pinned column.
+  const pinnedRightLaneOffset = Math.max(virtualWindow.totalWidth - pinnedRightFullWidth, 0)
   const firstVirtualRow = virtualWindow.rows.reduce(
     (first, row) => Math.min(first, row.index),
     Number.POSITIVE_INFINITY,
@@ -2283,15 +2295,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const target = event.currentTarget
       virtualizer.setScrollTop(target.scrollTop)
       virtualizer.setScrollLeft(target.scrollLeft)
-      syncHeaderRowsScroll(
-        rootRef.current,
-        target.scrollLeft,
-        virtualWindow.totalWidth,
-        viewport.width,
-      )
       updateScrollOffset({ top: target.scrollTop, left: target.scrollLeft })
     },
-    [updateScrollOffset, viewport.width, virtualWindow.totalWidth, virtualizer],
+    [updateScrollOffset, virtualizer],
   )
 
   const focusGroupRow = useCallback(
@@ -2785,119 +2791,276 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       <div className="bc-grid-main">
         <div className="bc-grid-table">
           <div
-            className="bc-grid-header-viewport"
-            role="rowgroup"
-            style={isAutoHeight ? autoHeightHeaderViewportStyle : headerViewportStyle}
+            ref={scrollerRef}
+            className="bc-grid-viewport"
+            onScroll={handleScroll}
+            style={viewportStyle(bodyHeight, isAutoHeight)}
           >
-            {columnGroupHeaderRows.map((row, rowIndex) => (
-              <div
-                key={row.map((cell) => `${cell.groupId}:${cell.ariaColIndex}`).join("|")}
-                className={classNames("bc-grid-header", "bc-grid-header-group-row")}
-                role="row"
-                data-bc-grid-scroll-sync="x"
-                aria-rowindex={rowIndex + 1}
-                style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
-              >
-                {row.map((cell) =>
-                  renderColumnGroupHeaderCell({
-                    cell,
-                    domBaseId,
-                    headerHeight,
-                    scrollLeft: scrollOffset.left,
-                    totalWidth: virtualWindow.totalWidth,
-                    viewportWidth: viewport.width,
-                  }),
-                )}
-              </div>
-            ))}
             <div
-              className={classNames(
-                "bc-grid-header",
-                columnGroupHeaderRows.length > 0 ? "bc-grid-header-leaf-row" : undefined,
-              )}
-              role="row"
-              data-bc-grid-scroll-sync="x"
-              aria-rowindex={columnGroupHeaderRows.length + 1}
-              style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
+              className="bc-grid-header-band"
+              role="rowgroup"
+              style={headerBandStyle(virtualWindow.totalWidth, headerChromeHeight)}
             >
-              {resolvedColumns.map((column, index) =>
-                renderHeaderCell({
-                  column,
-                  domBaseId,
-                  headerHeight,
-                  index,
-                  onColumnMenu: openColumnMenu,
-                  onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
-                  onReorderEnd: endReorder,
-                  onReorderMove: handleReorderPointerMove,
-                  onReorderStart: handleReorderPointerDown,
-                  onResizeEnd: endResize,
-                  onResizeMove: handleResizePointerMove,
-                  onResizeStart: handleResizePointerDown,
-                  onSort: handleHeaderSort,
-                  pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
-                  reorderingColumnId: columnReorderPreview?.sourceColumnId,
-                  scrollLeft: scrollOffset.left,
-                  showColumnMenu,
-                  sortState,
-                  totalWidth: virtualWindow.totalWidth,
-                  viewportWidth: viewport.width,
-                  filterText: columnFilterText[column.columnId] ?? "",
-                  filterPopupOpen: filterPopupState?.columnId === column.columnId,
-                  onOpenFilterPopup: (col, anchor) =>
-                    setFilterPopupState((prev) =>
-                      prev?.columnId === col.columnId ? null : { columnId: col.columnId, anchor },
-                    ),
-                }),
-              )}
-            </div>
-            {columnReorderPreview ? (
+              {columnGroupHeaderRows.map((row, rowIndex) => {
+                const groupLeftCells = row.filter((cell) => cell.pinned === "left")
+                const groupCenterCells = row.filter((cell) => cell.pinned == null)
+                const groupRightCells = row.filter((cell) => cell.pinned === "right")
+                return (
+                  <div
+                    key={row.map((cell) => `${cell.groupId}:${cell.ariaColIndex}`).join("|")}
+                    className={classNames("bc-grid-header", "bc-grid-header-group-row")}
+                    role="row"
+                    aria-rowindex={rowIndex + 1}
+                    style={headerRowStyle(virtualWindow.totalWidth, headerHeight)}
+                  >
+                    {groupLeftCells.length > 0 ? (
+                      <div
+                        className="bc-grid-pinned-lane bc-grid-pinned-lane-left"
+                        data-bc-grid-pinned-lane="left"
+                        style={pinnedLaneStyle("left", headerHeight, pinnedLeftFullWidth)}
+                      >
+                        {groupLeftCells.map((cell) =>
+                          renderColumnGroupHeaderCell({
+                            cell,
+                            domBaseId,
+                            headerHeight,
+                          }),
+                        )}
+                      </div>
+                    ) : null}
+                    {groupCenterCells.map((cell) =>
+                      renderColumnGroupHeaderCell({
+                        cell,
+                        domBaseId,
+                        headerHeight,
+                      }),
+                    )}
+                    {groupRightCells.length > 0 ? (
+                      <div
+                        className="bc-grid-pinned-lane bc-grid-pinned-lane-right"
+                        data-bc-grid-pinned-lane="right"
+                        style={pinnedLaneStyle("right", headerHeight, pinnedRightFullWidth)}
+                      >
+                        {groupRightCells.map((cell) =>
+                          renderColumnGroupHeaderCell({
+                            cell: { ...cell, left: cell.left - pinnedRightLaneOffset },
+                            domBaseId,
+                            headerHeight,
+                          }),
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
               <div
-                aria-hidden="true"
-                className="bc-grid-column-drop-indicator"
-                style={{
-                  height: headerChromeHeight,
-                  left: columnReorderPreview.indicatorLeft,
-                }}
-              />
-            ) : null}
-            {hasInlineFilters ? (
-              <div
-                className="bc-grid-filter-row"
+                className={classNames(
+                  "bc-grid-header",
+                  columnGroupHeaderRows.length > 0 ? "bc-grid-header-leaf-row" : undefined,
+                )}
                 role="row"
-                data-bc-grid-scroll-sync="x"
-                aria-rowindex={columnHeaderRowCount + 1}
-                style={headerRowStyle(virtualWindow.totalWidth, headerHeight, scrollOffset.left)}
+                aria-rowindex={columnGroupHeaderRows.length + 1}
+                style={headerRowStyle(virtualWindow.totalWidth, headerHeight)}
               >
-                {resolvedColumns.map((column, index) =>
-                  renderFilterCell({
+                {leafLeftPinnedColumns.length > 0 ? (
+                  <div
+                    className="bc-grid-pinned-lane bc-grid-pinned-lane-left"
+                    data-bc-grid-pinned-lane="left"
+                    style={pinnedLaneStyle("left", headerHeight, pinnedLeftFullWidth)}
+                  >
+                    {leafLeftPinnedColumns.map((column) =>
+                      renderHeaderCell({
+                        column,
+                        domBaseId,
+                        headerHeight,
+                        index: columnIndexById.get(column.columnId) ?? 0,
+                        onColumnMenu: openColumnMenu,
+                        onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
+                        onReorderEnd: endReorder,
+                        onReorderMove: handleReorderPointerMove,
+                        onReorderStart: handleReorderPointerDown,
+                        onResizeEnd: endResize,
+                        onResizeMove: handleResizePointerMove,
+                        onResizeStart: handleResizePointerDown,
+                        onSort: handleHeaderSort,
+                        pinnedEdge: pinnedEdgeFor(
+                          resolvedColumns,
+                          columnIndexById.get(column.columnId) ?? 0,
+                        ),
+                        reorderingColumnId: columnReorderPreview?.sourceColumnId,
+                        showColumnMenu,
+                        sortState,
+                        filterText: columnFilterText[column.columnId] ?? "",
+                        filterPopupOpen: filterPopupState?.columnId === column.columnId,
+                        onOpenFilterPopup: (col, anchor) =>
+                          setFilterPopupState((prev) =>
+                            prev?.columnId === col.columnId
+                              ? null
+                              : { columnId: col.columnId, anchor },
+                          ),
+                      }),
+                    )}
+                  </div>
+                ) : null}
+                {leafCenterColumns.map((column) =>
+                  renderHeaderCell({
                     column,
                     domBaseId,
-                    filterText: columnFilterText[column.columnId] ?? "",
                     headerHeight,
-                    index,
-                    loadSetFilterOptions,
-                    onFilterChange: (next) => updateColumnFilterText(column.columnId, next),
-                    pinnedEdge: pinnedEdgeFor(resolvedColumns, index),
-                    scrollLeft: scrollOffset.left,
-                    totalWidth: virtualWindow.totalWidth,
-                    viewportWidth: viewport.width,
-                    messages,
+                    index: columnIndexById.get(column.columnId) ?? 0,
+                    onColumnMenu: openColumnMenu,
+                    onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
+                    onReorderEnd: endReorder,
+                    onReorderMove: handleReorderPointerMove,
+                    onReorderStart: handleReorderPointerDown,
+                    onResizeEnd: endResize,
+                    onResizeMove: handleResizePointerMove,
+                    onResizeStart: handleResizePointerDown,
+                    onSort: handleHeaderSort,
+                    pinnedEdge: pinnedEdgeFor(
+                      resolvedColumns,
+                      columnIndexById.get(column.columnId) ?? 0,
+                    ),
+                    reorderingColumnId: columnReorderPreview?.sourceColumnId,
+                    showColumnMenu,
+                    sortState,
+                    filterText: columnFilterText[column.columnId] ?? "",
+                    filterPopupOpen: filterPopupState?.columnId === column.columnId,
+                    onOpenFilterPopup: (col, anchor) =>
+                      setFilterPopupState((prev) =>
+                        prev?.columnId === col.columnId ? null : { columnId: col.columnId, anchor },
+                      ),
                   }),
                 )}
+                {leafRightPinnedColumns.length > 0 ? (
+                  <div
+                    className="bc-grid-pinned-lane bc-grid-pinned-lane-right"
+                    data-bc-grid-pinned-lane="right"
+                    style={pinnedLaneStyle("right", headerHeight, pinnedRightFullWidth)}
+                  >
+                    {leafRightPinnedColumns.map((column) =>
+                      renderHeaderCell({
+                        column: { ...column, left: column.left - pinnedRightLaneOffset },
+                        domBaseId,
+                        headerHeight,
+                        index: columnIndexById.get(column.columnId) ?? 0,
+                        onColumnMenu: openColumnMenu,
+                        onConsumeReorderClickSuppression: consumeColumnReorderClickSuppression,
+                        onReorderEnd: endReorder,
+                        onReorderMove: handleReorderPointerMove,
+                        onReorderStart: handleReorderPointerDown,
+                        onResizeEnd: endResize,
+                        onResizeMove: handleResizePointerMove,
+                        onResizeStart: handleResizePointerDown,
+                        onSort: handleHeaderSort,
+                        pinnedEdge: pinnedEdgeFor(
+                          resolvedColumns,
+                          columnIndexById.get(column.columnId) ?? 0,
+                        ),
+                        reorderingColumnId: columnReorderPreview?.sourceColumnId,
+                        showColumnMenu,
+                        sortState,
+                        filterText: columnFilterText[column.columnId] ?? "",
+                        filterPopupOpen: filterPopupState?.columnId === column.columnId,
+                        onOpenFilterPopup: (col, anchor) =>
+                          setFilterPopupState((prev) =>
+                            prev?.columnId === col.columnId
+                              ? null
+                              : { columnId: col.columnId, anchor },
+                          ),
+                      }),
+                    )}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
+              {columnReorderPreview ? (
+                <div
+                  aria-hidden="true"
+                  className="bc-grid-column-drop-indicator"
+                  style={{
+                    height: headerChromeHeight,
+                    left: columnReorderPreview.indicatorLeft,
+                  }}
+                />
+              ) : null}
+              {hasInlineFilters ? (
+                <div
+                  className="bc-grid-filter-row"
+                  role="row"
+                  aria-rowindex={columnHeaderRowCount + 1}
+                  style={headerRowStyle(virtualWindow.totalWidth, headerHeight)}
+                >
+                  {leafLeftPinnedColumns.length > 0 ? (
+                    <div
+                      className="bc-grid-pinned-lane bc-grid-pinned-lane-left"
+                      data-bc-grid-pinned-lane="left"
+                      style={pinnedLaneStyle("left", headerHeight, pinnedLeftFullWidth)}
+                    >
+                      {leafLeftPinnedColumns.map((column) =>
+                        renderFilterCell({
+                          column,
+                          domBaseId,
+                          filterText: columnFilterText[column.columnId] ?? "",
+                          headerHeight,
+                          index: columnIndexById.get(column.columnId) ?? 0,
+                          loadSetFilterOptions,
+                          onFilterChange: (next) => updateColumnFilterText(column.columnId, next),
+                          pinnedEdge: pinnedEdgeFor(
+                            resolvedColumns,
+                            columnIndexById.get(column.columnId) ?? 0,
+                          ),
+                          messages,
+                        }),
+                      )}
+                    </div>
+                  ) : null}
+                  {leafCenterColumns.map((column) =>
+                    renderFilterCell({
+                      column,
+                      domBaseId,
+                      filterText: columnFilterText[column.columnId] ?? "",
+                      headerHeight,
+                      index: columnIndexById.get(column.columnId) ?? 0,
+                      loadSetFilterOptions,
+                      onFilterChange: (next) => updateColumnFilterText(column.columnId, next),
+                      pinnedEdge: pinnedEdgeFor(
+                        resolvedColumns,
+                        columnIndexById.get(column.columnId) ?? 0,
+                      ),
+                      messages,
+                    }),
+                  )}
+                  {leafRightPinnedColumns.length > 0 ? (
+                    <div
+                      className="bc-grid-pinned-lane bc-grid-pinned-lane-right"
+                      data-bc-grid-pinned-lane="right"
+                      style={pinnedLaneStyle("right", headerHeight, pinnedRightFullWidth)}
+                    >
+                      {leafRightPinnedColumns.map((column) =>
+                        renderFilterCell({
+                          column: { ...column, left: column.left - pinnedRightLaneOffset },
+                          domBaseId,
+                          filterText: columnFilterText[column.columnId] ?? "",
+                          headerHeight,
+                          index: columnIndexById.get(column.columnId) ?? 0,
+                          loadSetFilterOptions,
+                          onFilterChange: (next) => updateColumnFilterText(column.columnId, next),
+                          pinnedEdge: pinnedEdgeFor(
+                            resolvedColumns,
+                            columnIndexById.get(column.columnId) ?? 0,
+                          ),
+                          messages,
+                        }),
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
 
-          <div
-            ref={scrollerRef}
-            className="bc-grid-scroller"
-            role="rowgroup"
-            onScroll={handleScroll}
-            style={scrollerStyle(bodyHeight, isAutoHeight)}
-          >
             <div
               className="bc-grid-canvas"
+              role="rowgroup"
               style={canvasStyle(virtualWindow.totalHeight, virtualWindow.totalWidth)}
             >
               {virtualWindow.rows.map((virtualRow) => {
@@ -3112,12 +3275,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                       <div
                         className="bc-grid-pinned-lane bc-grid-pinned-lane-left"
                         data-bc-grid-pinned-lane="left"
-                        style={pinnedLaneStyle(
-                          "left",
-                          cellVirtualRow.height,
-                          pinnedLeftWidth,
-                          viewport.width,
-                        )}
+                        style={pinnedLaneStyle("left", cellVirtualRow.height, pinnedLeftWidth)}
                       >
                         {virtualLeftPinnedCols.map((virtualCol) =>
                           renderBodyCell({
@@ -3130,10 +3288,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
                             pinnedLaneOffset: 0,
                             searchText,
-                            scrollLeft: scrollOffset.left,
                             setActiveCell,
-                            totalWidth: virtualWindow.totalWidth,
-                            viewportWidth: viewport.width,
                             virtualCol,
                             virtualRow: cellVirtualRow,
                             selected,
@@ -3160,10 +3315,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         onCellFocus,
                         pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
                         searchText,
-                        scrollLeft: scrollOffset.left,
                         setActiveCell,
-                        totalWidth: virtualWindow.totalWidth,
-                        viewportWidth: viewport.width,
                         virtualCol,
                         virtualRow: cellVirtualRow,
                         selected,
@@ -3182,12 +3334,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                       <div
                         className="bc-grid-pinned-lane bc-grid-pinned-lane-right"
                         data-bc-grid-pinned-lane="right"
-                        style={pinnedLaneStyle(
-                          "right",
-                          cellVirtualRow.height,
-                          pinnedRightWidth,
-                          viewport.width,
-                        )}
+                        style={pinnedLaneStyle("right", cellVirtualRow.height, pinnedRightWidth)}
                       >
                         {virtualRightPinnedCols.map((virtualCol) =>
                           renderBodyCell({
@@ -3200,10 +3347,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             pinnedEdge: pinnedEdgeFor(resolvedColumns, virtualCol.index),
                             pinnedLaneOffset: virtualWindow.bodyRight,
                             searchText,
-                            scrollLeft: scrollOffset.left,
                             setActiveCell,
-                            totalWidth: virtualWindow.totalWidth,
-                            viewportWidth: viewport.width,
                             virtualCol,
                             virtualRow: cellVirtualRow,
                             selected,
@@ -3246,35 +3390,35 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 virtualizer={virtualizer}
               />
             </div>
-
-            <EditorPortal
-              controller={editController}
-              activeCell={activeCell}
-              rowEntries={visibleDataRowEntries}
-              resolvedColumns={resolvedColumns}
-              cellRect={editorCellRect}
-              virtualizer={virtualizer}
-              rowIndexById={rowIndexById}
-              columnIndexById={columnIndexById}
-              defaultEditor={defaultTextEditor as never}
-              showValidationMessages={showValidationMessages}
-              showKeyboardHints={showEditorKeyboardHints}
-              blurAction={editorBlurAction}
-              escDiscardsRow={escDiscardsRow}
-            />
-
-            {loading ? (
-              <div className="bc-grid-overlay" role="status" style={overlayStyle}>
-                {loadingOverlay ?? <BcGridDefaultLoadingOverlay label={messages.loadingLabel} />}
-              </div>
-            ) : null}
-
-            {!loading && rowEntries.length === 0 ? (
-              <div className="bc-grid-overlay" role="status" style={overlayStyle}>
-                {messages.noRowsLabel}
-              </div>
-            ) : null}
           </div>
+
+          <EditorPortal
+            controller={editController}
+            activeCell={activeCell}
+            rowEntries={visibleDataRowEntries}
+            resolvedColumns={resolvedColumns}
+            cellRect={editorCellRect}
+            virtualizer={virtualizer}
+            rowIndexById={rowIndexById}
+            columnIndexById={columnIndexById}
+            defaultEditor={defaultTextEditor as never}
+            showValidationMessages={showValidationMessages}
+            showKeyboardHints={showEditorKeyboardHints}
+            blurAction={editorBlurAction}
+            escDiscardsRow={escDiscardsRow}
+          />
+
+          {loading ? (
+            <div className="bc-grid-overlay" role="status" style={overlayStyle}>
+              {loadingOverlay ?? <BcGridDefaultLoadingOverlay label={messages.loadingLabel} />}
+            </div>
+          ) : null}
+
+          {!loading && rowEntries.length === 0 ? (
+            <div className="bc-grid-overlay" role="status" style={overlayStyle}>
+              {messages.noRowsLabel}
+            </div>
+          ) : null}
 
           {hasAggregationFooter ? (
             <BcGridAggregationFooterRow

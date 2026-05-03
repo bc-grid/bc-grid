@@ -617,9 +617,6 @@ export interface CellStyleParams {
   height: number
   left: number
   pinned: "left" | "right" | null
-  scrollLeft: number
-  totalWidth: number
-  viewportWidth: number
   width: number
   zIndex?: number
 }
@@ -629,9 +626,6 @@ export function cellStyle({
   height,
   left,
   pinned,
-  scrollLeft,
-  totalWidth,
-  viewportWidth,
   width,
   zIndex,
 }: CellStyleParams): CSSProperties {
@@ -648,7 +642,6 @@ export function cellStyle({
     textAlign: align,
     textOverflow: "ellipsis",
     top: 0,
-    transform: pinnedTransformValue(pinned, scrollLeft, totalWidth, viewportWidth),
     whiteSpace: "nowrap",
     width,
     zIndex: zIndex ?? (pinned ? 2 : 1),
@@ -659,7 +652,6 @@ export function pinnedLaneStyle(
   side: "left" | "right",
   height: number,
   width: number,
-  viewportWidth: number,
 ): CSSProperties {
   const base: CSSProperties = {
     height,
@@ -669,16 +661,10 @@ export function pinnedLaneStyle(
   }
 
   if (side === "left") {
-    return {
-      ...base,
-      left: 0,
-    }
+    return { ...base, left: 0 }
   }
 
-  return {
-    ...base,
-    left: Math.max(0, viewportWidth - width),
-  }
+  return { ...base, right: 0 }
 }
 
 export function rootStyle(height: number | "auto" | undefined): CSSProperties {
@@ -754,63 +740,41 @@ export function resolveContentFitHeight(params: {
   )
 }
 
-export const headerViewportStyle: CSSProperties = {
-  flex: "0 0 auto",
-  overflow: "hidden",
-  position: "relative",
-  zIndex: 3,
-}
-
-export const autoHeightHeaderViewportStyle: CSSProperties = {
-  ...headerViewportStyle,
-  position: "sticky",
-  top: 0,
-  zIndex: 4,
-}
-
-export function headerScrollTransform(scrollLeft: number): string {
-  return `translate3d(${-scrollLeft}px, 0, 0)`
-}
-
-export function headerRowStyle(width: number, height: number, scrollLeft: number): CSSProperties {
+export function headerRowStyle(width: number, height: number): CSSProperties {
   return {
     height,
     minWidth: "100%",
     position: "relative",
-    transform: headerScrollTransform(scrollLeft),
     width: Math.max(width, 1),
   }
 }
 
-export function syncHeaderRowsScroll(
-  root: HTMLElement | null,
-  scrollLeft: number,
-  totalWidth: number,
-  viewportWidth: number,
-): void {
-  if (!root) return
-  for (const row of root.querySelectorAll<HTMLElement>("[data-bc-grid-scroll-sync='x']")) {
-    row.style.transform = headerScrollTransform(scrollLeft)
-  }
-  for (const cell of root.querySelectorAll<HTMLElement>(
-    ".bc-grid-header-viewport .bc-grid-cell-pinned-left",
-  )) {
-    cell.style.transform = pinnedTransformValue("left", scrollLeft, totalWidth, viewportWidth) ?? ""
-  }
-  for (const cell of root.querySelectorAll<HTMLElement>(
-    ".bc-grid-header-viewport .bc-grid-cell-pinned-right",
-  )) {
-    cell.style.transform =
-      pinnedTransformValue("right", scrollLeft, totalWidth, viewportWidth) ?? ""
+/**
+ * Sticky header band style. Wraps the column-group + leaf + filter rows
+ * inside the unified `bc-grid-viewport`. `position: sticky; top: 0`
+ * pins the band to the viewport's top edge while body rows scroll past
+ * vertically; the band's width matches the canvas (`totalWidth`) so it
+ * scrolls horizontally in lockstep with the body, and pinned cells
+ * inside use their own `position: sticky; left/right: 0` lane wrappers
+ * (composed natively at the compositor level — no JS scroll handler).
+ */
+export function headerBandStyle(width: number, height: number): CSSProperties {
+  return {
+    height,
+    minWidth: "100%",
+    position: "sticky",
+    top: 0,
+    width: Math.max(width, 1),
+    zIndex: 3,
   }
 }
 
-export function scrollerStyle(bodyHeight: number | undefined, pageFlow = false): CSSProperties {
+export function viewportStyle(bodyHeight: number | undefined, pageFlow = false): CSSProperties {
   if (pageFlow) {
-    // Auto-height mode: the scroller does not own vertical scrolling —
+    // Auto-height mode: the viewport does not own vertical scrolling —
     // it grows to match its canvas content height and the page scrolls
-    // through it. It still owns horizontal scrolling so header/body
-    // scrollLeft synchronization continues to use the same element.
+    // through it. It still owns horizontal scrolling so the sticky
+    // headers and pinned cells compose with native sticky positioning.
     return {
       flex: "0 0 auto",
       overflowX: "auto",
@@ -878,19 +842,6 @@ export function alignToJustify(
   if (align === "right") return "flex-end"
   if (align === "center") return "center"
   return "flex-start"
-}
-
-export function pinnedTransformValue(
-  pinned: "left" | "right" | null,
-  scrollLeft: number,
-  totalWidth: number,
-  viewportWidth: number,
-): string | undefined {
-  if (pinned === "left") return `translate3d(${scrollLeft}px, 0, 0)`
-  if (pinned === "right") {
-    return `translate3d(${scrollLeft + viewportWidth - totalWidth}px, 0, 0)`
-  }
-  return undefined
 }
 
 // ---------------------------------------------------------------------------

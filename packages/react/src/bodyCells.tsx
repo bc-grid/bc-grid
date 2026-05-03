@@ -30,7 +30,6 @@ interface RenderBodyCellParams<TRow> {
   onCellFocus: ((position: BcCellPosition) => void) | undefined
   pinnedEdge: "left" | "right" | null
   pinnedLaneOffset?: number | undefined
-  scrollLeft: number
   searchText: string
   selected: boolean
   disabled: boolean
@@ -43,8 +42,6 @@ interface RenderBodyCellParams<TRow> {
    */
   editingCell?: BcCellPosition | null
   setActiveCell: (next: BcCellPosition | null) => void
-  totalWidth: number
-  viewportWidth: number
   virtualCol: { index: number; left: number; width: number; pinned: "left" | "right" | null }
   virtualRow: { height: number }
   /**
@@ -120,15 +117,12 @@ export function renderBodyCell<TRow>({
   onCellFocus,
   pinnedEdge,
   pinnedLaneOffset,
-  scrollLeft,
   searchText,
   selected,
   disabled,
   expanded,
   editingCell,
   setActiveCell,
-  totalWidth,
-  viewportWidth,
   virtualCol,
   virtualRow,
   hasOverlayValue,
@@ -263,9 +257,6 @@ export function renderBodyCell<TRow>({
             height: virtualRow.height,
             left: cellLeft,
             pinned: lanePinned ? null : virtualCol.pinned,
-            scrollLeft,
-            totalWidth,
-            viewportWidth,
             width: virtualCol.width,
           }),
           ...customStyle,

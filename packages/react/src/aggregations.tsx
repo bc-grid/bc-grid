@@ -5,13 +5,12 @@ import type {
   BcSelection,
   ColumnId,
 } from "@bc-grid/core"
-import type { ReactNode } from "react"
+import type { CSSProperties, ReactNode } from "react"
 import { useMemo } from "react"
 import {
   type ResolvedColumn,
   cellStyle,
   classNames,
-  headerRowStyle,
   pinnedClassName,
   pinnedEdgeClassName,
   pinnedEdgeFor,
@@ -116,7 +115,7 @@ function AggregationFooterRowCells<TRow>({
       role="row"
       aria-rowindex={rowIndex}
       tabIndex={-1}
-      style={headerRowStyle(totalWidth, rowHeight, scrollLeft)}
+      style={aggregationFooterRowStyle(totalWidth, rowHeight, scrollLeft)}
     >
       {columns.map((column, index) => {
         const result = resultsByColumnId.get(column.columnId)
@@ -141,17 +140,22 @@ function AggregationFooterRowCells<TRow>({
             aria-colindex={index + 1}
             data-column-id={column.columnId}
             data-bc-grid-aggregation-cell={result ? "true" : undefined}
-            style={cellStyle({
-              align: column.align,
-              height: rowHeight,
-              left: column.left,
-              pinned: column.pinned,
-              scrollLeft,
-              totalWidth,
-              viewportWidth,
-              width: column.width,
-              zIndex: column.pinned ? 3 : 2,
-            })}
+            style={{
+              ...cellStyle({
+                align: column.align,
+                height: rowHeight,
+                left: column.left,
+                pinned: column.pinned,
+                width: column.width,
+                zIndex: column.pinned ? 3 : 2,
+              }),
+              transform: aggregationPinnedTransform(
+                column.pinned,
+                scrollLeft,
+                totalWidth,
+                viewportWidth,
+              ),
+            }}
           >
             {content}
           </div>
@@ -211,4 +215,37 @@ function renderAggregationValue<TRow>(
     result,
     value: result.value,
   })
+}
+
+// Aggregation footer renders inside its own `bc-grid-aggregation-footer-viewport`
+// (sibling of the unified body viewport, not yet sticky-bottom inside it). Until
+// the v0.7 follow-up migrates the footer into the main viewport, the row + pinned
+// cells need to scroll-sync with the body horizontally via JS transform. The body
+// scroll handler updates `scrollOffset.left`, which threads in here as
+// `scrollLeft` and drives both transforms below.
+function aggregationFooterRowStyle(
+  width: number,
+  height: number,
+  scrollLeft: number,
+): CSSProperties {
+  return {
+    height,
+    minWidth: "100%",
+    position: "relative",
+    transform: `translate3d(${-scrollLeft}px, 0, 0)`,
+    width: Math.max(width, 1),
+  }
+}
+
+function aggregationPinnedTransform(
+  pinned: "left" | "right" | null,
+  scrollLeft: number,
+  totalWidth: number,
+  viewportWidth: number,
+): string | undefined {
+  if (pinned === "left") return `translate3d(${scrollLeft}px, 0, 0)`
+  if (pinned === "right") {
+    return `translate3d(${scrollLeft + viewportWidth - totalWidth}px, 0, 0)`
+  }
+  return undefined
 }

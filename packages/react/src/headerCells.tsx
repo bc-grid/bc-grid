@@ -114,11 +114,8 @@ interface RenderHeaderCellParams<TRow> {
   onSort: (column: ResolvedColumn<TRow>, modifiers: SortModifiers) => void
   pinnedEdge: "left" | "right" | null
   reorderingColumnId: ColumnId | undefined
-  scrollLeft: number
   showColumnMenu?: boolean
   sortState: readonly BcGridSort[]
-  totalWidth: number
-  viewportWidth: number
   /**
    * Filter-popup hookups for `column.filter.variant === "popup"` columns
    * per `filter-popup-variant`. The funnel button renders inside the
@@ -135,18 +132,12 @@ interface RenderColumnGroupHeaderCellParams<TRow> {
   cell: ColumnGroupHeaderCell<TRow>
   domBaseId: string
   headerHeight: number
-  scrollLeft: number
-  totalWidth: number
-  viewportWidth: number
 }
 
 export function renderColumnGroupHeaderCell<TRow>({
   cell,
   domBaseId,
   headerHeight,
-  scrollLeft,
-  totalWidth,
-  viewportWidth,
 }: RenderColumnGroupHeaderCellParams<TRow>): ReactNode {
   const headerLabel = typeof cell.header === "string" ? cell.header : cell.groupId
 
@@ -172,9 +163,6 @@ export function renderColumnGroupHeaderCell<TRow>({
         height: headerHeight,
         left: cell.left,
         pinned: cell.pinned,
-        scrollLeft,
-        totalWidth,
-        viewportWidth,
         width: cell.width,
         zIndex: cell.pinned ? 4 : 3,
       })}
@@ -200,11 +188,8 @@ export function renderHeaderCell<TRow>({
   onSort,
   pinnedEdge,
   reorderingColumnId,
-  scrollLeft,
   showColumnMenu = true,
   sortState,
-  totalWidth,
-  viewportWidth,
   filterText,
   filterPopupOpen,
   onOpenFilterPopup,
@@ -293,9 +278,6 @@ export function renderHeaderCell<TRow>({
         height: headerHeight,
         left: column.left,
         pinned: column.pinned,
-        scrollLeft,
-        totalWidth,
-        viewportWidth,
         width: column.width,
         zIndex: column.pinned ? 4 : 3,
       })}
@@ -449,9 +431,6 @@ interface RenderFilterCellParams<TRow> {
   loadSetFilterOptions?: ((columnId: ColumnId) => readonly SetFilterOption[]) | undefined
   onFilterChange: (next: string) => void
   pinnedEdge: "left" | "right" | null
-  scrollLeft: number
-  totalWidth: number
-  viewportWidth: number
   /**
    * Localised filter strings. Threaded from the grid's resolved
    * messages so AT announcements / placeholders aren't hardcoded
@@ -471,9 +450,6 @@ export function renderFilterCell<TRow>({
   loadSetFilterOptions,
   onFilterChange,
   pinnedEdge,
-  scrollLeft,
-  totalWidth,
-  viewportWidth,
   messages,
 }: RenderFilterCellParams<TRow>): ReactNode {
   const filterConfig = column.source.filter === false ? undefined : column.source.filter
@@ -501,9 +477,6 @@ export function renderFilterCell<TRow>({
         height: headerHeight,
         left: column.left,
         pinned: column.pinned,
-        scrollLeft,
-        totalWidth,
-        viewportWidth,
         width: column.width,
         zIndex: column.pinned ? 4 : 3,
       })}
