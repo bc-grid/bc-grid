@@ -143,6 +143,36 @@ import { BcServerGrid } from "@bc-grid/react"
 
 The grid auto-injects the column with the same gating (`shouldRenderActionsColumn` predicate) and the same per-row affordances. Bsncraft alone deletes ~150 LOC of wrapper code with this migration.
 
+## Keyboard shortcuts
+
+When the actions column is present, the grid wires two row-level shortcuts so sighted-keyboard users don't have to Tab through to the action column to discover Edit / Delete:
+
+| Gesture | Action |
+|---|---|
+| `Shift+E` | Fires `onEdit(row)` on the focused row |
+| `Shift+Delete` (or `Shift+Backspace`) | Fires `onDelete(row)` on the focused row, awaiting `confirmDelete` if wired |
+
+Both gestures:
+- Are gated on the actions column being present (skips when consumer hasn't auto-injected).
+- Respect `canEdit` / `canDelete` per-row gates (no-op when the consumer rejects).
+- Only fire on data rows (group rows are skipped — they have no row to pass).
+- Mirror the click path: `Shift+Delete` awaits the consumer's `confirmDelete` Promise before invoking `onDelete`, just like clicking the Delete button.
+
+The shortcuts work on `<BcEditGrid>`, `<BcServerGrid>` (any row model), and any direct `<BcGrid>` consumer that injects an actions column manually. They live in BcGrid's root `onKeyDown` so they fire regardless of whether the focused cell is on the actions column.
+
+```tsx
+<BcServerGrid<Customer>
+  rowModel="paged"
+  loadPage={loadCustomers}
+  columns={customerColumns}
+  rowId={(row) => row.id}
+  onEdit={openEditDialog}        // Shift+E triggers this
+  onDelete={deleteCustomer}      // Shift+Delete triggers this (after confirmDelete)
+  canEdit={(row) => !row.archived}
+  canDelete={(row) => row.invoiceCount === 0}
+/>
+```
+
 ## When NOT to use
 
 - **Custom action layout that doesn't fit the buttons-in-a-row pattern.** If you need a kebab menu, a popover with sub-options, or a multi-row action layout, build your own column with `cellRenderer` and skip the auto-injection (don't wire `onEdit` / `onDelete`). The pattern of leaving the column off the framework and letting the consumer compose is the right escape hatch.
