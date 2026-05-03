@@ -18,6 +18,7 @@ import {
   useBcGridApi,
 } from "@bc-grid/react"
 import { useCallback, useMemo, useState } from "react"
+import { ClientTreeExample } from "./client-tree.example"
 import {
   type CustomerFlag,
   type CustomerRow,
@@ -155,6 +156,11 @@ function isServerModeSwitchOnly(): boolean {
   return new URLSearchParams(window.location.search).get("serverModeSwitch") === "1"
 }
 
+function isClientTreeOnly(): boolean {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("clientTree") === "1"
+}
+
 export function App() {
   const [theme, setTheme] = useState<ThemeMode>("light")
   const [density, setDensity] = useState<BcGridDensity>("normal")
@@ -168,6 +174,19 @@ export function App() {
       <main className={theme === "dark" ? "app-shell dark" : "app-shell"}>
         <section className="workspace">
           <ServerModeSwitchExample />
+        </section>
+      </main>
+    )
+  }
+
+  // `?clientTree=1` mounts only the client tree row model demo for the
+  // `apps/examples/tests/client-tree-rowmodel.pw.ts` Playwright spec.
+  // Worker1 v06 headline.
+  if (isClientTreeOnly()) {
+    return (
+      <main className={theme === "dark" ? "app-shell dark" : "app-shell"}>
+        <section className="workspace">
+          <ClientTreeExample />
         </section>
       </main>
     )
