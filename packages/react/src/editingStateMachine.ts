@@ -347,6 +347,30 @@ export function nextActiveCellAfterEdit(
 }
 
 /**
+ * Tab/Shift+Tab edge-handling mode. v0.6 follow-up to #431 driven
+ * by bsncraft consumer feedback: should Tab from the last editable
+ * cell of the last row wrap to the first editable of the first
+ * row? Excel + Google Sheets default YES (wraparound). The grid
+ * exposes the choice via `BcGridProps.editorTabWraparound`.
+ *
+ *   - `"none"`: clamp at edge (the original v0.6 behaviour) — Tab
+ *     past the last editable cell stays put.
+ *   - `"row-wrap"` (default): scan all rows freely; at the trailing
+ *     edge wrap forward to (0, 0); at the leading edge wrap
+ *     backward to (lastRow, lastCol). Matches Excel / Google
+ *     Sheets default.
+ *   - `"selection-wrap"`: when an explicit selection of ≥2 rows is
+ *     active AND the editing row is part of it, restrict Tab/
+ *     Shift+Tab traversal to selected rows only — wraparound stays
+ *     within the selection. The "data-entry across the selected
+ *     rows" pattern from spreadsheet apps. Falls through to
+ *     `"row-wrap"` when the gating conditions aren't met (the user
+ *     is editing outside the selection, or fewer than 2 rows are
+ *     selected) so Tab still works.
+ */
+export type EditorTabWraparound = "none" | "row-wrap" | "selection-wrap"
+
+/**
  * Like `nextActiveCellAfterEdit` but skips non-editable cells for
  * Tab / Shift+Tab moves. Down / up keep the same-column behaviour
  * (mirrors AG Grid — the user pressed Enter / Shift+Enter so they
@@ -354,20 +378,28 @@ export function nextActiveCellAfterEdit(
  *
  * For `"right"` (Tab): scans forward through cells in linear order
  * (across columns then rows) starting from the naive next cell;
- * first editable cell wins. If no editable cell exists in the scan
- * range, stays put. For `"left"` (Shift+Tab): same but backward.
+ * first editable cell wins. For `"left"` (Shift+Tab): same but
+ * backward. Edge behaviour depends on `options.wraparound`:
+ *
+ *   - `"none"`: stays put when the scan runs off the trailing /
+ *     leading edge (original behaviour).
+ *   - `"row-wrap"` (default): wraps to the opposite end of the
+ *     grid and continues scanning. Matches Excel / Google Sheets.
+ *   - `"selection-wrap"`: restricts the scan to selected rows
+ *     only and wraps within the selection. Falls through to
+ *     `"row-wrap"` when the editing row is outside the selection
+ *     or the selection has fewer than 2 rows (so Tab still works
+ *     on the editing row).
  *
  * The `isCellEditableAt(rowIndex, colIndex)` callback encapsulates
- * the editable / disabled / row-kind checks — the caller (in
- * `<BcGrid>`) wires it from `rowEntries` + `resolvedColumns` +
- * `isCellEditable` + `isRowDisabled` so this helper stays pure
- * and unit-testable. Returns `false` for non-data rows (group
- * rows), disabled rows, and non-editable cells.
+ * the editable / disabled / row-kind checks. `isRowSelected` is
+ * only consulted when `wraparound === "selection-wrap"`. Returns
+ * `{ row, col }` of the destination, or the original cell when no
+ * editable cell exists anywhere in the scan range (avoids stranding
+ * the user at a non-editable cell).
  *
- * Closes the v0.6 follow-up: pre-fix, Tab on the last editable
- * cell in a row advanced to the literal next column (often
- * non-editable) and then no-oped, leaving the user stranded at a
- * non-editable cell. Worker3 `v06-editor-keyboard-navigation-polish`.
+ * Worker3 v06-editor-keyboard-navigation-polish (#431) +
+ * v06-editor-tab-wraparound-polish.
  */
 export function nextEditableCellAfterEdit(
   rowIndex: number,
@@ -376,6 +408,11 @@ export function nextEditableCellAfterEdit(
   lastCol: number,
   move: MoveOnSettle,
   isCellEditableAt: (rowIndex: number, colIndex: number) => boolean,
+  options?: {
+    wraparound?: EditorTabWraparound | undefined
+    isRowSelected?: ((rowIndex: number) => boolean) | undefined
+    selectedRowCount?: number | undefined
+  },
 ): { row: number; col: number } {
   // Down / up stay in the same column even when the target row's
   // cell at that column isn't editable. Same as pre-v0.6 behaviour
@@ -384,22 +421,45 @@ export function nextEditableCellAfterEdit(
     return nextActiveCellAfterEdit(rowIndex, colIndex, lastRow, lastCol, move)
   }
 
+  const wraparound = options?.wraparound ?? "row-wrap"
+  // selection-wrap gating: requires ≥2 selected rows AND the editing
+  // row to be one of them. Otherwise fall through to row-wrap so the
+  // user isn't stranded — editing a non-selected row should still
+  // wrap somewhere instead of doing nothing.
+  const useSelectionWrap =
+    wraparound === "selection-wrap" &&
+    options?.isRowSelected != null &&
+    (options.selectedRowCount ?? 0) >= 2 &&
+    options.isRowSelected(rowIndex)
+  const isRowEligible = useSelectionWrap
+    ? (r: number) => options.isRowSelected?.(r) ?? false
+    : () => true
+
   const direction = move === "right" ? 1 : -1
   let r = rowIndex
   let c = colIndex
+  // Iteration cap to guard against pathological "no editable cell
+  // anywhere in scope" inputs (or scope shrinking to 1 row that
+  // happens to be the active one with no editable cells).
+  const maxIterations = (lastRow + 1) * (lastCol + 1) + 1
+  let iterations = 0
 
-  // Walk one cell at a time in tab order. The first editable cell
-  // along the way is the destination; running off either end clamps
-  // back to the original cell (no-op).
   for (;;) {
+    iterations++
+    if (iterations > maxIterations) return { row: rowIndex, col: colIndex }
+
     if (direction === 1) {
       if (c < lastCol) {
         c += 1
       } else if (r < lastRow) {
         r += 1
         c = 0
-      } else {
+      } else if (wraparound === "none") {
         return { row: rowIndex, col: colIndex }
+      } else {
+        // row-wrap or selection-wrap: continue from the start.
+        r = 0
+        c = 0
       }
     } else {
       if (c > 0) {
@@ -407,10 +467,21 @@ export function nextEditableCellAfterEdit(
       } else if (r > 0) {
         r -= 1
         c = lastCol
-      } else {
+      } else if (wraparound === "none") {
         return { row: rowIndex, col: colIndex }
+      } else {
+        // row-wrap or selection-wrap: continue from the end.
+        r = lastRow
+        c = lastCol
       }
     }
+
+    // We've wrapped all the way back to the origin without finding
+    // an editable cell — bail. This is the post-wrap symmetry of the
+    // pre-wrap "stays put" behaviour.
+    if (r === rowIndex && c === colIndex) return { row: rowIndex, col: colIndex }
+
+    if (!isRowEligible(r)) continue
     if (isCellEditableAt(r, c)) return { row: r, col: c }
   }
 }

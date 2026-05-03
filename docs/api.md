@@ -49,7 +49,7 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Bulk actions | Available | Recipe | `bulkActions` |
 | URL state persistence | Available | `?urlstate=1` | `gridId`, `urlStatePersistence` |
 | Pagination | Available | `?pagination=1` | `pagination`, `pageSizeOptions` |
-| Aggregations | Available | `?aggregations=1` | `aggregation`, `statusBar` |
+| Aggregations | Available | `?aggregations=1` | `aggregation`, `aggregationScope`, `pinnedTotals`, `statusBar` |
 | Master detail | Available | `?masterDetail=1` | `renderDetailPanel` |
 | Auto / viewport fit | Available | `?autoHeight=1` | `height = "auto"`, `fit` |
 | Server row model | Available | Package API | `<BcServerGrid>` |
@@ -396,7 +396,7 @@ export type BcReactGridColumn<TRow, TValue = unknown> =
     cellStyle?: React.CSSProperties | ((params: BcCellRendererParams<TRow, TValue>) => React.CSSProperties | undefined)
 
     /**
-     * Optional React renderer for an aggregate result in the footer row.
+     * Optional React renderer for an aggregate result in the totals row.
      * Defaults to the column's preset `format`, then `String(result.value)`.
      */
     aggregationFormatter?: (params: BcAggregationFormatterParams<TRow, TValue>) => React.ReactNode
@@ -913,10 +913,11 @@ consumer-owned toolbar and storage flow:
   layout-only fields such as `groupBy`, `searchText`, `pagination`, `density`,
   and `sidebarPanel`.
 
-The full saved-view toolbar recipe is in `docs/recipes/saved-views.md`. URL
-state should carry the current layout blob only; consumers that need active
-saved-view identity can add their own `activeSavedViewId` URL parameter next to
-the grid payload.
+The full saved-view toolbar recipe is in `docs/recipes/saved-views.md`.
+Reference storage adapters for localStorage, IndexedDB, and server-backed
+storage are in `docs/recipes/saved-view-persistence.md`. URL state should carry
+the current layout blob only; consumers that need active saved-view identity can
+add their own `activeSavedViewId` URL parameter next to the grid payload.
 
 Compact example:
 
@@ -1142,6 +1143,7 @@ export interface BcFilterEditorProps<TValue = unknown> {
 
   // Aggregations
   aggregationScope="filtered" // "filtered" | "all" | "selected"
+  pinnedTotals="bottom"       // "bottom" | "top" | "both"
 
   // Grouping
   groupableColumns={[{ columnId: "region", header: "Region" }]}
@@ -1419,6 +1421,12 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   // Aggregations
   aggregationScope?: "filtered" | "all" | "selected"
+  /**
+   * Placement for the aggregation totals row when at least one column
+   * declares `aggregation`. Defaults to `"bottom"` for compatibility
+   * with the original aggregation footer.
+   */
+  pinnedTotals?: "top" | "bottom" | "both"
 
   // Grouping
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]

@@ -388,21 +388,193 @@ describe("nextEditableCellAfterEdit — Tab/Shift+Tab skip non-editable cells", 
     expect(nextEditableCellAfterEdit(3, 2, 9, 4, "stay", oracle)).toEqual({ row: 3, col: 2 })
   })
 
-  test("Tab clamps at the absolute last cell when no further editable cell exists", () => {
-    // Row 9 col 4 (the last cell) + "right" should clamp regardless
-    // of editability — there's nowhere to go.
+  test("Tab in 'none' wraparound mode clamps at the absolute last cell", () => {
+    // Row 9 col 4 (the last cell) + "right" should clamp when
+    // wraparound is explicitly "none". The default mode is now
+    // "row-wrap" (v06-editor-tab-wraparound-polish), so this test
+    // pins the opt-out path that mirrors v0.5 / pre-v0.6 behaviour.
     const allRowsEditable = (_r: number, c: number): boolean => c % 2 === 0
-    expect(nextEditableCellAfterEdit(9, 4, 9, 4, "right", allRowsEditable)).toEqual({
+    expect(
+      nextEditableCellAfterEdit(9, 4, 9, 4, "right", allRowsEditable, { wraparound: "none" }),
+    ).toEqual({
       row: 9,
       col: 4,
     })
   })
 
-  test("Shift+Tab clamps at the absolute first cell when no further editable cell exists", () => {
+  test("Shift+Tab in 'none' wraparound mode clamps at the absolute first cell", () => {
     const allRowsEditable = (_r: number, c: number): boolean => c % 2 === 0
-    expect(nextEditableCellAfterEdit(0, 0, 9, 4, "left", allRowsEditable)).toEqual({
+    expect(
+      nextEditableCellAfterEdit(0, 0, 9, 4, "left", allRowsEditable, { wraparound: "none" }),
+    ).toEqual({
       row: 0,
       col: 0,
     })
+  })
+})
+
+describe("nextEditableCellAfterEdit — wraparound modes (v0.6 §1 editor-tab-wraparound-polish)", () => {
+  // The grid wires `editorTabWraparound` from BcGridProps. The
+  // helper's default is "row-wrap" (matches Excel + Google Sheets);
+  // "none" opts out (clamp at edge); "selection-wrap" restricts to
+  // selected rows when the gating conditions are met.
+
+  test("default (row-wrap): Tab from (lastRow, lastCol) wraps to (0, 0)", () => {
+    const allEditable = () => true
+    // No options at all → uses default "row-wrap".
+    expect(nextEditableCellAfterEdit(9, 4, 9, 4, "right", allEditable)).toEqual({
+      row: 0,
+      col: 0,
+    })
+  })
+
+  test("default (row-wrap): Shift+Tab from (0, 0) wraps to (lastRow, lastCol)", () => {
+    const allEditable = () => true
+    expect(nextEditableCellAfterEdit(0, 0, 9, 4, "left", allEditable)).toEqual({
+      row: 9,
+      col: 4,
+    })
+  })
+
+  test("row-wrap: Tab from (lastRow, lastCol) skips non-editable cells while wrapping", () => {
+    // Only column 0 + 2 are editable. Tab from (lastRow, lastCol) =
+    // (9, 4) wraps to (0, 0) — first editable in scan order.
+    const editableEvenCols = (_r: number, c: number): boolean => c % 2 === 0
+    expect(nextEditableCellAfterEdit(9, 4, 9, 4, "right", editableEvenCols)).toEqual({
+      row: 0,
+      col: 0,
+    })
+  })
+
+  test("row-wrap: when no editable cell exists anywhere, returns origin (no infinite loop)", () => {
+    // The iteration cap guards against pathological inputs (or
+    // dynamic data where all-editable rows scrolled off). Without
+    // the cap the wrap would loop forever.
+    const noneEditable = () => false
+    expect(nextEditableCellAfterEdit(2, 2, 9, 4, "right", noneEditable)).toEqual({
+      row: 2,
+      col: 2,
+    })
+    expect(nextEditableCellAfterEdit(2, 2, 9, 4, "left", noneEditable)).toEqual({
+      row: 2,
+      col: 2,
+    })
+  })
+
+  test("row-wrap: returns origin when wrapping all the way around finds no other editable cell", () => {
+    // Only (3, 1) is editable. Tab from (3, 1) wraps fully and lands
+    // back on the origin (the only editable cell). Pin that the post-
+    // wrap symmetry doesn't accidentally return a non-editable cell.
+    const onlyOne = (r: number, c: number): boolean => r === 3 && c === 1
+    expect(nextEditableCellAfterEdit(3, 1, 9, 4, "right", onlyOne)).toEqual({
+      row: 3,
+      col: 1,
+    })
+  })
+
+  test("selection-wrap: Tab restricts traversal to selected rows", () => {
+    // Selected rows: 2, 5, 7. Tab from (2, 4) — last editable cell
+    // in selected row 2 — should jump to (5, 0), not (3, 0).
+    const selectedRows = new Set([2, 5, 7])
+    const allEditable = () => true
+    expect(
+      nextEditableCellAfterEdit(2, 4, 9, 4, "right", allEditable, {
+        wraparound: "selection-wrap",
+        isRowSelected: (r) => selectedRows.has(r),
+        selectedRowCount: 3,
+      }),
+    ).toEqual({ row: 5, col: 0 })
+  })
+
+  test("selection-wrap: Tab from last selected row's last cell wraps to first selected row", () => {
+    // Selected rows: 2, 5, 7. Tab from (7, 4) wraps within the
+    // selection back to (2, 0) — not (0, 0) which would leak
+    // outside the selection.
+    const selectedRows = new Set([2, 5, 7])
+    const allEditable = () => true
+    expect(
+      nextEditableCellAfterEdit(7, 4, 9, 4, "right", allEditable, {
+        wraparound: "selection-wrap",
+        isRowSelected: (r) => selectedRows.has(r),
+        selectedRowCount: 3,
+      }),
+    ).toEqual({ row: 2, col: 0 })
+  })
+
+  test("selection-wrap: Shift+Tab from first selected row's first cell wraps to last selected row", () => {
+    const selectedRows = new Set([2, 5, 7])
+    const allEditable = () => true
+    expect(
+      nextEditableCellAfterEdit(2, 0, 9, 4, "left", allEditable, {
+        wraparound: "selection-wrap",
+        isRowSelected: (r) => selectedRows.has(r),
+        selectedRowCount: 3,
+      }),
+    ).toEqual({ row: 7, col: 4 })
+  })
+
+  test("selection-wrap falls through to row-wrap when editing row is OUTSIDE the selection", () => {
+    // The user is editing row 3 (not selected). Without the
+    // fall-through they'd be stranded — Tab would have nowhere to
+    // go because no selected row matches `r === 3`. The helper
+    // detects the gating failure and reverts to row-wrap so Tab
+    // still works.
+    const selectedRows = new Set([5, 7])
+    const allEditable = () => true
+    expect(
+      nextEditableCellAfterEdit(3, 2, 9, 4, "right", allEditable, {
+        wraparound: "selection-wrap",
+        isRowSelected: (r) => selectedRows.has(r),
+        selectedRowCount: 2,
+      }),
+    ).toEqual({ row: 3, col: 3 })
+  })
+
+  test("selection-wrap falls through to row-wrap when selection size <2", () => {
+    // Single-row selections don't activate the wrap-within-selection
+    // gate (no useful traversal restriction with one row). Reverts
+    // to row-wrap so Tab still works as the user expects.
+    const selectedRows = new Set([3])
+    const allEditable = () => true
+    expect(
+      nextEditableCellAfterEdit(3, 4, 9, 4, "right", allEditable, {
+        wraparound: "selection-wrap",
+        isRowSelected: (r) => selectedRows.has(r),
+        selectedRowCount: 1,
+      }),
+    ).toEqual({ row: 4, col: 0 })
+  })
+
+  test("selection-wrap falls through to row-wrap when isRowSelected callback is missing", () => {
+    // Defensive: without the callback the helper can't restrict
+    // traversal. Behave as row-wrap rather than ignoring the request
+    // silently (which would clamp at edge).
+    const allEditable = () => true
+    expect(
+      nextEditableCellAfterEdit(9, 4, 9, 4, "right", allEditable, {
+        wraparound: "selection-wrap",
+        // isRowSelected omitted
+        selectedRowCount: 5,
+      }),
+    ).toEqual({ row: 0, col: 0 })
+  })
+
+  test("none mode + Tab wraps over no editable cells in scope returns origin (no wrap)", () => {
+    const allEditable = () => true
+    expect(
+      nextEditableCellAfterEdit(9, 4, 9, 4, "right", allEditable, { wraparound: "none" }),
+    ).toEqual({ row: 9, col: 4 })
+  })
+
+  test("Down/up still bypass the wraparound logic regardless of mode", () => {
+    // Vertical motion delegates to nextActiveCellAfterEdit per the
+    // existing contract. Wraparound options must not affect it.
+    const allEditable = () => true
+    expect(
+      nextEditableCellAfterEdit(9, 2, 9, 4, "down", allEditable, { wraparound: "row-wrap" }),
+    ).toEqual({ row: 9, col: 2 }) // clamps at lastRow per nextActiveCellAfterEdit
+    expect(
+      nextEditableCellAfterEdit(0, 2, 9, 4, "up", allEditable, { wraparound: "row-wrap" }),
+    ).toEqual({ row: 0, col: 2 }) // clamps at row 0
   })
 })

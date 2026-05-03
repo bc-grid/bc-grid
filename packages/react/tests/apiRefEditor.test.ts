@@ -77,6 +77,24 @@ describe("BcGridApi imperative editor methods (v0.5 audit P0-7)", () => {
     const api: BcServerGridApi = stubServerApi()
     expect(typeof api.applyRowPatches).toBe("function")
   })
+
+  test("BcGridApi exposes getScrollOffset returning { top, left } (v0.6.0-alpha.1)", () => {
+    // Maintainer ask 2026-05-03: consumers want to round-trip the
+    // exact pixel scroll position through their persistence layer.
+    // Pin the contract: getScrollOffset is a getter returning a
+    // { top, left } pair, mirroring getActiveCell / getSelection.
+    // Per `v06-scroll-state-controlled-prop`.
+    const api: BcGridApi = stubApi()
+    expect(typeof api.getScrollOffset).toBe("function")
+    const offset = api.getScrollOffset()
+    expect(typeof offset.top).toBe("number")
+    expect(typeof offset.left).toBe("number")
+  })
+
+  test("BcServerGridApi inherits getScrollOffset", () => {
+    const api: BcServerGridApi = stubServerApi()
+    expect(typeof api.getScrollOffset).toBe("function")
+  })
 })
 
 function stubApi(): BcGridApi {
@@ -119,6 +137,7 @@ function stubApi(): BcGridApi {
     cancelEdit: noop,
     discardRowEdits: () => ({ discarded: 0 }),
     applyRowPatches: () => Promise.resolve({ ok: true as const, applied: 0, rowsAffected: 0 }),
+    getScrollOffset: () => ({ top: 0, left: 0 }),
     refresh: noop,
   }
 }

@@ -31,6 +31,7 @@ export interface BcGridAggregationFooterRowProps<TRow> {
   columns: readonly ResolvedColumn<TRow>[]
   results: readonly AggregationResult[]
   locale?: string | undefined
+  position?: "top" | "bottom"
   rowHeight: number
   rowIndex: number
   scrollLeft: number
@@ -70,6 +71,7 @@ export function BcGridAggregationFooterRow<TRow>({
   columns,
   results,
   locale,
+  position = "bottom",
   rowHeight,
   rowIndex,
   scrollLeft,
@@ -81,7 +83,7 @@ export function BcGridAggregationFooterRow<TRow>({
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: The virtualized grid uses ARIA grid roles on positioned divs.
-    <div className="bc-grid-aggregation-footer-viewport" role="rowgroup">
+    <div className="bc-grid-aggregation-footer-viewport" data-position={position} role="rowgroup">
       <AggregationFooterRowCells
         columns={columns}
         locale={locale}
@@ -217,12 +219,12 @@ function renderAggregationValue<TRow>(
   })
 }
 
-// Aggregation footer renders inside its own `bc-grid-aggregation-footer-viewport`
-// (sibling of the unified body viewport, not yet sticky-bottom inside it). Until
-// the v0.7 follow-up migrates the footer into the main viewport, the row + pinned
-// cells need to scroll-sync with the body horizontally via JS transform. The body
-// scroll handler updates `scrollOffset.left`, which threads in here as
-// `scrollLeft` and drives both transforms below.
+// Aggregation totals render inside `bc-grid-aggregation-footer-viewport`
+// siblings of the unified body viewport. Until the v0.7 follow-up migrates
+// the bottom row into the main viewport, totals rows + pinned cells need to
+// scroll-sync with the body horizontally via JS transform. The body scroll
+// handler updates `scrollOffset.left`, which threads in here as `scrollLeft`
+// and drives both transforms below.
 function aggregationFooterRowStyle(
   width: number,
   height: number,

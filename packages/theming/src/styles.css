@@ -3882,6 +3882,15 @@ table.bc-grid-detail-nested-grid {
   z-index: 2;
 }
 
+.bc-grid-aggregation-footer-viewport[data-position="top"] {
+  border-top: 0;
+  border-bottom: 1px solid var(--bc-grid-border);
+}
+
+.bc-grid-aggregation-footer-viewport[data-position="bottom"] {
+  border-top: 1px solid var(--bc-grid-border);
+}
+
 .bc-grid-aggregation-footer-row {
   background: var(--bc-grid-muted);
   color: var(--bc-grid-fg);

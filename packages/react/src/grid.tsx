@@ -176,6 +176,15 @@ import {
 } from "./rangeInteraction"
 import { applyKeyboardRangeExtension } from "./rangeNavigation"
 import { BcRangeOverlay } from "./rangeOverlay"
+import {
+  BC_GRID_ROW_DRAG_MIME,
+  type BcRowDropAction,
+  computeEdgeScrollDelta,
+  computeRowDropPosition,
+  parseRowDragPayload,
+  resolveDragSourceRowIds,
+  serializeRowDragPayload,
+} from "./rowDragDrop"
 import { buildRowPatchApplyPlan } from "./rowPatchPlan"
 import { matchesSearchText } from "./search"
 import {
@@ -184,6 +193,7 @@ import {
   isRowSelected,
   selectOnly,
   selectRange,
+  selectionSize,
   toggleRow,
   toggleRows,
 } from "./selection"
@@ -279,6 +289,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ariaLabelledBy,
     onRowClick,
     onRowDoubleClick,
+    onRowDragOver,
+    onRowDrop,
+    onRowDragStart,
     onCellFocus,
     onBeforeCopy,
     onCopy,
@@ -302,6 +315,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const editorActivationProp = props.editorActivation
   const editorBlurActionProp = props.editorBlurAction
   const escDiscardsRowProp = props.escDiscardsRow
+  // editorTabWraparound default: "row-wrap" (matches Excel + Google
+  // Sheets). Per `v06-editor-tab-wraparound-polish` (bsncraft request).
+  const editorTabWraparound = props.editorTabWraparound ?? "row-wrap"
   const editScrollOutAction: "commit" | "cancel" | "preserve" =
     props.editScrollOutAction ?? "commit"
 
@@ -491,6 +507,23 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     scrollOffsetRef.current = next
     setScrollOffset(next)
   }, [])
+  // initialScrollOffset: one-time restore at mount. Read once, applied
+  // on first paint after the scroller is in the DOM. Subsequent updates
+  // are ignored (mirrors the initialLayout pattern). Per
+  // `v06-scroll-state-controlled-prop`.
+  const initialScrollOffsetRef = useRef(props.initialScrollOffset)
+  useEffect(() => {
+    const target = initialScrollOffsetRef.current
+    const scroller = scrollerRef.current
+    if (!target || !scroller) return
+    if (target.top !== 0) scroller.scrollTop = target.top
+    if (target.left !== 0) scroller.scrollLeft = target.left
+    // Mirror into the internal state so the virtualizer + ref agree
+    // with the DOM scroll position immediately. The native scroll
+    // event won't fire for programmatic scrollTop / scrollLeft sets
+    // that happen before the user interacts.
+    updateScrollOffset({ top: scroller.scrollTop, left: scroller.scrollLeft })
+  }, [updateScrollOffset])
   const isRowDisabled = useCallback((row: TRow) => rowIsDisabled?.(row) ?? false, [rowIsDisabled])
 
   const [sortState, setSortState] = useControlledState<readonly BcGridSort[]>(
@@ -598,6 +631,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // click; consumed (and reset) by shift-click. Held in a ref so we don't
   // re-render the grid just to update the anchor.
   const selectionAnchorRef = useRef<RowId | null>(null)
+
+  // Row drag-and-drop state (v0.6 §1 row-drag-drop-hooks). The grid
+  // wires HTML5 native DnD on row elements when `onRowDragOver` or
+  // `onRowDrop` is supplied. `dragSourceRowIdsRef` holds the dragged
+  // set across dragover events (dataTransfer is restricted on
+  // dragover for security — only readable on drop). `dropTarget`
+  // drives the visual indicator via `data-bc-grid-row-drop` on the
+  // hovered row; nulled out on dragleave / drop / dragend.
+  const dragSourceRowIdsRef = useRef<readonly RowId[] | null>(null)
+  const [dropTarget, setDropTarget] = useState<{
+    rowId: RowId
+    position: BcRowDropAction
+  } | null>(null)
+  const rowDragEnabled = onRowDragOver != null || onRowDrop != null
+
   const [columnMenu, setColumnMenu] = useState<ColumnVisibilityMenuAnchor | null>(null)
   const showColumnMenu = props.showColumnMenu !== false
   const filterRowLocked = props.showFilterRow !== undefined || props.showFilters !== undefined
@@ -1351,6 +1399,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     selection: selectionState,
   })
   const hasAggregationFooter = aggregationResults.length > 0
+  const pinnedTotals = props.pinnedTotals ?? "bottom"
+  const showTopAggregationTotals =
+    hasAggregationFooter && (pinnedTotals === "top" || pinnedTotals === "both")
+  const showBottomAggregationTotals =
+    hasAggregationFooter && (pinnedTotals === "bottom" || pinnedTotals === "both")
+  const aggregationTotalsRowCount =
+    (showTopAggregationTotals ? 1 : 0) + (showBottomAggregationTotals ? 1 : 0)
 
   // Whether the inline filter row should render. Default is column-driven
   // (`filter-popup-variant`: row hidden when every filterable column is
@@ -1383,7 +1438,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     headerChromeHeight,
     bodyHeight: contentFitBodyHeight,
     minBodyHeight: defaultRowHeight,
-    trailingChromeHeight: hasAggregationFooter ? defaultRowHeight : 0,
+    trailingChromeHeight: aggregationTotalsRowCount * defaultRowHeight,
   })
   const minViewportFitHeight = headerChromeHeight + defaultRowHeight
   const viewportFitFallbackHeight = headerChromeHeight + DEFAULT_BODY_HEIGHT
@@ -1836,6 +1891,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (!column) return false
       return isCellEditable(column, rowEntry.row)
     }
+    const isRowSelectedAt = (r: number): boolean => {
+      const rowEntry = rowEntries[r]
+      if (!rowEntry || !isDataRowEntry(rowEntry)) return false
+      return isRowSelected(selectionState, rowEntry.rowId)
+    }
     const { row: nextRow, col: nextCol } = nextEditableCellAfterEdit(
       rowIndex,
       colIndex,
@@ -1843,6 +1903,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       lastCol,
       next.move,
       isCellEditableAt,
+      {
+        wraparound: editorTabWraparound,
+        isRowSelected: isRowSelectedAt,
+        selectedRowCount: selectionSize(selectionState),
+      },
     )
     const targetRow = rowEntries[nextRow]
     const targetCol =
@@ -1854,6 +1919,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     editController.dispatchUnmounted()
   }, [
     editController.editState,
+    editorTabWraparound,
     rowEntries,
     resolvedColumns,
     rowIndexById,
@@ -1862,6 +1928,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     isRowDisabled,
     props.flashOnEdit,
     domBaseId,
+    selectionState,
   ])
 
   // Pixel rect of the cell currently being edited — passed to the editor
@@ -2292,6 +2359,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       getActiveCell() {
         return activeCell
       },
+      getScrollOffset() {
+        // Read from the live ref so consumers calling getScrollOffset()
+        // mid-scroll see the latest pixel position, not the last
+        // committed React state (which lags one frame).
+        return { top: scrollOffsetRef.current.top, left: scrollOffsetRef.current.left }
+      },
       getSelection() {
         return selectionState
       },
@@ -2481,6 +2554,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         const clamped = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
         updateUserSettings((prev) => ({ ...prev, prefetchAhead: clamped }))
       },
+      clearSelection() {
+        setSelectionState(createEmptySelection())
+      },
+      clearActiveCell() {
+        setActiveCell(null)
+      },
+      scrollToTop() {
+        const scroller = scrollerRef.current
+        if (scroller) scroller.scrollTop = 0
+      },
       refresh() {
         requestRender()
       },
@@ -2512,7 +2595,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setColumnState,
     setExpansionState,
     applyFilterState,
+    setActiveCell,
     setRangeSelectionState,
+    setSelectionState,
     setSortState,
     setVisibleUserSetting,
     updateUserSettings,
@@ -2685,6 +2770,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (!column) return false
       return isCellEditable(column, rowEntry.row)
     }
+    const isRowSelectedAt = (r: number): boolean => {
+      const rowEntry = rowEntries[r]
+      if (!rowEntry || !isDataRowEntry(rowEntry)) return false
+      return isRowSelected(selectionState, rowEntry.rowId)
+    }
     const { row: nextRow, col: nextCol } = nextEditableCellAfterEdit(
       rowIndex,
       colIndex,
@@ -2692,6 +2782,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       lastCol,
       move,
       isCellEditableAt,
+      {
+        wraparound: editorTabWraparound,
+        isRowSelected: isRowSelectedAt,
+        selectedRowCount: selectionSize(selectionState),
+      },
     )
     const targetRow = rowEntries[nextRow]
     const targetCol =
@@ -2701,10 +2796,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   }, [
     columnIndexById,
     editController.editState,
+    editorTabWraparound,
     isRowDisabled,
     resolvedColumns,
     rowEntries,
     rowIndexById,
+    selectionState,
   ])
   const activeDescendantCell = pendingEditNavigationCell ?? activeCell
   const activeCellId = editorOwnsFocus
@@ -2723,14 +2820,43 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // and the existing root flex column already enforces that.
   const bodyHeight: number | undefined = undefined
 
+  // onScrollChange debounce — pin the interval as a constant so a
+  // future tuning becomes a deliberate change. ~120ms is the
+  // "consumer persistence" sweet spot: long enough to coalesce a
+  // continuous scroll into one save, short enough that the user
+  // doesn't notice a sticky-restore lag if they refresh mid-scroll.
+  // Per `v06-scroll-state-controlled-prop`.
+  const SCROLL_CHANGE_DEBOUNCE_MS = 120
+  const onScrollChange = props.onScrollChange
+  const scrollChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (scrollChangeTimerRef.current) clearTimeout(scrollChangeTimerRef.current)
+    },
+    [],
+  )
   const handleScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
       const target = event.currentTarget
-      virtualizer.setScrollTop(target.scrollTop)
-      virtualizer.setScrollLeft(target.scrollLeft)
-      updateScrollOffset({ top: target.scrollTop, left: target.scrollLeft })
+      const next = { top: target.scrollTop, left: target.scrollLeft }
+      virtualizer.setScrollTop(next.top)
+      virtualizer.setScrollLeft(next.left)
+      updateScrollOffset(next)
+      if (onScrollChange) {
+        if (scrollChangeTimerRef.current) clearTimeout(scrollChangeTimerRef.current)
+        scrollChangeTimerRef.current = setTimeout(() => {
+          scrollChangeTimerRef.current = null
+          // Read from the live ref so the persisted value reflects
+          // where the user finally settled, not the position at the
+          // tick that started the debounce.
+          onScrollChange({
+            top: scrollOffsetRef.current.top,
+            left: scrollOffsetRef.current.left,
+          })
+        }, SCROLL_CHANGE_DEBOUNCE_MS)
+      }
     },
-    [updateScrollOffset, virtualizer],
+    [onScrollChange, updateScrollOffset, virtualizer],
   )
 
   const focusGroupRow = useCallback(
@@ -3114,7 +3240,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       updateColumnFilterText,
     ],
   )
-  const bodyAriaRowOffset = columnHeaderRowCount + (hasInlineFilters ? 1 : 0) + 1
+  const topAggregationTotalsRowCount = showTopAggregationTotals ? 1 : 0
+  const bodyAriaRowOffset =
+    columnHeaderRowCount + (hasInlineFilters ? 1 : 0) + topAggregationTotalsRowCount + 1
+  const topAggregationTotalsRowIndex = columnHeaderRowCount + (hasInlineFilters ? 1 : 0) + 1
   const ContextMenuLayer = BcGridContextMenuLayer as ComponentType<
     BcGridContextMenuLayerProps<TRow>
   >
@@ -3240,7 +3369,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         // Per accessibility-rfc §aria-rowcount: total rows in the
         // underlying dataset. In manual pagination with a known server
         // total, surface that total + the chrome rows (header + filter
-        // row + aggregation footer). Grouped column headers add extra
+        // row + aggregation totals). Grouped column headers add extra
         // header rows, so use `columnHeaderRowCount` rather than assuming
         // a single leaf-header row.
         (isManualPagination && paginationTotalRows != null
@@ -3248,7 +3377,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           : rowEntries.length) +
         columnHeaderRowCount +
         (hasInlineFilters ? 1 : 0) +
-        (hasAggregationFooter ? 1 : 0)
+        aggregationTotalsRowCount
       }
       aria-colcount={resolvedColumns.length}
       aria-activedescendant={activeCellId}
@@ -3265,10 +3394,44 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
       <div className="bc-grid-main">
         <div className="bc-grid-table">
+          {showTopAggregationTotals ? (
+            <BcGridAggregationFooterRow
+              columns={resolvedColumns}
+              locale={locale}
+              position="top"
+              results={aggregationResults}
+              rowHeight={defaultRowHeight}
+              rowIndex={topAggregationTotalsRowIndex}
+              scrollLeft={scrollOffset.left}
+              totalWidth={virtualWindow.totalWidth}
+              viewportWidth={viewport.width}
+            />
+          ) : null}
+
           <div
             ref={scrollerRef}
             className="bc-grid-viewport"
             onScroll={handleScroll}
+            onDragOver={
+              rowDragEnabled
+                ? (event) => {
+                    // Edge-zone auto-scroll. When the pointer is within
+                    // ~48px of the viewport's top/bottom edge during a
+                    // row drag, nudge the scroll. The browser fires
+                    // dragOver continuously while the pointer is over
+                    // the viewport, so a single rAF-style apply per
+                    // event gives smooth scrolling without setInterval
+                    // (which would keep firing after dragend). v0.6 §1.
+                    if (!dragSourceRowIdsRef.current) return
+                    const rect = event.currentTarget.getBoundingClientRect()
+                    const delta = computeEdgeScrollDelta({
+                      clientY: event.clientY,
+                      viewportRect: { top: rect.top, bottom: rect.bottom },
+                    })
+                    if (delta !== 0) event.currentTarget.scrollTop += delta
+                  }
+                : undefined
+            }
             style={viewportStyle(bodyHeight, isAutoHeight, viewport.width)}
           >
             <div
@@ -3650,10 +3813,131 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     data-bc-grid-focused-row={focused || undefined}
                     data-bc-grid-row-kind="data"
                     data-bc-grid-expanded={expanded || undefined}
+                    data-bc-grid-row-drop={
+                      dropTarget?.rowId === entry.rowId && dropTarget.position !== "none"
+                        ? dropTarget.position
+                        : undefined
+                    }
+                    draggable={rowDragEnabled && !disabled ? true : undefined}
                     style={{
                       ...buildRowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth),
                       ...consumerRowStyle,
                     }}
+                    onDragStart={
+                      rowDragEnabled && !disabled
+                        ? (event) => {
+                            // Multi-row drag: if the drag origin is part of
+                            // the current selection, drag the whole selected
+                            // set together (matches macOS Finder + VS Code).
+                            // Otherwise drag just the origin row. Resolved
+                            // here so the same source-list is available to
+                            // dragover (where dataTransfer reads are
+                            // restricted) via dragSourceRowIdsRef.
+                            const sourceRowIds = resolveDragSourceRowIds({
+                              originRowId: entry.rowId,
+                              selection: selectionState,
+                              visibleRowIds: visibleSelectableRowIds,
+                            })
+                            dragSourceRowIdsRef.current = sourceRowIds
+                            event.dataTransfer.effectAllowed = "move"
+                            try {
+                              event.dataTransfer.setData(
+                                BC_GRID_ROW_DRAG_MIME,
+                                serializeRowDragPayload(sourceRowIds),
+                              )
+                              // Plain text fallback so consumer drop targets
+                              // outside the grid get a sensible payload too.
+                              event.dataTransfer.setData("text/plain", sourceRowIds.join(","))
+                            } catch {
+                              // dataTransfer.setData can throw in some test
+                              // harnesses (jsdom variants); the drag still
+                              // works via dragSourceRowIdsRef in-process.
+                            }
+                            onRowDragStart?.(entry.row, sourceRowIds, event)
+                          }
+                        : undefined
+                    }
+                    onDragOver={
+                      rowDragEnabled
+                        ? (event) => {
+                            const sourceRowIds = dragSourceRowIdsRef.current
+                            if (!sourceRowIds) return
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            const computed = computeRowDropPosition(event.clientY, rect)
+                            const consumerPosition = onRowDragOver
+                              ? onRowDragOver({
+                                  row: entry.row,
+                                  rowId: entry.rowId,
+                                  sourceRowIds,
+                                  event,
+                                })
+                              : computed
+                            // Always preventDefault on a non-none accept so
+                            // the browser fires the subsequent `drop` event;
+                            // without this the default "no drop" cursor
+                            // stays and `onDrop` never fires.
+                            if (consumerPosition !== "none") {
+                              event.preventDefault()
+                              event.dataTransfer.dropEffect = "move"
+                            }
+                            const finalPosition: BcRowDropAction =
+                              consumerPosition === undefined ? computed : consumerPosition
+                            if (
+                              !dropTarget ||
+                              dropTarget.rowId !== entry.rowId ||
+                              dropTarget.position !== finalPosition
+                            ) {
+                              setDropTarget({ rowId: entry.rowId, position: finalPosition })
+                            }
+                          }
+                        : undefined
+                    }
+                    onDragLeave={
+                      rowDragEnabled
+                        ? (event) => {
+                            // Only clear when the drag actually left the row
+                            // — leaving for a child element (cell, chip)
+                            // also fires dragleave but we want to keep the
+                            // indicator. relatedTarget tells us where the
+                            // pointer went next.
+                            const next = event.relatedTarget as Node | null
+                            if (next && event.currentTarget.contains(next)) return
+                            if (dropTarget?.rowId === entry.rowId) setDropTarget(null)
+                          }
+                        : undefined
+                    }
+                    onDrop={
+                      rowDragEnabled
+                        ? (event) => {
+                            event.preventDefault()
+                            const sourceRowIds =
+                              dragSourceRowIdsRef.current ??
+                              parseRowDragPayload(event.dataTransfer.getData(BC_GRID_ROW_DRAG_MIME))
+                            if (!sourceRowIds || sourceRowIds.length === 0) return
+                            const position =
+                              dropTarget?.rowId === entry.rowId ? dropTarget.position : "none"
+                            if (position !== "none") {
+                              onRowDrop?.({
+                                row: entry.row,
+                                rowId: entry.rowId,
+                                sourceRowIds,
+                                position,
+                                event,
+                              })
+                            }
+                            setDropTarget(null)
+                            dragSourceRowIdsRef.current = null
+                          }
+                        : undefined
+                    }
+                    onDragEnd={
+                      rowDragEnabled
+                        ? () => {
+                            setDropTarget(null)
+                            dragSourceRowIdsRef.current = null
+                          }
+                        : undefined
+                    }
                     onClick={(event) => {
                       // Selection logic. Shift+click → range from anchor; ctrl/
                       // cmd+click → toggle this row in current selection;
@@ -3911,10 +4195,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             </div>
           ) : null}
 
-          {hasAggregationFooter ? (
+          {showBottomAggregationTotals ? (
             <BcGridAggregationFooterRow
               columns={resolvedColumns}
               locale={locale}
+              position="bottom"
               results={aggregationResults}
               rowHeight={defaultRowHeight}
               rowIndex={rowEntries.length + bodyAriaRowOffset}

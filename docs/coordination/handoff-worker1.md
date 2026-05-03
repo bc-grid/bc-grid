@@ -37,60 +37,68 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 ## v0.6 train — your queue (in priority order)
 
-**0.5.0 GA shipped 2026-05-03.** v0.6 is the consumer-feedback absorption + spreadsheet flows + bulk operations major release. Target ship date: ~2026-05-10.
+**0.5.0 GA shipped 2026-05-03.** v0.6 is consumer-feedback absorption + spreadsheet flows + bulk operations + state-persistence. Target ship date: ~2026-05-10. v0.6.0-alpha.1 cut imminent.
 
-Your v0.6 train has **5 queued tasks**, headlined by the client-side tree row model (the AG-Grid-parity gap that blocks every consumer who has parent/child data without a server endpoint to compute the tree). Pick them up in order; if you finish ahead of schedule, top of the v0.6 deferred list waits.
+You crushed the previous queue — **all 5 v0.6 server-perf items + the client-tree-rowmodel headline merged**: #433 stale-response-flood, #434 stale-viewkey-fetches, #438 client-tree RFC + #447 client-tree phase 1 (HEADLINE), #444 view-change-reset, #445 rollback-vs-invalidate. Updated queue below picks up where your planning doc left off + adds three consumer-facing follow-ons.
 
-### Active now → `v06-stale-response-flood-test` (planning doc §9, ~half day, **tests-only**)
+### Active now → `v06-client-tree-rowmodel-phase-2` (~1 day, headline polish)
 
-Stress-test the existing abort-on-supersede contract under request floods. The orchestration cancels in-flight requests via `abortExcept` (`packages/server-row-model/src/index.ts:919`) + the React gate at `packages/react/src/serverGrid.tsx:790`. Existing test (`serverGridPaged.test.ts:374-688`) covers a single late response — not a flood. Add a model-layer test that fires 10+ paged requests in quick succession (e.g. user typing "abcdefghij" with 10 keystrokes in <1s), defers each `loadPage` resolution, resolves them out of order, and asserts:
+Phase 1 (#447) shipped the foundation: `treeData`, outline column, sort + filter through tree, aggregations integration. Phase 2 closes the production-readiness gaps the RFC §10 open questions surfaced:
 
-- Only the latest result lands in cache (no zombie completions from intermediate requests).
-- `lastLoad.status === "success"` for the latest request.
-- All prior requests have `controller.signal.aborted === true`.
+1. **Performance pass** — add a smoke-perf bench under `apps/benchmarks/tests/perf.perf.pw.ts` for client tree: 5k-row tree (~10 levels deep, ~50 children per parent on average) with sort + filter applied. Bar: under 200ms initial flatten + under 50ms expand-toggle. Tune the tree-build algorithm if numbers are loose.
 
-**No source changes required** (existing behaviour is correct based on code review; this is contract pinning so a refactor that breaks the abort cascade catches in CI before users hit it).
+2. **Cycle-handling policy** — phase 1 deferred this. Add an explicit cycle detector in `flattenClientTree` that drops rows participating in a cycle + emits a dev-mode warning. Pin the contract with a unit test where row A's parentId = B and B's parentId = A.
 
-**Branch:** `agent/worker1/v06-stale-response-flood-test`. **Effort:** ~half day.
+3. **`keepAncestors` prop wiring** — phase 1 ratified the toggle but the implementation may have shipped the default-only path. Verify `BcGridProps.treeData.keepAncestors?: boolean` (default `true`) wires through; add a test exercising both sides.
 
-### Next-after → `v06-server-tree-stale-viewkey-fetches` (planning doc §10, ~half day)
+4. **Outline column ergonomics** — chevron animation timing, indent token (`--bc-grid-tree-indent`), `aria-expanded` semantics, keyboard support (Right = expand if collapsed else move-into-children; Left = collapse if expanded else move-to-parent). Match the master-detail toggle's existing accessibility contract.
 
-Pick up §10 next — `loadTreeChildren` does NOT call `abortExcept` (only paged does at `serverGrid.tsx:902`). Tree fetches under stale `viewKey` can leak children from a previous filter set into the current cache after a filter change. Concrete consequence: stale children appear under a node that may have re-collapsed or been filtered out.
+**Branch:** `agent/worker1/v06-client-tree-rowmodel-phase-2`. **Effort:** ~1 day.
 
-**Fix shape:** gate the `request.promise.then((result) => ...)` block on `viewKey === viewKeyRef.current` (matches the React-layer pattern from `isActiveServerPagedResponse`). Lower risk than full abort because tree fetches run against multiple parent-row-id requests in parallel.
+### Next-after → `v06-server-paged-cursor-pagination` (~1 day)
 
-**Branch:** `agent/worker1/v06-server-tree-stale-viewkey-fetches`. **Effort:** ~half day.
+Today's `LoadServerPage<TRow>` signature passes `pageIndex` + `pageSize` (offset-based). Some consumer backends — Hasura/Postgres-with-keyset, GraphQL-with-cursor, Algolia-search-style — only support cursor-based pagination natively. Forcing them to translate pageIndex → cursor adds latency and breaks "stable scroll while data inserts" guarantees.
 
-### Then-after → `v06-client-tree-rowmodel` (HEADLINE, ~1-2 days, two-spike-confirmed)
+**Fix shape:**
 
-**This is your v0.6 headline.** Today bc-grid only ships server tree (`<BcServerGrid rowModel="tree">`) — consumers with client-side parent/child data have to either (a) flatten and use grouping (loses the parent ID model) or (b) wire a fake server endpoint. Production-estimating spike (#374) finding #1 flagged this; doc-management spike (#367) hit the same gap.
+1. **Add `LoadServerPageCursor<TRow>`** as an alternative loader signature on `BcServerPagedProps`. Receives `{ cursor: string | null, pageSize, signal, view }` and returns `{ rows, nextCursor: string | null, totalRows? }`.
 
-**Implementation:**
+2. **Discriminate via a single union prop** — `loadPage: LoadServerPage<TRow> | { kind: "cursor", load: LoadServerPageCursor<TRow> }`. Or two distinct props (`loadPage` vs `loadPageCursor`) — pick whichever survives api-surface review better.
 
-1. **`BcGridProps.treeData?: { getRowParentId: (row) => RowId | null; getRowKey?: ... }`** — opt-in client tree mode. When set, the grid builds a parent → children map and renders rows with hierarchical indentation.
+3. **Internal pagination state machine** keeps one set of {prev, next} cursors instead of pageIndex. The visible row range is computed from cursor → cumulative rows, not pageIndex → offset.
 
-2. **Outline column variant** — extend the existing detail-column / grouping-column patterns. Indent based on tree depth; `▶` chevron toggles `expandedIds` set. Reuse `expansionState` plumbing from master-detail.
+4. **Recipe doc** at `docs/recipes/cursor-pagination.md` showing Hasura + GraphQL examples.
 
-3. **Sort + filter through the tree** — sorts apply to siblings under each parent (preserve hierarchy); filters that hide a row should also hide its descendants OR keep ancestors visible (configurable, default = "keep ancestors so user can see filtered context").
+**Branch:** `agent/worker1/v06-server-paged-cursor-pagination`. **Effort:** ~1 day.
 
-4. **Aggregations integration** — group rows already aggregate in client mode; tree rows should too (sum of children's measure column at parent row). Reuse `@bc-grid/aggregations`.
+### Then-after → `v06-server-grid-error-boundary` (~half day)
 
-5. **Test coverage:** unit tests for the tree-build algorithm + 1 Playwright spec for an outline-style task list demo (production-estimating spike scenario).
+Today when `loadPage` throws, the `<BcServerGrid>` shows the empty state (no error UI). Consumers wire their own error catching. Add a first-class error surface:
 
-**Branch:** `agent/worker1/v06-client-tree-rowmodel`. **Effort:** ~1-2 days. **Two-spike-confirmed** (production-estimating #1, doc-mgmt fallback).
+1. **`BcServerGridApi.getLastError()`** — returns the most recent failed-load error (or null).
+2. **`BcGridProps.renderServerError?: (params: { error, retry }) => ReactNode`** slot — consumer renders the error UI; receives a `retry()` thunk that re-fires the active `loadPage`.
+3. **Default fallback** if `renderServerError` is unset: minimal "Failed to load. Retry" button (uses `--bc-grid-edit-state-error-*` tokens for theme consistency).
+4. **Recipe** at `docs/recipes/server-grid-error-handling.md`.
 
-### After-that → `v06-server-view-change-reset-policy` (planning doc §1, ~half day)
+**Branch:** `agent/worker1/v06-server-grid-error-boundary`. **Effort:** ~half day.
 
-When `view` changes (filter / sort / pagination), the orchestration tears down the cache + restarts. Today it does this synchronously inside the React effect; under fast filter typing this can hammer fetch/abort cycles. Add an opt-in debounce window for view changes — coalesce N view changes within K ms into one cache reset. Default off (preserves current behaviour); consumers who want it pass `viewChangeDebounceMs: 200` on the loader options.
+### After-that → `v06-server-row-cache-stats` (~half day)
 
-**Branch:** `agent/worker1/v06-server-view-change-reset-policy`. **Effort:** ~half day.
+`BcServerGridApi.getCacheStats(): { blocksLoaded, blocksFetched, dedupedRequests, cacheHitRate, viewKey, ... }`. Consumer observability for production tuning — they can render the stats in a dev panel during integration. Pulls existing diagnostics from the model's internals; pure additive API.
 
-### Last → `v06-optimistic-rollback-vs-invalidate` (planning doc §11, ~half day)
+**Branch:** `agent/worker1/v06-server-row-cache-stats`. **Effort:** ~half day.
 
-The current managed-overlay rollback path treats the rollback as a pure local operation. If the server returns a fresh row payload that disagrees with the optimistic value, the overlay rollback runs but the next paged refetch re-shows the optimistic value because the cache hasn't been invalidated. Document the contract (rollback ≠ invalidate) and add a `BcServerGridApi.invalidateRowCache(rowId)` method consumers can call from their `onServerRowMutation` rejection branch when the server's final-state matters.
+### Last → `v06-server-paged-skeleton-rows` (~half day)
 
-**Branch:** `agent/worker1/v06-optimistic-rollback-vs-invalidate`. **Effort:** ~half day.
+Opt-in skeleton placeholder rows while a page loads instead of empty space. `BcGridProps.serverLoadingSkeleton?: "lines" | "shimmer" | false` (default `"lines"`). Renders `pageSize` skeleton rows in the right offset range so scrolling feels continuous. Composes with #428's prefetch radio — when prefetched blocks are in flight, those rows show skeletons too.
 
+**Branch:** `agent/worker1/v06-server-paged-skeleton-rows`. **Effort:** ~half day.
+
+### Previously active → `v06-client-tree-rowmodel` phase 1 (DONE — #447 merged b669e0f, HEADLINE)
+### Previously active → `v06-stale-response-flood-test` (DONE — #433 merged 236d712)
+### Previously active → `v06-server-tree-stale-viewkey-fetches` (DONE — #434 merged 97faaa6)
+### Previously active → `v06-server-view-change-reset-policy` (DONE — #444 merged 28a4f47)
+### Previously active → `v06-optimistic-rollback-vs-invalidate` (DONE — #445 merged debe776)
 ### Previously active → `v06-server-infinite-prefetch-budget` (DONE — #428 merged 86b9810)
 
 ### Previously active → `v06-server-perf-block-cache-lru-tuning` (DONE — #422 merged 976344c)
