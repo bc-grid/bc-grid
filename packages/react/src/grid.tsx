@@ -1301,6 +1301,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     selection: selectionState,
   })
   const hasAggregationFooter = aggregationResults.length > 0
+  const pinnedTotals = props.pinnedTotals ?? "bottom"
+  const showTopAggregationTotals =
+    hasAggregationFooter && (pinnedTotals === "top" || pinnedTotals === "both")
+  const showBottomAggregationTotals =
+    hasAggregationFooter && (pinnedTotals === "bottom" || pinnedTotals === "both")
+  const aggregationTotalsRowCount =
+    (showTopAggregationTotals ? 1 : 0) + (showBottomAggregationTotals ? 1 : 0)
 
   // Whether the inline filter row should render. Default is column-driven
   // (`filter-popup-variant`: row hidden when every filterable column is
@@ -1333,7 +1340,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     headerChromeHeight,
     bodyHeight: contentFitBodyHeight,
     minBodyHeight: defaultRowHeight,
-    trailingChromeHeight: hasAggregationFooter ? defaultRowHeight : 0,
+    trailingChromeHeight: aggregationTotalsRowCount * defaultRowHeight,
   })
   const minViewportFitHeight = headerChromeHeight + defaultRowHeight
   const viewportFitFallbackHeight = headerChromeHeight + DEFAULT_BODY_HEIGHT
@@ -3064,7 +3071,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       updateColumnFilterText,
     ],
   )
-  const bodyAriaRowOffset = columnHeaderRowCount + (hasInlineFilters ? 1 : 0) + 1
+  const topAggregationTotalsRowCount = showTopAggregationTotals ? 1 : 0
+  const bodyAriaRowOffset =
+    columnHeaderRowCount + (hasInlineFilters ? 1 : 0) + topAggregationTotalsRowCount + 1
+  const topAggregationTotalsRowIndex = columnHeaderRowCount + (hasInlineFilters ? 1 : 0) + 1
   const ContextMenuLayer = BcGridContextMenuLayer as ComponentType<
     BcGridContextMenuLayerProps<TRow>
   >
@@ -3190,7 +3200,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         // Per accessibility-rfc §aria-rowcount: total rows in the
         // underlying dataset. In manual pagination with a known server
         // total, surface that total + the chrome rows (header + filter
-        // row + aggregation footer). Grouped column headers add extra
+        // row + aggregation totals). Grouped column headers add extra
         // header rows, so use `columnHeaderRowCount` rather than assuming
         // a single leaf-header row.
         (isManualPagination && paginationTotalRows != null
@@ -3198,7 +3208,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           : rowEntries.length) +
         columnHeaderRowCount +
         (hasInlineFilters ? 1 : 0) +
-        (hasAggregationFooter ? 1 : 0)
+        aggregationTotalsRowCount
       }
       aria-colcount={resolvedColumns.length}
       aria-activedescendant={activeCellId}
@@ -3215,6 +3225,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
       <div className="bc-grid-main">
         <div className="bc-grid-table">
+          {showTopAggregationTotals ? (
+            <BcGridAggregationFooterRow
+              columns={resolvedColumns}
+              locale={locale}
+              position="top"
+              results={aggregationResults}
+              rowHeight={defaultRowHeight}
+              rowIndex={topAggregationTotalsRowIndex}
+              scrollLeft={scrollOffset.left}
+              totalWidth={virtualWindow.totalWidth}
+              viewportWidth={viewport.width}
+            />
+          ) : null}
+
           <div
             ref={scrollerRef}
             className="bc-grid-viewport"
@@ -3999,10 +4023,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             </div>
           ) : null}
 
-          {hasAggregationFooter ? (
+          {showBottomAggregationTotals ? (
             <BcGridAggregationFooterRow
               columns={resolvedColumns}
               locale={locale}
+              position="bottom"
               results={aggregationResults}
               rowHeight={defaultRowHeight}
               rowIndex={rowEntries.length + bodyAriaRowOffset}
