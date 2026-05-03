@@ -512,13 +512,18 @@ export function EditorMount<TRow>({
   const wrapperStyle: CSSProperties =
     mountStyle === "popup" && cellRect ? popupWrapperStyle(cellRect) : inCellWrapperStyle()
 
+  const wrapperEditState = editorStateAttribute({ error, pending })
   return (
     <div
       ref={wrapperRef}
       className={mountStyle === "popup" ? "bc-grid-editor-portal" : "bc-grid-editor-in-cell"}
       data-bc-grid-editor-root="true"
       data-bc-grid-editor-mount={mountStyle}
-      data-bc-grid-editor-state={editorStateAttribute({ error, pending })}
+      data-bc-grid-edit-state={wrapperEditState}
+      // Legacy alias from v0.5; preserved for one release. Removal
+      // scheduled for v0.7. Per `docs/migration/v0.6.md` (planning
+      // doc §4 visual contract consolidation).
+      data-bc-grid-editor-state={wrapperEditState}
       onKeyDown={handleKeyDown}
       style={wrapperStyle}
     >
@@ -694,6 +699,8 @@ function DefaultTextEditor({
       aria-invalid={error ? true : undefined}
       data-bc-grid-editor-input="true"
       data-bc-grid-editor-kind="text-default"
+      data-bc-grid-edit-state={editorStateAttribute({ error, pending })}
+      // Legacy alias from v0.5; preserved for one release.
       data-bc-grid-editor-state={editorStateAttribute({ error, pending })}
     />
   )

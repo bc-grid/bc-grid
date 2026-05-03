@@ -831,11 +831,19 @@ describe("@bc-grid/theming", () => {
     expect(focus).toContain("border-color: var(--bc-grid-focus-ring)")
     expect(focus).toContain("box-shadow: 0 0 0 2px color-mix")
 
-    const error = ruleFor('.bc-grid-editor-input[aria-invalid="true"],')
-    expect(error).toContain("border-color: var(--bc-grid-invalid)")
-    expect(error).toContain("var(--bc-grid-invalid) 18%")
+    // Per planning doc §4: the editor input's error styling now reads
+    // from the consolidated `--bc-grid-edit-state-error-stroke` token
+    // (which itself defaults to `--bc-grid-invalid`) so a consumer
+    // overriding the edit-state token tints the cell, the input border,
+    // AND the validation popover in lockstep. The legacy
+    // `data-bc-grid-editor-state="error"` + `aria-invalid="true"`
+    // selectors are preserved as deprecated aliases for one release;
+    // the CANONICAL selector is the new `data-bc-grid-edit-state="error"`.
+    const error = ruleFor('.bc-grid-editor-input[data-bc-grid-edit-state="error"],')
+    expect(error).toContain("border-color: var(--bc-grid-edit-state-error-stroke)")
+    expect(error).toContain("var(--bc-grid-edit-state-error-stroke) 18%")
 
-    const pending = ruleFor('.bc-grid-editor-input[data-bc-grid-editor-state="pending"] {')
+    const pending = ruleFor('.bc-grid-editor-input[data-bc-grid-edit-state="pending"],')
     expect(pending).toContain("var(--bc-grid-muted) 72%")
     expect(pending).toContain("color: var(--bc-grid-muted-fg)")
     expect(pending).toContain("cursor: progress")

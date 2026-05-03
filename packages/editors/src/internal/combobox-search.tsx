@@ -8,7 +8,12 @@ import {
   useRef,
   useState,
 } from "react"
-import { type EditorOption, editorOptionToString, visuallyHiddenStyle } from "../chrome"
+import {
+  type EditorOption,
+  editorOptionToString,
+  editorStateAttrs,
+  visuallyHiddenStyle,
+} from "../chrome"
 
 /**
  * shadcn-native Combobox primitive in *search* / *autocomplete* mode
@@ -357,7 +362,7 @@ export function SearchCombobox({
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind={kind}
         data-bc-grid-editor-option-count={options.length}
-        data-bc-grid-editor-state={pending ? "pending" : error ? "error" : "idle"}
+        {...editorStateAttrs({ error, pending })}
         data-state={open ? "open" : "closed"}
         data-bc-grid-editor-loading={loading ? "true" : undefined}
         data-bc-grid-editor-seeded={seeded2 ? "true" : undefined}

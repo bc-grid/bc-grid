@@ -60,12 +60,14 @@ const dummyColumn = { field: "name", header: "Name" } as BcReactGridColumn<Row>
 describe("context menu items", () => {
   test("uses the v0.3 default built-in actions when no consumer items are supplied", () => {
     expect(resolveContextMenuItems(undefined, makeContext())).toEqual(DEFAULT_CONTEXT_MENU_ITEMS)
-    // Promoted to a richer default in `context-menu-clipboard-and-bulk-commands`
-    // so consumers get a useful menu out of the box. Column-only commands
-    // are NOT in the default — they need column context that depends on
-    // the click target and would render disabled at the empty-grid
-    // right-click point.
-    expect(DEFAULT_CONTEXT_MENU_ITEMS.filter((item) => item !== "separator")).toEqual([
+    // Built-in clipboard / range actions stay flat at the top of the
+    // menu. The Server submenu (added in v0.5 default-context-menu
+    // wiring) appears below them; its `items` builder returns `[]` for
+    // non-server grids so the submenu collapses harmlessly there.
+    const builtInTokens = DEFAULT_CONTEXT_MENU_ITEMS.filter(
+      (item): item is string => typeof item === "string" && item !== "separator",
+    )
+    expect(builtInTokens).toEqual([
       "copy",
       "copy-row",
       "copy-with-headers",
@@ -848,5 +850,178 @@ describe("context menu — destructive variant on custom items", () => {
     } satisfies BcContextMenuItem<Row>
 
     expect(contextMenuItemDisabled(item, makeContext())).toBe(true)
+  })
+})
+
+// `BcServerGridApi` is recognised at runtime by the presence of
+// `getActiveRowModelMode`. The default Server submenu's `items` builder
+// returns `[]` for non-server grids (the submenu collapses to "disabled"
+// per the existing predicate at `contextMenuItemDisabled`) and a mode-
+// gated item list otherwise.
+function makeServerApi(input: {
+  mode: "paged" | "infinite" | "tree"
+  visiblePagination?: boolean
+  expandAll?: () => void
+  collapseAll?: () => void
+  setVisible?: (key: string, value: boolean) => void
+}): BcContextMenuContext<Row>["api"] {
+  return {
+    getRangeSelection: () => ({ ranges: [], anchor: null }),
+    getActiveRowModelMode: () => input.mode,
+    expandAll: input.expandAll ?? (() => {}),
+    collapseAll: input.collapseAll ?? (() => {}),
+    getVisibleSetting: (key: string) =>
+      key === "pagination" ? input.visiblePagination : undefined,
+    setVisibleSetting: input.setVisible ?? (() => {}),
+  } as unknown as BcContextMenuContext<Row>["api"]
+}
+
+function findServerSubmenu(
+  items: readonly BcContextMenuItem<Row>[],
+): import("../src/types").BcContextMenuSubmenuItem<Row> {
+  const submenu = items.find(
+    (item): item is import("../src/types").BcContextMenuSubmenuItem<Row> =>
+      typeof item === "object" &&
+      item !== null &&
+      "kind" in item &&
+      item.kind === "submenu" &&
+      item.id === "server",
+  )
+  if (!submenu) throw new Error("server submenu not found in DEFAULT_CONTEXT_MENU_ITEMS")
+  return submenu
+}
+
+describe("DEFAULT_CONTEXT_MENU_ITEMS server submenu", () => {
+  test("the Server submenu is present in the default item list", () => {
+    const submenu = findServerSubmenu(resolveContextMenuItems(undefined, makeContext()))
+    expect(submenu.id).toBe("server")
+    expect(submenu.label).toBe("Server")
+  })
+
+  test("the submenu is disabled (empty items) when the api is a non-server BcGridApi", () => {
+    const ctx = makeContext()
+    const submenu = findServerSubmenu(resolveContextMenuItems(undefined, ctx))
+    expect(resolveContextMenuSubmenuItems(submenu, ctx)).toEqual([])
+    // The shared disabled-predicate flips the submenu off when its
+    // resolved items list is empty.
+    expect(contextMenuItemDisabled(submenu, ctx)).toBe(true)
+  })
+
+  test("paged mode surfaces only the Show pagination toggle", () => {
+    const ctx = makeContext({ api: makeServerApi({ mode: "paged", visiblePagination: true }) })
+    const items = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )
+    expect(items).toHaveLength(1)
+    const [toggle] = items
+    if (!toggle || !isContextMenuToggleItem(toggle)) {
+      throw new Error("expected a toggle item")
+    }
+    expect(toggle.id).toBe("server-show-pagination")
+    expect(toggle.label).toBe("Show pagination")
+    expect(contextMenuItemChecked(toggle, ctx)).toBe(true)
+  })
+
+  test("paged Show pagination toggle reflects undefined visibility as ON (default true)", () => {
+    const ctx = makeContext({ api: makeServerApi({ mode: "paged" }) })
+    const items = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )
+    const [toggle] = items
+    if (!toggle || !isContextMenuToggleItem(toggle)) throw new Error("expected toggle")
+    // `getVisibleSetting("pagination")` returns undefined → contract is
+    // "pagination chrome is visible by default" → checked === true.
+    expect(contextMenuItemChecked(toggle, ctx)).toBe(true)
+  })
+
+  test("paged Show pagination toggle reflects explicit false as OFF", () => {
+    const ctx = makeContext({
+      api: makeServerApi({ mode: "paged", visiblePagination: false }),
+    })
+    const items = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )
+    const [toggle] = items
+    if (!toggle || !isContextMenuToggleItem(toggle)) throw new Error("expected toggle")
+    expect(contextMenuItemChecked(toggle, ctx)).toBe(false)
+  })
+
+  test("paged Show pagination toggle writes through setVisibleSetting", () => {
+    const writes: Array<[string, boolean]> = []
+    const ctx = makeContext({
+      api: makeServerApi({
+        mode: "paged",
+        setVisible: (key, value) => writes.push([key, value]),
+      }),
+    })
+    const items = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )
+    const [toggle] = items
+    if (!toggle || !isContextMenuToggleItem(toggle)) throw new Error("expected toggle")
+    toggle.onToggle(ctx, false)
+    expect(writes).toEqual([["pagination", false]])
+  })
+
+  test("tree mode surfaces Expand all groups + Collapse all groups", () => {
+    const ctx = makeContext({ api: makeServerApi({ mode: "tree" }) })
+    const items = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )
+    expect(
+      items.map((item) => (typeof item === "object" && "id" in item ? item.id : item)),
+    ).toEqual(["server-expand-all", "server-collapse-all"])
+  })
+
+  test("tree Expand all delegates to api.expandAll()", () => {
+    let expandCalls = 0
+    const ctx = makeContext({
+      api: makeServerApi({ mode: "tree", expandAll: () => expandCalls++ }),
+    })
+    const items = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )
+    const expand = items[0]
+    if (!expand || typeof expand !== "object" || !("onSelect" in expand)) {
+      throw new Error("expected expand item")
+    }
+    expand.onSelect(ctx)
+    expect(expandCalls).toBe(1)
+  })
+
+  test("tree Collapse all delegates to api.collapseAll()", () => {
+    let collapseCalls = 0
+    const ctx = makeContext({
+      api: makeServerApi({ mode: "tree", collapseAll: () => collapseCalls++ }),
+    })
+    const items = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )
+    const collapse = items[1]
+    if (!collapse || typeof collapse !== "object" || !("onSelect" in collapse)) {
+      throw new Error("expected collapse item")
+    }
+    collapse.onSelect(ctx)
+    expect(collapseCalls).toBe(1)
+  })
+
+  test("infinite mode currently surfaces no items (Prefetch submenu is a v0.6 follow-up)", () => {
+    const ctx = makeContext({ api: makeServerApi({ mode: "infinite" }) })
+    const items = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )
+    // Empty for now — Prefetch budget submenu (handoff item 2) needs
+    // BcUserSettings.layout.prefetchAhead + serverGrid wiring; queued
+    // as a v0.6 follow-up. The submenu collapses to "disabled" when
+    // empty per the shared predicate.
+    expect(items).toEqual([])
   })
 })
