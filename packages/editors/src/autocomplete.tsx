@@ -1,7 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useCallback } from "react"
-import { editorAccessibleName } from "./chrome"
+import { type EditorOption, editorAccessibleName } from "./chrome"
 import { SearchCombobox, type SearchComboboxFetchOptions } from "./internal/combobox-search"
+
+interface AutocompletePrepareResult {
+  initialOptions: readonly EditorOption[]
+}
 
 /**
  * Autocomplete editor — `kind: "autocomplete"`. Default for free-form
@@ -16,14 +20,13 @@ import { SearchCombobox, type SearchComboboxFetchOptions } from "./internal/comb
  * The new primitive renders a controlled popover anchored below the
  * input with full keyboard parity.
  *
- * Audit P1-W3-2 (prepareResult preload) is a deferred follow-up:
- * `BcCellEditorPrepareParams` only exposes `{ row, rowId, columnId }`,
- * not the resolved column with `fetchOptions`, so plumbing the
- * preload requires a small additive change to the prepare contract.
- * Tracked separately so this migration ships clean. In the meantime
- * the SearchCombobox renders a visible "Loading…" row inline on the
- * first-keystroke fetch — already an improvement over the silent
- * v0.1 datalist.
+ * Audit P1-W3-2 (prepareResult preload) is wired in v0.5: the
+ * editor's `prepare` hook calls `column.fetchOptions("", signal)` to
+ * preload the first page of options. The dropdown paints with these
+ * on first frame instead of the silent "blank dropdown until you
+ * type" v0.1 / v0.4 behaviour. If `fetchOptions` is unset (or
+ * rejects), the editor still mounts via the graceful prepare-rejection
+ * path and falls through to first-keystroke fetch.
  *
  * Behaviour (preserved from v0.1):
  *   - Free-text input — committed value is whatever's in the input at
@@ -45,11 +48,35 @@ import { SearchCombobox, type SearchComboboxFetchOptions } from "./internal/comb
 export const autocompleteEditor: BcCellEditor<unknown, unknown> = {
   Component: AutocompleteEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
   kind: "autocomplete",
+  // First-page preload via `column.fetchOptions("", signal)` so the
+  // dropdown paints with options on first frame. The framework's
+  // prepare path is race-safe (a token guards a stale resolve), but
+  // it does not pass an AbortSignal — the controller token suppresses
+  // the late dispatch instead. v0.6 follow-up: thread an AbortSignal
+  // through `BcCellEditorPrepareParams` so superseded preloads can
+  // cancel their network request as well.
+  async prepare({ column }) {
+    const fetchOptions = (column as { fetchOptions?: SearchComboboxFetchOptions }).fetchOptions
+    if (!fetchOptions) return undefined
+    const controller = new AbortController()
+    const initialOptions = await fetchOptions("", controller.signal)
+    return { initialOptions } satisfies AutocompletePrepareResult
+  },
 }
 
 function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled, column } =
-    props
+  const {
+    initialValue,
+    error,
+    focusRef,
+    seedKey,
+    pending,
+    required,
+    readOnly,
+    disabled,
+    column,
+    prepareResult,
+  } = props
   const fetchOptions = (column as { fetchOptions?: SearchComboboxFetchOptions }).fetchOptions
   const accessibleName = editorAccessibleName(column, "Autocomplete value")
   const handleSelect = useCallback(() => {
@@ -57,6 +84,13 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
     // editor portal wrapper reads the input value at commit time.
     // No additional plumbing needed here.
   }, [])
+
+  // `prepareResult` is the resolved value from `autocompleteEditor.prepare`.
+  // When the consumer's column had no `fetchOptions` (or prepare rejected
+  // and the framework's graceful-degradation path mounted us with no
+  // result), `prepareResult` is `undefined` and SearchCombobox falls
+  // through to its first-paint fetch via `fetchOptions`.
+  const initialOptions = (prepareResult as AutocompletePrepareResult | undefined)?.initialOptions
 
   return (
     <SearchCombobox
@@ -71,6 +105,7 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
       focusRef={focusRef as { current: HTMLElement | null } | undefined}
       onSelect={handleSelect}
       fetchOptions={fetchOptions}
+      initialOptions={initialOptions}
       kind="autocomplete"
     />
   )

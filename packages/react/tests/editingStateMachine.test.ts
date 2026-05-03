@@ -89,11 +89,25 @@ describe("reduceEditState — cancel paths", () => {
     expect(s.mode).toBe("navigation")
   })
 
-  test("prepareRejected returns to navigation", () => {
+  test("prepareRejected mounts the editor with no preload (graceful degradation, audit P1-W3-2)", () => {
+    // Pre-v0.5: prepareRejected returned to navigation, silently
+    // blocking edit when preload failed (a vendor-lookup grid on a
+    // flaky network would lose every cell-edit gesture). Now the
+    // machine mounts with `prepareResult: undefined` so the editor
+    // falls through to its synchronous `column.options` /
+    // first-keystroke `fetchOptions` path. The framework still
+    // suppresses the error for AT users today; consumers who want a
+    // hard "no edit on prepare failure" can return a sentinel from
+    // `prepare` that the Component checks instead.
     let s: EditState<string> = initial
     s = reduceEditState(s, { type: "activate", cell, activation: "f2" })
     s = reduceEditState(s, { type: "prepareRejected", error: "boom" })
-    expect(s.mode).toBe("navigation")
+    expect(s.mode).toBe("mounting")
+    if (s.mode === "mounting") {
+      expect(s.cell).toEqual(cell)
+      expect(s.activation).toBe("f2")
+      expect(s.prepareResult).toBeUndefined()
+    }
   })
 
   test("cancel during mounting transitions to cancelling (editor was about to mount)", () => {

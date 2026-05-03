@@ -10,8 +10,12 @@ export const colourEditor: BcCellEditor<unknown, string> = {
   // wrapper so e2e selectors can target this editor specifically.
   kind: "colour",
   // Optional. Runs once before the component mounts; the resolved
-  // value lands on \`props.prepareResult\`. Reject to abort activation
-  // (the framework re-enters Navigation and announces the error).
+  // value lands on \`props.prepareResult\`. The \`column\` arg is the
+  // resolved column metadata (use \`column.fetchOptions\`,
+  // \`column.options\`, etc. to drive preloads). Rejecting falls
+  // through to a graceful mount with \`prepareResult: undefined\`
+  // (audit P1-W3-2) — the editor still mounts so users on flaky
+  // networks aren't silently blocked from editing.
   prepare: async ({ row, column }) => {
     return loadPaletteFor(row, column.columnId)
   },

@@ -168,7 +168,25 @@ export function reduceEditState<TValue>(
           ...(event.prepareResult !== undefined ? { prepareResult: event.prepareResult } : {}),
         }
       }
-      if (event.type === "prepareRejected" || event.type === "cancel") {
+      if (event.type === "prepareRejected") {
+        // Graceful degradation (audit P1-W3-2 follow-up). A prepare
+        // failure used to abort activation and bounce back to
+        // Navigation. For vendor-lookup ERPs on flaky networks that
+        // meant a network blip silently blocked edit. We now mount the
+        // editor with no preload so the synchronous `column.options` /
+        // first-keystroke `fetchOptions` paths still work — the user
+        // gets a working editor, just without the prepare-resolved
+        // initial state. The error message is still surfaced via the
+        // controller's announce hook so AT users hear the failure.
+        return {
+          mode: "mounting",
+          cell: state.cell,
+          activation: state.activation,
+          ...(state.seedKey != null ? { seedKey: state.seedKey } : {}),
+          ...(state.pointerHint ? { pointerHint: state.pointerHint } : {}),
+        }
+      }
+      if (event.type === "cancel") {
         return { mode: "navigation" }
       }
       return state
