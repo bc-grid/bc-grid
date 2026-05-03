@@ -795,7 +795,10 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
   )
 
   const commitFromPasteApplyPlan = useCallback(
-    (plan: RangeTsvPasteApplyPlan<TRow>): void => {
+    (
+      plan: RangeTsvPasteApplyPlan<TRow>,
+      commitOptions: { source?: BcCellEditCommitEvent<TRow>["source"] } = {},
+    ): void => {
       validateAbortRef.current?.abort()
       validateAbortRef.current = null
 
@@ -834,7 +837,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
           column: commitEntry.column,
           previousValue: commitEntry.previousValue as never,
           nextValue: commitEntry.nextValue as never,
-          source: "paste",
+          source: commitOptions.source ?? "paste",
         }
 
         let settle: ReturnType<typeof consumerHook>

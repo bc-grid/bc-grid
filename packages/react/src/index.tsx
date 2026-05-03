@@ -135,6 +135,7 @@ export type {
   BcRangeCopyHook,
   BcRangeKeyAction,
   BcRangeSelection,
+  BcRangeSelectionOptions,
   BcReactFilterDefinition,
   BcReactGridColumn,
   BcSelection,

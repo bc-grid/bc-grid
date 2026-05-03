@@ -568,6 +568,30 @@ export interface BcSidebarContext<TRow = unknown> {
   pivot?: unknown
 }
 
+export interface BcRangeSelectionOptions {
+  /**
+   * Allow multiple disjoint ranges. The current interaction layer only
+   * renders the active range; the option is reserved for the range RFC's
+   * multi-range path.
+   */
+  multiRange?: boolean
+  /**
+   * Show the active-range fill handle. Defaults to true when range
+   * selection is otherwise active.
+   */
+  fillHandle?: boolean
+  /**
+   * Cap future pointer-created range selections. Keyboard-created ranges
+   * already clamp to the current row/column model.
+   */
+  maxCellCount?: number
+  /**
+   * Future pointer-range option: when true, pointer range selection will
+   * not also update row selection.
+   */
+  preventRowSelection?: boolean
+}
+
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   data: readonly TRow[]
   columns: readonly BcReactGridColumn<TRow>[]
@@ -768,6 +792,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    */
   onCellEditCommit?: BcCellEditCommitHandler<TRow>
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+  /**
+   * Behaviour flags for range-selection affordances. Existing keyboard
+   * range selection remains available by default; set
+   * `rangeSelectionOptions={false}` or `{ fillHandle: false }` to hide
+   * the spreadsheet-style fill handle.
+   */
+  rangeSelectionOptions?: boolean | BcRangeSelectionOptions
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
 
@@ -1321,7 +1352,7 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
    * editors). Consumer telemetry can split scroll-out commits from
    * deliberate keyboard / pointer commits via this discriminator.
    */
-  source: "keyboard" | "pointer" | "api" | "paste" | "scroll-out"
+  source: "keyboard" | "pointer" | "api" | "paste" | "fill" | "scroll-out"
 }
 
 /**

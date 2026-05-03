@@ -243,6 +243,7 @@ export const apiSurfaceManifest = [
       "BcRangeCopyHook",
       "BcRangeKeyAction",
       "BcRangeSelection",
+      "BcRangeSelectionOptions",
       "BcReactFilterDefinition",
       "BcReactGridColumn",
       "BcSavedView",
