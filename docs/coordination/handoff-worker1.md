@@ -56,9 +56,11 @@ The persistence shape will be pinned by the RFC's `BcUserSettings` spec. Until R
 
 **Goal:** one bc-grid construct that holds shared state once and switches its row-model engine internally based on a controlled `groupBy` prop (or equivalent). Consumer just sets `groupBy`; the grid handles the rest.
 
-**Wait for the RFC.** Coordinator is drafting `docs/design/server-mode-switch-rfc.md` right now (background subagent). The RFC will pin: the architectural shape (enhanced `<BcServerGrid>` vs new `useServerGrid` polymorphic hook), the state carry-over contract per-piece-of-state, the server query sequence on the switch, the public API delta against `docs/api.md`, the migration path for the existing hook trio, and the perf budget. Maintainer ratifies the RFC + open questions before you start.
+**Wait for maintainer ratification.** RFC is **delivered** at `docs/design/server-mode-switch-rfc.md` (2026-05-03). Recommendation: **Shape A** — `<BcServerGrid>` becomes mode-polymorphic internally with a controlled `groupBy` driver (and optional `rowModel` override); the three turnkey hooks stay as escape-hatches; a new `useServerGrid` polymorphic hook lands in alpha.3 / GA. The RFC pins the per-piece-of-state carry-over contract (§4 — 14 dimensions, with explicit drops for expansion / rangeSelection / pending-mutations), the server query sequence on switch (§5), the public API delta (§6), the migration path (§7), the perf budget (§8 — < 50ms synchronous flip), and the test plan (§9 — 14 unit cases + 1 Playwright + 1 perf bench). Effort estimate (§11): 18-25 hours, single PR; split if it grows past 1500 LOC of net diff.
 
-**Coordinator will ping you when the RFC is ratified.** Until then, finish the context-menu lane above and (if you're idle after that) you may pull a v0.6 task from `docs/coordination/v05-audit-followups/worker1-server-perf.md` to keep momentum.
+**Eight open questions in §10** need maintainer ratification before you start. The most consequential are Q3 (synthesise vs clean loading frame), Q2 (groupBy heuristic vs `resolveMode` callback), and Q6 (alpha.2 vs alpha.3 boundary). Coordinator will edit the RFC with the maintainer's calls inline, then ping you to start.
+
+**Until then,** finish the context-menu lane above and (if you're idle after that) you may pull a v0.6 task from `docs/coordination/v05-audit-followups/worker1-server-perf.md` to keep momentum.
 
 **Branch (when ready):** `agent/worker1/v05-server-mode-switch`. **Effort:** structural change spanning `packages/server-row-model/src/index.ts`, `packages/react/src/serverGrid.tsx`, all three turnkey hooks, plus tests and Playwright spec — likely 2-3 worker sessions, broken into stages per the RFC.
 
