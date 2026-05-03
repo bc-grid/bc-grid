@@ -32,21 +32,31 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
 - ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
 
-### Active now → `v05-server-mode-switch` stage 3.2 — pending-mutation grace + loading frame + carry-over tests (RFC final stage)
+### Active now → `v06-layout-architecture-pass` PR (a) — single scroll container + sticky header/pinned (~12-16h)
 
-**Stages 1, 2, 3.1 all shipped** (1e2c043, 5fc890f, 0db97a1). The structural mode polymorphism is in main: each inner state hook computes its own `activeMode` via `resolveActiveRowModelMode`, gates on `isPagedActive` / `isInfiniteActive` / `isTreeActive`, and aborts in-flight requests + clears cache when its mode flips active→inactive.
+**Stages 1-3.2 of the server-mode-switch RFC all shipped** (1e2c043, 5fc890f, 0db97a1, 772a3b6). The structural mode polymorphism + pending-mutation grace + abort-on-deactivate are all in main; only the 14-dimension carry-over test sweep + Playwright spec remain as RFC §9 follow-up (worth a small PR after PR (a) below if your alpha.2 lane has bandwidth).
 
-**Stage 3.2 closes the RFC:**
+**The next active task is the v0.6 layout architecture pass.** bsncraft consumer review surfaced 5 layout memos in the past 24h — pinned-cell shading, sticky-left detail panel, editor portal mispositioning, nested-grid flex distribution, header-body horizontal scroll lag. 3 of 5 are shipped as point fixes; 2 remain. Maintainer's framing: they share a root cause — bc-grid's render layer uses JS-driven coordinate calculations where the browser layout engine has the right primitives (`position: sticky`).
 
-- **Pending-mutation grace per RFC §5:** when the active mode flips, await `pendingMutations.size === 0` for ≤ 100ms. Anything still pending after the grace window settles as `{ status: "rejected", reason: "mode switch" }`.
-- **Synchronous loading frame per RFC §5:** abort + drop result + render `loading={true}` `data={[]}` for one frame; the new mode's first query then fires asynchronously. Today's stage-3.1 abort happens but the new mode's first paint can flash the previous data; pin the loading-frame contract.
-- **Carry-over tests per RFC §9:** 14 unit cases covering each dimension in §4 (sort / filter / searchText / groupBy / columnState / pageSize / expansion-drop / selection / rangeSelection-drop / focusedRowId / scroll / viewKey / pending-mutations-settled / block-cache-dropped). Plus 1 Playwright spec covering the bsncraft happy-path (paged↔tree switch with filter / sort / focused-cell / selection all carried).
+**RFC drafting now** at `docs/design/layout-architecture-pass-rfc.md` (background subagent). The thesis: rewrite the chrome to use a single scroll container with `position: sticky; top: 0` headers and `position: sticky; left: 0 / right: 0` pinned cells. Deletes ~200 LOC of JS scroll-sync (`syncHeaderRowsScroll`, `pinnedTransformValue`, `headerScrollTransform`, the `availableGridWidth` ResizeObserver from `d7eddaf`) and closes all 5 memos with one structural change instead of 5 patches.
 
-**Branch:** `agent/worker1/v05-server-mode-switch-stage-3-2`. **Effort:** ~4-6h.
+**PR (a) scope (yours):** structural DOM rewrite — single viewport, sticky headers, sticky pinned columns. The virtualizer keeps doing what it does (compute which rows + cols to render). The scroll handler that synced header.scrollLeft to body.scrollLeft is deleted. Existing pinned-cell shading layering (5341af3) composes naturally because sticky positioning is per-cell. Closes memo 5 (header lag) immediately because there's no JS sync point that can drift.
 
-### Previously active → mode-switch stages 1, 2, 3.1 (DONE)
+Your lane gets PR (a) because you have the most React layout context after the mode-switch RFC. PRs (b) (detail panel sticky-left) and (c) (editor portal simplification + flex source-of-truth consolidation) compose on top.
 
-#397 (1e2c043) Stage 1 additive apiRef. #400 (5fc890f) Stage 2 props collapse. #402 (0db97a1) Stage 3.1 runtime polymorphism + abort-on-deactivate.
+**Wait for the RFC.** The RFC pins the structural decisions — the new render graph, the migration plan, perf budget, test plan, sequencing of (a) → (b) → (c), the `availableGridWidth` deletion path. Coordinator will ping you when the RFC lands; in the meantime you can start by reading `gridInternals.ts` headerScrollTransform / pinnedTransformValue / syncHeaderRowsScroll and `grid.tsx` body container + scroller setup to map the surface area.
+
+**Branch (when ready):** `agent/worker1/v06-layout-architecture-pass-pr-a`. **Effort:** ~12-16h structural rewrite.
+
+### After PR (a) → `v05-server-mode-switch` stage 3.3 — RFC §9 test sweep + Playwright (~3-4h)
+
+The 14-dimension carry-over unit cases per RFC §9 + 1 Playwright happy-path covering the bsncraft case (paged↔tree switch with filter / sort / focused-cell / selection carried). Stage 3.2 (#406, 772a3b6) shipped the runtime behavior; stage 3.3 pins the contract.
+
+**Branch:** `agent/worker1/v05-server-mode-switch-stage-3-3`. **Effort:** ~3-4h.
+
+### Previously active → mode-switch stages 1, 2, 3.1, 3.2 (DONE)
+
+#397 (1e2c043) Stage 1 additive apiRef. #400 (5fc890f) Stage 2 props collapse. #402 (0db97a1) Stage 3.1 runtime polymorphism + abort-on-deactivate. #406 (772a3b6) Stage 3.2 pending-mutation grace + sync loading frame.
 
 ### After mode-switch ships → `v05-use-server-grid-polymorphic-hook` (alpha.3 / GA scope, ~6-8h)
 
