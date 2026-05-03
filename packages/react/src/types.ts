@@ -1473,3 +1473,9 @@ export type {
 }
 
 export type { BcNormalisedRange, BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
+export type {
+  BcRowPatch,
+  BcRowPatchFailure,
+  BcRowPatchFailureCode,
+  BcRowPatchResult,
+} from "@bc-grid/core"

@@ -1,7 +1,13 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useCallback, useState } from "react"
-import { editorAccessibleName, resolveEditorOptions } from "./chrome"
+import { type EditorOption, editorAccessibleName, resolveEditorOptions } from "./chrome"
 import { Combobox } from "./internal/combobox"
+
+interface SelectPrepareResult {
+  initialOptions: readonly EditorOption[]
+}
+
+type SelectFetchOptions = (query: string, signal: AbortSignal) => Promise<readonly EditorOption[]>
 
 /**
  * Select editor — `kind: "select"`. Default for enum / one-of-many
@@ -43,6 +49,21 @@ export const selectEditor: BcCellEditor<unknown, unknown> = {
   Component: SelectEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
   kind: "select",
   popup: true,
+  // First-page preload via `column.fetchOptions("", signal)` so the
+  // dropdown paints with async-loaded options on first frame instead
+  // of the consumer having to choose between the autocomplete editor
+  // (free-text + popup) and rolling a custom `cellEditor`. Mirrors
+  // the autocomplete editor's prepare hook (#403). When the column
+  // has no `fetchOptions`, the prepare resolves `undefined` and the
+  // Component falls through to the synchronous `column.options` path.
+  // Per `v06-prepareresult-preload-select-multi` (planning doc §3).
+  async prepare({ column }) {
+    const fetchOptions = (column as { fetchOptions?: SelectFetchOptions }).fetchOptions
+    if (!fetchOptions) return undefined
+    const controller = new AbortController()
+    const initialOptions = await fetchOptions("", controller.signal)
+    return { initialOptions } satisfies SelectPrepareResult
+  },
 }
 
 function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
@@ -57,9 +78,15 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
     disabled,
     column,
     row,
+    prepareResult,
   } = props
   const optionsSource = (column as { options?: unknown }).options
-  const options = resolveEditorOptions(optionsSource, row)
+  // `prepareResult.initialOptions` from the prepare hook above wins
+  // when `column.fetchOptions` is wired; falls through to
+  // `resolveEditorOptions(column.options, row)` for the synchronous
+  // path so consumers using static `column.options` see no change.
+  const initialOptions = (prepareResult as SelectPrepareResult | undefined)?.initialOptions
+  const options = initialOptions ?? resolveEditorOptions(optionsSource, row)
   const accessibleName = editorAccessibleName(column, "Select value")
 
   // Mirror the picked value into local state so the consumer can see

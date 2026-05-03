@@ -15,6 +15,7 @@ import type {
   BcPivotState,
   BcRange,
   BcRangeSelection,
+  BcRowPatchResult,
   BcSelection,
   ColumnId,
   RowId,
@@ -168,6 +169,7 @@ import {
 } from "./rangeInteraction"
 import { applyKeyboardRangeExtension } from "./rangeNavigation"
 import { BcRangeOverlay } from "./rangeOverlay"
+import { buildRowPatchApplyPlan } from "./rowPatchPlan"
 import { matchesSearchText } from "./search"
 import {
   headerCheckboxState,
@@ -2271,6 +2273,27 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         return copyRangeToClipboard(range, nextApi)
       },
       pasteTsv,
+      async applyRowPatches(patches): Promise<BcRowPatchResult<TRow>> {
+        // Atomic bulk update — see BcGridApi.applyRowPatches docs.
+        // Validate-all-then-apply lives in `buildRowPatchApplyPlan`;
+        // the editing controller's `commitFromRowPatchPlan` runs the
+        // batched overlay write + per-cell `onCellEditCommit` with
+        // `source: "api"`. Per `v06-bulk-row-patch-primitive`.
+        const applyResult = await buildRowPatchApplyPlan({
+          patches,
+          columns: resolvedColumns,
+          rowEntries,
+        })
+        if (!applyResult.ok) {
+          return { ok: false, failures: applyResult.failures }
+        }
+        editController.commitFromRowPatchPlan(applyResult.plan)
+        return {
+          ok: true,
+          applied: applyResult.plan.commits.length,
+          rowsAffected: applyResult.plan.rowsAffected,
+        }
+      },
       clearRangeSelection() {
         setRangeSelectionState(rangeClear(rangeSelectionState))
       },
@@ -2400,6 +2423,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     rangeSelectionState,
     requestRender,
     resolvedColumns,
+    rowEntries,
     rowIndexById,
     rowsById,
     scrollToCell,

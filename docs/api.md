@@ -798,7 +798,48 @@ export interface BcRangeSelectionOptions {
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
 
+<<<<<<< HEAD
 Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `normaliseRange`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React renders the active range overlay, clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`), paste applies through the same edit overlay path, and the active range shows a drag fill handle by default. Set `rangeSelectionOptions={false}` or `{ fillHandle: false }` to hide the fill handle.
+=======
+**Selection narrowing helpers** exported from `@bc-grid/core` (re-exported from `@bc-grid/react` — v0.6 §1):
+
+```ts
+function isExplicitSelection(s: BcSelection): s is { mode: "explicit"; rowIds: ReadonlySet<RowId> }
+function isAllSelection(s: BcSelection): s is { mode: "all"; except: ReadonlySet<RowId> }
+function isFilteredSelection(
+  s: BcSelection,
+): s is { mode: "filtered"; except: ReadonlySet<RowId>; viewKey?: string }
+
+function forEachSelectedRowId(
+  selection: BcSelection,
+  visibleRowIds: readonly RowId[],
+  callback: (rowId: RowId) => void,
+): void
+```
+
+The type guards narrow `BcSelection` inside `if`-branches without the discriminator dance — downstream helpers like `getSelectedRows(selection, allRows)` can branch cleanly:
+
+```ts
+function getSelectedRows<TRow>(selection: BcSelection, allRows: readonly TRow[]): TRow[] {
+  if (isExplicitSelection(selection)) {
+    return allRows.filter((r) => selection.rowIds.has(getId(r)))
+  }
+  // selection is { mode: "all" | "filtered" } — both have `except`
+  return allRows.filter((r) => !selection.except.has(getId(r)))
+}
+```
+
+`forEachSelectedRowId` walks every selected `RowId` regardless of mode — the unified loop body for "delete every selected", "export every selected", "patch every selected." For `"explicit"` mode it walks the explicit set; for `"all"` / `"filtered"` it walks `visibleRowIds` and skips the `except` set:
+
+```ts
+forEachSelectedRowId(selection, visibleRowIds, (rowId) => {
+  patches.push({ rowId, fields: { status: "approved" } })
+})
+await apiRef.current?.applyRowPatches(patches) // see docs/recipes/bulk-row-patch.md
+```
+
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `normaliseRange`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React renders a pointer-inert active range overlay and clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); paste and fill handle behavior remain separate Track 2 implementation tasks.
+>>>>>>> origin/main
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 

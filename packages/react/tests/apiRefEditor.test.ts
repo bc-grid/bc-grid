@@ -61,6 +61,22 @@ describe("BcGridApi imperative editor methods (v0.5 audit P0-7)", () => {
     const api: BcServerGridApi = stubServerApi()
     expect(typeof api.discardRowEdits).toBe("function")
   })
+
+  test("BcGridApi exposes applyRowPatches returning Promise<BcRowPatchResult> (v0.6 §1)", async () => {
+    // Atomic bulk-update primitive — see BcGridApi.applyRowPatches
+    // docs. Pinned at the type level so a refactor that drops the
+    // method is caught even if no consumer code references it yet.
+    const api: BcGridApi = stubApi()
+    expect(typeof api.applyRowPatches).toBe("function")
+
+    const result = await api.applyRowPatches([{ rowId: "row-1", fields: {} }])
+    expect(result.ok).toBe(true)
+  })
+
+  test("BcServerGridApi inherits applyRowPatches", () => {
+    const api: BcServerGridApi = stubServerApi()
+    expect(typeof api.applyRowPatches).toBe("function")
+  })
 })
 
 function stubApi(): BcGridApi {
@@ -102,6 +118,7 @@ function stubApi(): BcGridApi {
     commitEdit: noop,
     cancelEdit: noop,
     discardRowEdits: () => ({ discarded: 0 }),
+    applyRowPatches: () => Promise.resolve({ ok: true as const, applied: 0, rowsAffected: 0 }),
     refresh: noop,
   }
 }

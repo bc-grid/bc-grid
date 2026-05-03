@@ -126,14 +126,15 @@ Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both docume
 
 ### v0.6 headlines (one per worker)
 
-- `[ready: worker1]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant. Today bc-grid only ships server tree (`<BcServerGrid rowModel="tree">`); consumers with client-side parent/child data have to flatten + use grouping (loses parent ID model) or wire a fake server endpoint. Build a parent → children map from `getRowParentId(row)`, render with hierarchical indentation reusing the existing `expansionState` plumbing from master-detail, sort/filter through the tree, integrate `@bc-grid/aggregations` for parent-row sums. **Two-spike-confirmed** (production-estimating #1, doc-mgmt fallback). ~1-2 days.
-- `[review: worker2 #436]` **v06-fill-handle** — drag-to-fill handle on the active range (range-rfc §6 — RFC done day 0; impl never landed). 8×8 px dot at the active range's bottom-right corner; mousedown → drag-extend mode → on release, source values fill into destination via the existing `editController.commitFromPasteApplyPlan` path. v0.6 ships literal-repeat semantics; series detection (1, 2 → 3, 4, 5; Mon → Tue, Wed) is a v0.7 follow-up. The spreadsheet-feel feature that takes bc-grid from "data grid that does ranges" to "Excel-replacement-class data grid." Branch `agent/worker2/v06-fill-handle`.
+- `[done: worker1 #438]` **v06-client-tree-rowmodel-rfc** (worker1, doc-only) — RFC drafted at `docs/design/client-tree-rowmodel-rfc.md` covering the v0.6 headline client tree row model. Merged 16869e3.
+- `[ready: worker1]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant per the ratified RFC above. Two-spike-confirmed. ~1-2 days.
+- `[review: worker2 #436]` **v06-fill-handle** — drag-to-fill handle on the active range (range-rfc §6). Branch `agent/worker2/v06-fill-handle`.
 - `[ready: worker3]` **v06-bulk-row-patch-primitive** — `BcGridApi.applyRowPatches(patches[])` atomic bulk update with validate-all-then-apply semantics. The primitive every "fill down" / "shift dates" / "set status to Approved" toolbar wants. **Two-spike-confirmed** (doc-mgmt #6, production-estimating #4). ~1 day.
 
 ### v0.6 supporting work (in worker queues)
 
-- `[ready: worker1]` **v06-stale-response-flood-test** (planning doc §9, ~half day, tests-only).
-- `[ready: worker1]` **v06-server-tree-stale-viewkey-fetches** (planning doc §10, ~half day).
+- `[review: worker1 #433]` **v06-stale-response-flood-test** (planning doc §9, tests-only) — 3 new model-layer tests pinning the existing flood contract: `lastLoad` ends at the FINAL request, every prior `controller.signal.aborted === true`, and a stale-loadPage-after-abortExcept race scenario.
+- `[in-flight: worker1]` **v06-server-tree-stale-viewkey-fetches** (worker1, planning doc §10) — extracts the existing React-layer viewKey gate at `serverGrid.tsx:1745-1755` (shipped in #391) into a pure exported helper `shouldMergeTreeResult({ resultViewKey, fallbackViewKey, currentViewKey })`. Updates the React caller to use the helper. 6 new unit tests pin the gate contract: result.viewKey echo path, fallback path, stale-with-undefined-echo path, stale-with-stale-echo path, empty-string edge case. Branch `agent/worker1/v06-server-tree-stale-viewkey-fetches`.
 - `[ready: worker1]` **v06-server-view-change-reset-policy** (planning doc §1, ~half day).
 - `[ready: worker1]` **v06-optimistic-rollback-vs-invalidate** (planning doc §11, ~half day).
 - `[ready: worker2]` **v05-bsncraft-pinned-scroll-shadow-overlay** — bsncraft P0 #4 carry-over: `mix-blend-mode: multiply` on the pinned-edge pseudo. ~half day.
