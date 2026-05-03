@@ -88,3 +88,23 @@ test("validate rejects malformed datetime", async ({ page }) => {
   await expect(input).toBeAttached()
   await expect(input).toHaveAttribute("aria-invalid", "true")
 })
+
+test("datetimeEditor mounts in-cell (in-cell-editor-mode-rfc §4 hybrid: native picker is OS-chrome)", async ({
+  page,
+}) => {
+  // Same rationale as the dateEditor in-cell pin: the native
+  // datetime-local picker is OS-chrome and unreachable to bc-grid's
+  // `data-bc-grid-editor-portal` markings, so default `popup: false`
+  // mounts the trigger inline inside the cell DOM. Worker3 PR (b)
+  // per `docs/coordination/handoff-worker3.md`.
+  await page.goto(URL)
+  await focusBodyCell(page, 0, DATETIME_COLUMN)
+  await page.keyboard.press("F2")
+  const wrapper = page.locator("[data-bc-grid-editor-mount]").first()
+  await expect(wrapper).toBeAttached()
+  await expect(wrapper).toHaveAttribute("data-bc-grid-editor-mount", "in-cell")
+  const cellHostsWrapper = await wrapper.evaluate(
+    (el) => el.closest("[data-column-id]")?.getAttribute("data-column-id") ?? null,
+  )
+  expect(cellHostsWrapper).toBe(DATETIME_COLUMN)
+})
