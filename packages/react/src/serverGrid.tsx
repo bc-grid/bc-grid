@@ -24,11 +24,13 @@ import type {
 import { emptyBcRangeSelection } from "@bc-grid/core"
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createActionsColumn, shouldRenderActionsColumn } from "./actionsColumn"
 import { BcGrid, useBcGridApi } from "./grid"
 import {
   assignRef,
   columnIdFor,
   createEmptySelection,
+  defaultMessages,
   hasDefinedProp,
   hasProp,
 } from "./gridInternals"
@@ -922,6 +924,68 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   useEffect(() => assignRef(externalApiRef, serverApi), [externalApiRef, serverApi])
 
   const gridProps = props as unknown as BcGridProps<TRow>
+
+  // Actions column auto-injection (v0.6 §1 server-grid-actions-column,
+  // bsncraft P1). When the consumer wires any of the actions handlers
+  // — onEdit / onDelete / onDiscardRowEdits / extraActions — and
+  // hasn't opted out via `hideActions={true}`, append the pinned-right
+  // `__bc_actions` column. Mirrors how `<BcEditGrid>` injects its
+  // actions column today; lifting the wiring here means
+  // `<BcServerGrid>` consumers don't have to hand-roll the column for
+  // server-paged / infinite / tree grids (the pattern bsncraft alone
+  // re-implemented in ~150 LOC for their ServerEditGrid wrapper).
+  const {
+    onEdit: actionsOnEdit,
+    onDelete: actionsOnDelete,
+    onDiscardRowEdits: actionsOnDiscardRowEdits,
+    extraActions: actionsExtra,
+    hideActions: actionsHide,
+    canEdit: actionsCanEdit,
+    canDelete: actionsCanDelete,
+    editLabel: actionsEditLabel,
+    deleteLabel: actionsDeleteLabel,
+    discardLabel: actionsDiscardLabel,
+  } = props
+  const actionsColumn = useMemo(() => {
+    if (
+      !shouldRenderActionsColumn({
+        onEdit: actionsOnEdit,
+        onDelete: actionsOnDelete,
+        onDiscardRowEdits: actionsOnDiscardRowEdits,
+        extraActions: actionsExtra,
+        hideActions: actionsHide,
+      })
+    )
+      return null
+    return createActionsColumn<TRow>({
+      canDelete: actionsCanDelete,
+      canEdit: actionsCanEdit,
+      deleteLabel: actionsDeleteLabel ?? defaultMessages.deleteLabel,
+      discardLabel: actionsDiscardLabel ?? defaultMessages.discardLabel,
+      editLabel: actionsEditLabel ?? defaultMessages.editLabel,
+      extraActions: actionsExtra,
+      onDelete: actionsOnDelete,
+      onDiscardRowEdits: actionsOnDiscardRowEdits,
+      onEdit: actionsOnEdit,
+    })
+  }, [
+    actionsCanDelete,
+    actionsCanEdit,
+    actionsDeleteLabel,
+    actionsDiscardLabel,
+    actionsEditLabel,
+    actionsExtra,
+    actionsHide,
+    actionsOnDelete,
+    actionsOnDiscardRowEdits,
+    actionsOnEdit,
+  ])
+  const renderColumns = useMemo(() => {
+    const sourceColumns = activeMode === "tree" ? tree.columns : gridProps.columns
+    if (!actionsColumn) return sourceColumns
+    return [...sourceColumns, actionsColumn]
+  }, [actionsColumn, activeMode, gridProps.columns, tree.columns])
+
   const loading =
     props.loading ??
     (modeSwitchTransition ||
@@ -951,7 +1015,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       // accepted page while a new server query is pending. Always
       // applied after spreading consumer props.
       rowProcessingMode="manual"
-      columns={activeMode === "tree" ? tree.columns : gridProps.columns}
+      columns={renderColumns}
       data={
         activeMode === "paged"
           ? paged.gridShell.gridRows

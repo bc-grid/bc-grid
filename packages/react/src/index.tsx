@@ -85,6 +85,7 @@ export type {
 } from "./savedView"
 
 export type {
+  BcActionsColumnProps,
   BcAggregationFormatterParams,
   BcAggregationScope,
   BcBulkActionsContext,

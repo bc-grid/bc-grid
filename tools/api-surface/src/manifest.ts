@@ -195,6 +195,7 @@ export const apiSurfaceManifest = [
     ],
     declarationExports: [
       "BC_GRID_ROW_DRAG_MIME",
+      "BcActionsColumnProps",
       "BcAggregationFormatterParams",
       "BcAggregationScope",
       "BcBuiltInColumnFilterType",
