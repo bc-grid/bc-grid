@@ -1074,6 +1074,41 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * across mounts. Per `docs/recipes/grid-state-persistence.md`.
    */
   onScrollChange?: (next: { top: number; left: number }) => void
+
+  /**
+   * Restore the editor on a specific cell once at mount — companion
+   * to `initialScrollOffset` (#450) for the "grid looks exactly as
+   * the user left it" story (v0.6 §1
+   * `v06-editing-state-controlled-prop`).
+   *
+   * Read on first render only; subsequent updates are ignored
+   * (mirrors `initialScrollOffset` and the editor's async
+   * lifecycle — a fully-controlled `editingCell` would race the
+   * prepare → mount → editing transitions). For programmatic
+   * mid-session control, use `apiRef.current?.startEdit(rowId,
+   * columnId)` instead.
+   *
+   * The grid resolves the cell after mount (waits for the row +
+   * column to exist in the resolved model). If the row id is
+   * unknown when restore fires (e.g. server data hasn't loaded),
+   * the restore is a no-op — the consumer can re-trigger via
+   * `apiRef.current?.startEdit(...)` once data arrives.
+   *
+   * Pair with `onEditingCellChange` to persist + restore the
+   * editing cell across navigation. Per
+   * `docs/recipes/grid-state-persistence.md`.
+   */
+  editingCell?: BcCellPosition | null
+  /**
+   * Fires when the editing cell changes — entering edit mode (next
+   * is non-null), leaving edit mode (next is null), or moving
+   * editor between cells (Tab / Enter / Shift+Tab). Receives the
+   * current cell + the prior cell. Use to persist the editing cell
+   * for a subsequent restore via `editingCell`.
+   *
+   * Per `docs/recipes/grid-state-persistence.md`.
+   */
+  onEditingCellChange?: (next: BcCellPosition | null, prev: BcCellPosition | null) => void
   /**
    * Behaviour flags for range-selection affordances. Existing keyboard
    * range selection remains available by default; set

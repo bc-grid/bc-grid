@@ -1985,6 +1985,57 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     selectionState,
   ])
 
+  // editingCell controlled prop (v0.6 §1
+  // `v06-editing-state-controlled-prop`). Companion to
+  // `initialScrollOffset` for the "grid looks exactly as the user
+  // left it" story. Two effects:
+  //   - Outbound: fire `onEditingCellChange(next, prev)` when the
+  //     editing cell changes (entering/leaving edit mode or moving
+  //     between cells via Tab/Enter).
+  //   - Inbound: read `editingCell` once at mount; if non-null +
+  //     valid row + editable column, programmatically start the
+  //     editor on that cell.
+  // Read once at mount via ref so subsequent prop changes don't
+  // race the editor's async lifecycle (prepare → mount → editing
+  // → unmount). For programmatic mid-session control, consumers
+  // use `apiRef.current?.startEdit(...)` instead.
+  const initialEditingCellRef = useRef(props.editingCell)
+  const onEditingCellChangeProp = props.onEditingCellChange
+  const previousEditingCellRef = useRef<BcCellPosition | null>(null)
+  useEffect(() => {
+    if (!onEditingCellChangeProp) return
+    const next = resolveEditingCellFromState(editController.editState)
+    const prev = previousEditingCellRef.current
+    if (cellPositionsEqual(next, prev)) return
+    previousEditingCellRef.current = next
+    onEditingCellChangeProp(next, prev)
+  }, [editController.editState, onEditingCellChangeProp])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: initialEditingCell is read once at mount; api/rowsById/etc. are read fresh from refs
+  useEffect(() => {
+    const target = initialEditingCellRef.current
+    if (!target) return
+    if (!editingEnabled) return
+    if (editController.editState.mode !== "navigation") return
+    const rowEntry = rowsById.get(target.rowId)
+    if (!rowEntry || rowEntry.kind !== "data") return
+    if (isRowDisabled(rowEntry.row)) return
+    const column = resolvedColumns.find((c) => c.columnId === target.columnId)
+    if (!column) return
+    if (!isCellEditable(column, rowEntry.row)) return
+    const editorForActivation = column.source.cellEditor ?? defaultTextEditor
+    editController.start(target, "api", {
+      editor: editorForActivation as never,
+      row: rowEntry.row,
+      rowId: target.rowId,
+      column: column.source,
+    })
+    // Empty deps — read once at mount AFTER row/column model resolves.
+    // Per `v06-editing-state-controlled-prop`. If the row id is
+    // unknown when restore fires (e.g. server data hasn't loaded),
+    // the early-return above no-ops and the consumer can re-trigger
+    // via `apiRef.current?.startEdit(...)` once data arrives.
+  }, [])
+
   // Pixel rect of the cell currently being edited — passed to the editor
   // portal for absolute positioning. Source of truth is the DOM
   // (`getBoundingClientRect`), not the virtualizer's position calculator,
@@ -4595,6 +4646,31 @@ function publicPasteSkippedCell(cell: BcGridPasteTsvSkippedCell): BcGridPasteTsv
 function isEditableKeyTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   return target.isContentEditable || editableKeyTargetTags.has(target.tagName)
+}
+
+/**
+ * Derive the editing cell from the editing controller's state. Used
+ * by the `editingCell` controlled prop to fire change callbacks
+ * (v0.6 §1 `v06-editing-state-controlled-prop`). Returns the
+ * cell position when the controller is in any editing-active mode
+ * (preparing / mounting / editing / validating / committing /
+ * cancelling / unmounting), `null` in `navigation` mode.
+ *
+ * Pure so the derivation can be unit-tested without mounting the
+ * controller.
+ */
+function resolveEditingCellFromState(state: {
+  mode: string
+  cell?: BcCellPosition
+}): BcCellPosition | null {
+  if (state.mode === "navigation") return null
+  return state.cell ?? null
+}
+
+function cellPositionsEqual(a: BcCellPosition | null, b: BcCellPosition | null): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  return a.rowId === b.rowId && a.columnId === b.columnId
 }
 
 /**

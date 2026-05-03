@@ -14,14 +14,32 @@ The grid does not own storage — every persistable surface is exposed via initi
 | Expansion | `defaultExpansion` / `expansion` | `onExpansionChange` | — |
 | Active cell | `defaultActiveCell` / `activeCell` | `onActiveCellChange` | `getActiveCell` |
 | Scroll position | `initialScrollOffset` | `onScrollChange` | `getScrollOffset` |
+| Editing cell | `editingCell` | `onEditingCellChange` | — (mid-edit state on `editController`) |
 
-`initialScrollOffset` + `onScrollChange` + `getScrollOffset` shipped in v0.6.0-alpha.1 to close the last gap in this matrix.
+`initialScrollOffset` + `onScrollChange` + `getScrollOffset` shipped in v0.6.0-alpha.1 to close the scroll gap. `editingCell` + `onEditingCellChange` shipped in the same release to close the editor gap — the user can leave a cell mid-edit, navigate away, and return to find the editor restored on the same cell.
+
+### Editing cell — restore semantics
+
+The editor's lifecycle is async (prepare → mount → editing → validating → committing → unmounting), so `editingCell` is a **one-time-restore** prop, not a fully bidirectional controlled prop. The grid reads it once at mount, calls `editController.start(...)` if the cell is valid (row exists, column is editable, editing is enabled), then ignores subsequent prop updates. For programmatic mid-session control, use `apiRef.current?.startEdit(rowId, columnId)` instead.
+
+`onEditingCellChange(next, prev)` fires on every editing-cell change (entering / leaving / moving via Tab/Enter). Use it to persist the cell so a later mount can restore via `editingCell`.
+
+```tsx
+<BcGrid
+  // ...
+  editingCell={persistedState.editingCell ?? null}
+  onEditingCellChange={(next) => persist({ editingCell: next })}
+/>
+```
+
+If the row id was unknown when restore fires (e.g. the consumer's server data hasn't loaded yet), the restore is a no-op — re-trigger via `apiRef.current?.startEdit(...)` once data lands.
 
 ## Pattern: round-trip through localStorage
 
 ```tsx
 import {
   useBcGridApi,
+  type BcCellPosition,
   type BcGridLayoutState,
   type BcSelection,
 } from "@bc-grid/react"
@@ -32,6 +50,7 @@ interface PersistedGridState {
   selection?: BcSelection
   scrollOffset?: { top: number; left: number }
   expansion?: string[]
+  editingCell?: BcCellPosition | null
 }
 
 const STORAGE_KEY = "my-app:customers-grid"
@@ -81,6 +100,9 @@ function CustomersGrid() {
       // Scroll position — the v0.6.0-alpha.1 addition.
       initialScrollOffset={restored.scrollOffset}
       onScrollChange={(scrollOffset) => persist({ scrollOffset })}
+      // Editing cell — restore on mount + persist on change.
+      editingCell={restored.editingCell ?? null}
+      onEditingCellChange={(editingCell) => persist({ editingCell })}
     />
   )
 }
