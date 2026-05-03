@@ -279,19 +279,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     onInsertRow: rowContextInsert,
   } = props as Partial<BcGridEditRowActionProps<TRow>>
 
-  // Editor toggles forward-compatible with the v0.5
-  // vanilla-and-context-menu RFC. Defaults preserve current
-  // behaviour; the right-click menu's "Edit mode" / "Show
-  // validation messages" / "Show keyboard hints" toggles will
-  // write through these props once the RFC ratifies + the
-  // `BcUserSettings` persistence layer lands.
-  const editingEnabled = props.editingEnabled !== false
-  const showValidationMessages = props.showValidationMessages !== false
-  const showEditorKeyboardHints = props.showEditorKeyboardHints === true
-  const editorActivation: "f2-only" | "single-click" | "double-click" =
-    props.editorActivation ?? "double-click"
-  const editorBlurAction: "commit" | "reject" | "ignore" = props.editorBlurAction ?? "commit"
-  const escDiscardsRow = props.escDiscardsRow === true
+  // Editor toggle prop captures (resolved against userSettings
+  // below, after userSettingsState + userVisibleSettings declare).
+  // Captured here to keep them adjacent to the destructure for
+  // `editingEnabled === undefined` ("locked-by-prop") detection.
+  const editingEnabledProp = props.editingEnabled
+  const showValidationMessagesProp = props.showValidationMessages
+  const showEditorKeyboardHintsProp = props.showEditorKeyboardHints
+  const editorActivationProp = props.editorActivation
+  const editorBlurActionProp = props.editorBlurAction
+  const escDiscardsRowProp = props.escDiscardsRow
   const editScrollOutAction: "commit" | "cancel" | "preserve" =
     props.editScrollOutAction ?? "commit"
 
@@ -344,6 +341,61 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [updateUserSettings],
   )
   const userVisibleSettings = userSettingsState?.visible
+
+  // Editor toggles: prop wins (locked-by-prop), else userSettings,
+  // else the v0.5 default. The chrome context menu's `Editor`
+  // submenu writes through to userSettings via the `setEditor*`
+  // callbacks below — see worker3 v05-default-context-menu-wiring.
+  const editingEnabled =
+    editingEnabledProp !== undefined
+      ? editingEnabledProp !== false
+      : (userVisibleSettings?.editingEnabled ?? true)
+  const showValidationMessages =
+    showValidationMessagesProp !== undefined
+      ? showValidationMessagesProp !== false
+      : (userVisibleSettings?.showValidationMessages ?? true)
+  const showEditorKeyboardHints =
+    showEditorKeyboardHintsProp !== undefined
+      ? showEditorKeyboardHintsProp === true
+      : (userVisibleSettings?.showEditorKeyboardHints ?? false)
+  const editorActivation: "f2-only" | "single-click" | "double-click" =
+    editorActivationProp ?? userSettingsState?.editorActivation ?? "double-click"
+  const editorBlurAction: "commit" | "reject" | "ignore" =
+    editorBlurActionProp ?? userSettingsState?.editorBlurAction ?? "commit"
+  const escDiscardsRow =
+    escDiscardsRowProp !== undefined
+      ? escDiscardsRowProp === true
+      : (userVisibleSettings?.escDiscardsRow ?? false)
+
+  const setEditingEnabledPreference = useCallback(
+    (next: boolean) => setVisibleUserSetting("editingEnabled", next),
+    [setVisibleUserSetting],
+  )
+  const setShowValidationMessagesPreference = useCallback(
+    (next: boolean) => setVisibleUserSetting("showValidationMessages", next),
+    [setVisibleUserSetting],
+  )
+  const setShowEditorKeyboardHintsPreference = useCallback(
+    (next: boolean) => setVisibleUserSetting("showEditorKeyboardHints", next),
+    [setVisibleUserSetting],
+  )
+  const setEscDiscardsRowPreference = useCallback(
+    (next: boolean) => setVisibleUserSetting("escDiscardsRow", next),
+    [setVisibleUserSetting],
+  )
+  const setEditorActivationPreference = useCallback(
+    (next: "f2-only" | "single-click" | "double-click") => {
+      updateUserSettings((prev) => ({ ...prev, editorActivation: next }))
+    },
+    [updateUserSettings],
+  )
+  const setEditorBlurActionPreference = useCallback(
+    (next: "commit" | "reject" | "ignore") => {
+      updateUserSettings((prev) => ({ ...prev, editorBlurAction: next }))
+    },
+    [updateUserSettings],
+  )
+
   const defaultLayoutState = props.initialLayout ?? props.layoutState
   const layoutColumnIds = useMemo(
     () =>
@@ -2756,18 +2808,38 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         activeSidebarPanel,
         density,
         densityLocked: props.density !== undefined || props.layoutState?.density !== undefined,
+        editingEnabled,
+        editingEnabledLocked: editingEnabledProp !== undefined,
+        editorActivation,
+        editorActivationLocked: editorActivationProp !== undefined,
+        editorBlurAction,
+        editorBlurActionLocked: editorBlurActionProp !== undefined,
+        escDiscardsRow,
+        escDiscardsRowLocked: escDiscardsRowProp !== undefined,
         filterRowLocked,
         filterRowVisible: hasInlineFilters,
         groupBy: groupByState,
         groupableColumnIds,
+        latestValidationError: editController.getLatestValidationError(),
         onActiveFilterSummaryVisibleChange: setActiveFilterSummaryVisiblePreference,
         onDensityChange: setDensityPreference,
+        onDismissLatestValidationError: editController.clearLatestValidationError,
+        onEditingEnabledChange: setEditingEnabledPreference,
+        onEditorActivationChange: setEditorActivationPreference,
+        onEditorBlurActionChange: setEditorBlurActionPreference,
+        onEscDiscardsRowChange: setEscDiscardsRowPreference,
         onFilterRowVisibleChange: setFilterRowVisiblePreference,
         onGroupByChange: setGroupByState,
+        onShowEditorKeyboardHintsChange: setShowEditorKeyboardHintsPreference,
+        onShowValidationMessagesChange: setShowValidationMessagesPreference,
         onSidebarPanelChange: setSidebarPanelPreference,
         onSidebarVisibleChange: setSidebarVisiblePreference,
         onStatusBarVisibleChange: setStatusBarVisiblePreference,
         rowActions: rowContextMenuActions,
+        showEditorKeyboardHints,
+        showEditorKeyboardHintsLocked: showEditorKeyboardHintsProp !== undefined,
+        showValidationMessages,
+        showValidationMessagesLocked: showValidationMessagesProp !== undefined,
         sidebarAvailable: hasSidebar,
         sidebarPanels,
         sidebarVisible,
@@ -2778,6 +2850,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       activeFilterSummaryVisible,
       activeSidebarPanel,
       density,
+      editController,
+      editingEnabled,
+      editingEnabledProp,
+      editorActivation,
+      editorActivationProp,
+      editorBlurAction,
+      editorBlurActionProp,
+      escDiscardsRow,
+      escDiscardsRowProp,
       filterRowLocked,
       groupByState,
       groupableColumnIds,
@@ -2788,11 +2869,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       rowContextMenuActions,
       setActiveFilterSummaryVisiblePreference,
       setDensityPreference,
+      setEditingEnabledPreference,
+      setEditorActivationPreference,
+      setEditorBlurActionPreference,
+      setEscDiscardsRowPreference,
       setFilterRowVisiblePreference,
       setGroupByState,
+      setShowEditorKeyboardHintsPreference,
+      setShowValidationMessagesPreference,
       setSidebarPanelPreference,
       setSidebarVisiblePreference,
       setStatusBarVisiblePreference,
+      showEditorKeyboardHints,
+      showEditorKeyboardHintsProp,
+      showValidationMessages,
+      showValidationMessagesProp,
       sidebarPanels,
       sidebarVisible,
       statusBarVisible,

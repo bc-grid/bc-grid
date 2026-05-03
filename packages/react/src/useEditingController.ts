@@ -195,6 +195,30 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     if (changed) forceRender()
   }, [])
 
+  /**
+   * Unconditionally retire the latest validation error + flash window,
+   * regardless of which cell they targeted. Wired through the chrome
+   * context menu's "Dismiss latest error" action — the user explicitly
+   * acknowledged the error and wants the surface gone before the 8s
+   * timeout fires. Worker3 v05-default-context-menu-wiring.
+   */
+  const clearLatestValidationError = useCallback(() => {
+    let changed = false
+    if (latestValidationErrorRef.current !== null) {
+      if (validationStatusTimerRef.current) clearTimeout(validationStatusTimerRef.current)
+      latestValidationErrorRef.current = null
+      validationStatusTimerRef.current = null
+      changed = true
+    }
+    if (validationFlashCellRef.current !== null) {
+      if (validationFlashTimerRef.current) clearTimeout(validationFlashTimerRef.current)
+      validationFlashCellRef.current = null
+      validationFlashTimerRef.current = null
+      changed = true
+    }
+    if (changed) forceRender()
+  }, [])
+
   // Cleanup outstanding timers on unmount so an unmounted grid doesn't
   // schedule a forceRender after teardown.
   useEffect(() => {
@@ -965,6 +989,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
     getRowEditState,
     getEditMode,
     getLatestValidationError,
+    clearLatestValidationError,
     isCellFlashing,
     pruneOverlay,
     start,
