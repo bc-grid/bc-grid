@@ -59,6 +59,27 @@ Each toggle reads + writes via the new `BcUserSettings` shape (RFC will pin the 
 
 **Branch:** `agent/worker2/v05-context-menu-chrome-bundle-2`. **Effort:** ~30-40 min.
 
+### After bundle-2 ships → `v05-context-menu-row-actions` (~45-60 min)
+
+The vanilla+context-menu RFC (#392) covers chrome + view + filter toggles, but ERP grids also need row-shaped actions on right-click. Worker2 owns the chrome + the right-click handler + the menu structure, so this lane is yours.
+
+Items in this PR — context-menu category "Row":
+
+1. **Insert row above** — context-menu action when right-clicking a body row. Routes to `editController.insertRow({ at: rowIndex })` (you'll need to add the action if it doesn't exist; coordinate with worker3 if so via a one-line PR comment, or add a pass-through prop `onInsertRow?` that consumers wire).
+2. **Insert row below** — same shape, `at: rowIndex + 1`.
+3. **Duplicate row** — `editController.duplicateRow(rowId)` or pass-through `onDuplicateRow?(rowId, rowData)`.
+4. **Delete row** — `editController.deleteRow(rowId)` or pass-through `onDeleteRow?(rowId)`. Behind a confirmation gate (consumer-supplied `confirmDelete?: (rowId) => boolean | Promise<boolean>`).
+
+These are all `<BcEditGrid>` patterns; `<BcGrid>` (read-only) shouldn't show them. Branch off the existing right-click handler from bundle-1; the menu structure scales naturally.
+
+**Branch:** `agent/worker2/v05-context-menu-row-actions`. **Effort:** ~45-60 min.
+
+### After row-actions → `v05-grouping-implementation-pull-forward` (~half day)
+
+Pull one of the v0.5 → v0.6 grouping items forward from `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`. Pick whichever is at the top of that doc that isn't gated on a breaking change. Suggested first pull: any "group selection algebra" follow-up that builds on bundle-1 #393's basic implementation (e.g. tri-state group checkboxes when partial children selected, or selection-aware aggregations in group rows). Read the doc, pick the item that fits a single-PR shape, write a brief task slug entry into this handoff under "Active now" when you start.
+
+**Branch:** `agent/worker2/v05-grouping-pull-forward`. **Effort:** ~half day.
+
 ### Previously active → `v05-chrome-and-filter-bundle-1` (DONE — #393)
 
 The 3 chrome/filter polish items from your own #388 doc landed (active filter chip strip in toolbar, group selection algebra basic, filter operators blank/not-blank for every scalar type).

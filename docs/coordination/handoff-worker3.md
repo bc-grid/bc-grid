@@ -55,6 +55,24 @@ The persistence shape will be defined in the RFC's `BcUserSettings` spec. Wait f
 
 **Branch:** `agent/worker3/v05-context-menu-editor-toggles`. **Effort:** ~40-60 min.
 
+### Next after #395 ships → `v05-editor-portal-polish-bundle-1` (3 items, ~60-90 min total)
+
+Three editor-portal items that ride on the toggle props you just shipped (#395). Each is independent; bundle them into one PR.
+
+1. **Editor activation modes prop** — `editorActivation?: "f2-only" | "single-click" | "double-click"` on `BcGridProps` (default unchanged: `"f2-only"`). Single-click activation is the common ERP pattern for forms-style data entry; double-click is the AG-Grid-default. Wires into the cell click handler in `grid.tsx`. Add unit tests for each mode + an integration test in `editorPortal.test.tsx`.
+2. **Editor blur semantics prop** — `editorBlurAction?: "commit" | "reject" | "ignore"` on `BcGridProps` (default unchanged: `"commit"`). For forms-style ERP screens that want explicit Tab/Enter commit and treat blur as cancel. Threads through `editorPortal.tsx`'s click-outside handler.
+3. **Esc reverts whole row in row-edit mode** — when `BcEditGrid` is in row-edit mode, `Esc` from any cell of the editing row calls `editController.discardRowEdits(rowId)` instead of just cancelling the single cell. Audit P1-W3-3 follow-up to #381. Pure additive — no API change, just a keyboard handler refinement.
+
+**Branch:** `agent/worker3/v05-editor-portal-polish-bundle-1`. **Effort:** ~60-90 min.
+
+### After bundle-1 → `v05-prepare-result-preload` (worker3-editors §3 pulled forward, ~half day)
+
+Pull the v0.6 §3 task forward from `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`: autocomplete editor preloads the first page of options via `editor.prepare()` so the dropdown paints with options on first frame instead of a blank "Loading…" state. Small `BcCellEditorPrepareParams` extension (add `column: BcColumn` so prepare callbacks can branch on column metadata) — flag the API change in the PR description so coordinator catches it during the api-surface diff review.
+
+Graceful-degradation note from the planning doc: if `prepare` rejects, fall through to the synchronous `column.options` path so the editor still mounts even when preload fails (don't push the state machine back to Navigation on prepare-rejection).
+
+**Branch:** `agent/worker3/v05-prepare-result-preload`. **Effort:** ~half day (includes a custom-editor recipe doc update + tests).
+
 ### Previously active → `v05-editor-bundle-1` (DONE — #390)
 
 The 3 editor polish items from your own #387 doc landed (locale-aware number parser §2, multi-mode Combobox `Enter` semantics fix §5, clear-rejection feedback for sighted users via status-bar slot §6).

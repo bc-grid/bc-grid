@@ -68,6 +68,24 @@ The persistence shape will be pinned by the RFC's `BcUserSettings` spec. Until R
 
 **Branch (when ready):** `agent/worker1/v05-server-mode-switch`. **Effort:** structural change spanning `packages/server-row-model/src/index.ts`, `packages/react/src/serverGrid.tsx`, all three turnkey hooks, plus tests and Playwright spec — likely 2-3 worker sessions, broken into stages per the RFC.
 
+### After mode-switch ships → `v05-use-server-grid-polymorphic-hook` (alpha.3 / GA scope, ~6-8h)
+
+Per RFC §6 + §7 + Q6 ratification: once the structural mode-polymorphism in `<BcServerGrid>` ships in alpha.2, layer the polymorphic `useServerGrid` hook on top in a separate alpha.3 / GA PR. Composes with the structural change rather than reshaping it. Recommended-path replacement for the three single-mode hooks (which stay as escape-hatches per Q6).
+
+Surface (from RFC §6):
+
+```ts
+export function useServerGrid<TRow>(
+  opts: UseServerGridOptions<TRow>,
+): UseServerGridResult<TRow>
+```
+
+Where `UseServerGridOptions<TRow>` accepts `loadPage?` / `loadBlock?` / `loadChildren?` (consumer supplies the loaders for the modes they want to support), plus the same `gridId` / `rowId` / `initial` shape from the existing turnkey hooks. The hook owns one debounce, one mutation-id stream, one `apiRef`, one controlled `groupBy` pair; on `groupBy` change it routes to the matching loader.
+
+Should reuse the carry-over machinery you build in the alpha.2 structural change (most of the hook is plumbing on top of it). New surface in `tools/api-surface/src/manifest.ts` for `@bc-grid/react`: `useServerGrid` + `UseServerGridOptions` + `UseServerGridResult` + state/actions types. Update `docs/api.md §5.3` to mark the new hook as the recommended path.
+
+**Branch:** `agent/worker1/v05-use-server-grid-polymorphic-hook`. **Effort:** ~6-8h, single PR. Lands in alpha.3 / GA.
+
 ### Previously active → `v05-server-perf-bundle-1` (DONE — #391)
 
 The 4 server-perf items from your own #383 doc landed as a single coherent PR (LRU eviction tuning §5, prefetch knob §8, stale-flood test §9, per-row request-id supersedure §10).
