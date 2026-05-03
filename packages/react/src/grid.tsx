@@ -194,6 +194,7 @@ import type {
   BcReactGridColumn,
   BcSidebarContext,
   BcUserSettings,
+  BcUserSettingsStore,
 } from "./types"
 import { useEditingController } from "./useEditingController"
 import { formatCellValue, getCellValue } from "./value"
@@ -205,6 +206,30 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
 const DEFAULT_DETAIL_HEIGHT = 144
 const editableKeyTargetTags = new Set(["INPUT", "TEXTAREA", "SELECT"])
 const BcGridContextMenuLayer = lazy(() => import("./internal/context-menu-layer"))
+
+function useDefaultUserSettingsStore(
+  providedStore: BcUserSettingsStore | undefined,
+): BcUserSettingsStore {
+  const settingsRef = useRef<BcUserSettings | undefined>(undefined)
+  const listenersRef = useRef(new Set<(next: BcUserSettings) => void>())
+
+  return useMemo<BcUserSettingsStore>(
+    () =>
+      providedStore ?? {
+        read: () => settingsRef.current,
+        write: (next) => {
+          settingsRef.current = next
+          for (const listener of listenersRef.current) listener(next)
+        },
+        subscribe: (listener) => {
+          listenersRef.current.add(listener)
+          return () => listenersRef.current.delete(listener)
+        },
+      },
+    [providedStore],
+  )
+}
+
 type BcGridEditRowActionProps<TRow> = Pick<
   BcEditGridProps<TRow>,
   "canDelete" | "confirmDelete" | "onDelete" | "onDuplicateRow" | "onInsertRow"
@@ -282,8 +307,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => readUrlPersistedGridState(props.urlStatePersistence),
     [props.urlStatePersistence],
   )
+  const userSettingsStore = useDefaultUserSettingsStore(props.userSettings)
   const [userSettingsState, setUserSettingsState] = useState<BcUserSettings | undefined>(() =>
-    props.userSettings?.read(),
+    userSettingsStore.read(),
   )
   const userSettingsRef = useRef(userSettingsState)
   const applyUserSettingsState = useCallback((next: BcUserSettings | undefined) => {
@@ -291,23 +317,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setUserSettingsState(next)
   }, [])
   useEffect(() => {
-    const store = props.userSettings
-    if (!store) {
-      applyUserSettingsState(undefined)
-      return
-    }
+    const store = userSettingsStore
     applyUserSettingsState(store.read())
     return store.subscribe?.((next) => applyUserSettingsState(next))
-  }, [applyUserSettingsState, props.userSettings])
+  }, [applyUserSettingsState, userSettingsStore])
   const updateUserSettings = useCallback(
     (updater: (prev: BcUserSettings) => BcUserSettings) => {
       const base = userSettingsRef.current ?? { version: 1 }
       const next = updater(base)
       userSettingsRef.current = next
       setUserSettingsState(next)
-      props.userSettings?.write(next)
+      userSettingsStore.write(next)
     },
-    [props.userSettings],
+    [userSettingsStore],
   )
   const setVisibleUserSetting = useCallback(
     (key: keyof NonNullable<BcUserSettings["visible"]>, value: boolean) => {
