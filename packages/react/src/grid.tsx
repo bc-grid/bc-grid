@@ -1587,24 +1587,44 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   ])
 
   // Pixel rect of the cell currently being edited — passed to the editor
-  // portal for absolute positioning. Computed from the virtualizer so we
-  // get the right offsets even when the row/col is in a pinned region.
+  // portal for absolute positioning. Source of truth is the DOM
+  // (`getBoundingClientRect`), not the virtualizer's position calculator,
+  // because the virtualizer's `scrollOffsetForRow` math assumes uniform
+  // row heights and bypasses any layout shifts above the target row
+  // (expanded detail panels, group rows, sticky-anything). Surfaced
+  // 2026-05-03 by bsncraft: with `renderDetailPanel` configured and
+  // multiple panels expanded, the editor portal landed offset upward
+  // by the cumulative panel height. AG Grid uses the DOM-rect approach
+  // for the same reason. Fallback to the virtualizer math when the
+  // cell isn't yet in the DOM (rare first-paint edge case).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: expansionState is an invalidation-only dep — toggling detail panels above the editing row shifts cell DOM position without changing any value-deps
   const editorCellRect = useMemo(() => {
     if (editController.editState.mode === "navigation") return null
     if (editController.editState.mode === "unmounting") return null
     const cell = editController.editState.cell
+    const rootEl = rootRef.current
+    const cellEl = document.getElementById(cellDomId(domBaseId, cell.rowId, cell.columnId))
+    if (cellEl && rootEl) {
+      const cellRect = cellEl.getBoundingClientRect()
+      const rootRect = rootEl.getBoundingClientRect()
+      return {
+        top: cellRect.top - rootRect.top,
+        left: cellRect.left - rootRect.left,
+        width: cellRect.width,
+        height: cellRect.height,
+      }
+    }
     const rowIndex = rowIndexById.get(cell.rowId)
     const colIndex = columnIndexById.get(cell.columnId)
     if (rowIndex == null || colIndex == null) return null
     const rowOffset = virtualizer.scrollOffsetForRow(rowIndex, "nearest")
     const colOffset = virtualizer.scrollOffsetForCol(colIndex, "nearest")
-    const rowHeightAtIndex = defaultRowHeight
     const column = resolvedColumns[colIndex]
     return {
       top: rowOffset - scrollOffset.top,
       left: colOffset - scrollOffset.left,
       width: column?.width ?? 120,
-      height: rowHeightAtIndex,
+      height: defaultRowHeight,
     }
   }, [
     editController.editState,
@@ -1614,6 +1634,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     defaultRowHeight,
     resolvedColumns,
     scrollOffset,
+    domBaseId,
+    // expansionState is an invalidation trigger, not a value dep:
+    // expanding/collapsing detail panels above the editing row shifts
+    // the cell's DOM y-position without changing any of the deps above.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: invalidation-only dep
+    expansionState,
   ])
 
   const scrollToRow = useCallback(
