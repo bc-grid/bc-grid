@@ -80,6 +80,22 @@ Pull one of the v0.5 → v0.6 grouping items forward from `docs/coordination/v05
 
 **Branch:** `agent/worker2/v05-grouping-pull-forward`. **Effort:** ~half day.
 
+### After grouping pull-forward → `v06-detail-panel-sticky-left` (~30-45 min)
+
+Surfaced 2026-05-03 by bsncraft consumer review on the customers grid. When the master grid scrolls horizontally, the detail panel scrolls with it (it's a child of the same scroll container), revealing empty space beyond the detail's content width. The recommendation matches AG Grid / Linear / Notion / Airtable: `position: sticky; left: 0` on the detail panel wrapper at `packages/react/src/grid.tsx:2941`, with width measured by `ResizeObserver` against the master grid container's `clientWidth` (do **NOT** use `100vw` — sidebars / host chrome reduce the grid's actual width below viewport).
+
+Detail content keeps its own horizontal scroll inside the sticky container. Vertical scroll behavior unchanged. Pinned-left disclosure column ▶ stays visually aligned with the detail row's left edge because both anchor to scroll-left = 0.
+
+Acceptance criteria (from the consumer thread):
+
+- Horizontal scroll on master leaves the detail panel anchored to the visible viewport.
+- Detail panel content keeps its own horizontal scroll if it overflows the viewport width.
+- Vertical scroll on master scrolls the detail row off-screen as expected (no sticky-vertical).
+- `detailPanelHeight` (and the row-fn variant) is still honored.
+- Pinned-left disclosure column ▶ button still visually connects to the detail row's left edge.
+
+**Branch:** `agent/worker2/v06-detail-panel-sticky-left`. **Effort:** ~30-45 min including a Playwright spec (coordinator runs the spec). Tagged v0.6 by the consumer; folding in here keeps your lane productive.
+
 ### Previously active → `v05-chrome-and-filter-bundle-1` (DONE — #393)
 
 The 3 chrome/filter polish items from your own #388 doc landed (active filter chip strip in toolbar, group selection algebra basic, filter operators blank/not-blank for every scalar type).
