@@ -289,6 +289,37 @@ export function resolvePrefetchAhead(prefetchAhead: number | undefined): number 
 }
 
 /**
+ * Pure helper exported for unit testing. Returns a dev-only error
+ * message when the active row-model mode's required loader is
+ * missing. Returns `null` when the loader for the active mode is
+ * present (no warning needed). Per `docs/design/server-mode-switch-rfc.md
+ * §6` stage 2 mount assertion.
+ */
+export function resolveMissingLoaderMessage(input: {
+  activeMode: ServerRowModelMode
+  hasLoadPage: boolean
+  hasLoadBlock: boolean
+  hasLoadChildren: boolean
+}): string | null {
+  const missing =
+    input.activeMode === "paged"
+      ? !input.hasLoadPage
+      : input.activeMode === "infinite"
+        ? !input.hasLoadBlock
+        : input.activeMode === "tree"
+          ? !input.hasLoadChildren
+          : false
+  if (!missing) return null
+  const loaderName =
+    input.activeMode === "paged"
+      ? "loadPage"
+      : input.activeMode === "infinite"
+        ? "loadBlock"
+        : "loadChildren"
+  return `<BcServerGrid> is in "${input.activeMode}" mode but the required ${loaderName} prop is missing. Pass ${loaderName} or set rowModel explicitly. See docs/design/server-mode-switch-rfc.md §6.`
+}
+
+/**
  * Pure helper exported for unit testing. Resolves the active row-model
  * mode given the consumer's optional `rowModel` prop and the controlled
  * `groupBy` array.
@@ -373,22 +404,49 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   const tree = useTreeServerState(props, baseVisibleColumns)
   const mutationCounterRef = useRef(0)
 
+  // Resolved active mode — heuristic kicks in when `props.rowModel`
+  // is omitted, per `docs/design/server-mode-switch-rfc.md §6` stage
+  // 2 collapse + Q2 ratification.
+  const activeMode = resolveActiveRowModelMode({
+    rowModel: props.rowModel,
+    groupBy: props.groupBy,
+  })
+
+  // Dev-only mount assertion: fires once on mount (and on activeMode
+  // change) when the active mode's required loader is missing. Per
+  // RFC §6 stage 2 mount assertion. Production builds elide the
+  // warning; the runtime contract is "the loader matching the active
+  // mode is required" and the resulting null loader will throw when
+  // invoked, but the dev message lands first.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only assertion
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return
+    const message = resolveMissingLoaderMessage({
+      activeMode,
+      hasLoadPage: props.loadPage !== undefined,
+      hasLoadBlock: props.loadBlock !== undefined,
+      hasLoadChildren: props.loadChildren !== undefined,
+    })
+    if (message != null) console.error(message)
+    // Mount-only — only fire when the active mode itself changes.
+  }, [activeMode])
+
   const queueServerRowMutation = useCallback(
     (patch: ServerRowPatch) => {
-      if (props.rowModel === "paged") paged.queueMutation(patch)
-      else if (props.rowModel === "infinite") infinite.queueMutation(patch)
-      else if (props.rowModel === "tree") tree.queueMutation(patch)
+      if (activeMode === "paged") paged.queueMutation(patch)
+      else if (activeMode === "infinite") infinite.queueMutation(patch)
+      else if (activeMode === "tree") tree.queueMutation(patch)
     },
-    [infinite, paged, props.rowModel, tree],
+    [activeMode, infinite, paged, tree],
   )
 
   const settleServerRowMutation = useCallback(
     (result: ServerMutationResult<TRow>) => {
-      if (props.rowModel === "paged") paged.settleMutation(result)
-      else if (props.rowModel === "infinite") infinite.settleMutation(result)
-      else if (props.rowModel === "tree") tree.settleMutation(result)
+      if (activeMode === "paged") paged.settleMutation(result)
+      else if (activeMode === "infinite") infinite.settleMutation(result)
+      else if (activeMode === "tree") tree.settleMutation(result)
     },
-    [infinite, paged, props.rowModel, tree],
+    [activeMode, infinite, paged, tree],
   )
 
   const handleCellEditCommit = useCallback(
@@ -415,7 +473,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   const cellEditCommitHandler =
     props.onServerRowMutation || props.onCellEditCommit ? handleCellEditCommit : undefined
   const pagedFooter =
-    props.rowModel === "paged"
+    activeMode === "paged"
       ? (props.footer ??
         (paged.gridShell.paginationEnabled ? (
           <BcGridPagination
@@ -430,7 +488,14 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       : undefined
 
   const serverApi = useMemo<BcServerGridApi<TRow>>(() => {
-    const mode = props.rowModel
+    // Resolve the active row-model mode via the heuristic helper.
+    // Today most consumers pass an explicit `rowModel`; once the
+    // mode-switch RFC stage 3 lands, omitted `rowModel` derives
+    // from `groupBy` per `resolveActiveRowModelMode`.
+    const mode = resolveActiveRowModelMode({
+      rowModel: props.rowModel,
+      groupBy: props.groupBy,
+    })
 
     return {
       scrollToRow(rowId, opts) {
@@ -659,20 +724,20 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
   const gridProps = props as unknown as BcGridProps<TRow>
   const loading =
     props.loading ??
-    (props.rowModel === "paged"
+    (activeMode === "paged"
       ? paged.loading
-      : props.rowModel === "infinite"
+      : activeMode === "infinite"
         ? infinite.loading
-        : props.rowModel === "tree"
+        : activeMode === "tree"
           ? tree.loading
           : true)
   const loadingOverlay =
     props.loadingOverlay ??
-    (props.rowModel === "paged" && paged.error
+    (activeMode === "paged" && paged.error
       ? "Failed to load rows"
-      : props.rowModel === "infinite" && infinite.error
+      : activeMode === "infinite" && infinite.error
         ? "Failed to load rows"
-        : props.rowModel === "tree" && tree.error
+        : activeMode === "tree" && tree.error
           ? "Failed to load rows"
           : undefined)
 
@@ -685,43 +750,41 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       // accepted page while a new server query is pending. Always
       // applied after spreading consumer props.
       rowProcessingMode="manual"
-      columns={props.rowModel === "tree" ? tree.columns : gridProps.columns}
+      columns={activeMode === "tree" ? tree.columns : gridProps.columns}
       data={
-        props.rowModel === "paged"
+        activeMode === "paged"
           ? paged.gridShell.gridRows
-          : props.rowModel === "infinite"
+          : activeMode === "infinite"
             ? infinite.rows
-            : props.rowModel === "tree"
+            : activeMode === "tree"
               ? tree.rows
               : []
       }
       apiRef={gridApiRef}
-      {...(props.rowModel === "paged" ? { footer: pagedFooter } : {})}
+      {...(activeMode === "paged" ? { footer: pagedFooter } : {})}
       loading={loading}
       loadingOverlay={loadingOverlay}
-      {...(props.rowModel === "paged" ? { pagination: paged.gridShell.gridPagination } : {})}
+      {...(activeMode === "paged" ? { pagination: paged.gridShell.gridPagination } : {})}
       {...(cellEditCommitHandler ? { onCellEditCommit: cellEditCommitHandler } : {})}
-      {...(props.rowModel === "paged"
-        ? { onColumnStateChange: paged.handleColumnStateChange }
-        : {})}
+      {...(activeMode === "paged" ? { onColumnStateChange: paged.handleColumnStateChange } : {})}
       onFilterChange={
-        props.rowModel === "tree"
+        activeMode === "tree"
           ? tree.handleFilterChange
-          : props.rowModel === "infinite"
+          : activeMode === "infinite"
             ? infinite.handleFilterChange
             : paged.handleFilterChange
       }
-      {...(props.rowModel === "paged" ? { onGroupByChange: paged.handleGroupByChange } : {})}
-      {...(props.rowModel === "paged" ? { onSearchTextChange: paged.handleSearchTextChange } : {})}
+      {...(activeMode === "paged" ? { onGroupByChange: paged.handleGroupByChange } : {})}
+      {...(activeMode === "paged" ? { onSearchTextChange: paged.handleSearchTextChange } : {})}
       onSortChange={
-        props.rowModel === "tree"
+        activeMode === "tree"
           ? tree.handleSortChange
-          : props.rowModel === "infinite"
+          : activeMode === "infinite"
             ? infinite.handleSortChange
             : paged.handleSortChange
       }
-      rowId={props.rowModel === "tree" ? tree.rowId : gridProps.rowId}
-      {...(props.rowModel === "infinite"
+      rowId={activeMode === "tree" ? tree.rowId : gridProps.rowId}
+      {...(activeMode === "infinite"
         ? { onVisibleRowRangeChange: infinite.handleVisibleRowRangeChange }
         : {})}
     />
@@ -1065,24 +1128,24 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
   const getModelState = useCallback(
     () =>
       modelRef.current.getState({
-        mode: props.rowModel,
+        mode: "paged",
         rowCount,
         selection: toServerSelection(undefined, view),
         view,
         viewKey,
       }),
-    [props.rowModel, rowCount, view, viewKey],
+    [rowCount, view, viewKey],
   )
   const getDiagnostics = useCallback(
     (selection?: BcSelection) =>
       modelRef.current.getDiagnostics({
-        mode: props.rowModel,
+        mode: "paged",
         rowCount,
         selection: toServerSelection(selection, view),
         view,
         viewKey,
       }),
-    [props.rowModel, rowCount, view, viewKey],
+    [rowCount, view, viewKey],
   )
 
   const whenIdle = useCallback(async () => {
@@ -1338,24 +1401,24 @@ function useInfiniteServerState<TRow>(
   const getModelState = useCallback(
     () =>
       modelRef.current.getState({
-        mode: props.rowModel,
+        mode: "infinite",
         rowCount,
         selection: toServerSelection(undefined, view),
         view,
         viewKey,
       }),
-    [props.rowModel, rowCount, view, viewKey],
+    [rowCount, view, viewKey],
   )
   const getDiagnostics = useCallback(
     (selection?: BcSelection) =>
       modelRef.current.getDiagnostics({
-        mode: props.rowModel,
+        mode: "infinite",
         rowCount,
         selection: toServerSelection(selection, view),
         view,
         viewKey,
       }),
-    [props.rowModel, rowCount, view, viewKey],
+    [rowCount, view, viewKey],
   )
 
   const whenIdle = useCallback(async () => {
@@ -1627,7 +1690,7 @@ function useTreeServerState<TRow>(
     (mutationResult: ServerMutationResult<TRow>) => {
       const patch = modelRef.current
         .getState({
-          mode: props.rowModel,
+          mode: "tree",
           rowCount: rows.length,
           selection: toServerSelection(undefined, view),
           view,
@@ -1643,7 +1706,7 @@ function useTreeServerState<TRow>(
       if (sourceRowId) syncTreeMutationRow(sourceRowId, targetRowId ?? sourceRowId)
       if (targetRowId && targetRowId !== sourceRowId) syncTreeMutationRow(targetRowId)
     },
-    [props.rowModel, rows.length, serverRowId, syncTreeMutationRow, view, viewKey],
+    [rows.length, serverRowId, syncTreeMutationRow, view, viewKey],
   )
 
   const applyRowUpdate = useCallback(
@@ -1673,24 +1736,24 @@ function useTreeServerState<TRow>(
   const getModelState = useCallback(
     () =>
       modelRef.current.getState({
-        mode: props.rowModel,
+        mode: "tree",
         rowCount: rows.length,
         selection: toServerSelection(undefined, view),
         view,
         viewKey,
       }),
-    [props.rowModel, rows.length, view, viewKey],
+    [rows.length, view, viewKey],
   )
   const getDiagnostics = useCallback(
     (selection?: BcSelection) =>
       modelRef.current.getDiagnostics({
-        mode: props.rowModel,
+        mode: "tree",
         rowCount: rows.length,
         selection: toServerSelection(selection, view),
         view,
         viewKey,
       }),
-    [props.rowModel, rows.length, view, viewKey],
+    [rows.length, view, viewKey],
   )
 
   const whenIdle = useCallback(async () => {
@@ -1709,12 +1772,12 @@ function useTreeServerState<TRow>(
     handleFilterChange,
     handleSortChange,
     invalidate,
-    loading: props.rowModel === "tree" && rootLoading && rows.length === 0 && !error,
+    loading: rootLoading && rows.length === 0 && !error,
     queueMutation,
     refresh,
     retryBlock,
     rowCount: resolveTreeRowCount({
-      mode: props.rowModel,
+      mode: "tree",
       visibleRowCount: rows.length,
       initialRootChildCount,
       rootLoading,
