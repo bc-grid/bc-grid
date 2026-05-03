@@ -32,7 +32,31 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
 - ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
 
-### Active now → `v05-default-context-menu-wiring` — server + pagination slice (~1-1.5h)
+### Active now → `v06-server-perf-block-cache-lru-tuning` (your planning doc §5, ~half day)
+
+**Server slice of `v05-default-context-menu-wiring` shipped as #420** (CI: smoke + smoke-perf green; e2e finishing — coordinator merging when complete). `Server` submenu wired into the contextual default menu: `Show pagination` toggle, `Expand all groups` / `Collapse all groups` (tree mode), `Prefetch ahead` submenu (0/1/2/3 blocks for infinite mode), `Server pagination` toggle (Server-paged vs Load all visible).
+
+**Mode-switch RFC fully shipped** stages 1-3.3 + polymorphic `useServerGrid` hook. **Layout pass PR (a) shipped.** **Default context menu wired.** Your v0.5 alpha.2 → GA work is structurally complete.
+
+The next active task is the v0.6 server-perf train. Pull §5 forward from `docs/coordination/v05-audit-followups/worker1-server-perf.md`: block-cache LRU eviction tuning under realistic ERP scroll patterns. The current `maxBlocks: 50` default (bumped 20 → 50 in #391 server-perf bundle-1) was set empirically; your planning doc §5 flagged that we don't have a unit test or perf bench measuring eviction order under realistic ERP usage (5k+ rows with rapid up/down scrolling, varied page sizes, viewport-driven prefetch).
+
+Implementation:
+
+1. **Pin the eviction order with a unit test** in `packages/server-row-model/tests/serverRowModel.test.ts`. Simulate the rapid-scroll pattern (scroll 1000 rows down, then 1000 up, then 500 down, etc.); assert that the most-recently-used blocks survive eviction and the least-recently-used blocks are evicted in LRU order.
+
+2. **Add a smoke-perf bench case** at `apps/benchmarks/tests/perf.perf.pw.ts` measuring scroll-with-eviction latency: 5k row infinite grid, 200px/frame trackpad scroll for 5s, measure paint cadence + GC pauses + cache hit rate. Bar: zero dropped frames at 60Hz.
+
+3. **Tune the default if the bench surfaces a better number.** The current 50 was a conservative bump; ERP scroll patterns may want 75 or 100 if memory cost stays bounded (each block holds N rows; ~50KB per block at our typical row size).
+
+**Branch:** `agent/worker1/v06-server-perf-block-cache-lru-tuning`. **Effort:** ~half day.
+
+### After LRU tuning → bsncraft migration co-pilot (consumer-paced) OR continue pulling v0.6 server-perf items
+
+Your planning doc has 11 v0.6 task proposals; pick the next at the top of the unfinished list when you're ready.
+
+### Previously active → `v05-default-context-menu-wiring` server slice (DONE — #420 in review)
+
+### Old anchor: `v05-default-context-menu-wiring` — server + pagination slice (~1-1.5h)
 
 **Stage 3.3 shipped as #417** (178d9d7) — RFC §9 carry-over test sweep + 1 Playwright happy-path. Mode-switch RFC fully implemented across stages 1, 2, 3.1, 3.2, 3.3 (#397 / #400 / #402 / #406 / #417). **Polymorphic `useServerGrid` hook also shipped** as #409 (928d9d7). bsncraft can adopt either the legacy three-hook pattern OR the new polymorphic hook.
 

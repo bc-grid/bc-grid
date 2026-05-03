@@ -19,7 +19,7 @@ const NUMBER_COLUMN = "creditLimit"
 
 async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = 900
   })
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))

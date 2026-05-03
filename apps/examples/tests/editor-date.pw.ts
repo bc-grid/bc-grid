@@ -22,7 +22,7 @@ async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   // lastInvoice is far-right of the grid — scroll the body all the way
   // right so the virtualizer renders cells in this column.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = scroller.scrollWidth
   })
   // Two RAF ticks let the virtualizer commit the new viewport.

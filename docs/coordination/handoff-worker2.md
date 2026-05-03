@@ -35,7 +35,53 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
-### Active now → `v05-default-context-menu-wiring` — chrome slice (~1.5-2h)
+### Active now → `v06-saved-view-dto-recipe` (your planning doc §5, ~half day)
+
+**Chrome slice of `v05-default-context-menu-wiring` shipped as #419** (CI: smoke + smoke-perf green; e2e finishing — coordinator merging when complete). Top-level `Clear all filters` action; `Column` submenu (pin/unpin/hide/autosize/show-all/clear-filter) for any column-bound right-click; in-memory `BcUserSettings` fallback so View toggles work without consumer persistence; `View` submenu wired through that fallback.
+
+**Filter registry shipped** (#410). **Set filter option provider shipped** (#413). **Layout pass PR (b) shipped** (#416). **Default context menu chrome wired** (#419 in review). Your v0.5 alpha.2 → GA work is structurally complete.
+
+The next active task is the v0.6 saved-view DTO from your planning doc §5 (audit P1-W2-3). Publish the canonical `BcSavedView` DTO + helpers (`createSavedView`, `applySavedViewLayout`, `migrateSavedViewLayout`) + a toolbar recipe doc. No runtime UI required — the DTO + helpers + recipe are the deliverable. Composes with the filter-registry + set-filter-option-provider work since saved views serialize through the registry.
+
+Spec from your planning doc:
+
+```ts
+interface BcSavedView<TRow = unknown> {
+  id: string
+  name: string
+  gridId: string
+  version: number              // schema migration anchor
+  layout: BcGridLayoutState     // nested, not duplicated
+  scope: "user" | "team" | "global"
+  ownerId?: string
+  isDefault?: boolean
+  isFavorite?: boolean
+  createdAt?: string
+  updatedAt?: string
+  description?: string
+}
+```
+
+Helpers:
+- `createSavedView(opts: { gridId, name, layout, scope?, ... }): BcSavedView` — id generated, version pinned, timestamps set.
+- `applySavedViewLayout(api: BcGridApi, view: BcSavedView): void` — applies the layout state (sort, filter, columnState, groupBy, etc.) to a live grid via apiRef.
+- `migrateSavedViewLayout(view: BcSavedView): BcSavedView` — version-aware migration so older saved views remain consumable.
+
+Toolbar recipe doc at `docs/recipes/saved-views.md` — covers the consumer UX pattern (list + load + save + delete) without bc-grid implementing the UI. Uses controlled `layoutState` + `onLayoutStateChange` + `urlStatePersistence` + host storage.
+
+Decide whether URL state should carry only the current layout blob or also `activeSavedViewId`. Recommendation: just the blob; consumers who want the active ID round-tripped add it as their own URL param.
+
+**Branch:** `agent/worker2/v06-saved-view-dto-recipe`. **Effort:** ~half day.
+
+### After saved-view DTO → `v06-erp-filter-operators` (your planning doc §6, ~half day)
+
+Pull §6 forward — ERP filter operators (audit P1-W2-4): `blank` / `not blank` for every scalar type (already shipped in #393), but the rest are missing — `not equals` for text/date, relative dates (today / this week / last N days / this month), fiscal-period buckets, current-user/team predicates, `does not contain`. Composes with the filter registry from #410 (operators land as registry entries with predicate + editor).
+
+**Branch:** `agent/worker2/v06-erp-filter-operators`. **Effort:** ~half day.
+
+### Previously active → `v05-default-context-menu-wiring` chrome slice (DONE — #419 in review)
+
+### Old anchor: `v05-default-context-menu-wiring` — chrome slice (~1.5-2h)
 
 **Layout pass PR (b) shipped as #416** (e25b2b1) — detail panel composes as `position: sticky; left: 0` with `width: var(--bc-grid-viewport-width)`; horizontal master scroll leaves the detail panel anchored to the visible viewport. Closes layout RFC §4 memo 2.
 

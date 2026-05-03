@@ -38,7 +38,33 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 - ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
 
-### Active now → `v05-default-context-menu-wiring` — editor + row-action slice (~1.5-2h)
+### Active now → `v06-editor-visual-contract-consolidation` (your planning doc §4, ~half day)
+
+**Editor + row-action slice of `v05-default-context-menu-wiring` shipped as #421** (CI: smoke + smoke-perf green; e2e finishing — coordinator merging when complete). `Editor` submenu wired into the contextual default menu: `Edit mode` toggle, `Show validation messages` toggle, `Show keyboard hints` toggle, `Activation` submenu (Single click / Double click / F2 only), `On blur` submenu (Commit / Reject / Ignore), `Esc reverts row` toggle. Row-action items (Insert above/below + Duplicate + Delete with confirmDelete gate) wired in for `<BcEditGrid>` row-context right-clicks. `Dismiss latest error` action when there's an active validation error in the status-bar slot.
+
+**In-cell editor RFC fully shipped** (PRs a/b/c). **Validation flash + status segment shipped** (#407). **Layout pass PR (c) shipped** (#418). **Default context menu editor + row actions wired** (#421 in review). Your v0.5 alpha.2 → GA work is structurally complete.
+
+The next active task is the v0.6 visual contract consolidation from your planning doc §4 (cell-state styling lives in two places — `data-bc-grid-cell-state="error"` on the cell + `.bc-grid-validation-popover` chrome — different visual contracts; consumer overrides must touch both). Consolidate into one cell-state contract with the popover composing on top.
+
+Implementation:
+
+1. **Single source of truth** for cell-state visual tokens. Move the `--bc-grid-cell-error-bg` / `--bc-grid-cell-error-fg` / etc. into a single `data-bc-grid-cell-state` selector cascade. The popover's chrome composes via `inherit` from the cell rather than duplicating the tokens.
+
+2. **Migration alias** for one release. `data-bc-grid-cell-state="error"` continues to apply via the existing path AND also via the new consolidated path; deprecation note in `docs/migration/v0.6.md` (already exists for the layout pass — pair the visual-contract migration there).
+
+3. **Test coverage** — pin the consolidated contract via theming.test.ts (computed-value assertions for each cell state) + 1 Playwright spec covering the popover-inherits-from-cell behavior.
+
+Pair the migration note with the layout pass's `.bc-grid-scroller` → `.bc-grid-viewport` rename note in `docs/migration/v0.6.md` so consumers see both v0.6 chrome migrations in one place.
+
+**Branch:** `agent/worker3/v06-editor-visual-contract-consolidation`. **Effort:** ~half day.
+
+### After visual-contract consolidation → bsncraft migration co-pilot (editor side, consumer-paced)
+
+Same as before — when bsncraft's customers grid migration draft surfaces editor-side rough edges, your role is editor + lookup expertise.
+
+### Previously active → `v05-default-context-menu-wiring` editor + row-action slice (DONE — #421 in review)
+
+### Old anchor: `v05-default-context-menu-wiring` — editor + row-action slice (~1.5-2h)
 
 **Layout pass PR (c) shipped as #418** (41ec5e0) — `availableGridWidth` ResizeObserver removed (consolidated onto `viewport.width`); `editorCellRect` simplified (no more `expansionState` invalidation dep + lint suppression); design.md §4.2 / §4.3 + §13 decisions table updated. Closes layout RFC §4 memos 3 + 4.
 
