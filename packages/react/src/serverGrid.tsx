@@ -845,22 +845,32 @@ function useServerSortFilterState<TRow>(
 }
 
 function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerState<TRow> {
+  // Mode-switch RFC stage 3.1: gate all hook activity on the resolved
+  // active mode rather than the explicit `props.rowModel` literal.
+  // When the heuristic activates (consumer omits `rowModel`), this
+  // hook fetches iff `groupBy` is empty.
+  const activeMode = resolveActiveRowModelMode({
+    rowModel: props.rowModel,
+    groupBy: props.groupBy,
+  })
+  const isPagedActive = activeMode === "paged"
+
   const modelRef = useRef(createServerRowModel<TRow>())
   const latestBlockKeyRef = useRef<ServerBlockKey | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [result, setResult] = useState<ServerPagedResult<TRow> | undefined>(() =>
-    props.rowModel === "paged" ? props.initialResult : undefined,
+    isPagedActive ? props.initialResult : undefined,
   )
-  const [loading, setLoading] = useState(() => props.rowModel === "paged" && !props.initialResult)
+  const [loading, setLoading] = useState(() => isPagedActive && !props.initialResult)
   const [error, setError] = useState<unknown>(null)
 
   const pageControlled = hasProp(props, "page")
   const pageSizeControlled = hasProp(props, "pageSize")
   const [uncontrolledPage, setUncontrolledPage] = useState(() =>
-    props.rowModel === "paged" ? (props.defaultPage ?? props.initialResult?.pageIndex ?? 0) : 0,
+    isPagedActive ? (props.defaultPage ?? props.initialResult?.pageIndex ?? 0) : 0,
   )
   const [uncontrolledPageSize, setUncontrolledPageSize] = useState(() =>
-    props.rowModel === "paged"
+    isPagedActive
       ? (props.pageSize ??
         props.defaultPageSize ??
         props.initialResult?.pageSize ??
@@ -939,7 +949,7 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
     },
     [columnStateControlled, props.columns, props.onColumnStateChange, resetUncontrolledPage],
   )
-  const loadPage = props.rowModel === "paged" ? props.loadPage : undefined
+  const loadPage = isPagedActive ? props.loadPage : undefined
   const view = useMemo(
     () =>
       modelRef.current.createViewState({
@@ -1129,8 +1139,26 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
     [drainAwaiters],
   )
 
-  const rows = props.rowModel === "paged" ? (result?.rows ?? []) : []
-  const rowCount = props.rowModel === "paged" ? (result?.totalRows ?? 0) : "unknown"
+  // Mode-switch RFC §5: when this hook's mode goes inactive (e.g.
+  // user switches groupBy and the heuristic flips paged→tree), abort
+  // in-flight requests synchronously and drop the cache + result so
+  // the next reactivation starts clean.
+  const wasPagedActiveRef = useRef(isPagedActive)
+  useEffect(() => {
+    if (wasPagedActiveRef.current && !isPagedActive) {
+      modelRef.current.abortAll()
+      modelRef.current.cache.clear()
+      drainAwaiters({ ok: false })
+      latestBlockKeyRef.current = null
+      setResult(undefined)
+      setLoading(false)
+      setError(null)
+    }
+    wasPagedActiveRef.current = isPagedActive
+  }, [drainAwaiters, isPagedActive])
+
+  const rows = isPagedActive ? (result?.rows ?? []) : []
+  const rowCount = isPagedActive ? (result?.totalRows ?? 0) : "unknown"
   const gridShell = resolveServerPagedGridShell({
     pageIndex: requestPageIndex,
     pageSize,
@@ -1200,6 +1228,16 @@ function useInfiniteServerState<TRow>(
   props: BcServerGridProps<TRow>,
   visibleColumns: readonly ColumnId[],
 ): InfiniteServerState<TRow> {
+  // Mode-switch RFC stage 3.1: gate all hook activity on the resolved
+  // active mode. The infinite hook runs only when `rowModel` is
+  // explicitly `"infinite"` (the heuristic never resolves to infinite
+  // — it picks paged or tree from `groupBy`).
+  const activeMode = resolveActiveRowModelMode({
+    rowModel: props.rowModel,
+    groupBy: props.groupBy,
+  })
+  const isInfiniteActive = activeMode === "infinite"
+
   const modelRef = useRef(createServerRowModel<TRow>())
   const inFlightCountRef = useRef(0)
   const loadedRowsRef = useRef<TRow[]>([])
@@ -1207,7 +1245,7 @@ function useInfiniteServerState<TRow>(
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [rows, setRows] = useState<readonly TRow[]>([])
   const [rowCount, setRowCount] = useState<number | "unknown">("unknown")
-  const [loading, setLoading] = useState(() => props.rowModel === "infinite")
+  const [loading, setLoading] = useState(() => isInfiniteActive)
   const [error, setError] = useState<unknown>(null)
 
   const resetInfiniteRows = useCallback(() => {
@@ -1226,17 +1264,14 @@ function useInfiniteServerState<TRow>(
     resetInfiniteRows,
   )
 
-  const blockSize =
-    props.rowModel === "infinite"
-      ? (props.blockSize ?? DEFAULT_SERVER_BLOCK_SIZE)
-      : DEFAULT_SERVER_BLOCK_SIZE
-  const maxCachedBlocks = props.rowModel === "infinite" ? props.maxCachedBlocks : undefined
-  const blockLoadDebounceMs = props.rowModel === "infinite" ? props.blockLoadDebounceMs : undefined
-  const maxConcurrentRequests =
-    props.rowModel === "infinite" ? props.maxConcurrentRequests : undefined
-  const prefetchAhead =
-    props.rowModel === "infinite" ? resolvePrefetchAhead(props.prefetchAhead) : 1
-  const loadBlock = props.rowModel === "infinite" ? props.loadBlock : undefined
+  const blockSize = isInfiniteActive
+    ? (props.blockSize ?? DEFAULT_SERVER_BLOCK_SIZE)
+    : DEFAULT_SERVER_BLOCK_SIZE
+  const maxCachedBlocks = isInfiniteActive ? props.maxCachedBlocks : undefined
+  const blockLoadDebounceMs = isInfiniteActive ? props.blockLoadDebounceMs : undefined
+  const maxConcurrentRequests = isInfiniteActive ? props.maxConcurrentRequests : undefined
+  const prefetchAhead = isInfiniteActive ? resolvePrefetchAhead(props.prefetchAhead) : 1
+  const loadBlock = isInfiniteActive ? props.loadBlock : undefined
   const searchText = props.searchText ?? props.defaultSearchText
   const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
   const view = useMemo(
@@ -1331,6 +1366,23 @@ function useInfiniteServerState<TRow>(
   }, [ensureBlock, loadBlock, refreshVersion])
 
   useEffect(() => () => modelRef.current.abortAll(), [])
+
+  // Mode-switch RFC §5: abort + clear cache when this hook's mode
+  // goes inactive.
+  const wasInfiniteActiveRef = useRef(isInfiniteActive)
+  useEffect(() => {
+    if (wasInfiniteActiveRef.current && !isInfiniteActive) {
+      modelRef.current.abortAll()
+      modelRef.current.cache.clear()
+      inFlightCountRef.current = 0
+      loadedRowsRef.current = []
+      setRows([])
+      setRowCount("unknown")
+      setLoading(false)
+      setError(null)
+    }
+    wasInfiniteActiveRef.current = isInfiniteActive
+  }, [isInfiniteActive])
 
   const handleVisibleRowRangeChange = useCallback(
     (range: { startIndex: number; endIndex: number }) => {
@@ -1466,21 +1518,30 @@ function useTreeServerState<TRow>(
   props: BcServerGridProps<TRow>,
   visibleColumns: readonly ColumnId[],
 ): TreeServerState<TRow> {
+  // Mode-switch RFC stage 3.1: gate all hook activity on the resolved
+  // active mode. The tree hook runs when `rowModel="tree"` is explicit
+  // OR when `groupBy` is non-empty under the heuristic.
+  const activeMode = resolveActiveRowModelMode({
+    rowModel: props.rowModel,
+    groupBy: props.groupBy,
+  })
+  const isTreeActive = activeMode === "tree"
+
   const modelRef = useRef(createServerRowModel<TRow>())
   const rootLoadSequenceRef = useRef(0)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [tree, setTree] = useState<TreeSnapshot<TRow>>(() => modelRef.current.createTreeSnapshot())
   const [error, setError] = useState<unknown>(null)
-  const [rootLoading, setRootLoading] = useState(() => props.rowModel === "tree")
+  const [rootLoading, setRootLoading] = useState(() => isTreeActive)
 
   const resetTreeRows = useCallback(() => {
     modelRef.current.abortAll()
     modelRef.current.cache.clear()
     setTree(modelRef.current.createTreeSnapshot())
     setError(null)
-    setRootLoading(props.rowModel === "tree")
+    setRootLoading(isTreeActive)
     setRefreshVersion((version) => version + 1)
-  }, [props.rowModel])
+  }, [isTreeActive])
 
   const { filterState, handleFilterChange, handleSortChange, sortState } = useServerSortFilterState(
     props,
@@ -1495,12 +1556,13 @@ function useTreeServerState<TRow>(
     ? (props.expansion ?? new Set<RowId>())
     : uncontrolledExpansion
 
-  const childCount =
-    props.rowModel === "tree" ? resolveTreeChildCount(props.childCount) : DEFAULT_SERVER_BLOCK_SIZE
-  const maxCachedTreeBlocks = props.rowModel === "tree" ? props.maxCachedBlocks : undefined
-  const initialRootChildCount = props.rowModel === "tree" ? props.initialRootChildCount : undefined
-  const loadChildRows = props.rowModel === "tree" ? props.loadChildren : undefined
-  const loadRootRows = props.rowModel === "tree" ? props.loadRoots : undefined
+  const childCount = isTreeActive
+    ? resolveTreeChildCount(props.childCount)
+    : DEFAULT_SERVER_BLOCK_SIZE
+  const maxCachedTreeBlocks = isTreeActive ? props.maxCachedBlocks : undefined
+  const initialRootChildCount = isTreeActive ? props.initialRootChildCount : undefined
+  const loadChildRows = isTreeActive ? props.loadChildren : undefined
+  const loadRootRows = isTreeActive ? props.loadRoots : undefined
   const searchText = props.searchText ?? props.defaultSearchText
   const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
   const view = useMemo(
@@ -1627,6 +1689,26 @@ function useTreeServerState<TRow>(
 
   useEffect(() => () => modelRef.current.abortAll(), [])
 
+  // Mode-switch RFC §5: abort + clear cache when this hook's mode
+  // goes inactive. Per RFC §4 item 7, expansion is "dropped by design"
+  // on a tree→non-tree switch — but expansion is consumer-controlled
+  // when supplied so the hook only resets the uncontrolled fallback.
+  const wasTreeActiveRef = useRef(isTreeActive)
+  useEffect(() => {
+    if (wasTreeActiveRef.current && !isTreeActive) {
+      modelRef.current.abortAll()
+      modelRef.current.cache.clear()
+      setTree(modelRef.current.createTreeSnapshot())
+      setRootLoading(false)
+      setError(null)
+      // Drop the uncontrolled expansion set so a later re-entry into
+      // tree mode starts clean (RFC §4 item 7). Controlled `expansion`
+      // is consumer-owned and untouched.
+      if (!expansionControlled) setUncontrolledExpansion(new Set<RowId>())
+    }
+    wasTreeActiveRef.current = isTreeActive
+  }, [expansionControlled, isTreeActive])
+
   const toggleNode = useCallback(
     (rowId: RowId) => {
       const node = tree.nodes.get(rowId)
@@ -1646,7 +1728,7 @@ function useTreeServerState<TRow>(
 
   const columns = useMemo(
     () =>
-      props.rowModel === "tree"
+      isTreeActive
         ? createTreeColumns({
             columns: props.columns,
             expandedRowIds: expansionState,
@@ -1654,7 +1736,7 @@ function useTreeServerState<TRow>(
             toggleNode,
           })
         : props.columns,
-    [expansionState, props.columns, props.rowModel, toggleNode, tree.nodes],
+    [expansionState, isTreeActive, props.columns, toggleNode, tree.nodes],
   )
 
   const rowId = useCallback(
