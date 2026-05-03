@@ -638,7 +638,7 @@ function TextFilterControl({
     }
     const payload: TextFilterInput = { op: next.op, value: next.value }
     if (next.caseSensitive) payload.caseSensitive = true
-    if (next.regex) payload.regex = true
+    if (next.regex || next.op === "regex") payload.regex = true
     onFilterChange(encodeTextFilterInput(payload))
   }
   const flat = {
@@ -647,6 +647,7 @@ function TextFilterControl({
     caseSensitive: input.caseSensitive === true,
     regex: input.regex === true,
   }
+  const regexMode = input.op === "regex" || (input.op !== "fuzzy" && flat.regex)
   const update = (next: Partial<typeof flat>) => emit({ ...flat, ...next })
   const blankOp = isBlankFilterOperator(input.op) ? input.op : null
   const contextOp = isTextContextFilterOperator(input.op)
@@ -657,11 +658,20 @@ function TextFilterControl({
         aria-label={`${filterLabel} operator`}
         className="bc-grid-filter-select"
         value={input.op}
-        onChange={(event) => update({ op: event.currentTarget.value as TextFilterOperator })}
+        onChange={(event) => {
+          const op = event.currentTarget.value as TextFilterOperator
+          update({
+            op,
+            ...(op === "regex" ? { regex: true } : {}),
+            ...(op === "fuzzy" ? { regex: false } : {}),
+          })
+        }}
         onKeyDown={onFilterKeyDown}
       >
         <option value="contains">Contains</option>
         <option value="does-not-contain">Does not contain</option>
+        <option value="regex">Regex</option>
+        <option value="fuzzy">Fuzzy</option>
         <option value="equals">Equals</option>
         <option value="not-equals">Does not equal</option>
         <option value="starts-with">Starts with</option>
@@ -691,9 +701,11 @@ function TextFilterControl({
             value={input.value}
             onChange={(event) => update({ value: event.currentTarget.value })}
             onKeyDown={onFilterKeyDown}
-            placeholder={flat.regex ? "Regex pattern" : placeholder}
-            spellCheck={flat.regex ? false : undefined}
-            autoComplete={flat.regex ? "off" : undefined}
+            placeholder={
+              regexMode ? "Regex pattern" : input.op === "fuzzy" ? "Fuzzy text" : placeholder
+            }
+            spellCheck={regexMode ? false : undefined}
+            autoComplete={regexMode ? "off" : undefined}
           />
           <button
             type="button"
@@ -706,17 +718,19 @@ function TextFilterControl({
           >
             Aa
           </button>
-          <button
-            type="button"
-            aria-label={`${filterLabel} regex`}
-            aria-pressed={flat.regex}
-            className="bc-grid-filter-text-toggle"
-            title="Regular expression"
-            onClick={() => update({ regex: !flat.regex })}
-            onKeyDown={onFilterKeyDown}
-          >
-            .*
-          </button>
+          {input.op === "fuzzy" || input.op === "regex" ? null : (
+            <button
+              type="button"
+              aria-label={`${filterLabel} regex`}
+              aria-pressed={regexMode}
+              className="bc-grid-filter-text-toggle"
+              title="Regular expression"
+              onClick={() => update({ regex: !regexMode })}
+              onKeyDown={onFilterKeyDown}
+            >
+              .*
+            </button>
+          )}
         </>
       )}
     </div>
@@ -774,6 +788,10 @@ function DateFilterControl({
         <option value="last-n-days">Last N days</option>
         <option value="this-month">This month</option>
         <option value="last-month">Last month</option>
+        <option value="mtd">Month to date</option>
+        <option value="qtd">Quarter to date</option>
+        <option value="ytd">Year to date</option>
+        <option value="last-fiscal-week">Last fiscal week</option>
         <option value="this-fiscal-quarter">This fiscal quarter</option>
         <option value="last-fiscal-quarter">Last fiscal quarter</option>
         <option value="this-fiscal-year">This fiscal year</option>
@@ -1476,16 +1494,40 @@ function NumberFilterControl({
             placeholder={input.op === "between" ? minPlaceholder : ""}
           />
           {input.op === "between" ? (
-            <input
-              aria-label={`${filterLabel} maximum`}
-              className="bc-grid-filter-input"
-              type="number"
-              inputMode="decimal"
-              value={input.valueTo ?? ""}
-              onChange={(event) => update({ valueTo: event.currentTarget.value })}
-              onKeyDown={onFilterKeyDown}
-              placeholder={maxPlaceholder}
-            />
+            <>
+              <input
+                aria-label={`${filterLabel} maximum`}
+                className="bc-grid-filter-input"
+                type="number"
+                inputMode="decimal"
+                value={input.valueTo ?? ""}
+                onChange={(event) => update({ valueTo: event.currentTarget.value })}
+                onKeyDown={onFilterKeyDown}
+                placeholder={maxPlaceholder}
+              />
+              <button
+                type="button"
+                aria-label={`${filterLabel} include minimum`}
+                aria-pressed={input.includeMin !== false}
+                className="bc-grid-filter-text-toggle"
+                title="Include minimum"
+                onClick={() => update({ includeMin: input.includeMin === false })}
+                onKeyDown={onFilterKeyDown}
+              >
+                [
+              </button>
+              <button
+                type="button"
+                aria-label={`${filterLabel} include maximum`}
+                aria-pressed={input.includeMax !== false}
+                className="bc-grid-filter-text-toggle"
+                title="Include maximum"
+                onClick={() => update({ includeMax: input.includeMax === false })}
+                onKeyDown={onFilterKeyDown}
+              >
+                ]
+              </button>
+            </>
           ) : null}
         </>
       )}
