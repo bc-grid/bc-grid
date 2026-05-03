@@ -34,7 +34,7 @@ async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   // column intercepts pointer events near the left gutter; scroll right
   // a bit so the owner cell is well away from the pinned shadow.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = 200
   })
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))

@@ -27,7 +27,7 @@ test("pinned-left ID column stays anchored to viewport-left under horizontal scr
 
   // Scroll the body horizontally past where the ID column would otherwise be.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = 800
   })
   // One frame for the synchronous handler + one more for layout.
@@ -53,7 +53,7 @@ test("pinned-right actions column stays anchored to viewport-right", async ({ pa
 
   // Scroll fully right then back to 0; viewport-x should be steady.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = scroller.scrollWidth - scroller.clientWidth
   })
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
@@ -61,7 +61,7 @@ test("pinned-right actions column stays anchored to viewport-right", async ({ pa
   const fullyRightBox = await pinned.boundingBox()
 
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = 0
   })
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
@@ -84,7 +84,7 @@ test("header columns stay horizontally synced with body cells during the scroll 
   await expect(grid).toBeVisible()
 
   const positions = await grid.evaluate((gridElement) => {
-    const scroller = gridElement.querySelector<HTMLElement>(".bc-grid-scroller")
+    const scroller = gridElement.querySelector<HTMLElement>(".bc-grid-viewport")
     if (!scroller) return null
     const cellLeft = (selector: string): number | null => {
       const element = gridElement.querySelector<HTMLElement>(selector)
@@ -133,14 +133,14 @@ test("pinned scroll-shadow data attrs toggle with scroll position", async ({ pag
 
   // Scroll right; left shadow appears.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = 200
   })
   await expect(grid).toHaveAttribute("data-scrolled-left", "true", { timeout: 1000 })
 
   // Scroll back to 0; left shadow goes away.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = 0
   })
   await expect(grid).not.toHaveAttribute("data-scrolled-left", "true", { timeout: 1000 })
@@ -172,7 +172,7 @@ test("pinned header corner shadow fades in when body content scrolls underneath"
   await expect.poll(() => pseudoOpacity(leftEdge, "::after")).toBe("0")
 
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = 240
   })
 

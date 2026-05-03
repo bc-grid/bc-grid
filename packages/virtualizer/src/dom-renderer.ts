@@ -100,7 +100,11 @@ export class DOMRenderer {
     this.host.setAttribute("role", "grid")
 
     this.scroller = document.createElement("div")
-    this.scroller.className = "bc-grid-scroller"
+    // Post-layout-pass canonical class (was `bc-grid-scroller`,
+    // hard-renamed in #415). Both classes are emitted so stand-alone
+    // virtualizer consumers still see `bc-grid-scroller` if their
+    // styling pre-dates the rename.
+    this.scroller.className = "bc-grid-viewport bc-grid-scroller"
     this.scroller.addEventListener("scroll", this.handleScroll, { passive: true })
 
     this.canvas = document.createElement("div")

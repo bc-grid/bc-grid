@@ -13,8 +13,8 @@ test("auto-height mode uses document vertical scroll while preserving horizontal
   await expect(grid).toHaveAttribute("aria-rowcount", "102")
 
   const metrics = await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
-    const header = document.querySelector<HTMLElement>(".bc-grid .bc-grid-header-viewport")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
+    const header = document.querySelector<HTMLElement>(".bc-grid .bc-grid-header-band")
     if (!scroller || !header) return null
     return {
       documentScrolls: document.documentElement.scrollHeight > window.innerHeight,
@@ -34,7 +34,7 @@ test("auto-height mode uses document vertical scroll while preserving horizontal
   )
   expect(metrics?.scrollerScrollWidth).toBeGreaterThan(metrics?.scrollerClientWidth ?? 0)
 
-  await grid.locator(".bc-grid-scroller").evaluate((scroller) => {
+  await grid.locator(".bc-grid-viewport").evaluate((scroller) => {
     scroller.scrollLeft = 800
     scroller.dispatchEvent(new Event("scroll", { bubbles: true }))
   })
