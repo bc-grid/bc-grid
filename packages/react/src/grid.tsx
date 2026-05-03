@@ -1,3 +1,4 @@
+import { aggregateColumns } from "@bc-grid/aggregations"
 import { AnimationBudget, flash } from "@bc-grid/animations"
 import { emptyBcPivotState, emptyBcRangeSelection, normaliseRange, rangeClear } from "@bc-grid/core"
 import type {
@@ -5,6 +6,7 @@ import type {
   BcColumnFilter,
   BcColumnStateEntry,
   BcGridApi,
+  BcGridColumn,
   BcGridFilter,
   BcGridPasteTsvFailure,
   BcGridPasteTsvParams,
@@ -50,9 +52,11 @@ import {
 } from "./bulkActions"
 import {
   buildClientTree,
+  collectLeafDescendants,
   compactVisibleAncestors,
   expandVisibleAncestors,
   flattenClientTree,
+  sortClientTreeChildren,
 } from "./clientTree"
 import { computeAutosizeWidth, measureColumnWidths, upsertColumnStateEntry } from "./columnCommands"
 import { commitColumnWidthState } from "./columnResize"
@@ -1005,6 +1009,50 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [treeModeActive, clientTreeIndex, props.treeData, expansionState, setExpansionState],
   )
 
+  // Parent-row aggregation cache (worker1 v06 phase 2.5). When tree
+  // mode is active AND any column declares `aggregation`, walk every
+  // parent row, collect leaf descendants, and run `aggregateColumns`
+  // once per parent. The cache is `Map<rowId, Map<columnId, { value,
+  // formattedValue }>>` so the per-cell renderer can look up the
+  // aggregated display in O(1). Built lazily via useMemo so leaf-only
+  // grids and non-aggregated tree grids pay zero cost. Per
+  // `docs/design/client-tree-rowmodel-rfc.md §6`.
+  const treeAggregationCache = useMemo<ReadonlyMap<
+    RowId,
+    ReadonlyMap<string, { value: unknown; formattedValue: string }>
+  > | null>(() => {
+    if (!treeModeActive || !clientTreeIndex) return null
+    const aggregatedColumns = consumerResolvedColumns.filter((c) => c.source.aggregation != null)
+    if (aggregatedColumns.length === 0) return null
+    const sourceColumns = aggregatedColumns.map((c) => c.source as BcGridColumn<TRow>)
+    const cache = new Map<RowId, Map<string, { value: unknown; formattedValue: string }>>()
+    for (const parentRowId of clientTreeIndex.childrenByParent.keys()) {
+      const leaves = collectLeafDescendants(clientTreeIndex, parentRowId)
+      if (leaves.length === 0) continue
+      const results = aggregateColumns(leaves as readonly TRow[], sourceColumns)
+      const perColumn = new Map<string, { value: unknown; formattedValue: string }>()
+      for (const result of results) {
+        const column = aggregatedColumns.find((c) => c.columnId === result.columnId)
+        if (!column) continue
+        const sampleRow = leaves[0] as TRow
+        const formatted = formatCellValue(result.value, sampleRow, column.source, locale)
+        perColumn.set(result.columnId, { value: result.value, formattedValue: formatted })
+      }
+      if (perColumn.size > 0) cache.set(parentRowId, perColumn)
+    }
+    return cache.size > 0 ? cache : null
+  }, [treeModeActive, clientTreeIndex, consumerResolvedColumns, locale])
+
+  const getTreeAggregatedValue = useCallback(
+    (targetRowId: RowId, targetColumnId: string) => {
+      if (!treeAggregationCache) return null
+      const perColumn = treeAggregationCache.get(targetRowId)
+      if (!perColumn) return null
+      return perColumn.get(targetColumnId) ?? null
+    },
+    [treeAggregationCache],
+  )
+
   const allRowEntries = useMemo<readonly DataRowEntry<TRow>[]>(() => {
     // Manual row processing: render `data` as the host gave it, with
     // no client-side sort/filter/search transforms. The active-filter
@@ -1073,20 +1121,37 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       rowId: rowId(row, index),
     }))
 
-    // Tree-mode branch (worker1 v06 client tree row model). When
-    // `treeData` is active, the flat sort below is replaced by a
-    // tree-flatten step: keep-ancestors expansion of the visible
-    // (matched) set, then DFS pre-order walk gated on `expansionState`.
-    // Per-subtree sort (sort siblings under each parent) is a phase 2.5
-    // follow-up — v0.6 ships data-order children as the default.
+    // Tree-mode branch (worker1 v06 client tree row model + phase 2.5
+    // per-subtree sort). When `treeData` is active:
+    //   1. Apply per-subtree sort via `sortClientTreeChildren` so
+    //      siblings under each parent honour `sortState`.
+    //   2. Compute the visible set with keepAncestors expansion against
+    //      the filter-matched flat set.
+    //   3. Flatten DFS pre-order gated on `expansionState`.
     if (treeModeActive && clientTreeIndex && props.treeData) {
+      const sortedIndex =
+        sortState.length > 0
+          ? sortClientTreeChildren(clientTreeIndex, (a: TRow, b: TRow) => {
+              for (const sort of sortState) {
+                const column = consumerResolvedColumns.find((c) => c.columnId === sort.columnId)
+                if (!column) continue
+                const va = getCellValue(a, column.source)
+                const vb = getCellValue(b, column.source)
+                const cmp = column.source.comparator
+                  ? column.source.comparator(va, vb, a, b)
+                  : defaultCompareValues(va, vb)
+                if (cmp !== 0) return sort.direction === "asc" ? cmp : -cmp
+              }
+              return 0
+            })
+          : clientTreeIndex
       const matchedSet = new Set(built.map((entry) => entry.rowId))
       const visibleRowIds =
         props.treeData.keepAncestors === false
-          ? compactVisibleAncestors({ index: clientTreeIndex, matchedRowIds: matchedSet })
-          : expandVisibleAncestors({ index: clientTreeIndex, matchedRowIds: matchedSet })
+          ? compactVisibleAncestors({ index: sortedIndex, matchedRowIds: matchedSet })
+          : expandVisibleAncestors({ index: sortedIndex, matchedRowIds: matchedSet })
       return flattenClientTree({
-        index: clientTreeIndex,
+        index: sortedIndex,
         expansionState,
         visibleRowIds,
       })
@@ -4562,6 +4627,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             renderInCellEditor,
                             isCellFlashing: editController.isCellFlashing,
                             getTreeOutlineInfo,
+                            getTreeAggregatedValue,
                           }),
                         )}
                       </div>
@@ -4590,6 +4656,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         renderInCellEditor,
                         isCellFlashing: editController.isCellFlashing,
                         getTreeOutlineInfo,
+                        getTreeAggregatedValue,
                       }),
                     )}
                     {virtualRightPinnedCols.length > 0 ? (
@@ -4623,6 +4690,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             renderInCellEditor,
                             isCellFlashing: editController.isCellFlashing,
                             getTreeOutlineInfo,
+                            getTreeAggregatedValue,
                           }),
                         )}
                       </div>

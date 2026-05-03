@@ -8,9 +8,10 @@ import { useState } from "react"
 // Production-estimating-style outline: a small bill-of-materials tree
 // where each material can have children (sub-assemblies) and so on.
 // The outline column carries the chevron + indent; sibling columns
-// are regular columns. Aggregations on the `cost` column would sum
-// across descendants — phase 2.5 will wire that; for now parent rows
-// show their declared cost.
+// are regular columns. Phase 2.5 wires per-subtree sort + parent-row
+// aggregations: with `aggregation: { type: "sum" }` on `cost`, every
+// non-leaf row displays the sum of its leaf descendants instead of
+// its raw value. Click any header to sort siblings within each parent.
 
 interface BomRow {
   id: string
@@ -41,6 +42,7 @@ const columns: readonly BcGridColumn<BomRow>[] = [
     width: 120,
     align: "right",
     format: "currency",
+    aggregation: { type: "sum" },
   },
 ]
 
