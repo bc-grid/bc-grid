@@ -185,6 +185,7 @@ import { BcStatusBar } from "./statusBar"
 import type {
   BcCellEditCommitEvent,
   BcCellEditor,
+  BcGridDensity,
   BcGridLayoutState,
   BcGridProps,
   BcReactGridColumn,
@@ -328,6 +329,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.density ??
     props.layoutState?.density ??
     defaultLayoutState?.density ??
+    userSettingsState?.density ??
     persistedGridState.density ??
     "normal"
   const instanceId = useId()
@@ -601,6 +603,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     (next: boolean) => setVisibleUserSetting("statusBar", next),
     [setVisibleUserSetting],
   )
+  const setActiveFilterSummaryVisiblePreference = useCallback(
+    (next: boolean) => setVisibleUserSetting("activeFilterSummary", next),
+    [setVisibleUserSetting],
+  )
+  const setDensityPreference = useCallback(
+    (next: BcGridDensity) => {
+      updateUserSettings((prev) => ({
+        ...prev,
+        density: next,
+      }))
+    },
+    [updateUserSettings],
+  )
 
   // Consumer columns resolved for filter / sort lookups. The synthetic
   // selection-checkbox column (when `checkboxSelection` is on) is added
@@ -630,6 +645,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => buildColumnVisibilityItems(columns, columnState),
     [columns, columnState],
   )
+  const groupableColumnIds = useMemo(() => {
+    const ids = new Set<ColumnId>()
+    for (const column of consumerResolvedColumns) {
+      if (column.source.groupable === true) ids.add(column.columnId)
+    }
+    for (const column of props.groupableColumns ?? []) {
+      ids.add(column.columnId)
+    }
+    return Array.from(ids)
+  }, [consumerResolvedColumns, props.groupableColumns])
   const persistenceState = useMemo(
     () => ({
       columnState: persistedColumnState,
@@ -2012,6 +2037,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       selectionState,
     ],
   )
+  const activeFilterSummaryVisible =
+    props.activeFilterSummary !== "off" && (userVisibleSettings?.activeFilterSummary ?? true)
+  const activeFilterSummaryLocked = props.activeFilterSummary !== undefined
   const statusBarSegments = useMemo<
     readonly NonNullable<BcGridProps<TRow>["statusBar"]>[number][]
   >(() => {
@@ -2019,10 +2047,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     const base =
       props.statusBar ??
       (userVisibleSettings?.statusBar === true ? (["total", "filtered", "selected"] as const) : [])
-    if (props.activeFilterSummary === "off") return base
+    if (!activeFilterSummaryVisible) return base
     if (base.includes("activeFilters")) return base
     return ["activeFilters", ...base]
-  }, [props.activeFilterSummary, props.statusBar, userVisibleSettings?.statusBar])
+  }, [activeFilterSummaryVisible, props.statusBar, userVisibleSettings?.statusBar])
   const statusBarVisible = userVisibleSettings?.statusBar ?? true
 
   const handlePaginationChange = useCallback(
@@ -2530,10 +2558,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const chromeContextMenuItems = useMemo(
     () =>
       buildGridChromeContextMenuItems<TRow>({
+        activeFilterSummaryLocked,
+        activeFilterSummaryVisible,
         activeSidebarPanel,
+        density,
+        densityLocked: props.density !== undefined || props.layoutState?.density !== undefined,
         filterRowLocked,
         filterRowVisible: hasInlineFilters,
+        groupBy: groupByState,
+        groupableColumnIds,
+        onActiveFilterSummaryVisibleChange: setActiveFilterSummaryVisiblePreference,
+        onDensityChange: setDensityPreference,
         onFilterRowVisibleChange: setFilterRowVisiblePreference,
+        onGroupByChange: setGroupByState,
         onSidebarPanelChange: setSidebarPanelPreference,
         onSidebarVisibleChange: setSidebarVisiblePreference,
         onStatusBarVisibleChange: setStatusBarVisiblePreference,
@@ -2543,11 +2580,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         statusBarVisible,
       }),
     [
+      activeFilterSummaryLocked,
+      activeFilterSummaryVisible,
       activeSidebarPanel,
+      density,
       filterRowLocked,
+      groupByState,
+      groupableColumnIds,
       hasInlineFilters,
       hasSidebar,
+      props.density,
+      props.layoutState?.density,
+      setActiveFilterSummaryVisiblePreference,
+      setDensityPreference,
       setFilterRowVisiblePreference,
+      setGroupByState,
       setSidebarPanelPreference,
       setSidebarVisiblePreference,
       setStatusBarVisiblePreference,

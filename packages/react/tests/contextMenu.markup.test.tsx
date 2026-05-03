@@ -218,6 +218,23 @@ describe("BcGridContextMenu — toggle and submenu markup", () => {
     expect(html).toContain("M3 8.5 6.5 12 13 4.5")
   })
 
+  test("renders radio-style toggle items as radio menuitems", () => {
+    const html = renderMenu([
+      {
+        kind: "toggle",
+        selection: "radio",
+        id: "density-normal",
+        label: "Normal",
+        checked: true,
+        onToggle: () => {},
+      },
+    ])
+
+    expect(html).toContain('role="menuitemradio"')
+    expect(html).toContain('aria-checked="true"')
+    expect(html).toContain(">Normal</span>")
+  })
+
   test("renders submenu triggers with aria-haspopup and nested menu content", () => {
     const html = renderMenu([
       {
