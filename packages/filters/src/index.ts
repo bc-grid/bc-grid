@@ -133,6 +133,20 @@ function serverColumnFilterDefinition(
 const textFilterOperators = [
   { op: "contains", label: "Contains", valueShape: "single" },
   { op: "does-not-contain", label: "Does not contain", valueShape: "single" },
+  {
+    op: "regex",
+    label: "Matches regex",
+    valueShape: "single",
+    serverHint:
+      "Invalid or potentially slow patterns are treated as no-match by the client predicate.",
+  },
+  {
+    op: "fuzzy",
+    label: "Fuzzy match",
+    valueShape: "single",
+    serverHint:
+      "Client predicate uses Levenshtein distance <= 2 against the value and word tokens.",
+  },
   { op: "starts-with", label: "Starts with", valueShape: "single" },
   { op: "ends-with", label: "Ends with", valueShape: "single" },
   { op: "equals", label: "Equals", valueShape: "single" },
@@ -178,6 +192,25 @@ const dateFilterOperators = [
   { op: "last-n-days", label: "Last N days", valueShape: "integer" },
   { op: "this-month", label: "This month", valueShape: "none" },
   { op: "last-month", label: "Last month", valueShape: "none" },
+  { op: "mtd", label: "Month to date", valueShape: "none" },
+  {
+    op: "qtd",
+    label: "Quarter to date",
+    valueShape: "context",
+    serverHint: "Uses BcFilterPredicateContext.fiscalCalendar when supplied.",
+  },
+  {
+    op: "ytd",
+    label: "Year to date",
+    valueShape: "context",
+    serverHint: "Uses BcFilterPredicateContext.fiscalCalendar when supplied.",
+  },
+  {
+    op: "last-fiscal-week",
+    label: "Last fiscal week",
+    valueShape: "context",
+    serverHint: "Uses BcFilterPredicateContext.weekStartsOn; defaults to Monday.",
+  },
   {
     op: "this-fiscal-quarter",
     label: "This fiscal quarter",
@@ -383,14 +416,21 @@ function matchesTextFilter(
   const needleRaw = String(filter.value ?? "")
   if (needleRaw.length === 0) return true
 
-  if (filter.regex === true) {
-    try {
-      const pattern = new RegExp(needleRaw, filter.caseSensitive === true ? "" : "i")
-      const matched = pattern.test(formattedValue)
-      return filter.op === "not-equals" || filter.op === "does-not-contain" ? !matched : matched
-    } catch {
-      return false
-    }
+  if (filter.op === "fuzzy") {
+    return fuzzyTextMatch(
+      formattedValue,
+      needleRaw,
+      filter.caseSensitive === true,
+      fuzzyDistanceFromFilter(filter),
+    )
+  }
+
+  if (filter.op === "regex" || filter.regex === true) {
+    const pattern = compileTextFilterRegex(needleRaw, filter.caseSensitive === true)
+    if (!pattern) return false
+    const matched = pattern.test(formattedValue)
+    if (filter.op === "not-equals" || filter.op === "does-not-contain") return !matched
+    return matched
   }
 
   const caseSensitive = filter.caseSensitive === true
@@ -464,11 +504,11 @@ function matchesNumberFilter(value: BcFilterPredicateValue, filter: ServerColumn
   if (actual == null) return false
 
   if (filter.op === "between") {
-    const values = filter.values?.map((value) => Number(value)).filter(Number.isFinite) ?? []
-    if (values.length < 2) return false
-    const min = Math.min(values[0] ?? 0, values[1] ?? 0)
-    const max = Math.max(values[0] ?? 0, values[1] ?? 0)
-    return actual >= min && actual <= max
+    const range = numberBetweenRange(filter)
+    if (!range) return false
+    const aboveMin = range.includeMin ? actual >= range.min : actual > range.min
+    const belowMax = range.includeMax ? actual <= range.max : actual < range.max
+    return aboveMin && belowMax
   }
 
   const expected = Number(filter.value)
@@ -480,6 +520,128 @@ function matchesNumberFilter(value: BcFilterPredicateValue, filter: ServerColumn
   if (filter.op === ">") return actual > expected
   if (filter.op === ">=") return actual >= expected
   return false
+}
+
+interface NumberBetweenRange {
+  min: number
+  max: number
+  includeMin: boolean
+  includeMax: boolean
+}
+
+function numberBetweenRange(filter: ServerColumnFilter): NumberBetweenRange | null {
+  const valueRange = numberBetweenValueRange(filter.value)
+  if (valueRange) return valueRange
+
+  const first = parseFilterNumber(filter.values?.[0])
+  const second = parseFilterNumber(filter.values?.[1])
+  if (first == null || second == null) return null
+  const includeFirst = filter.values?.[2] !== false
+  const includeSecond = filter.values?.[3] !== false
+  if (first <= second) {
+    return { min: first, max: second, includeMin: includeFirst, includeMax: includeSecond }
+  }
+  return { min: second, max: first, includeMin: includeSecond, includeMax: includeFirst }
+}
+
+function numberBetweenValueRange(value: unknown): NumberBetweenRange | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const range = value as {
+    min?: unknown
+    max?: unknown
+    includeMin?: unknown
+    includeMax?: unknown
+  }
+  const minRaw = parseFilterNumber(range.min)
+  const maxRaw = parseFilterNumber(range.max)
+  if (minRaw == null || maxRaw == null) return null
+  const includeMinRaw = range.includeMin !== false
+  const includeMaxRaw = range.includeMax !== false
+  if (minRaw <= maxRaw) {
+    return { min: minRaw, max: maxRaw, includeMin: includeMinRaw, includeMax: includeMaxRaw }
+  }
+  return { min: maxRaw, max: minRaw, includeMin: includeMaxRaw, includeMax: includeMinRaw }
+}
+
+function compileTextFilterRegex(pattern: string, caseSensitive: boolean): RegExp | null {
+  if (isPotentiallySlowRegex(pattern)) {
+    warnSlowRegexPattern(pattern)
+    return null
+  }
+  try {
+    return new RegExp(pattern, caseSensitive ? "" : "i")
+  } catch {
+    return null
+  }
+}
+
+const warnedSlowRegexPatterns = new Set<string>()
+
+function warnSlowRegexPattern(pattern: string): void {
+  if (isProduction() || warnedSlowRegexPatterns.has(pattern)) return
+  warnedSlowRegexPatterns.add(pattern)
+  console.warn(
+    `[bc-grid] Text filter regex "${pattern}" was ignored because it may be slow. Use a bounded pattern or handle this filter server-side.`,
+  )
+}
+
+function isPotentiallySlowRegex(pattern: string): boolean {
+  if (pattern.length > 256) return true
+  const nestedQuantifier = /\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d*,?\d*\})/
+  const quantifiedAlternation = /\((?:[^()\\]|\\.)*\|(?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d*,?\d*\})/
+  return nestedQuantifier.test(pattern) || quantifiedAlternation.test(pattern)
+}
+
+function fuzzyDistanceFromFilter(filter: ServerColumnFilter): number {
+  const rawDistance = filter.values?.[0]
+  if (typeof rawDistance !== "number" || !Number.isInteger(rawDistance)) return 2
+  return Math.min(10, Math.max(0, rawDistance))
+}
+
+function fuzzyTextMatch(
+  value: string,
+  query: string,
+  caseSensitive: boolean,
+  maxDistance: number,
+): boolean {
+  const haystack = caseSensitive ? value.trim() : value.trim().toLowerCase()
+  const needle = caseSensitive ? query.trim() : query.trim().toLowerCase()
+  if (!needle) return true
+  if (levenshteinWithin(haystack, needle, maxDistance)) return true
+  return haystack
+    .split(/\s+/)
+    .filter(Boolean)
+    .some((token) => levenshteinWithin(token, needle, maxDistance))
+}
+
+function levenshteinWithin(left: string, right: string, maxDistance: number): boolean {
+  if (Math.abs(left.length - right.length) > maxDistance) return false
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index)
+  const current = Array.from({ length: right.length + 1 }, () => 0)
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    current[0] = leftIndex
+    let rowMin = current[0]
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1
+      current[rightIndex] = Math.min(
+        (previous[rightIndex] ?? 0) + 1,
+        (current[rightIndex - 1] ?? 0) + 1,
+        (previous[rightIndex - 1] ?? 0) + substitutionCost,
+      )
+      rowMin = Math.min(rowMin, current[rightIndex] ?? Number.POSITIVE_INFINITY)
+    }
+    if (rowMin > maxDistance) return false
+    for (let index = 0; index < previous.length; index += 1) {
+      previous[index] = current[index] ?? 0
+    }
+  }
+
+  return (previous[right.length] ?? Number.POSITIVE_INFINITY) <= maxDistance
+}
+
+function isProduction(): boolean {
+  return typeof process !== "undefined" && process.env.NODE_ENV === "production"
 }
 
 function parseFormattedBoolean(value: string): boolean | null {
@@ -556,12 +718,29 @@ function resolveDateOperatorRange(
     if (!parts) return null
     return monthRange(parts.year, parts.month)
   }
+  if (filter.op === "mtd") {
+    const parts = isoDateParts(today)
+    if (!parts) return null
+    return { start: monthRange(parts.year, parts.month).start, end: dayToIsoDate(todayDay) }
+  }
   if (filter.op === "last-month") {
     const parts = isoDateParts(today)
     if (!parts) return null
     const lastMonth = addMonths(dayFromParts(parts.year, parts.month, 1), -1)
     const lastParts = isoDateParts(dayToIsoDate(lastMonth))
     return lastParts ? monthRange(lastParts.year, lastParts.month) : null
+  }
+  if (filter.op === "qtd") {
+    const current = fiscalQuarterRange(todayDay, ctx.fiscalCalendar)
+    return current ? { start: current.start, end: dayToIsoDate(todayDay) } : null
+  }
+  if (filter.op === "ytd") {
+    const current = fiscalYearRange(todayDay, ctx.fiscalCalendar)
+    return current ? { start: current.start, end: dayToIsoDate(todayDay) } : null
+  }
+  if (filter.op === "last-fiscal-week") {
+    const thisWeekStart = startOfWeek(todayDay, ctx.weekStartsOn ?? 1)
+    return { start: dayToIsoDate(thisWeekStart - 7), end: dayToIsoDate(thisWeekStart - 1) }
   }
   if (filter.op === "this-fiscal-year") return fiscalYearRange(todayDay, ctx.fiscalCalendar)
   if (filter.op === "last-fiscal-year") {

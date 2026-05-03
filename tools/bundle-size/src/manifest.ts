@@ -32,7 +32,7 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/core",
       bundlePath: "packages/core/dist/index.js",
-      baselineGzipBytes: 2120,
+      baselineGzipBytes: 2284,
     },
     {
       packageName: "@bc-grid/virtualizer",
@@ -47,17 +47,24 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
-      // Bumped 2026-05-03 for v0.5.0 GA cut from 90.38 KiB →
-      // 91.53 KiB. Accepted feature work since alpha.3: prefetch
-      // budget + Server submenu prefetch radio (#428); ERP filter
-      // operators (text not-equals/does-not-contain, date relative
-      // tokens incl. fiscal periods, current-user/team predicates)
-      // (#429); row-state cascade scoping (#430 — :not() guards on
-      // 16 selectors so master row hover doesn't bleed into nested
-      // grids); editor keyboard navigation polish (#431 — Tab skips
-      // non-editable cells + disabled rows). 150 KiB hard cap
-      // unchanged; ~58 KiB headroom for v0.6 + v0.7 + v0.8 work.
-      baselineGzipBytes: 93725,
+      // Bumped 2026-05-04 for v0.6.0-alpha.1 cut from 91.53 KiB →
+      // 103.68 KiB. Accepted feature work since 0.5.0 GA: 3 v0.6
+      // headlines (client tree row model phases 1+2 #447/#449,
+      // fill handle #436, bulk row patch primitive #437); state-
+      // persistence story (scroll-state controlled prop #450, server-
+      // grid actions column #453); spreadsheet flows (fill-handle
+      // series detection #456, editor cell undo/redo #454, row drag-
+      // drop hooks #440); supporting work (bulk-action toolbar #439,
+      // pinned totals row #446, saved-view storage recipe #441,
+      // editor tab wraparound #448, BcSelection narrowing #442,
+      // prepareresult preload select+multi #435); server-perf
+      // hardening (prefetch budget #428, stale-flood test #433,
+      // stale-viewKey gate #434, view-change reset policy #444,
+      // optimistic rollback vs invalidate #445); bsncraft 0.5.0 GA
+      // P0 patches (pinned-right + header overlap #443, in-cell
+      // editor unmount on server grid #451). 150 KiB hard cap
+      // unchanged; ~46 KiB headroom for the rest of v0.6 + v0.7.
+      baselineGzipBytes: 106168,
     },
   ],
 }
