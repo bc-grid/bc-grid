@@ -3706,6 +3706,10 @@ table.bc-grid-detail-nested-grid {
  * on scroll position; the shadows are pseudo-elements on the seam edge
  * cells for each pinned group, including the pinned header/filter
  * corners. They fade in/out on the data-attr toggle.
+ *
+ * `mix-blend-mode: multiply` makes the seam darken the row state below
+ * instead of replacing hover / focused / selected backgrounds with an
+ * opaque strip.
  */
 .bc-grid-cell-pinned-left-edge::after {
   content: "";
@@ -3716,6 +3720,7 @@ table.bc-grid-detail-nested-grid {
   height: 100%;
   pointer-events: none;
   background: linear-gradient(to right, var(--bc-grid-pinned-boundary), transparent);
+  mix-blend-mode: multiply;
   opacity: 0;
   transition: opacity var(--bc-grid-motion-duration-medium) var(--bc-grid-motion-ease-standard);
 }
@@ -3729,6 +3734,7 @@ table.bc-grid-detail-nested-grid {
   height: 100%;
   pointer-events: none;
   background: linear-gradient(to left, var(--bc-grid-pinned-boundary), transparent);
+  mix-blend-mode: multiply;
   opacity: 0;
   transition: opacity var(--bc-grid-motion-duration-medium) var(--bc-grid-motion-ease-standard);
 }
@@ -4255,6 +4261,7 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-cell-pinned-right-edge::before {
     width: 1px;
     background: CanvasText;
+    mix-blend-mode: normal;
     opacity: 1;
   }
 
