@@ -643,6 +643,66 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * toggle.
    */
   showEditorKeyboardHints?: boolean
+
+  /**
+   * Pointer-driven editor activation mode. Keyboard activation
+   * (`F2` / `Enter` / printable / `Backspace` / `Delete`) is
+   * unaffected — this prop controls only mouse-driven entry.
+   *
+   *   - `"double-click"` (default) — today's behaviour; double-click
+   *     on an editable cell opens the editor. Mirrors the AG-Grid
+   *     default and is the right call for table-of-data screens
+   *     where accidental clicks shouldn't enter edit.
+   *   - `"single-click"` — single-click activates edit on editable
+   *     cells. The common pattern for forms-style ERP screens
+   *     (sales-estimating line items, customer-detail edit), where
+   *     the user expects "tap and type" without a second click.
+   *   - `"f2-only"` — pointer never activates edit; keyboard only.
+   *     Right for read-mostly grids where the rare edit is
+   *     deliberately keyboard-driven (compliance, audit, reporting).
+   *
+   * Pairs with `editingEnabled` — when that's `false`, this prop
+   * has no effect (no activation path is open).
+   */
+  editorActivation?: "f2-only" | "single-click" | "double-click"
+
+  /**
+   * Click-outside semantics for the active editor.
+   *
+   *   - `"commit"` (default) — today's behaviour; clicking outside
+   *     the editor commits the current value through the same path
+   *     as Tab / Enter (validate + onCellEditCommit).
+   *   - `"reject"` — clicking outside cancels the edit (mirrors
+   *     Escape). Useful for forms-style ERP screens that want
+   *     explicit Tab/Enter commit and treat blur as cancel.
+   *   - `"ignore"` — clicking outside neither commits nor cancels;
+   *     the editor stays open. The user must explicitly Tab / Enter
+   *     to commit or Escape to cancel. Right for high-stakes edits
+   *     where accidental commits would be costly.
+   *
+   * Threads through `editorPortal.tsx`'s document-level
+   * pointerdown click-outside handler. Keyboard semantics
+   * (Tab/Enter/Escape) are unaffected.
+   */
+  editorBlurAction?: "commit" | "reject" | "ignore"
+
+  /**
+   * When `true`, pressing Escape inside the active editor not only
+   * cancels the active edit but also calls
+   * `editController.discardRowEdits(rowId)` — rolling back every
+   * uncommitted overlay patch on the row, including cells edited
+   * via prior Tab progressions. Defaults to `false` (Esc cancels
+   * only the active editor; prior cell edits stay in the overlay
+   * until explicitly discarded via the BcEditGrid Discard action).
+   *
+   * `<BcEditGrid>` overrides this default to `true` since its action
+   * column already exposes the row-discard surface — the keyboard
+   * shortcut completes the symmetry.
+   *
+   * Audit P1-W3-3 follow-up to #381. Pure additive (no API change
+   * for consumers who don't set the prop).
+   */
+  escDiscardsRow?: boolean
 }
 
 export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {

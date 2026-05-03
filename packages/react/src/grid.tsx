@@ -246,6 +246,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const editingEnabled = props.editingEnabled !== false
   const showValidationMessages = props.showValidationMessages !== false
   const showEditorKeyboardHints = props.showEditorKeyboardHints === true
+  // Pointer-driven editor activation mode. Keyboard activation is
+  // unaffected. Default `"double-click"` preserves today's behaviour.
+  const editorActivation: "f2-only" | "single-click" | "double-click" =
+    props.editorActivation ?? "double-click"
+  const editorBlurAction: "commit" | "reject" | "ignore" = props.editorBlurAction ?? "commit"
+  // Esc-discards-row default: false at BcGrid level (cell-only Esc).
+  // <BcEditGrid> overrides via prop spread to true.
+  const escDiscardsRow = props.escDiscardsRow === true
 
   // The spread preserves all defaultMessages required fields; cast back
   // to the full BcGridMessages shape since `Partial<>` overrides widen
@@ -2678,17 +2686,57 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                           selectionAnchorRef.current = entry.rowId
                         }
                       }
+                      // Single-click activation mode (forms-style ERP screens).
+                      // Default `"double-click"` mode skips this branch; the
+                      // dblclick handler below owns activation. `"f2-only"`
+                      // mode skips both — keyboard-only edits.
+                      if (
+                        editingEnabled &&
+                        editorActivation === "single-click" &&
+                        !disabled &&
+                        !event.shiftKey &&
+                        !event.ctrlKey &&
+                        !event.metaKey
+                      ) {
+                        const target = (event.target as HTMLElement).closest<HTMLElement>(
+                          "[data-column-id]",
+                        )
+                        const columnId = target?.dataset.columnId
+                        if (columnId) {
+                          const column = resolvedColumns.find((c) => c.columnId === columnId)
+                          if (column && isCellEditable(column, entry.row)) {
+                            const editor = (column.source.cellEditor ?? defaultTextEditor) as never
+                            editController.start(
+                              { rowId: entry.rowId, columnId: column.columnId },
+                              "doubleclick",
+                              {
+                                pointerHint: { x: event.clientX, y: event.clientY },
+                                editor,
+                                row: entry.row,
+                                rowId: entry.rowId,
+                              },
+                            )
+                          }
+                        }
+                      }
                       onRowClick?.(entry.row, event)
                     }}
                     onDoubleClick={(event) => {
                       // Activate edit on the cell at the click point if the
                       // column is editable. Falls through to onRowDoubleClick
-                      // either way.
+                      // either way. Skipped in `"f2-only"` and `"single-click"`
+                      // modes — the latter handled the activation on single
+                      // click already.
                       const target = (event.target as HTMLElement).closest<HTMLElement>(
                         "[data-column-id]",
                       )
                       const columnId = target?.dataset.columnId
-                      if (editingEnabled && !disabled && columnId) {
+                      if (
+                        editingEnabled &&
+                        editorActivation === "double-click" &&
+                        !disabled &&
+                        columnId
+                      ) {
                         const column = resolvedColumns.find((c) => c.columnId === columnId)
                         if (column && isCellEditable(column, entry.row)) {
                           const editor = (column.source.cellEditor ?? defaultTextEditor) as never
@@ -2852,6 +2900,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               defaultEditor={defaultTextEditor as never}
               showValidationMessages={showValidationMessages}
               showKeyboardHints={showEditorKeyboardHints}
+              blurAction={editorBlurAction}
+              escDiscardsRow={escDiscardsRow}
             />
 
             {loading ? (
