@@ -188,7 +188,7 @@ Two specific internal-export deletions (none in `tools/api-surface/src/manifest.
 - `headerScrollTransform`, `headerViewportStyle`, `autoHeightHeaderViewportStyle`, `headerRowStyle`, `syncHeaderRowsScroll`, `pinnedTransformValue`, `pinnedLaneStyle` from `gridInternals.ts` exports. They are framework internals exported for cross-module use within `@bc-grid/react`, not part of the public package surface.
 - The `availableGridWidth` state from `grid.tsx:381-395`. Internal; never exposed.
 
-CSS class names on chrome surfaces are preserved: `.bc-grid-header`, `.bc-grid-header-group-row`, `.bc-grid-filter-row`, `.bc-grid-row`, `.bc-grid-cell`, `.bc-grid-cell-pinned-left`, `.bc-grid-cell-pinned-right`, `.bc-grid-canvas`. Consumer style overrides keep working. Two new internal-purpose names (`.bc-grid-viewport` replaces `.bc-grid-scroller`; the legacy name kept as an alias on the same element for one release to absorb consumer overrides) — covered in §10 open question 2.
+CSS class names on chrome surfaces are preserved: `.bc-grid-header`, `.bc-grid-header-group-row`, `.bc-grid-filter-row`, `.bc-grid-row`, `.bc-grid-cell`, `.bc-grid-cell-pinned-left`, `.bc-grid-cell-pinned-right`, `.bc-grid-canvas`. Consumer style overrides keep working. **Per §10 Q2 ratification: `.bc-grid-scroller` is hard-renamed to `.bc-grid-viewport` in PR (a) — no alias.** Consumer style overrides keying off `.bc-grid-scroller` are listed as a v0.6 migration note. The structural element is the same `<div ref={viewportRef}>`; only the class name changes.
 
 ## 7. Performance
 
@@ -255,15 +255,17 @@ Unit + Playwright. Workers write specs; coordinator runs Playwright at merge per
 
 **Perf:** the new horizontal-scroll bench case from §7. Coordinator runs at merge of PR (a).
 
-## 10. Open questions for consumer-testing feedback loop
+## 10. Maintainer ratification (2026-05-03)
 
-1. **Hard-delete vs. one-release deprecation.** `headerScrollTransform`, `pinnedTransformValue`, `headerViewportStyle`, `pinnedLaneStyle` are not in the api-surface manifest, so no public consumer should depend on them. Recommendation: hard-delete; consumers who reach for internals are off-contract and absorb the churn. Open: any internal bsncraft import to verify? (Quick `grep` on the consumer side at merge.)
-2. **Class-name alias `.bc-grid-scroller` → `.bc-grid-viewport`.** The class is documented in the existing theming overrides surface. Recommendation: keep `.bc-grid-scroller` as an alias on the same element for v0.6 only, drop in v0.7. The class is purely a styling hook — the structural element is the same `<div ref={scrollerRef}>`.
-3. **Forced-colors mode interaction with `position: sticky`.** No known browser bug; sticky positioning is rendering-engine-level and forced-colors is paint-level, so they compose. Recommend a Playwright spec under forced-colors anyway (the spec from §9 covers this).
-4. **iOS Safari sticky positioning bugs.** The notorious `<thead>` sticky bug doesn't apply — bc-grid uses `<div>` chrome. The other historical Safari sticky bug (sticky elements inside scrolling containers with `transform` on an ancestor breaking) needs a verification pass: the `rootStyle` (`gridInternals.ts:684-704`) sets `position: relative` on the root; no ancestor transform in the bc-grid tree. Consumer apps that wrap the grid in a transformed ancestor (CSS animations, drawer slide-ins) may see issues — recommend documenting this caveat in the migration notes.
-5. **Legacy mode toggle for one release.** Whether to keep the JS scroll-sync code paths behind a `legacy: true` opt-in for one release in case a consumer's chrome customization depends on the JS-driven coordinate hooks. Recommendation: NO. Clean delete. Consumers who want pixel-tracked scroll position can subscribe to the viewport's `scroll` event directly via the existing `apiRef` (or a new `onViewportScroll` prop if a consumer asks; v0.7 follow-up if needed).
-6. **Sequencing with the in-cell editor mode RFC.** Layout RFC PR (a) lands first so the in-cell editor inherits a stable cell-positioning foundation. The in-cell RFC's PR (a) builds on top of this RFC's PR (a). Both can land in v0.6.0; the dependency is one-way. Recommendation: this RFC's PR (a) → this RFC's PR (b) → in-cell RFC's PR (a) (which can run in parallel with this RFC's PR (c)) → this RFC's PR (c) → in-cell RFC's PRs (b) + (c).
-7. **Aggregation footer row sticky-bottom.** Out of scope for this RFC but a natural follow-up. The footer row at `grid.tsx:3177` becomes a `position: sticky; bottom: 0` row inside the same viewport. Track as v0.7 queue entry.
+Maintainer ratified all 7 open questions in a single planning pass. 6 of 7 carried the coordinator's recommendation; **Q2 lands as hard-rename of `.bc-grid-scroller` → `.bc-grid-viewport` (no alias)** — discussed below.
+
+1. **Hard-delete vs. one-release deprecation of internal scroll-sync helpers?** **RESOLVED — hard-delete.** PR (a) deletes `headerScrollTransform`, `pinnedTransformValue`, `headerViewportStyle`, `autoHeightHeaderViewportStyle`, `headerRowStyle`, `syncHeaderRowsScroll`, `pinnedLaneStyle`, and the per-cell `transform` from `cellStyle` outright. None are in the api-surface manifest; consumers reaching for them are off-contract. bsncraft confirms via `grep` at merge.
+2. **`.bc-grid-scroller` → `.bc-grid-viewport` rename — alias for v0.6 or hard-rename?** **RESOLVED — hard-rename, no alias.** Deviation from the original recommendation. PR (a) drops `.bc-grid-scroller` entirely; consumers update their CSS overrides as part of the v0.6 migration. Document in migration notes alongside the iOS Safari caveat (Q4).
+3. **Forced-colors-mode Playwright spec on PR (a)?** **RESOLVED — yes.** Ship `tests/forced-colors-sticky.pw.ts` with PR (a). Cheap insurance; the layout pass touches surfaces with existing forced-colors fallbacks.
+4. **Document the iOS Safari "sticky inside transformed ancestor breaks" caveat in migration notes?** **RESOLVED — yes.** Add to `docs/migration/v0.6.md` (or equivalent). Bundle with the Q2 hard-rename doc note.
+5. **`legacy: true` opt-in prop retaining JS scroll-sync for one release?** **RESOLVED — no.** Clean delete in PR (a). Consumers who want pixel-tracked scroll subscribe to the viewport's native `scroll` event via `apiRef`; if a real need surfaces, add `onViewportScroll?` as a v0.7 prop.
+6. **Sequencing with the in-cell editor RFC's PRs?** **RESOLVED — layout PR (a) first, in-cell PRs build on top.** Order: layout (a) → layout (b) → in-cell (a) (parallel with layout (c)) → layout (c) → in-cell (b) + (c). The in-cell editor inherits stable sticky-positioned cell coordinates so its mount path is simpler.
+7. **File `v07-aggregation-footer-sticky-bottom` as a v0.7 backlog entry now?** **RESOLVED — yes.** Filed in `docs/queue.md` under v0.7 follow-ups; coordinator picks it up after v0.6 ships.
 
 ## 11. Estimated scope
 
