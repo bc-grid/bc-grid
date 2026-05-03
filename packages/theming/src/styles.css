@@ -215,10 +215,33 @@
   --bc-grid-statusbar-height: 36px;
 }
 
+/*
+ * Header + body rows are 3-track grid containers per worker1/worker2/
+ * worker3 verdict 2026-05-04 (`docs/coordination/pinned-lane-positioning
+ * -decision.md`, all-three-workers Option B). Tracks are LANE-based,
+ * not column-count-based:
+ *
+ *   1: pinned-left lane  (auto-sized from the lane wrapper's inline
+ *      `width: pinnedLeftWidth`)
+ *   2: center area       (`minmax(0, 1fr)` — empty when there are no
+ *      center cells; cells inside are absolute-positioned and don't
+ *      consume the track but the track guarantees the lanes have
+ *      space between them)
+ *   3: pinned-right lane (auto-sized from `width: pinnedRightWidth`)
+ *
+ * Lane wrappers land in their respective tracks via `grid-column: 1`
+ * and `grid-column: 3` below — count-agnostic, works for any consumer
+ * column count. The pre-fix template was 5 hardcoded fr-tracks from
+ * `var(--bc-grid-columns)`, which broke every consumer not on
+ * exactly 5 visible body columns (bsncraft v0.6.0-alpha.1 P0).
+ *
+ * `--bc-grid-columns` is preserved as a token for consumers who want
+ * to override per-grid (rare; documented as escape-hatch only).
+ */
 .bc-grid-header,
 .bc-grid-row {
   display: grid;
-  grid-template-columns: var(--bc-grid-columns);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-width: 45rem;
 }
 
@@ -351,19 +374,22 @@
 }
 
 /*
- * Pinned-lane wrappers (worker1 #415 layout architecture pass). Each
- * lane is `position: sticky` on `left: 0` (left lane) or `right: 0`
- * (right lane) — see `pinnedLaneStyle` in `gridInternals.ts`. The row
- * is `display: grid`, so we must split the grid placement per side
- * or both lanes land at `grid-column: 1` (the start) and visually
- * overlap on the left edge of the row. Bsncraft v0.5.0 GA P0 surfaced
- * this: pinned-right column rendered on the left, overlapping the
- * auto-injected `__bc_detail` column.
+ * Pinned-lane wrappers — Option B from the v0.6.0-alpha.1 P0
+ * decision (`docs/coordination/pinned-lane-positioning-decision.md`,
+ * unanimous worker verdict). Body + header rows use a 3-track template
+ * (`auto minmax(0, 1fr) auto`) so the left lane lands in track 1 and
+ * the right lane lands in track 3 regardless of consumer column count.
  *
- * Fix: pin the left lane to `grid-column: 1 / 2` (first track) and
- * the right lane to `grid-column: -2 / -1` (last track). Sticky
- * positioning then pulls each lane to the visible viewport's
- * left/right edge as the user horizontally scrolls.
+ * The previous fix (#443) used `grid-column: -2 / -1` against a
+ * 5-hardcoded-fr-track template, which broke every consumer not on
+ * exactly 5 visible body columns (bsncraft hit this with their 4-
+ * column AR Customers grid). Option B's lane-based template is
+ * count-agnostic by construction.
+ *
+ * Lane positioning still composes via `position: sticky` from the
+ * inline `pinnedLaneStyle` in `gridInternals.ts` — sticky pulls each
+ * lane to the viewport's edge during horizontal scroll. The grid
+ * placement here is the natural-flow position before sticky engages.
  */
 .bc-grid-pinned-lane {
   grid-row: 1;
@@ -371,12 +397,12 @@
 }
 
 .bc-grid-pinned-lane-left {
-  grid-column: 1 / 2;
+  grid-column: 1;
   justify-self: start;
 }
 
 .bc-grid-pinned-lane-right {
-  grid-column: -2 / -1;
+  grid-column: 3;
   justify-self: end;
 }
 

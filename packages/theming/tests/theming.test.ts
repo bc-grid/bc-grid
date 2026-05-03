@@ -287,24 +287,32 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain("grid-row: 1")
     expect(css).toContain("align-self: start")
 
-    // Bsncraft v0.5.0 GA P0 regression: both pinned lanes used to
-    // share `grid-column: 1 / -1`, so with the row's `display: grid`
-    // they both landed at grid-column 1 (left edge) and visually
-    // overlapped. Per-side placement pins lanes to the first/last
-    // grid track + adds `justify-self` so sticky positioning pulls
-    // each to its viewport edge correctly.
+    // Bsncraft v0.6.0-alpha.1 P0 (2026-05-04): all three workers
+    // ratified Option B from the pinned-lane RFC — body + header rows
+    // use a 3-track LANE-based template (`auto minmax(0, 1fr) auto`)
+    // instead of column-count-based fr-tracks. Left lane → track 1,
+    // right lane → track 3, regardless of consumer column count. The
+    // previous fix (`grid-column: -2 / -1` against 5 hardcoded fr-
+    // tracks) broke every consumer not on exactly 5 columns.
+    expect(css).toMatch(
+      /\.bc-grid-header,\s*\n\.bc-grid-row\s*\{[\s\S]*?grid-template-columns:\s*auto minmax\(0,\s*1fr\)\s*auto/,
+    )
+
     const leftLaneRule = ruleFor(".bc-grid-pinned-lane-left {")
-    expect(leftLaneRule).toContain("grid-column: 1 / 2")
+    expect(leftLaneRule).toMatch(/grid-column:\s*1\s*;/)
     expect(leftLaneRule).toContain("justify-self: start")
 
     const rightLaneRule = ruleFor(".bc-grid-pinned-lane-right {")
-    expect(rightLaneRule).toContain("grid-column: -2 / -1")
+    expect(rightLaneRule).toMatch(/grid-column:\s*3\s*;/)
     expect(rightLaneRule).toContain("justify-self: end")
 
-    // The shared `.bc-grid-pinned-lane` rule no longer carries a
-    // `grid-column: 1 / -1` directive (which would be fought against
-    // the per-side overrides via specificity ties). Per-side rules
-    // own the placement; the shared rule keeps grid-row + align-self.
+    // The pre-fix `1 / 2` and `-2 / -1` directives must be gone —
+    // they were the count-dependent shape that broke bsncraft.
+    expect(leftLaneRule).not.toContain("1 / 2")
+    expect(rightLaneRule).not.toContain("-2 / -1")
+
+    // The shared `.bc-grid-pinned-lane` rule keeps grid-row + align-self
+    // — common across both sides; per-side rules own the column placement.
     const sharedLaneRule = ruleFor(".bc-grid-pinned-lane {")
     expect(sharedLaneRule).not.toContain("grid-column: 1 / -1")
 
