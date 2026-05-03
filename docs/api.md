@@ -152,6 +152,14 @@ export interface BcGridColumn<TRow, TValue = unknown> {
   valueParser?: (input: string, row: TRow) => TValue
 
   /**
+   * Fill-handle series hint. Omit for automatic detection, `"literal"` to
+   * force copy semantics, `"linear"` / `"exponential"` / `"weekday"` /
+   * `"month"` for a built-in strategy, or pass a resolver that maps the
+   * selected source cells to the projected fill cells.
+   */
+  fillSeries?: BcFillSeries
+
+  /**
    * Preset formatter. Equivalent to writing a `valueFormatter` by hand for
    * common cases. The preset list is below in §4.2.
    * If both `format` and `valueFormatter` are set, `valueFormatter` wins.
@@ -228,6 +236,28 @@ export interface SetFilterOptionLoadResult {
 export type SetFilterOptionProvider = (
   params: SetFilterOptionLoadParams,
 ) => Promise<SetFilterOptionLoadResult>
+
+export type BcFillSeriesPreset = "literal" | "linear" | "exponential" | "weekday" | "month"
+
+export interface BcFillSeriesSourceCell {
+  position: BcCellPosition
+  rowIndex: number
+  columnIndex: number
+  value: unknown
+}
+
+export interface BcFillSeriesTargetCell {
+  position: BcCellPosition
+  rowIndex: number
+  columnIndex: number
+}
+
+export type BcFillSeriesResolver = (
+  sourceCells: readonly BcFillSeriesSourceCell[],
+  fillCells: readonly BcFillSeriesTargetCell[],
+) => readonly unknown[]
+
+export type BcFillSeries = BcFillSeriesPreset | BcFillSeriesResolver
 
 export type BcColumnFilter =
   | {
@@ -799,9 +829,6 @@ export interface BcRangeSelectionOptions {
 
 The `BcSelection` shape mirrors `ServerSelection` from `server-query-rfc` so that client-side selection and server-side selection share one type. Bulk-operation handlers (delete-selected, export-selected) consume the same snapshot regardless of mode.
 
-<<<<<<< HEAD
-Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `normaliseRange`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React renders the active range overlay, clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`), paste applies through the same edit overlay path, and the active range shows a drag fill handle by default. Set `rangeSelectionOptions={false}` or `{ fillHandle: false }` to hide the fill handle.
-=======
 **Selection narrowing helpers** exported from `@bc-grid/core` (re-exported from `@bc-grid/react` — v0.6 §1):
 
 ```ts
@@ -839,8 +866,7 @@ forEachSelectedRowId(selection, visibleRowIds, (rowId) => {
 await apiRef.current?.applyRowPatches(patches) // see docs/recipes/bulk-row-patch.md
 ```
 
-Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `normaliseRange`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React renders a pointer-inert active range overlay and clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`); paste and fill handle behavior remain separate Track 2 implementation tasks.
->>>>>>> origin/main
+Range-selection engine helpers exported from `@bc-grid/core`: `emptyBcRangeSelection`, `newRangeAt`, `normaliseRange`, `expandRangeTo`, `rangeContains`, `rangesContain`, `rangeBounds`, `rangePointerDown`, `rangePointerMove`, `rangePointerUp`, `rangeKeydown`, `rangeSelectAll`, `rangeClear`, `serializeRangeSelection`, and `parseRangeSelection`. These are pure state-machine helpers. React renders a pointer-inert active range overlay, clipboard copy consumes the active range to write TSV (`text/plain`) and table HTML (`text/html`), paste applies through the same edit overlay path, and the active range shows a series-aware drag fill handle by default. Set `rangeSelectionOptions={false}` or `{ fillHandle: false }` to hide the fill handle.
 
 Controlled-state callbacks use React's `onXChange` naming, not AG Grid's `onXChanged` naming, because they are the setter pair for the controlled prop. Domain events that are not controlled-state setters use verb/event names (`onCellEditCommit`, `onRowClick`, `onServerError`).
 
@@ -2819,7 +2845,7 @@ Re-stated from `design.md §9` and confirmed here:
 3. **`groupableColumns` redundancy with `groupable: true` per column**: the per-column `groupable` is the source of truth; `groupableColumns` (in `BcGridProps`) is reserved if/when we want UI-side filtering of which groupables appear in the dropdown. **Decision:** keep both; `groupableColumns` defaults to `columns.filter(c => c.groupable)`.
 4. **Locale sources of truth**: grid `locale` prop vs `view.locale` (in `ServerViewState`) — for client grids, `BcGridProps.locale` is canonical. For server grids, `view.locale` is what the server sees; the grid copies the prop into the view state.
 5. **`onCellEditCommit` event timing**: pre-commit (with cancel option) or post-commit only? **Decision:** post-commit only. Pre-commit validation is `column.validate`; cancelled edits do not emit `onCellEditCommit`.
-6. **`BcRange` (range selection)**: declared in `core` for Q3. Does the v0.1 surface need to mention it at all? **Answer:** Track 2 unblocked the core state machine: `BcRangeSelection` and pure range helpers are exported from `@bc-grid/core`. React renders the active range overlay, clipboard paste, and literal-repeat fill handle.
+6. **`BcRange` (range selection)**: declared in `core` for Q3. Does the v0.1 surface need to mention it at all? **Answer:** Track 2 unblocked the core state machine: `BcRangeSelection` and pure range helpers are exported from `@bc-grid/core`. React renders the active range overlay, clipboard paste, and series-aware fill handle.
 7. **i18n message keys**: which strings are localizable at v0.1? **Proposal:** `BcGridMessages` covers loading state, no-rows, search placeholder, page-size label, group-by label, action-column label, action-menu items, sort-direction labels, accessibility live-region templates from `accessibility-rfc §Live Regions`.
 
 ---

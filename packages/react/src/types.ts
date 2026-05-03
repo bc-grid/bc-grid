@@ -402,6 +402,28 @@ export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
   locale?: string | undefined
 }
 
+export type BcFillSeriesPreset = "literal" | "linear" | "exponential" | "weekday" | "month"
+
+export interface BcFillSeriesSourceCell {
+  position: BcCellPosition
+  rowIndex: number
+  columnIndex: number
+  value: unknown
+}
+
+export interface BcFillSeriesTargetCell {
+  position: BcCellPosition
+  rowIndex: number
+  columnIndex: number
+}
+
+export type BcFillSeriesResolver = (
+  sourceCells: readonly BcFillSeriesSourceCell[],
+  fillCells: readonly BcFillSeriesTargetCell[],
+) => readonly unknown[]
+
+export type BcFillSeries = BcFillSeriesPreset | BcFillSeriesResolver
+
 export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
   BcCoreGridColumn<TRow, TValue>,
   "header"
@@ -418,6 +440,12 @@ export type BcReactGridColumn<TRow, TValue = unknown> = Omit<
   cellStyle?:
     | CSSProperties
     | ((params: BcCellRendererParams<TRow, TValue>) => CSSProperties | undefined)
+  /**
+   * Spreadsheet fill-handle series hint for this column. Omit for automatic
+   * detection, `"literal"` to force copy semantics, or provide a resolver
+   * that maps the selected source cells to the projected fill cells.
+   */
+  fillSeries?: BcFillSeries
   /**
    * Opt this column out of the built-in header menu while leaving the grid
    * level `showColumnMenu` setting enabled for other columns.

@@ -169,7 +169,7 @@ import {
   normaliseClipboardPayload,
   writeClipboardPayload,
 } from "./rangeClipboard"
-import { type RangeFillProjection, buildLiteralRangeFillTsv, projectRangeFill } from "./rangeFill"
+import { type RangeFillProjection, buildRangeFillTsv, projectRangeFill } from "./rangeFill"
 import {
   createRangeInteractionModel,
   shouldClearRangeSelectionForModelChange,
@@ -910,7 +910,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // skips client tree just like it skips client grouping — the host
   // owns row membership in manual mode.
   const treeModeActive = !isManualRowProcessing && !!props.treeData && groupByState.length === 0
-  // biome-ignore lint/correctness/useExhaustiveDependencies: groupByState.length signals the collision toggle
   useEffect(() => {
     if (props.treeData && groupByState.length > 0) {
       console.warn(
@@ -2227,11 +2226,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         return
       }
 
-      const tsv = buildLiteralRangeFillTsv({
+      const tsv = buildRangeFillTsv({
         projection,
         columns: resolvedColumns,
         rowIds: rangeRowIds,
         getSourceValue: getRangeFillSourceValue,
+        locale,
       })
       const applyResult = await buildRangeTsvPasteApplyPlan({
         range: projection.fillRange,
@@ -2261,6 +2261,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       editController,
       getRangeFillSourceValue,
       isRowDisabled,
+      locale,
       messages,
       rangeRowIds,
       resolvedColumns,
