@@ -32,23 +32,9 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
 - ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
 
-### Active now → `v05-context-menu-server-toggles` (your context-menu implementation lane, ~40-60 min)
+### Active now → `v05-server-mode-switch` (RFC ratified, structural alpha.2 fix, multi-session)
 
-**Bundle-1 (#391) is shipped.** The next active task is the context-menu server-side toggles. The maintainer's vision is "vanilla grid by default + everything toggleable from right-click + consumer-supplied persistence API"; the RFC at `docs/design/vanilla-and-context-menu-rfc.md` (#392) ratified the architecture (note the 10 open questions in §9 — until those resolve, use placeholder field names + TODO comments for the persistence shape; coordinator will sweep through and update on RFC ratification).
-
-**Server-side toggles (each as a context-menu item wired to existing behavior):**
-
-1. **Pagination chrome toggle** — currently `paginationMode` controls "client" vs "manual"; pagination chrome (`<BcPagination>`) appears unconditionally if pageSize is set. Add a context-menu toggle: View → "Show pagination" so consumers can hide the chrome without unmounting the prop.
-2. **Server tree expand-all / collapse-all** — for `useServerTreeGrid` consumers, add a context-menu action under "Customize" → Server: "Expand all visible groups" / "Collapse all groups". Wire through the `useServerTreeGrid` actions.
-3. **Prefetch budget submenu** — bundle-1 (#391) shipped the `prefetchAhead?` knob; now expose it as a context-menu submenu: Server → Prefetch → 0 / 1 (default) / 2 / 3 blocks ahead. User-adjustable per-grid.
-
-(The "Server pagination mode" toggle originally listed here has been pulled — that scope is now subsumed by `v05-server-mode-switch` below.)
-
-The persistence shape will be pinned by the RFC's `BcUserSettings` spec. Until RFC ratifies, store toggles in memory + accept a `userSettings` prop as a placeholder that coordinator will harmonize.
-
-**Branch:** `agent/worker1/v05-context-menu-server-toggles`. **Effort:** ~30-45 min (3 items).
-
-### Next after context-menu lane → `v05-server-mode-switch` (NEW v0.5 commitment, structural fix, multi-session)
+**Context-menu server-toggles shipped as #394** (showPagination prop + useServerTreeGrid expandAllGroups/collapseAllGroups actions). Items 3 + 4 from the original task were deferred: prefetch submenu now plugs into `BcContextMenuSubmenuItem` from worker2's #396; mode-toggle is subsumed by this active task.
 
 **Maintainer call (2026-05-03):** "this should have been day-1 functionality when server mode + grouping was supported." Land in v0.5.0.
 
@@ -64,7 +50,7 @@ The persistence shape will be pinned by the RFC's `BcUserSettings` spec. Until R
 
 **Effort:** 18-25h, single PR. Split if >1500 LOC of net diff: structural change first (alpha.2), polymorphic hook second (alpha.3 / GA — that part is your alpha.3 lane, not this PR).
 
-**Gating:** finish the context-menu server-toggles lane above first. After that PR ships, you can branch from main onto `agent/worker1/v05-server-mode-switch` and start. The carry-over contract (§4) is the load-bearing section; read it twice.
+**Gating:** none — context-menu server-toggles already shipped (#394). Branch from current main onto `agent/worker1/v05-server-mode-switch` and start. The carry-over contract (§4) is the load-bearing section; read it twice.
 
 **Branch (when ready):** `agent/worker1/v05-server-mode-switch`. **Effort:** structural change spanning `packages/server-row-model/src/index.ts`, `packages/react/src/serverGrid.tsx`, all three turnkey hooks, plus tests and Playwright spec — likely 2-3 worker sessions, broken into stages per the RFC.
 

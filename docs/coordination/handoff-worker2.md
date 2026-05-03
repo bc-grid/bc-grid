@@ -35,27 +35,16 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
-### Active now → `v05-context-menu-chrome-bundle-1` (your context-menu implementation lane, half 1 of 2, ~30-40 min)
+### Active now → `v05-context-menu-chrome-bundle-2` (half 2 of 2, ~30-40 min)
 
-**Bundle-1 (#393) is shipped** (active filter chip strip + group selection algebra basic + blank/not-blank operators). The next active task is the context-menu chrome toggles. The maintainer's vision is "vanilla grid by default + everything toggleable from right-click + consumer-supplied persistence API"; the RFC at `docs/design/vanilla-and-context-menu-rfc.md` (#392) ratified the architecture (note the 10 open questions in §9 — until those resolve, use placeholder field names + TODO comments for the persistence shape; coordinator will sweep through and update on RFC ratification).
+**Bundle-1 shipped as #396** (filter row toggle, sidebar toggle, status bar toggle, filters panel action — plus you delivered `BcContextMenuSubmenuItem` + `BcContextMenuToggleItem` primitives + `BcUserSettings` / `BcUserColumnSettings` / `BcUserSettingsStore` types in the public surface that worker1's #394 was deferring to). Bundle-2 picks up where bundle-1 left off.
 
-**Items in this PR — toggle category "View" + "Filter" (~30-40 min):**
-
-1. **Filter row toggle** — context-menu item View → "Show filter row" (checkbox affordance). Wires through to `BcGridProps.filterRow` (today: defaults `true`, becomes default `false` in vanilla mode per RFC §3).
-2. **Sidebar toggle** — context-menu item View → "Show sidebar" + a submenu when shown: which panel is open (Columns / Filters / Pivot).
-3. **Status bar toggle** — context-menu item View → "Show status bar" (checkbox).
-4. **Filters panel toggle** — context-menu item Filter → "Open Filters panel" (action; routes to sidebar with filters panel selected).
-
-Each toggle reads + writes via the new `BcUserSettings` shape (RFC will pin the exact field names). Until RFC ratifies, use placeholder field names + flag the spots in TODO comments for coordinator to update on RFC ratification.
-
-**Branch:** `agent/worker2/v05-context-menu-chrome-bundle-1`. **Effort:** ~30-40 min.
-
-### After bundle-1 ships → `v05-context-menu-chrome-bundle-2` (half 2 of 2, ~30-40 min)
+**Items in this PR (~30-40 min):**
 
 5. **Density toggle** — context-menu item View → Density → Compact / Normal / Comfortable (radio group). Wires to the existing `data-density` attribute that the theming layer already styles for.
 6. **Group-by menu** — context-menu item Group → "Group by this column" (only on header context — needs column id from event target). Toggle current column in/out of `groupBy[]`.
 7. **Pin column menu** — context-menu item Pin → "Pin left" / "Pin right" / "Unpin" (on header context).
-8. **Active filter chip strip toggle** — bundle-1 (#393) shipped the chip strip; now add a View → "Show active filters" toggle so users can hide it.
+8. **Active filter chip strip toggle** — #393 shipped the chip strip; now add a View → "Show active filters" toggle so users can hide it.
 
 **Branch:** `agent/worker2/v05-context-menu-chrome-bundle-2`. **Effort:** ~30-40 min.
 

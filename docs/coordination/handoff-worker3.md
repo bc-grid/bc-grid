@@ -38,26 +38,9 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 - ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
 
-### Active now → `v05-context-menu-editor-toggles` (your context-menu implementation lane, ~40-60 min)
+### Active now → `v05-editor-portal-polish-bundle-1` (3 items, ~60-90 min total)
 
-**Bundle-1 (#390) is shipped** (locale parser + multi-Enter fix + clear-rejection toast). The next active task is the context-menu editor toggles.
-
-The maintainer's vision is "vanilla grid by default + everything toggleable from right-click + consumer-supplied persistence API." The RFC at `docs/design/vanilla-and-context-menu-rfc.md` (#392, merged) ratified the architecture (note the 10 open questions in §9 — until those resolve, use placeholder field names + TODO comments for the persistence shape; coordinator will sweep through and update on RFC ratification).
-
-**Items in your lane:**
-
-1. **Edit mode toggle** — context-menu item Editor → "Edit mode" (checkbox: read-only vs editable). When off, the grid behaves as a `<BcGrid>` (no edit affordance, no `<BcEditGrid>` chrome). When on, the grid behaves as `<BcEditGrid>`. Wires through a new `editingEnabled` controlled prop that flips the underlying composition. RFC will pin the prop name.
-2. **Per-column editable toggle** — context-menu item on a header → Editor → "Allow edits in this column" (checkbox). Sets a per-column override that takes precedence over the grid-level edit mode. Persists in `BcUserSettings.columnSettings[columnId].editable`.
-3. **Show validation messages inline toggle** — context-menu item View → "Show validation messages" (checkbox). When off, validation still runs (cells still mark as `aria-invalid`) but the visible popover from #356 is suppressed. Useful for read-only views or for users who want a less noisy edit experience.
-4. **Editor keyboard hints toggle** — context-menu item Editor → "Show keyboard hints" (checkbox). When on, editor inputs render a subtle "F2 / Enter / Esc / Tab" caption at the bottom of the popover for new users. Off by default.
-
-The persistence shape will be defined in the RFC's `BcUserSettings` spec. Wait for the RFC to ratify before final wiring; until then, store toggles in memory + accept a `userSettings` prop that the coordinator will define.
-
-**Branch:** `agent/worker3/v05-context-menu-editor-toggles`. **Effort:** ~40-60 min.
-
-### Next after #395 ships → `v05-editor-portal-polish-bundle-1` (3 items, ~60-90 min total)
-
-Three editor-portal items that ride on the toggle props you just shipped (#395). Each is independent; bundle them into one PR.
+**Editor-toggle props shipped as #395** (`editingEnabled` / `showValidationMessages` / `showEditorKeyboardHints` props + `EditorKeyboardHints` component). Three editor-portal items now ride on top of those props. Each is independent; bundle them into one PR.
 
 1. **Editor activation modes prop** — `editorActivation?: "f2-only" | "single-click" | "double-click"` on `BcGridProps` (default unchanged: `"f2-only"`). Single-click activation is the common ERP pattern for forms-style data entry; double-click is the AG-Grid-default. Wires into the cell click handler in `grid.tsx`. Add unit tests for each mode + an integration test in `editorPortal.test.tsx`.
 2. **Editor blur semantics prop** — `editorBlurAction?: "commit" | "reject" | "ignore"` on `BcGridProps` (default unchanged: `"commit"`). For forms-style ERP screens that want explicit Tab/Enter commit and treat blur as cancel. Threads through `editorPortal.tsx`'s click-outside handler.
