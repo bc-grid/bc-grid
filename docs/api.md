@@ -46,6 +46,7 @@ The examples app keeps the main AR Customers demo non-intrusive: sidebar/tool pa
 | Context menu | Available | Right-click grid cells | `contextMenuItems`, `showColumnMenu` |
 | Cell editing | Available | `?edit=1` | `<BcEditGrid>`, `cellEditor` |
 | Checkbox selection | Available | `?checkbox=1` | `checkboxSelection` |
+| Bulk actions | Available | Recipe | `bulkActions` |
 | URL state persistence | Available | `?urlstate=1` | `gridId`, `urlStatePersistence` |
 | Pagination | Available | `?pagination=1` | `pagination`, `pageSizeOptions` |
 | Aggregations | Available | `?aggregations=1` | `aggregation`, `statusBar` |
@@ -1441,6 +1442,12 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   // Slots
   toolbar?: React.ReactNode
+  /**
+   * Row-selection bulk action bar. The grid renders the selected-count
+   * label, clear-selection button, and themed bar surface; the slot
+   * supplies domain actions.
+   */
+  bulkActions?: React.ReactNode | ((ctx: BcBulkActionsContext) => React.ReactNode)
   footer?: React.ReactNode
   /**
    * Footer status-bar segments rendered below the body and above any
@@ -1670,6 +1677,24 @@ and swap compact empty/loading/error content in place.
   )}
 />
 ```
+
+The `bulkActions` slot appears above the toolbar whenever
+`selectedRowCount > 0`. The grid supplies the bar surface, selection count, and
+clear-selection button; the slot supplies the domain actions. The render
+function receives:
+
+```ts
+interface BcBulkActionsContext {
+  selectedRowIds: readonly RowId[]
+  selectedRowCount: number
+  clearSelection(): void
+}
+```
+
+`selectedRowIds` is resolved against rows currently known to the client grid.
+For server-wide select-all operations over unloaded rows, keep the controlled
+`selection` snapshot and send that descriptor to the server. The full recipe is
+in `docs/recipes/bulk-actions.md`.
 
 The `statusBar` slot accepts an array of segment descriptors. Built-in IDs hide
 themselves when their content is irrelevant: `filtered` only appears once a

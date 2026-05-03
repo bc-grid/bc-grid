@@ -333,6 +333,18 @@ export type BcStatusBarSegment<TRow = unknown> =
   | "latestError"
   | BcStatusBarCustomSegment<TRow>
 
+export interface BcBulkActionsContext {
+  /**
+   * Selected row IDs resolved against rows currently known to this
+   * client grid. For explicit selection this is the selected set; for
+   * all/filtered selection modes it is the known row population minus
+   * `selection.except`.
+   */
+  selectedRowIds: readonly RowId[]
+  selectedRowCount: number
+  clearSelection(): void
+}
+
 export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
   value: unknown
   formattedValue: string
@@ -710,6 +722,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   rowIsDisabled?: (row: TRow) => boolean
 
   toolbar?: ReactNode
+  /**
+   * Consumer-owned action slot rendered as a grid-supplied bulk-actions
+   * bar whenever one or more rows are selected. The grid owns the bar,
+   * selected-count label, and clear-selection button; the slot supplies
+   * domain actions such as "Mark paid", "Move to folder", or "Delete".
+   */
+  bulkActions?: ReactNode | ((ctx: BcBulkActionsContext) => ReactNode)
   footer?: ReactNode
   /**
    * Footer status bar segments rendered below the body, above any
