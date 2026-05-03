@@ -14,7 +14,18 @@
   --bc-grid-input-border: var(--input, var(--bc-grid-border));
   --bc-grid-muted: var(--muted, hsl(210 40% 96%));
   --bc-grid-muted-fg: var(--muted-foreground, hsl(215 16% 47%));
-  --bc-grid-row-hover: color-mix(in srgb, var(--accent, hsl(210 40% 96%)) 70%, transparent);
+  /* Opaque hover token: body cells paint via `background: var(...)`
+     shorthand which clears the cell's resting `background-color`. If
+     the token were partly transparent (the pre-2026-05-03 shape), the
+     30% transparent portion would composite against whatever's behind
+     the row — which is generally `--bc-grid-bg` but can drift in
+     consumer integrations with non-trivial layered backgrounds.
+     Pinned cells layer the same token via `background-image:
+     linear-gradient(<token>, <token>)` over their opaque base, so an
+     opaque hover token is the only shape that produces byte-identical
+     pixels for body and pinned in every consumer host. Surfaced by
+     bsncraft 2026-05 P0 #1 + #3. */
+  --bc-grid-row-hover: color-mix(in srgb, var(--accent, hsl(210 40% 96%)) 70%, var(--bc-grid-bg));
   --bc-grid-row-border: color-mix(in srgb, var(--bc-grid-border) 82%, transparent);
   --bc-grid-row-selected: var(--accent, hsl(210 40% 96%));
   --bc-grid-row-selected-fg: var(--accent-foreground, var(--bc-grid-fg));

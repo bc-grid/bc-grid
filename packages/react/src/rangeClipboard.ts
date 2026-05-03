@@ -738,7 +738,8 @@ function escapeHtml(value: string): string {
 function isRangePasteCellEditable<TRow>(column: ResolvedColumn<TRow>, row: TRow): boolean {
   const editable = column.source.editable
   if (typeof editable === "function") return editable(row)
-  return editable === true
+  if (typeof editable === "boolean") return editable
+  return column.source.cellEditor != null
 }
 
 function parseRangePasteValue<TRow>(

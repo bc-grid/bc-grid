@@ -3792,15 +3792,25 @@ function isEditableKeyTarget(target: EventTarget | null): boolean {
 
 /**
  * Activation guard per `editing-rfc §Activation guards`. The column may
- * declare `editable` as a boolean or a row-fn; default false (read-only).
+ * declare `editable` as a boolean or a row-fn. When `editable` is
+ * undefined the default is `cellEditor != null` so a column that ships
+ * a custom `cellEditor` is editable out of the box (bsncraft 2026-05
+ * P1 #10: silent no-op when `cellEditor` was set without `editable`
+ * was a discoverability trap). Set `editable: false` to opt out.
  */
 function isCellEditable<TRow>(
-  column: { source: { editable?: boolean | ((row: TRow) => boolean) } },
+  column: {
+    source: {
+      editable?: boolean | ((row: TRow) => boolean)
+      cellEditor?: unknown
+    }
+  },
   row: TRow,
 ): boolean {
   const editable = column.source.editable
   if (typeof editable === "function") return editable(row)
-  return editable === true
+  if (typeof editable === "boolean") return editable
+  return column.source.cellEditor != null
 }
 
 /**
