@@ -277,6 +277,22 @@ export function EditorMount<TRow>({
   const scrollOutCancelRef = useRef(cancel)
   scrollOutCancelRef.current = cancel
 
+  // Stable refs for the row + column + initialValue values used inside
+  // the cleanup. Without these, putting `rowEntry.row`, `column.source`,
+  // and `initialValue` in the effect's dep array would re-fire the
+  // effect every render where any of those references changes — which
+  // happens on every server-grid re-fetch (new row object refs even for
+  // unchanged data) and would trigger a spurious scroll-out commit +
+  // unmount loop. Bsncraft v0.5.0 GA P0 — in-cell editors immediately
+  // unmounted on `<BcServerGrid>` because of this. The cleanup reads
+  // from refs at cleanup time so it always sees the latest values.
+  const cleanupRowRef = useRef(rowEntry.row)
+  cleanupRowRef.current = rowEntry.row
+  const cleanupColumnSourceRef = useRef(column.source)
+  cleanupColumnSourceRef.current = column.source
+  const cleanupInitialValueRef = useRef(initialValue)
+  cleanupInitialValueRef.current = initialValue
+
   // Move DOM focus to the editor's `focusRef` after mount, then dispatch
   // `mounted` to advance the state machine to Editing. Cleanup releases
   // the focus back to the grid root via `unmounted`.
@@ -327,11 +343,11 @@ export function EditorMount<TRow>({
               )
               commitFn({
                 rowId: cell.rowId,
-                row: rowEntry.row,
+                row: cleanupRowRef.current,
                 columnId: cell.columnId,
-                column: column.source,
+                column: cleanupColumnSourceRef.current,
                 value,
-                previousValue: initialValue,
+                previousValue: cleanupInitialValueRef.current,
               })
             }
           }
@@ -340,6 +356,13 @@ export function EditorMount<TRow>({
 
       dispatchUnmounted()
     }
+    // Bsncraft v0.5.0 GA P0: removed `rowEntry.row`, `column.source`,
+    // `initialValue` from the dep array. Those values change on every
+    // server-grid re-fetch and would re-fire the effect's cleanup,
+    // triggering a spurious scroll-out commit + unmount of the active
+    // in-cell editor. The cleanup now reads them from refs at cleanup
+    // time so it sees the latest values without forcing the effect
+    // to re-run.
   }, [
     dispatchMounted,
     dispatchUnmounted,
@@ -351,9 +374,6 @@ export function EditorMount<TRow>({
     getEditMode,
     cell.rowId,
     cell.columnId,
-    rowEntry.row,
-    column.source,
-    initialValue,
   ])
 
   const handleCommit = (
