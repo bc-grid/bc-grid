@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import type { BcGridFilter } from "@bc-grid/core"
 import { renderToStaticMarkup } from "react-dom/server"
 import { BcGrid } from "../src/grid"
 import type { BcGridColumn, BcGridProps, BcUserSettings, BcUserSettingsStore } from "../src/types"
@@ -19,6 +20,13 @@ const columns: readonly BcGridColumn<Row>[] = [
 ]
 
 const rows: readonly Row[] = [{ id: "1", name: "Acme" }]
+const activeNameFilter = {
+  kind: "column",
+  columnId: "name",
+  type: "text",
+  op: "contains",
+  value: "Acme",
+} satisfies BcGridFilter
 
 function settingsStore(settings: BcUserSettings): BcUserSettingsStore {
   return {
@@ -93,5 +101,32 @@ describe("BcGrid userSettings visibility bridge", () => {
     })
     expect(shown).toContain('class="bc-grid-statusbar"')
     expect(shown).toContain('data-segment="total"')
+  })
+
+  test("visible.activeFilterSummary gates the status-bar filter chip strip", () => {
+    const hidden = renderGrid({
+      defaultFilter: activeNameFilter,
+      userSettings: settingsStore({ version: 1, visible: { activeFilterSummary: false } }),
+    })
+    expect(hidden).not.toContain('data-segment="activeFilters"')
+
+    const shown = renderGrid({
+      defaultFilter: activeNameFilter,
+      userSettings: settingsStore({ version: 1, visible: { activeFilterSummary: true } }),
+    })
+    expect(shown).toContain('data-segment="activeFilters"')
+  })
+
+  test("density setting applies when no density prop override is supplied", () => {
+    const fromSettings = renderGrid({
+      userSettings: settingsStore({ version: 1, density: "comfortable" }),
+    })
+    expect(fromSettings).toContain('data-density="comfortable"')
+
+    const propOverride = renderGrid({
+      density: "compact",
+      userSettings: settingsStore({ version: 1, density: "comfortable" }),
+    })
+    expect(propOverride).toContain('data-density="compact"')
   })
 })

@@ -40,7 +40,7 @@ export interface BcGridContextMenuProps<TRow> {
   clearSelection: () => void
   onClose: () => void
   resolvedColumns: readonly ResolvedColumn<TRow>[]
-  rowId: RowId
+  rowId?: RowId | undefined
   rowsById: ReadonlyMap<RowId, RowEntry<TRow>>
   selection: BcSelection
 }
@@ -61,13 +61,14 @@ export function BcGridContextMenu<TRow>({
   const menuId = useId()
   const menuRef = useRef<HTMLDivElement | null>(null)
   const context = useMemo<BcContextMenuContext<TRow>>(() => {
-    const entry = rowsById.get(rowId)
+    const entry = rowId != null ? rowsById.get(rowId) : undefined
     return {
       api,
-      cell: columnId ? { rowId, columnId } : null,
+      cell: rowId != null && columnId ? { rowId, columnId } : null,
       column: columnId
         ? (resolvedColumns.find((candidate) => candidate.columnId === columnId)?.source ?? null)
         : null,
+      columnId,
       row: entry?.kind === "data" ? entry.row : null,
       selection,
     }
@@ -160,11 +161,11 @@ export function BcGridContextMenu<TRow>({
     } else if (item === "clear-all-filters") {
       api.clearFilter()
     } else if (item === "clear-column-filter") {
-      // Disabled-state predicate guards on `context.cell` already, but
+      // Disabled-state predicate guards on `context.columnId` already, but
       // the dispatch path checks again because activate() runs after
       // the disabled predicate may have changed (e.g., a custom item
       // mutating filter state on the same click).
-      if (context.cell) api.clearFilter(context.cell.columnId)
+      if (context.columnId) api.clearFilter(context.columnId)
     } else if (
       item === "pin-column-left" ||
       item === "pin-column-right" ||
@@ -172,7 +173,7 @@ export function BcGridContextMenu<TRow>({
       item === "hide-column" ||
       item === "autosize-column"
     ) {
-      const targetColumnId = context.cell?.columnId
+      const targetColumnId = context.columnId
       if (targetColumnId) dispatchColumnCommand(api, item, targetColumnId)
     } else if (item === "show-all-columns") {
       // Bulk show: collapse every hidden flag to false in a single
@@ -243,6 +244,7 @@ export function BcGridContextMenu<TRow>({
     }
 
     if (isContextMenuToggleItem(item)) {
+      const selectionProps = item.selection ? { selection: item.selection } : {}
       return (
         <BcGridMenuToggleItem
           active={active}
@@ -251,6 +253,7 @@ export function BcGridContextMenu<TRow>({
           id={nested ? undefined : `${menuId}-item-${index}`}
           key={key}
           label={label}
+          {...selectionProps}
           onClick={(event) => event.stopPropagation()}
           onActivate={() => activate(item)}
           onMouseEnter={() => {

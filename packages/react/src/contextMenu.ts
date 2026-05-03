@@ -141,8 +141,8 @@ export function contextMenuItemDisabled<TRow>(
     // Disabled when there's no right-click cell context (the user
     // triggered the menu via Shift+F10 with no active cell, say) OR
     // when the active cell's column has no filter entry to clear.
-    if (!context.cell) return true
-    return !filterHasColumn(context.api.getFilter(), context.cell.columnId)
+    if (!context.columnId) return true
+    return !filterHasColumn(context.api.getFilter(), context.columnId)
   }
   if (
     item === "pin-column-left" ||
@@ -195,7 +195,7 @@ function columnCommandEnabled<TRow>(
   // All five column commands need a column-bound trigger context. Header
   // / cell / filter-row right-clicks supply `context.column`; Shift+F10
   // with no active cell does not.
-  const targetColumnId = context.cell?.columnId ?? null
+  const targetColumnId = context.columnId ?? null
   if (!context.column || !targetColumnId) return false
   const columnState = context.api.getColumnState()
   const entry = columnState.find((row) => row.columnId === targetColumnId)

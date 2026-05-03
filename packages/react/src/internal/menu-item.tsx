@@ -65,6 +65,7 @@ export interface BcGridMenuToggleItemProps
   extends Omit<MenuItemBaseProps, "leading">,
     Omit<HTMLAttributes<HTMLDivElement>, "role" | "aria-disabled" | "aria-checked" | "children"> {
   checked: boolean
+  selection?: "checkbox" | "radio"
   onActivate?: () => void
 }
 
@@ -73,6 +74,7 @@ export function BcGridMenuToggleItem({
   checked,
   disabled,
   label,
+  selection = "checkbox",
   trailing,
   className,
   onActivate,
@@ -105,7 +107,7 @@ export function BcGridMenuToggleItem({
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       onMouseEnter={onMouseEnter}
-      role="menuitemcheckbox"
+      role={selection === "radio" ? "menuitemradio" : "menuitemcheckbox"}
       tabIndex={-1}
     >
       <span aria-hidden="true" className="bc-grid-menu-item-leading bc-grid-context-menu-icon">

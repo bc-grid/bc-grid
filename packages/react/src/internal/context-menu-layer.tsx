@@ -56,7 +56,7 @@ export function BcGridContextMenuLayer<TRow>({
   const applyContextMenuState = useCallback(
     (next: BcGridContextMenuState | null) => {
       if (!next) return
-      if (next.columnId) {
+      if (next.rowId != null && next.columnId) {
         const position = { rowId: next.rowId, columnId: next.columnId }
         setActiveCell(position)
         onCellFocus?.(position)

@@ -90,6 +90,7 @@ export interface BcUserSettings {
     filterRow?: boolean
     sidebar?: boolean
     statusBar?: boolean
+    activeFilterSummary?: boolean
     flashOnEdit?: boolean
     checkboxSelection?: boolean
   }
@@ -384,6 +385,7 @@ export interface BcContextMenuToggleItem<TRow = unknown> {
   kind: "toggle"
   id: string
   label: string
+  selection?: "checkbox" | "radio"
   checked: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
   onToggle: (ctx: BcContextMenuContext<TRow>, next: boolean) => void
   disabled?: boolean | ((ctx: BcContextMenuContext<TRow>) => boolean)
@@ -409,6 +411,7 @@ export type BcContextMenuItem<TRow = unknown> =
 
 export interface BcContextMenuContext<TRow = unknown> {
   cell: BcCellPosition | null
+  columnId?: ColumnId | undefined
   row: TRow | null
   column: BcReactGridColumn<TRow> | null
   selection: BcSelection
