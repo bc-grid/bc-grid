@@ -46,6 +46,8 @@ function renderGrid(
     rowIsInactive?: (row: Row) => boolean
     defaultFilter?: BcGridFilter | null
     onFilterChange?: ((next: BcGridFilter | null, prev: BcGridFilter | null) => void) | undefined
+    pageSize?: number
+    pagination?: boolean
   } = {},
 ): string {
   const {
@@ -60,6 +62,8 @@ function renderGrid(
     rowIsInactive,
     defaultFilter,
     onFilterChange,
+    pageSize,
+    pagination,
   } = props
   return renderToStaticMarkup(
     <BcGrid<Row>
@@ -75,6 +79,8 @@ function renderGrid(
       filter={filter}
       defaultFilter={defaultFilter}
       onFilterChange={onFilterChange}
+      pageSize={pageSize}
+      pagination={pagination}
       searchText={searchText}
       showInactive={showInactive}
       rowIsInactive={rowIsInactive}
@@ -152,6 +158,19 @@ describe("BcGrid rowProcessingMode — default 'client'", () => {
       groupBy: ["status"],
     })
     expect(groupRowCount(html)).toBeGreaterThan(0)
+  })
+
+  test("client grouping computes counts before page-window slicing", () => {
+    const html = renderGrid({
+      groupableColumns: [{ columnId: "status", header: "Status" }],
+      groupBy: ["status"],
+      pageSize: 2,
+      pagination: true,
+    })
+
+    expect(groupRowCount(html)).toBe(2)
+    expect(html).toContain("Status: active")
+    expect(html).toContain("(2)")
   })
 })
 

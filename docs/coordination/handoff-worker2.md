@@ -37,15 +37,15 @@ v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it.
 
 ### Active now → `v05-grouping-implementation-pull-forward` (~half day)
 
-**Row-actions menu shipped as #404** (0719ca1) — Insert Above / Insert Below / Duplicate / Delete with consumer-supplied `confirmDelete` gate, all wired through new `editController` actions. Combined with chrome bundles 1+2 (#396 / #399) and #393 chrome+filter polish, the v0.5 context-menu lane is structurally complete on your side.
+Pull one of the v0.5 → v0.6 grouping items forward from `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`. Pick whichever is at the top of that doc that isn't gated on a breaking change. Suggested first pull: any "group selection algebra" follow-up that builds on bundle-1 #393's basic implementation (e.g. tri-state group checkboxes when partial children selected, or selection-aware aggregations in group rows). Read the doc, pick the item that fits a single-PR shape, write a brief task slug entry into this handoff under "Active now" when you start.
+
+Worker2 started the top grouping correctness slice from §1: build grouping over the full filtered/sorted row model before applying the client page-window display. The visible page still controls which leaf rows render; group rows keep full child counts and full descendant metadata.
+
+**Branch:** `agent/worker2/v05-grouping-pull-forward`. **Effort:** ~half day.
 
 ### Previously active → `v05-context-menu-row-actions` (DONE — #404)
 
-The grouping pull-forward task below was previously queued behind row-actions; promoting it to Active now.
-
-Pull one of the v0.5 → v0.6 grouping items forward from `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`. Pick whichever is at the top of that doc that isn't gated on a breaking change. Suggested first pull: any "group selection algebra" follow-up that builds on bundle-1 #393's basic implementation (e.g. tri-state group checkboxes when partial children selected, or selection-aware aggregations in group rows). Read the doc, pick the item that fits a single-PR shape, write a brief task slug entry into this handoff under "Active now" when you start.
-
-**Branch:** `agent/worker2/v05-grouping-pull-forward`. **Effort:** ~half day.
+**Row-actions menu shipped as #404** (0719ca1) — Insert Above / Insert Below / Duplicate / Delete with consumer-supplied `confirmDelete` gate, all wired through new `editController` actions. Combined with chrome bundles 1+2 (#396 / #399) and #393 chrome+filter polish, the v0.5 context-menu lane is structurally complete on your side.
 
 ### After grouping pull-forward → `v06-detail-panel-sticky-left` (~30-45 min)
 
