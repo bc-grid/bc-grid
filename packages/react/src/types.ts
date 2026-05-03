@@ -638,6 +638,44 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * respects `prefers-reduced-motion`.
    */
   flashOnEdit?: boolean
+
+  /**
+   * Grid-level editing master switch. When `false`, every editor
+   * activation path is suppressed regardless of `column.editable`:
+   * keyboard (F2 / Enter / printable / Backspace / Delete), pointer
+   * (double-click), and the `apiRef.startEdit` programmatic path.
+   * Validation, server commit, and the editing controller remain
+   * available so that paste-in-flight or pending-mutation rollback
+   * paths still settle.
+   *
+   * Defaults to `true` (current behaviour). Forward-compatible with
+   * the v0.5 vanilla-and-context-menu RFC's "Edit mode" toggle —
+   * the right-click menu will read / write this prop through the
+   * `BcUserSettings` persistence layer once that ratifies.
+   */
+  editingEnabled?: boolean
+
+  /**
+   * Show the visible inline validation popover (introduced in #356)
+   * under the editor input on validation rejection. When `false`,
+   * the popover is suppressed; the AT contract (assertive live
+   * region announce + `aria-invalid` on the input) is unchanged so
+   * screen-reader users still get the rejection signal.
+   *
+   * Defaults to `true`. Forward-compatible with the RFC's View →
+   * "Show validation messages" toggle.
+   */
+  showValidationMessages?: boolean
+
+  /**
+   * Render a small dim caption at the bottom of the editor portal
+   * showing the keyboard contract — `F2 / Enter / Esc / Tab` — for
+   * users learning the bc-grid edit model. Off by default; turning
+   * on adds ~20px of vertical chrome inside the portal. Forward-
+   * compatible with the RFC's Editor → "Show keyboard hints"
+   * toggle.
+   */
+  showEditorKeyboardHints?: boolean
 }
 
 export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {

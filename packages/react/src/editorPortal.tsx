@@ -41,6 +41,19 @@ interface EditorPortalProps<TRow> {
    * `cellEditor`. v0.1 default is a text input.
    */
   defaultEditor?: BcCellEditor<TRow>
+  /**
+   * Show the visible inline validation popover under the editor on
+   * rejection. AT contract (assertive announce + `aria-invalid`) is
+   * unchanged when this is false. Audit P1-W3 / vanilla-and-context-
+   * menu RFC View → "Show validation messages" toggle.
+   */
+  showValidationMessages?: boolean
+  /**
+   * Render the F2 / Enter / Esc / Tab keyboard-hints caption at the
+   * bottom of the editor portal. Off by default; opt-in via
+   * `BcGridProps.showEditorKeyboardHints`.
+   */
+  showKeyboardHints?: boolean
 }
 
 /**
@@ -63,6 +76,8 @@ export function EditorPortal<TRow>({
   rowIndexById,
   columnIndexById,
   defaultEditor,
+  showValidationMessages = true,
+  showKeyboardHints = false,
 }: EditorPortalProps<TRow>): ReactNode {
   const { editState } = controller
 
@@ -107,6 +122,8 @@ export function EditorPortal<TRow>({
       column={column}
       rowEntry={rowEntry}
       editor={editorSpec}
+      showValidationMessages={showValidationMessages}
+      showKeyboardHints={showKeyboardHints}
       {...(virtualizer ? { virtualizer } : {})}
       {...(typeof rowIndex === "number" ? { rowIndex } : {})}
       {...(typeof colIndex === "number" ? { colIndex } : {})}
@@ -124,6 +141,8 @@ interface EditorMountProps<TRow> {
   virtualizer?: Virtualizer
   rowIndex?: number
   colIndex?: number
+  showValidationMessages: boolean
+  showKeyboardHints: boolean
 }
 
 function EditorMount<TRow>({
@@ -136,6 +155,8 @@ function EditorMount<TRow>({
   virtualizer,
   rowIndex,
   colIndex,
+  showValidationMessages,
+  showKeyboardHints,
 }: EditorMountProps<TRow>) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const focusRef = useRef<HTMLElement | null>(null)
@@ -315,7 +336,30 @@ function EditorMount<TRow>({
         {...(requiredFlag ? { required: true } : {})}
         {...(disabledFlag ? { disabled: true } : {})}
       />
-      <EditorValidationPopover error={error} />
+      {showValidationMessages ? <EditorValidationPopover error={error} /> : null}
+      {showKeyboardHints ? <EditorKeyboardHints /> : null}
+    </div>
+  )
+}
+
+/**
+ * Subtle keyboard-hints caption rendered at the bottom of the editor
+ * portal when the consumer opts in via
+ * `BcGridProps.showEditorKeyboardHints`. Off by default; intended for
+ * teams onboarding new ERP users to the bc-grid edit model. The
+ * caption is `aria-hidden` because the AT contract is already covered
+ * by the input's ARIA role + `aria-keyshortcuts` would be the right
+ * AT path (followup) — this surface exists for sighted discovery
+ * only.
+ */
+export function EditorKeyboardHints(): ReactNode {
+  return (
+    <div
+      className="bc-grid-editor-keyboard-hints"
+      data-bc-grid-editor-keyboard-hints="true"
+      aria-hidden="true"
+    >
+      <kbd>F2</kbd> edit · <kbd>Enter</kbd> commit · <kbd>Esc</kbd> cancel · <kbd>Tab</kbd> next
     </div>
   )
 }
