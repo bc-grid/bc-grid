@@ -727,6 +727,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    */
   rowProcessingMode?: "client" | "manual"
   aggregationScope?: BcAggregationScope
+  /**
+   * Placement for the aggregation totals row when at least one column
+   * declares `aggregation`. Defaults to `"bottom"` to preserve the
+   * existing footer-row behavior; use `"top"` or `"both"` for ERP
+   * screens that need the grand total pinned near the header.
+   */
+  pinnedTotals?: "top" | "bottom" | "both"
 
   groupableColumns?: readonly { columnId: ColumnId; header: string }[]
   groupsExpandedByDefault?: boolean

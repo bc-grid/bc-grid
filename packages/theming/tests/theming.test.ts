@@ -1450,6 +1450,22 @@ describe("@bc-grid/theming", () => {
     expect(labelRule).toContain("white-space: nowrap")
   })
 
+  test("aggregation totals rows expose top and bottom separator contracts", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const topIdx = css.indexOf('.bc-grid-aggregation-footer-viewport[data-position="top"] {')
+    expect(topIdx).toBeGreaterThan(-1)
+    const topRuleEnd = css.indexOf("}", topIdx)
+    const topRule = css.slice(topIdx, topRuleEnd)
+    expect(topRule).toContain("border-top: 0")
+    expect(topRule).toContain("border-bottom: 1px solid var(--bc-grid-border)")
+
+    const bottomIdx = css.indexOf('.bc-grid-aggregation-footer-viewport[data-position="bottom"] {')
+    expect(bottomIdx).toBeGreaterThan(-1)
+    const bottomRuleEnd = css.indexOf("}", bottomIdx)
+    const bottomRule = css.slice(bottomIdx, bottomRuleEnd)
+    expect(bottomRule).toContain("border-top: 1px solid var(--bc-grid-border)")
+  })
+
   test("filters panel items render as list rows with an eased focus-within ring", () => {
     // The filters panel is a utility list, not a pile of nested cards.
     // Pin the flatter shadcn command/list-item treatment: row divider,
