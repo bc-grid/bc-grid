@@ -7,6 +7,7 @@ import {
 } from "../src/internal/chrome-context-menu"
 import type {
   BcContextMenuContext,
+  BcContextMenuCustomItem,
   BcContextMenuItem,
   BcContextMenuSubmenuItem,
   BcGridDensity,
@@ -45,6 +46,17 @@ function submenu(
   return item
 }
 
+function actionItem(
+  items: readonly BcContextMenuItem<Row>[],
+  id: string,
+): BcContextMenuCustomItem<Row> {
+  const item = items.find((candidate) => typeof candidate === "object" && candidate.id === id)
+  if (!item || typeof item !== "object" || item.kind === "submenu" || item.kind === "toggle") {
+    throw new Error(`action ${id} not found`)
+  }
+  return item
+}
+
 function toggle(
   items: readonly BcContextMenuItem<Row>[],
   id: string,
@@ -73,9 +85,20 @@ function headerContext(columnId: ColumnId = "status"): BcContextMenuContext<Row>
   return makeContext({ column: statusColumn, columnId })
 }
 
+function rowContext(rowIndex = 2): BcContextMenuContext<Row> {
+  return makeContext({
+    cell: { rowId: "r1", columnId: "status" },
+    column: statusColumn,
+    columnId: "status",
+    row: { id: "r1" },
+    rowId: "r1",
+    rowIndex,
+  })
+}
+
 function options(
-  overrides: Partial<BcGridChromeContextMenuOptions> = {},
-): BcGridChromeContextMenuOptions {
+  overrides: Partial<BcGridChromeContextMenuOptions<Row>> = {},
+): BcGridChromeContextMenuOptions<Row> {
   return {
     activeFilterSummaryLocked: false,
     activeFilterSummaryVisible: true,
@@ -105,7 +128,7 @@ function options(
 }
 
 function buildItems(
-  optionOverrides: Partial<BcGridChromeContextMenuOptions> = {},
+  optionOverrides: Partial<BcGridChromeContextMenuOptions<Row>> = {},
   context: BcContextMenuContext<Row> = makeContext(),
 ): readonly BcContextMenuItem<Row>[] {
   return resolveContextMenuItems(
@@ -237,6 +260,121 @@ describe("buildGridChromeContextMenuItems", () => {
     expect(itemIds(submenu(headerItems, "pin").items as readonly BcContextMenuItem<Row>[])).toEqual(
       ["pin-column-left", "pin-column-right", "unpin-column"],
     )
+  })
+
+  test("body row context omits Row submenu until edit-grid row actions are supplied", () => {
+    expect(itemIds(buildItems({}, rowContext()))).not.toContain("row")
+    expect(
+      itemIds(buildItems({ rowActions: { onDelete: () => {} } }, headerContext())),
+    ).not.toContain("row")
+  })
+
+  test("row context adds BcEditGrid Row submenu actions", () => {
+    const items = buildItems(
+      {
+        rowActions: {
+          onDelete: () => {},
+          onDuplicateRow: () => {},
+          onInsertRow: () => {},
+        },
+      },
+      rowContext(),
+    )
+
+    expect(itemIds(items)).toEqual([
+      "copy",
+      "copy-row",
+      "copy-with-headers",
+      "separator-3",
+      "filter",
+      "view",
+      "row",
+      "separator-7",
+      "clear-selection",
+      "clear-range",
+    ])
+
+    const rowItems = submenu(items, "row").items as readonly BcContextMenuItem<Row>[]
+    expect(itemIds(rowItems)).toEqual([
+      "insert-row-above",
+      "insert-row-below",
+      "duplicate-row",
+      "separator-3",
+      "delete-row",
+    ])
+    expect(actionItem(rowItems, "delete-row")).toMatchObject({
+      kind: "item",
+      variant: "destructive",
+      disabled: false,
+    })
+  })
+
+  test("Row submenu invokes insert, duplicate, and confirmed delete callbacks", async () => {
+    const inserted: unknown[] = []
+    let duplicated: unknown = null
+    let confirmed: unknown = null
+    let deleted: unknown = null
+    const ctx = rowContext()
+    const items = buildItems(
+      {
+        rowActions: {
+          confirmDelete: async (params) => {
+            confirmed = params
+            return true
+          },
+          onDelete: (row) => {
+            deleted = row
+          },
+          onDuplicateRow: (params) => {
+            duplicated = params
+          },
+          onInsertRow: (params) => {
+            inserted.push(params)
+          },
+        },
+      },
+      ctx,
+    )
+    const rowItems = submenu(items, "row").items as readonly BcContextMenuItem<Row>[]
+
+    actionItem(rowItems, "insert-row-above").onSelect(ctx)
+    actionItem(rowItems, "insert-row-below").onSelect(ctx)
+    actionItem(rowItems, "duplicate-row").onSelect(ctx)
+    actionItem(rowItems, "delete-row").onSelect(ctx)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(inserted).toEqual([
+      { row: { id: "r1" }, rowId: "r1", rowIndex: 2, at: 2, placement: "above" },
+      { row: { id: "r1" }, rowId: "r1", rowIndex: 2, at: 3, placement: "below" },
+    ])
+    expect(duplicated).toEqual({ row: { id: "r1" }, rowId: "r1", rowIndex: 2 })
+    expect(confirmed).toEqual({ row: { id: "r1" }, rowId: "r1", rowIndex: 2 })
+    expect(deleted).toEqual({ id: "r1" })
+  })
+
+  test("Row delete action respects canDelete and consumer confirmation", async () => {
+    let deleted = false
+    const ctx = rowContext()
+    const items = buildItems(
+      {
+        rowActions: {
+          canDelete: () => false,
+          confirmDelete: () => false,
+          onDelete: () => {
+            deleted = true
+          },
+        },
+      },
+      ctx,
+    )
+    const rowItems = submenu(items, "row").items as readonly BcContextMenuItem<Row>[]
+    const deleteRow = actionItem(rowItems, "delete-row")
+
+    expect(deleteRow).toMatchObject({ disabled: true, variant: "destructive" })
+    deleteRow.onSelect(ctx)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(deleted).toBe(false)
   })
 
   test("Group by this column updates the supplied groupBy list", () => {

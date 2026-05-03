@@ -413,6 +413,8 @@ export interface BcContextMenuContext<TRow = unknown> {
   cell: BcCellPosition | null
   columnId?: ColumnId | undefined
   row: TRow | null
+  rowId?: RowId | undefined
+  rowIndex?: number | undefined
   column: BcReactGridColumn<TRow> | null
   selection: BcSelection
   api: BcGridApi<TRow>
@@ -789,6 +791,9 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
   onDelete?: (row: TRow) => void
   canEdit?: (row: TRow) => boolean
   canDelete?: (row: TRow) => boolean
+  onInsertRow?: (params: BcEditGridInsertRowParams<TRow>) => void
+  onDuplicateRow?: (params: BcEditGridRowActionParams<TRow>) => void
+  confirmDelete?: (params: BcEditGridRowActionParams<TRow>) => boolean | Promise<boolean>
 
   /**
    * Multi-cell row rollback handler — surfaced as a "Discard" action
@@ -814,6 +819,17 @@ export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
   /** Discard-action label. Defaults to "Discard". */
   discardLabel?: string
   DeleteIcon?: ComponentType<{ className?: string }>
+}
+
+export interface BcEditGridRowActionParams<TRow> {
+  row: TRow
+  rowId: RowId
+  rowIndex: number
+}
+
+export interface BcEditGridInsertRowParams<TRow> extends BcEditGridRowActionParams<TRow> {
+  at: number
+  placement: "above" | "below"
 }
 
 export interface BcEditGridAction<TRow> {

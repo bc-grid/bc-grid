@@ -3,10 +3,22 @@ import type {
   BcContextMenuContext,
   BcContextMenuItem,
   BcContextMenuItems,
+  BcEditGridInsertRowParams,
+  BcEditGridRowActionParams,
   BcGridDensity,
 } from "../types"
 
-export interface BcGridChromeContextMenuOptions {
+export interface BcGridChromeContextMenuRowActions<TRow> {
+  canDelete?: ((row: TRow) => boolean) | undefined
+  confirmDelete?:
+    | ((params: BcEditGridRowActionParams<TRow>) => boolean | Promise<boolean>)
+    | undefined
+  onDelete?: ((row: TRow) => void) | undefined
+  onDuplicateRow?: ((params: BcEditGridRowActionParams<TRow>) => void) | undefined
+  onInsertRow?: ((params: BcEditGridInsertRowParams<TRow>) => void) | undefined
+}
+
+export interface BcGridChromeContextMenuOptions<TRow = unknown> {
   activeSidebarPanel: string | null
   activeFilterSummaryLocked: boolean
   activeFilterSummaryVisible: boolean
@@ -16,6 +28,7 @@ export interface BcGridChromeContextMenuOptions {
   filterRowVisible: boolean
   groupBy: readonly ColumnId[]
   groupableColumnIds: readonly ColumnId[]
+  rowActions?: BcGridChromeContextMenuRowActions<TRow> | undefined
   sidebarAvailable: boolean
   sidebarPanels: readonly { id: string; label: string }[]
   sidebarVisible: boolean
@@ -36,7 +49,7 @@ const DENSITY_OPTIONS: readonly { id: BcGridDensity; label: string }[] = [
 ]
 
 export function buildGridChromeContextMenuItems<TRow>(
-  options: BcGridChromeContextMenuOptions,
+  options: BcGridChromeContextMenuOptions<TRow>,
 ): BcContextMenuItems<TRow> {
   return (context) => buildGridChromeContextMenuItemsForContext(context, options)
 }
@@ -60,11 +73,12 @@ function buildGridChromeContextMenuItemsForContext<TRow>(
     onSidebarPanelChange,
     onSidebarVisibleChange,
     onStatusBarVisibleChange,
+    rowActions,
     sidebarAvailable,
     sidebarPanels,
     sidebarVisible,
     statusBarVisible,
-  }: BcGridChromeContextMenuOptions,
+  }: BcGridChromeContextMenuOptions<TRow>,
 ): readonly BcContextMenuItem<TRow>[] {
   const hasFiltersPanel = sidebarPanels.some((panel) => panel.id === "filters")
   const headerColumnId = headerColumnIdForContext(context)
@@ -169,6 +183,16 @@ function buildGridChromeContextMenuItemsForContext<TRow>(
     },
   ]
 
+  const rowItems = buildRowActionItems(context, rowActions)
+  if (rowItems.length > 0) {
+    items.push({
+      kind: "submenu",
+      id: "row",
+      label: "Row",
+      items: rowItems,
+    })
+  }
+
   if (headerColumnId && groupableColumnIds.length > 0) {
     items.push({
       kind: "submenu",
@@ -206,6 +230,83 @@ function buildGridChromeContextMenuItemsForContext<TRow>(
 function headerColumnIdForContext<TRow>(context: BcContextMenuContext<TRow>): ColumnId | undefined {
   if (context.row != null || context.cell != null) return undefined
   return context.columnId
+}
+
+function buildRowActionItems<TRow>(
+  context: BcContextMenuContext<TRow>,
+  rowActions: BcGridChromeContextMenuRowActions<TRow> | undefined,
+): readonly BcContextMenuItem<TRow>[] {
+  if (!rowActions || context.row == null || context.rowId == null || context.rowIndex == null) {
+    return []
+  }
+
+  const params: BcEditGridRowActionParams<TRow> = {
+    row: context.row,
+    rowId: context.rowId,
+    rowIndex: context.rowIndex,
+  }
+  const items: BcContextMenuItem<TRow>[] = []
+
+  if (rowActions.onInsertRow) {
+    items.push(
+      {
+        kind: "item",
+        id: "insert-row-above",
+        label: "Insert row above",
+        onSelect: () =>
+          rowActions.onInsertRow?.({
+            ...params,
+            at: params.rowIndex,
+            placement: "above",
+          }),
+      },
+      {
+        kind: "item",
+        id: "insert-row-below",
+        label: "Insert row below",
+        onSelect: () =>
+          rowActions.onInsertRow?.({
+            ...params,
+            at: params.rowIndex + 1,
+            placement: "below",
+          }),
+      },
+    )
+  }
+
+  if (rowActions.onDuplicateRow) {
+    items.push({
+      kind: "item",
+      id: "duplicate-row",
+      label: "Duplicate row",
+      onSelect: () => rowActions.onDuplicateRow?.(params),
+    })
+  }
+
+  if (rowActions.onDelete) {
+    if (items.length > 0) items.push("separator")
+    items.push({
+      kind: "item",
+      id: "delete-row",
+      label: "Delete row",
+      variant: "destructive",
+      disabled: rowActions.canDelete ? !rowActions.canDelete(params.row) : false,
+      onSelect: () => {
+        void runDeleteRowAction(rowActions, params)
+      },
+    })
+  }
+
+  return items
+}
+
+async function runDeleteRowAction<TRow>(
+  rowActions: BcGridChromeContextMenuRowActions<TRow>,
+  params: BcEditGridRowActionParams<TRow>,
+): Promise<void> {
+  const confirmed = await rowActions.confirmDelete?.(params)
+  if (confirmed === false) return
+  rowActions.onDelete?.(params.row)
 }
 
 function toggleGroupBy(
