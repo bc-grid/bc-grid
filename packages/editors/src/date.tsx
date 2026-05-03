@@ -1,6 +1,6 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { editorInputClassName, editorStateAttrs } from "./chrome"
 
 /**
  * Date editor — `kind: "date"`. Default for date columns per
@@ -97,7 +97,7 @@ function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
       aria-disabled={disabled || pending ? true : undefined}
       data-bc-grid-editor-input="true"
       data-bc-grid-editor-kind="date"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
+      {...editorStateAttrs({ error, pending })}
     />
   )
 }

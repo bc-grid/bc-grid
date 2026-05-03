@@ -1,6 +1,6 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { editorInputClassName, editorStateAttrs } from "./chrome"
 
 /**
  * Datetime editor — `kind: "datetime"`. Default for date-with-time
@@ -93,7 +93,7 @@ function DatetimeEditor(props: BcCellEditorProps<unknown, unknown>) {
       aria-disabled={disabled || pending ? true : undefined}
       data-bc-grid-editor-input="true"
       data-bc-grid-editor-kind="datetime"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
+      {...editorStateAttrs({ error, pending })}
     />
   )
 }

@@ -1,6 +1,6 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName } from "./chrome"
+import { editorInputClassName, editorStateAttrs } from "./chrome"
 
 /**
  * Time editor — `kind: "time"`. Default for time-of-day columns per
@@ -77,7 +77,7 @@ function TimeEditor(props: BcCellEditorProps<unknown, unknown>) {
       aria-disabled={disabled || pending ? true : undefined}
       data-bc-grid-editor-input="true"
       data-bc-grid-editor-kind="time"
-      data-bc-grid-editor-state={editorControlState({ error, pending })}
+      {...editorStateAttrs({ error, pending })}
     />
   )
 }
