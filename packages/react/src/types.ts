@@ -60,7 +60,12 @@ import type {
   SetFilterOptionLoadResult,
   SetFilterOptionProvider,
 } from "@bc-grid/core"
-import type { BcFilterDefinition as BcEngineFilterDefinition } from "@bc-grid/filters"
+import type {
+  BcFilterDefinition as BcEngineFilterDefinition,
+  BcFilterPredicateContext as BcEngineFilterPredicateContext,
+  BcFilterUserContext as BcEngineFilterUserContext,
+  BcFiscalCalendar as BcEngineFiscalCalendar,
+} from "@bc-grid/filters"
 import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
 
 export type BcGridDensity = "compact" | "normal" | "comfortable"
@@ -654,6 +659,16 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    */
   layoutState?: BcGridLayoutState
   onLayoutStateChange?: (next: BcGridLayoutState, prev: BcGridLayoutState) => void
+
+  /**
+   * Context used by built-in filter predicates that intentionally stay
+   * relative or user-scoped in their persisted `BcGridFilter` payloads:
+   * relative dates (`today`, `last-n-days`), fiscal periods, and
+   * current-user/team predicates. Server grids should pass the same
+   * structured filter payload to the endpoint; this context is only for
+   * client-side row matching.
+   */
+  filterPredicateContext?: BcFilterPredicateContext
 
   showInactive?: boolean
   onShowInactiveChange?: (next: boolean) => void
@@ -1344,6 +1359,9 @@ export type BcCellEditCommitHandler<TRow> = (
 ) => void | Promise<undefined | BcCellEditCommitResult<TRow>>
 
 export type BcFilterDefinition<TValue = unknown> = BcEngineFilterDefinition<TValue>
+export type BcFilterPredicateContext = BcEngineFilterPredicateContext
+export type BcFilterUserContext = BcEngineFilterUserContext
+export type BcFiscalCalendar = BcEngineFiscalCalendar
 
 export interface BcReactFilterDefinition<TValue = unknown> extends BcFilterDefinition<TValue> {
   Editor?: ComponentType<BcFilterEditorProps<TValue>>

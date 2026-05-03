@@ -997,17 +997,46 @@ host search input on Cmd/Ctrl+F.
 
 Per-column `filter` declares **what kind of filter UI to show** and what parser to use; the actual filter state is in `BcGridFilter` (which mirrors `ServerFilter` from `server-query-rfc` for parity with server grids).
 
-Built-in filter types: `text`, `number`, `number-range`, `date`, `date-range`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. The `text` type emits `op: "contains" | "starts-with" | "ends-with" | "equals"` plus optional modifier flags `caseSensitive?: true` and `regex?: true` on the resulting `ServerColumnFilter`. The default `op: "contains"` with no modifiers is case-insensitive substring matching (the v0.1 / v0.2 behaviour, preserved); `caseSensitive: true` matches the input casing exactly; `regex: true` interprets `value` as a JavaScript regex pattern (the regex flag overrides `op`, and patterns that fail to compile are dropped at both build time and match time so partial typing of an unfinished pattern doesn't blank the row set). Consumers driving controlled `filter` / `onFilterChange` get the canonical `BcGridFilter` shape with `caseSensitive` / `regex` carried directly on each `ServerColumnFilter` leaf — no encode / decode is required at the host-app boundary. The internal `columnFilterText` editor map uses a plain needle string for the default `contains` + no-modifier case (legacy compat) and a JSON payload for non-default operator / modifier state; both shapes round-trip through `BcGridFilter` so persisted state from v0.2 still rehydrates correctly. The `number-range` type is a convenience over `number` `between` that renders two `inputMode="decimal"` fields and always emits `op: "between"`; partial input (only one bound filled, or non-numeric content) is treated as inactive so typing doesn't narrow the row set mid-keystroke. The `date-range` type mirrors `number-range` for ISO 8601 dates: two `<input type="date">` fields separated by an em-dash, no operator dropdown, and `op: "between"` with the bounds normalised so consumers can type either edge first. Set filters are multi-select editors over distinct column values and emit `op: "in" | "not-in" | "blank"` (`values` is present for `in` / `not-in`). By default, the grid uses a small-data adapter over current client rows; high-cardinality columns can provide `filter.loadSetFilterOptions(params)` for async/server-backed search with `AbortSignal`, result limits, selected-value hydration, `totalCount`, and `hasMore`. The popover surface includes a search input that requests a loaded page of matching values, a "Select loaded / Clear loaded" affordance scoped to the currently loaded matching options, a selected-outside-current-search section, and a "Clear selection" footer action. Selections for options hidden by the active search query are preserved when toggling loaded values. The trigger button carries `data-active="true"` whenever the filter is active (`op === "blank"` or `values.length > 0`) so themes can style applied-filter state without parsing `filterText`. For array-valued cells, each array item is indexed and matched independently. Registered filter types use non-empty custom strings in `BcColumnFilter.type` / `ServerColumnFilter.type`; unknown registered types log a development warning and evaluate as no-match.
+Built-in filter types: `text`, `number`, `number-range`, `date`, `date-range`, `set`, `boolean`. The React grid includes inline and popup editors for these built-ins. The `text` type emits `op: "contains" | "does-not-contain" | "starts-with" | "ends-with" | "equals" | "not-equals" | "current-user" | "current-team" | "blank" | "not-blank"` plus optional modifier flags `caseSensitive?: true` and `regex?: true` on the resulting `ServerColumnFilter`. The default `op: "contains"` with no modifiers is case-insensitive substring matching (the v0.1 / v0.2 behaviour, preserved); `caseSensitive: true` matches the input casing exactly; `regex: true` interprets `value` as a JavaScript regex pattern (the regex flag overrides text operator anchoring, and patterns that fail to compile are dropped at both build time and match time so partial typing of an unfinished pattern doesn't blank the row set). Consumers driving controlled `filter` / `onFilterChange` get the canonical `BcGridFilter` shape with `caseSensitive` / `regex` carried directly on each `ServerColumnFilter` leaf — no encode / decode is required at the host-app boundary. The internal `columnFilterText` editor map uses a plain needle string for the default `contains` + no-modifier case (legacy compat) and a JSON payload for non-default operator / modifier state; both shapes round-trip through `BcGridFilter` so persisted state from v0.2 still rehydrates correctly. The `number-range` type is a convenience over `number` `between` that renders two `inputMode="decimal"` fields and always emits `op: "between"`; partial input (only one bound filled, or non-numeric content) is treated as inactive so typing doesn't narrow the row set mid-keystroke. The `date` type supports exact/date-range operators plus evergreen relative tokens: `today`, `yesterday`, `this-week`, `last-week`, `last-n-days`, `this-month`, `last-month`, `this-fiscal-quarter`, `last-fiscal-quarter`, `this-fiscal-year`, and `last-fiscal-year`. Relative and fiscal operators persist as tokens plus parameters, not resolved dates, so saved views stay current. The client predicate resolves them through `filterPredicateContext.now`, `weekStartsOn`, and `fiscalCalendar`; server grids should pass the same structured filter payload to the endpoint. The `date-range` type mirrors `number-range` for ISO 8601 dates: two `<input type="date">` fields separated by an em-dash, no operator dropdown, and `op: "between"` with the bounds normalised so consumers can type either edge first. Set filters are multi-select editors over distinct column values and emit `op: "in" | "not-in" | "blank" | "not-blank" | "current-user" | "current-team"` (`values` is present for `in` / `not-in`). The current-user/team operators compare the cell value or array-valued cell items against `filterPredicateContext.user.id` / `user.teamIds`. By default, the grid uses a small-data adapter over current client rows; high-cardinality columns can provide `filter.loadSetFilterOptions(params)` for async/server-backed search with `AbortSignal`, result limits, selected-value hydration, `totalCount`, and `hasMore`. The popover surface includes a search input that requests a loaded page of matching values, a "Select loaded / Clear loaded" affordance scoped to the currently loaded matching options, a selected-outside-current-search section, and a "Clear selection" footer action. Selections for options hidden by the active search query are preserved when toggling loaded values. The trigger button carries `data-active="true"` whenever the filter is active (value-less operators such as `blank`, `not-blank`, `current-user`, `current-team`, or `values.length > 0`) so themes can style applied-filter state without parsing `filterText`. For array-valued cells, each array item is indexed and matched independently. Registered filter types use non-empty custom strings in `BcColumnFilter.type` / `ServerColumnFilter.type`; unknown registered types log a development warning and evaluate as no-match.
 
 ```ts
 // from @bc-grid/filters (engine)
 export interface BcFilterDefinition<TValue = unknown> {
   type: string
-  predicate: (value: { formattedValue: string; rawValue?: TValue }, criteria: unknown) => boolean
+  operators?: readonly BcFilterOperatorDefinition[]
+  predicate: (
+    value: { formattedValue: string; rawValue?: TValue },
+    criteria: unknown,
+    ctx: BcFilterPredicateContext,
+  ) => boolean
   serialize: (criteria: unknown) => string
   parse: (serialized: string) => unknown
   criteriaFromFilter?: (filter: ServerColumnFilter) => unknown
   filterFromCriteria?: (criteria: unknown) => ({ op: string } & Partial<ServerColumnFilter>) | null
+}
+
+export interface BcFilterOperatorDefinition {
+  op: string
+  label: string
+  valueShape: "none" | "single" | "range" | "multi" | "integer" | "context"
+  serverHint?: string
+}
+
+export interface BcFilterPredicateContext {
+  now?: Date | string | number
+  weekStartsOn?: 0 | 1 | 2 | 3 | 4 | 5 | 6
+  fiscalCalendar?: BcFiscalCalendar
+  user?: BcFilterUserContext
+}
+
+export interface BcFiscalCalendar {
+  startMonth?: number
+  startDay?: number
+}
+
+export interface BcFilterUserContext {
+  id?: string | number
+  teamIds?: readonly (string | number)[]
 }
 
 // from @bc-grid/react
@@ -1351,6 +1380,12 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   searchInputRef?: React.RefObject<HTMLInputElement | null>
 
   // Active filter convention
+  /**
+   * Client-side predicate context for relative/user-scoped filter
+   * operators. Server grids keep sending the structured filter payload
+   * to the endpoint; this context is only for local row matching.
+   */
+  filterPredicateContext?: BcFilterPredicateContext
   showInactive?: boolean
   onShowInactiveChange?: (next: boolean) => void
   rowIsInactive?: (row: TRow) => boolean
@@ -2450,6 +2485,7 @@ export type {
   BcContextMenuBuiltinItem, BcContextMenuContext, BcContextMenuCustomItem,
   BcContextMenuItem, BcContextMenuItems,
   BcReactFilterDefinition, BcFilterEditorProps, BcFilterDefinition,
+  BcFilterPredicateContext, BcFilterUserContext, BcFiscalCalendar,
   BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarCustomPanel, BcSidebarPanel,
 
   // Re-exports from @bc-grid/core
@@ -2612,7 +2648,10 @@ export {
   filterRegistry, createFilterRegistry, registerFilter,
   matchesFilter,
 }
-export type { BcFilterDefinition, BcFilterRegistry }
+export type {
+  BcFilterDefinition, BcFilterOperatorDefinition, BcFilterPredicateContext,
+  BcFilterRegistry, BcFilterUserContext, BcFiscalCalendar,
+}
 ```
 
 ### `@bc-grid/export`

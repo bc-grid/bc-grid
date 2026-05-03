@@ -10,9 +10,11 @@ import type {
 } from "@bc-grid/core"
 import {
   columnFilterFromSerializedCriteria,
+  matchesColumnFilter as matchesRegisteredColumnFilter,
   matchesFilter as matchesRegisteredFilter,
   serializeColumnFilterCriteria,
 } from "@bc-grid/filters"
+import type { BcFilterPredicateContext } from "@bc-grid/filters"
 import { reportUnknownFilterDefinition } from "./filterRegistry"
 
 /**
@@ -25,7 +27,25 @@ import { reportUnknownFilterDefinition } from "./filterRegistry"
  */
 export type ColumnFilterText = Readonly<Record<ColumnId, string>>
 export type ColumnFilterTypeByColumnId = Readonly<Record<ColumnId, BcColumnFilter["type"]>>
-export type DateFilterOperator = "is" | "before" | "after" | "between" | "blank" | "not-blank"
+export type DateFilterOperator =
+  | "is"
+  | "not-equals"
+  | "before"
+  | "after"
+  | "between"
+  | "today"
+  | "yesterday"
+  | "this-week"
+  | "last-week"
+  | "last-n-days"
+  | "this-month"
+  | "last-month"
+  | "this-fiscal-quarter"
+  | "last-fiscal-quarter"
+  | "this-fiscal-year"
+  | "last-fiscal-year"
+  | "blank"
+  | "not-blank"
 export type NumberFilterOperator =
   | "="
   | "!="
@@ -36,7 +56,13 @@ export type NumberFilterOperator =
   | "between"
   | "blank"
   | "not-blank"
-export type SetFilterOperator = "in" | "not-in" | "blank" | "not-blank"
+export type SetFilterOperator =
+  | "in"
+  | "not-in"
+  | "blank"
+  | "not-blank"
+  | "current-user"
+  | "current-team"
 /**
  * Operator surface for `BcColumnFilter.type === "text"` per
  * `filter-registry-rfc §text`. The `regex` modifier is a separate
@@ -46,9 +72,13 @@ export type SetFilterOperator = "in" | "not-in" | "blank" | "not-blank"
  */
 export type TextFilterOperator =
   | "contains"
+  | "does-not-contain"
   | "starts-with"
   | "ends-with"
   | "equals"
+  | "not-equals"
+  | "current-user"
+  | "current-team"
   | "blank"
   | "not-blank"
 
@@ -325,6 +355,13 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
     if (filter.op === "blank" || filter.op === "not-blank") {
       return encodeDateFilterInput({ op: filter.op, value: "" })
     }
+    if (isDateValueLessFilterOperator(filter.op)) {
+      return encodeDateFilterInput({ op: filter.op, value: "" })
+    }
+    if (filter.op === "last-n-days") {
+      const value = scalarFilterInputValue(filter.value)
+      return value ? encodeDateFilterInput({ op: "last-n-days", value }) : undefined
+    }
     if (filter.op === "between") {
       const values = dateFilterValuePair(filter.values)
       return values ? encodeDateFilterInput({ op: "between", ...values }) : undefined
@@ -340,7 +377,12 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
   }
 
   if (filter.type === "set") {
-    if (filter.op === "blank" || filter.op === "not-blank") {
+    if (
+      filter.op === "blank" ||
+      filter.op === "not-blank" ||
+      filter.op === "current-user" ||
+      filter.op === "current-team"
+    ) {
       return encodeSetFilterInput({ op: filter.op, values: [] })
     }
     if (filter.op !== "in" && filter.op !== "not-in") return undefined
@@ -362,7 +404,7 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
   // JSON-encoded TextFilterInput so the editor restores op + modifier
   // flags faithfully.
   const op = isTextFilterOperator(filter.op) ? filter.op : "contains"
-  if (op === "blank" || op === "not-blank") return encodeTextFilterInput({ op, value: "" })
+  if (isTextValueLessFilterOperator(op)) return encodeTextFilterInput({ op, value: "" })
   const value = scalarFilterInputValue(filter.value)
   if (!value || value.trim().length === 0) return undefined
   const caseSensitive = filter.caseSensitive === true
@@ -384,9 +426,12 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
 export function matchesColumnFilter(
   cellValue: FilterCellValue,
   filter: ServerColumnFilter,
+  options: { context?: BcFilterPredicateContext | undefined } = {},
 ): boolean {
   const value = normaliseFilterCellValue(cellValue)
   if (filter.type === "boolean") {
+    if (filter.op === "blank") return isBlankFilterCellValue(value)
+    if (filter.op === "not-blank") return !isBlankFilterCellValue(value)
     if (filter.op !== "is") return false
     const actual = parseFormattedBoolean(value.formattedValue)
     return actual != null && actual === Boolean(filter.value)
@@ -400,18 +445,18 @@ export function matchesColumnFilter(
     return matchesNumberFilter(value, filter)
   }
   if (filter.type === "date") {
-    return matchesDateFilter(value, filter)
+    return matchesDateFilter(value, filter, options.context)
   }
   if (filter.type === "date-range") {
     // The date-range filter always emits op="between"; the predicate
     // path is identical to `date`'s between branch.
-    return matchesDateFilter(value, filter)
+    return matchesDateFilter(value, filter, options.context)
   }
   if (filter.type === "set") {
-    return matchesSetFilter(value, filter)
+    return matchesSetFilter(value, filter, options.context)
   }
   if (filter.type !== "text") return false
-  return matchesTextFilter(value, filter)
+  return matchesTextFilter(value, filter, options.context)
 }
 
 /**
@@ -427,9 +472,13 @@ export function matchesColumnFilter(
 function matchesTextFilter(
   cellValue: { formattedValue: string; rawValue?: unknown },
   filter: ServerColumnFilter,
+  context: BcFilterPredicateContext | undefined,
 ): boolean {
   if (filter.op === "blank") return isBlankFilterCellValue(cellValue)
   if (filter.op === "not-blank") return !isBlankFilterCellValue(cellValue)
+  if (filter.op === "current-user" || filter.op === "current-team") {
+    return matchesRegisteredColumnFilter(cellValue, filter, { context })
+  }
   const formattedValue = cellValue.formattedValue
   const needleRaw = String(filter.value ?? "")
   if (needleRaw.length === 0) return true
@@ -437,7 +486,8 @@ function matchesTextFilter(
   if (filter.regex === true) {
     try {
       const pattern = new RegExp(needleRaw, filter.caseSensitive === true ? "" : "i")
-      return pattern.test(formattedValue)
+      const matched = pattern.test(formattedValue)
+      return filter.op === "not-equals" || filter.op === "does-not-contain" ? !matched : matched
     } catch {
       return false
     }
@@ -447,9 +497,12 @@ function matchesTextFilter(
   const haystack = caseSensitive ? formattedValue : formattedValue.toLowerCase()
   const needle = caseSensitive ? needleRaw : needleRaw.toLowerCase()
   if (!isTextFilterOperator(filter.op)) return false
+  if (filter.op === "current-user" || filter.op === "current-team") return false
   if (filter.op === "starts-with") return haystack.startsWith(needle)
   if (filter.op === "ends-with") return haystack.endsWith(needle)
   if (filter.op === "equals") return haystack === needle
+  if (filter.op === "not-equals") return haystack !== needle
+  if (filter.op === "does-not-contain") return !haystack.includes(needle)
   return haystack.includes(needle)
 }
 
@@ -462,8 +515,10 @@ function matchesTextFilter(
 export function matchesGridFilter(
   filter: BcGridFilter,
   valueByColumnId: (columnId: ColumnId) => FilterCellValue,
+  options: { context?: BcFilterPredicateContext | undefined } = {},
 ): boolean {
   return matchesRegisteredFilter(filter, valueByColumnId, {
+    context: options.context,
     onUnknownFilter: (type, columnFilter) =>
       reportUnknownFilterDefinition(type, `column "${columnFilter.columnId}" predicate`),
   })
@@ -684,7 +739,7 @@ export function nextSetFilterValuesOnToggleAll(
  */
 function parseTextFilterInput(raw: string): TextColumnFilterDraft | null {
   const input = decodeTextFilterInput(raw)
-  if (input.op === "blank" || input.op === "not-blank") {
+  if (isTextValueLessFilterOperator(input.op)) {
     return {
       kind: "column",
       type: "text",
@@ -720,6 +775,23 @@ function parseDateFilterInput(raw: string): DateColumnFilterDraft | null {
       kind: "column",
       type: "date",
       op: input.op,
+    }
+  }
+  if (isDateValueLessFilterOperator(input.op)) {
+    return {
+      kind: "column",
+      type: "date",
+      op: input.op,
+    }
+  }
+  if (input.op === "last-n-days") {
+    const days = parsePositiveIntegerInput(input.value)
+    if (days == null) return null
+    return {
+      kind: "column",
+      type: "date",
+      op: "last-n-days",
+      value: days,
     }
   }
   const value = parseFilterDate(input.value)
@@ -829,7 +901,12 @@ function parseDateRangeFilterInput(raw: string): DateRangeColumnFilterDraft | nu
 function parseSetFilterInput(raw: string): SetColumnFilterDraft | null {
   const input = decodeSetFilterInput(raw)
 
-  if (input.op === "blank" || input.op === "not-blank") {
+  if (
+    input.op === "blank" ||
+    input.op === "not-blank" ||
+    input.op === "current-user" ||
+    input.op === "current-team"
+  ) {
     return {
       kind: "column",
       type: "set",
@@ -907,9 +984,16 @@ function normaliseSetFilterInput(input: Partial<SetFilterInput>): SetFilterInput
 function matchesDateFilter(
   cellValue: { formattedValue: string; rawValue?: unknown },
   filter: ServerColumnFilter,
+  context: BcFilterPredicateContext | undefined,
 ): boolean {
   if (filter.op === "blank") return isBlankFilterCellValue(cellValue)
   if (filter.op === "not-blank") return !isBlankFilterCellValue(cellValue)
+  if (
+    isDateValueLessFilterOperator(filter.op as DateFilterOperator) ||
+    filter.op === "last-n-days"
+  ) {
+    return matchesRegisteredColumnFilter(cellValue, filter, { context })
+  }
   const actual = parseFilterDate(cellValue.rawValue) ?? parseFilterDate(cellValue.formattedValue)
   if (!actual) return false
 
@@ -926,6 +1010,7 @@ function matchesDateFilter(
   const expected = parseFilterDate(filter.value)
   if (!expected) return false
   if (filter.op === "is") return actual === expected
+  if (filter.op === "not-equals") return actual !== expected
   if (filter.op === "before") return actual < expected
   if (filter.op === "after") return actual > expected
   return false
@@ -934,9 +1019,13 @@ function matchesDateFilter(
 function matchesSetFilter(
   cellValue: { formattedValue: string; rawValue?: unknown },
   filter: ServerColumnFilter,
+  context: BcFilterPredicateContext | undefined,
 ): boolean {
   if (filter.op === "blank") return isBlankSetFilterCellValue(cellValue)
   if (filter.op === "not-blank") return !isBlankSetFilterCellValue(cellValue)
+  if (filter.op === "current-user" || filter.op === "current-team") {
+    return matchesRegisteredColumnFilter(cellValue, filter, { context })
+  }
 
   const selected = new Set((filter.values ?? []).flatMap(setFilterValueKeys))
   if (selected.size === 0) return true
@@ -1087,6 +1176,12 @@ function parseFilterNumber(value: string): number | null {
   return Number.isFinite(numeric) ? numeric : null
 }
 
+function parsePositiveIntegerInput(value: string): number | null {
+  const parsed = Number(value.trim())
+  if (!Number.isInteger(parsed) || parsed < 1) return null
+  return parsed
+}
+
 function toDateInputValue(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, "0")
@@ -1097,11 +1192,38 @@ function toDateInputValue(date: Date): string {
 function isDateFilterOperator(value: unknown): value is DateFilterOperator {
   return (
     value === "is" ||
+    value === "not-equals" ||
     value === "before" ||
     value === "after" ||
     value === "between" ||
+    value === "today" ||
+    value === "yesterday" ||
+    value === "this-week" ||
+    value === "last-week" ||
+    value === "last-n-days" ||
+    value === "this-month" ||
+    value === "last-month" ||
+    value === "this-fiscal-quarter" ||
+    value === "last-fiscal-quarter" ||
+    value === "this-fiscal-year" ||
+    value === "last-fiscal-year" ||
     value === "blank" ||
     value === "not-blank"
+  )
+}
+
+function isDateValueLessFilterOperator(value: DateFilterOperator): boolean {
+  return (
+    value === "today" ||
+    value === "yesterday" ||
+    value === "this-week" ||
+    value === "last-week" ||
+    value === "this-month" ||
+    value === "last-month" ||
+    value === "this-fiscal-quarter" ||
+    value === "last-fiscal-quarter" ||
+    value === "this-fiscal-year" ||
+    value === "last-fiscal-year"
   )
 }
 
@@ -1122,14 +1244,34 @@ function isNumberFilterOperator(value: unknown): value is NumberFilterOperator {
 function isTextFilterOperator(value: unknown): value is TextFilterOperator {
   return (
     value === "contains" ||
+    value === "does-not-contain" ||
     value === "starts-with" ||
     value === "ends-with" ||
     value === "equals" ||
+    value === "not-equals" ||
+    value === "current-user" ||
+    value === "current-team" ||
     value === "blank" ||
     value === "not-blank"
   )
 }
 
+function isTextValueLessFilterOperator(value: TextFilterOperator): boolean {
+  return (
+    value === "blank" ||
+    value === "not-blank" ||
+    value === "current-user" ||
+    value === "current-team"
+  )
+}
+
 function isSetFilterOperator(value: unknown): value is SetFilterOperator {
-  return value === "in" || value === "not-in" || value === "blank" || value === "not-blank"
+  return (
+    value === "in" ||
+    value === "not-in" ||
+    value === "blank" ||
+    value === "not-blank" ||
+    value === "current-user" ||
+    value === "current-team"
+  )
 }
