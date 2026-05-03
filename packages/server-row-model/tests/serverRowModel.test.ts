@@ -1981,3 +1981,74 @@ describe("paged stale-response flood (worker1 audit P1 §9)", () => {
     }
   })
 })
+
+describe("hasInFlightRequests + awaitAllSettled (server-mode-switch RFC §6)", () => {
+  test("hasInFlightRequests returns false on a fresh model with no requests", () => {
+    const model = createServerRowModel<Row>()
+    expect(model.hasInFlightRequests()).toBe(false)
+  })
+
+  test("hasInFlightRequests returns true while a paged request is in flight, false after settle", async () => {
+    const model = createServerRowModel<Row>()
+    const load = deferred<ServerPagedResult<Row>>()
+    const request = model.loadPagedPage({
+      loadPage: () => load.promise,
+      pageIndex: 0,
+      pageSize: 25,
+      view,
+    })
+    expect(model.hasInFlightRequests()).toBe(true)
+    load.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "a", name: "Acme" }],
+      totalRows: 1,
+    })
+    await request.promise
+    expect(model.hasInFlightRequests()).toBe(false)
+  })
+
+  test("awaitAllSettled resolves immediately when no requests are in flight", async () => {
+    const model = createServerRowModel<Row>()
+    const start = performance.now()
+    await model.awaitAllSettled()
+    expect(performance.now() - start).toBeLessThan(5)
+  })
+
+  test("awaitAllSettled resolves when all in-flight requests settle (success or rejection)", async () => {
+    const model = createServerRowModel<Row>()
+    const successLoad = deferred<ServerPagedResult<Row>>()
+    const failLoad = deferred<ServerPagedResult<Row>>()
+
+    const successRequest = model.loadPagedPage({
+      loadPage: () => successLoad.promise,
+      pageIndex: 0,
+      pageSize: 25,
+      view,
+    })
+    successRequest.promise.catch(() => {})
+
+    const failRequest = model.loadPagedPage({
+      loadPage: () => failLoad.promise,
+      pageIndex: 1,
+      pageSize: 25,
+      view,
+    })
+    failRequest.promise.catch(() => {})
+
+    expect(model.hasInFlightRequests()).toBe(true)
+
+    const settledPromise = model.awaitAllSettled()
+
+    successLoad.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "a", name: "Acme" }],
+      totalRows: 1,
+    })
+    failLoad.reject(new Error("server hiccup"))
+
+    await settledPromise
+    expect(model.hasInFlightRequests()).toBe(false)
+  })
+})

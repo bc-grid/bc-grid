@@ -233,46 +233,57 @@ describe("@bc-grid/theming", () => {
 
     expect(css).toContain("--bc-grid-pinned-bg: var(--bc-grid-bg)")
     expect(css).toContain("--bc-grid-pinned-header-bg: var(--bc-grid-header-bg)")
-    expect(css).toContain("--bc-grid-pinned-row-hover-bg:")
     expect(css).toContain("--bc-grid-pinned-boundary:")
     expect(css).toContain(".bc-grid-pinned-lane {")
     expect(css).toContain("grid-column: 1 / -1")
     expect(css).toContain("grid-row: 1")
     expect(css).toContain("align-self: start")
 
+    // Pinned cells layer the same body row-state token as a
+    // `background-image: linear-gradient(<token>, <token>)` overlay
+    // on top of an opaque `background-color: var(--bc-grid-bg)` base.
+    // Same source token as the body row → byte-identical pixels.
     const base = ruleFor(".bc-grid-cell-pinned-left,\n.bc-grid-cell-pinned-right,")
-    expect(base).toContain("background: var(--bc-grid-pinned-bg)")
+    expect(base).toContain("background-color: var(--bc-grid-pinned-bg)")
+    expect(base).toContain("background-image: none")
     expect(base).toContain("background-clip: padding-box")
 
     const header = ruleFor(".bc-grid-header .bc-grid-cell-pinned-left,")
-    expect(header).toContain("background: var(--bc-grid-pinned-header-bg)")
+    expect(header).toContain("background-color: var(--bc-grid-pinned-header-bg)")
 
     const hover = ruleFor(".bc-grid-row:hover .bc-grid-cell-pinned-left,")
-    expect(hover).toContain("background: var(--bc-grid-pinned-row-hover-bg)")
-    expect(hover).not.toContain("var(--bc-grid-row-hover)")
+    expect(hover).toContain(
+      "background-image: linear-gradient(var(--bc-grid-row-hover), var(--bc-grid-row-hover))",
+    )
 
     const focused = ruleFor(
       '.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-left,',
     )
-    expect(focused).toContain("background: var(--bc-grid-pinned-row-focused-bg)")
+    expect(focused).toContain("background-image: linear-gradient(")
+    expect(focused).toContain("var(--bc-grid-row-focused-bg)")
 
     const selected = ruleFor('.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left,')
-    expect(selected).toContain("background: var(--bc-grid-pinned-row-selected-bg)")
+    expect(selected).toContain(
+      "background-image: linear-gradient(var(--bc-grid-row-selected), var(--bc-grid-row-selected))",
+    )
     expect(selected).toContain("color: var(--bc-grid-row-selected-fg)")
 
     const selectedHover = ruleFor(
       '.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-left,',
     )
-    expect(selectedHover).toContain("background: var(--bc-grid-pinned-row-selected-hover-bg)")
-    expect(selectedHover).not.toContain("var(--bc-grid-row-hover)")
+    expect(selectedHover).toContain("background-image: linear-gradient(")
+    expect(selectedHover).toContain("var(--bc-grid-row-selected-hover-bg)")
 
     const active = ruleFor(".bc-grid-cell-pinned-left:focus-visible,")
-    expect(active).toContain("background: var(--bc-grid-pinned-active-cell-bg)")
+    expect(active).toContain(
+      "background-image: linear-gradient(var(--bc-grid-active-cell-bg), var(--bc-grid-active-cell-bg))",
+    )
 
     const selectedActive = ruleFor(
       '.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left[data-bc-grid-active-cell="true"],',
     )
-    expect(selectedActive).toContain("background: var(--bc-grid-pinned-selected-active-cell-bg)")
+    expect(selectedActive).toContain("background-image: linear-gradient(")
+    expect(selectedActive).toContain("var(--bc-grid-row-selected-active-cell-bg)")
   })
 
   test("pinned actions column has opaque surfaces and restrained action buttons", () => {
@@ -286,25 +297,28 @@ describe("@bc-grid/theming", () => {
 
     expect(css).toContain("--bc-grid-pinned-actions-bg: var(--bc-grid-pinned-bg)")
     expect(css).toContain("--bc-grid-pinned-actions-header-bg: var(--bc-grid-pinned-header-bg)")
-    expect(css).toContain("--bc-grid-pinned-actions-selected-bg:")
     expect(css).toContain("--bc-grid-pinned-actions-bg: Canvas")
 
     const base = ruleFor('.bc-grid-cell[data-column-id="__bc_actions"],')
-    expect(base).toContain("background: var(--bc-grid-pinned-actions-bg)")
+    expect(base).toContain("background-color: var(--bc-grid-pinned-actions-bg)")
+    expect(base).toContain("background-image: none")
     expect(base).toContain("background-clip: border-box")
 
     const header = ruleFor('.bc-grid-header .bc-grid-cell[data-column-id="__bc_actions"],')
     expect(header).toContain("justify-content: center")
-    expect(header).toContain("background: var(--bc-grid-pinned-actions-header-bg)")
+    expect(header).toContain("background-color: var(--bc-grid-pinned-actions-header-bg)")
 
     const hover = ruleFor('.bc-grid-row:hover .bc-grid-cell[data-column-id="__bc_actions"]')
-    expect(hover).toContain("background: var(--bc-grid-pinned-actions-hover-bg)")
-    expect(hover).not.toContain("transparent")
+    expect(hover).toContain(
+      "background-image: linear-gradient(var(--bc-grid-row-hover), var(--bc-grid-row-hover))",
+    )
 
     const selected = ruleFor(
       '.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-column-id="__bc_actions"],',
     )
-    expect(selected).toContain("background: var(--bc-grid-pinned-actions-selected-bg)")
+    expect(selected).toContain(
+      "background-image: linear-gradient(var(--bc-grid-row-selected), var(--bc-grid-row-selected))",
+    )
     expect(selected).toContain("color: var(--bc-grid-row-selected-fg)")
 
     const actions = ruleFor(".bc-grid-actions {")
@@ -368,7 +382,9 @@ describe("@bc-grid/theming", () => {
 
     expect(forced).toContain("--bc-grid-pinned-bg: Canvas")
     expect(forced).toContain("--bc-grid-pinned-header-bg: Canvas")
-    expect(forced).toContain("--bc-grid-pinned-row-selected-bg: Highlight")
+    expect(forced).toContain("--bc-grid-row-selected: Highlight")
+    expect(forced).toContain("--bc-grid-row-selected-hover-bg: Highlight")
+    expect(forced).toContain("--bc-grid-row-selected-active-cell-bg: Highlight")
     expect(forced).toContain("--bc-grid-pinned-boundary: CanvasText")
     expect(forced).toContain(".bc-grid-cell-pinned-left-edge::after,")
     expect(forced).toContain("background: CanvasText")

@@ -36,35 +36,54 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#381** `editController.discardRowEdits` + `BcEditGrid` Discard action (audit P1-W3-3) — coordinator merge-resolved a test-file conflict from #378
 - ✅ **#382** `BcCellEditor.getValue?` hook for custom editors (audit P1-W3-6) + custom-editor recipe doc
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
+- ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
 
-### Active now → `v05-editor-bundle-1` (3 editor polish items in one PR, ~30-40 min)
+### Active now → `v05-editor-portal-polish-bundle-1` (3 items, ~60-90 min total)
 
-bsncraft is on `0.5.0-alpha.1`. Until they surface migration findings, bundle these 3 editor items from your own #387 planning doc into one PR. They're independent + small + each addresses a real ERP-user friction.
+**Editor-toggle props shipped as #395** (`editingEnabled` / `showValidationMessages` / `showEditorKeyboardHints` props + `EditorKeyboardHints` component). Three editor-portal items now ride on top of those props. Each is independent; bundle them into one PR.
 
-**Items:**
+1. **Editor activation modes prop** — `editorActivation?: "f2-only" | "single-click" | "double-click"` on `BcGridProps` (default unchanged: `"f2-only"`). Single-click activation is the common ERP pattern for forms-style data entry; double-click is the AG-Grid-default. Wires into the cell click handler in `grid.tsx`. Add unit tests for each mode + an integration test in `editorPortal.test.tsx`.
+2. **Editor blur semantics prop** — `editorBlurAction?: "commit" | "reject" | "ignore"` on `BcGridProps` (default unchanged: `"commit"`). For forms-style ERP screens that want explicit Tab/Enter commit and treat blur as cancel. Threads through `editorPortal.tsx`'s click-outside handler.
+3. **Esc reverts whole row in row-edit mode** — when `BcEditGrid` is in row-edit mode, `Esc` from any cell of the editing row calls `editController.discardRowEdits(rowId)` instead of just cancelling the single cell. Audit P1-W3-3 follow-up to #381. Pure additive — no API change, just a keyboard handler refinement.
 
-1. **Locale-aware number parser** (#387 §2 — audit P1-W3-5) — ship `numberEditor.parseLocaleNumber(value, locale)` helper using `Intl.NumberFormat`'s decimal separator. Document as the recommended `column.valueParser` for international ERP grids. `de-DE` user types `1,5` → parses as `1.5`. Export from `@bc-grid/editors`. Add unit tests for `en-US`, `de-DE`, `fr-FR`, `ja-JP`.
+**Branch:** `agent/worker3/v05-editor-portal-polish-bundle-1`. **Effort:** ~60-90 min.
 
-2. **Multi-mode Combobox `Enter` semantics fix** (#387 §5 — surfaced fixing `editor-multi-select.pw.ts` at `a57a33f` / `8af914e`) — `Enter` currently routes through `updateSelection` (toggling the active option) before bubbling to the editor portal commit. In multi-mode, `Enter` should ONLY bubble to commit; `Space` stays as the toggle gesture. Also update `editor-multi-select.pw.ts` to use `Enter` for commit (drop the `Tab` workaround); coordinator will run Playwright at merge.
+### After bundle-1 → `v05-on-cell-edit-commit-result-aware` (~45-60 min)
 
-3. **Clear-rejection feedback for sighted users** (#387 §6 — surfaced in worker3 #378) — when `clearCell` runs `column.validate("")` and validate rejects, today no editor portal is mounted so the visible validation popover (#356) doesn't fire. Sighted users see nothing; AT users hear the assertive announce. Add a transient toast / status-bar slot. Pairs with #387 §1 (validation visual flash) but ship them separately.
+bsncraft v0.5 alpha.1 editing-pass review (2026-05-03) flagged that `<BcGrid onCellEditCommit>` is fire-and-forget while `<BcServerGrid onServerRowMutation>` is full optimistic / rollback / stale-gate lifecycle. ERP child-CRUD grids that call a server action on every cell commit re-implement the optimistic/rollback dance bc-grid already owns server-side.
 
-**Branch:** `agent/worker3/v05-editor-bundle-1`. **Effort:** ~30-40 min for the bundle.
+**Widen `onCellEditCommit` (additive, backwards-compatible):**
 
-### After bundle-1 ships → `v05-context-menu-editor-toggles` (your context-menu lane)
+```ts
+// Before:
+onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
 
-The maintainer asked for a "vanilla grid by default + everything toggleable from right-click + consumer-supplied persistence API" architecture. RFC is being drafted by coordinator (`agent/coordinator/v05-vanilla-and-context-menu-rfc`); ratifies before this task ships, but the editor-side toggles are predictable and you can start when bundle-1 ships.
+// After:
+onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) =>
+  | void
+  | Promise<void>
+  | Promise<{ status: "accepted" | "rejected"; reason?: string; row?: TRow }>
+```
 
-**Items in your lane:**
+When the host returns `{ status, reason?, row? }`, `<BcGrid>` runs the same cell-overlay lifecycle as `<BcServerGrid>` already does for `ServerMutationResult`: optimistic update on mount, await handler, roll back on rejected and surface `reason` as the cell error overlay (existing #356 popover). Returning `void | Promise<void>` keeps fire-and-forget behavior unchanged.
 
-1. **Edit mode toggle** — context-menu item Editor → "Edit mode" (checkbox: read-only vs editable). When off, the grid behaves as a `<BcGrid>` (no edit affordance, no `<BcEditGrid>` chrome). When on, the grid behaves as `<BcEditGrid>`. Wires through a new `editingEnabled` controlled prop that flips the underlying composition. RFC will pin the prop name.
-2. **Per-column editable toggle** — context-menu item on a header → Editor → "Allow edits in this column" (checkbox). Sets a per-column override that takes precedence over the grid-level edit mode. Persists in `BcUserSettings.columnSettings[columnId].editable`.
-3. **Show validation messages inline toggle** — context-menu item View → "Show validation messages" (checkbox). When off, validation still runs (cells still mark as `aria-invalid`) but the visible popover from #356 is suppressed. Useful for read-only views or for users who want a less noisy edit experience.
-4. **Editor keyboard hints toggle** — context-menu item Editor → "Show keyboard hints" (checkbox). When on, editor inputs render a subtle "F2 / Enter / Esc / Tab" caption at the bottom of the popover for new users. Off by default.
+The implementation lives in `useEditingController` — the commit path already routes through there. Reuse the optimistic-overlay state machine the server-row-model edit pathway uses. `BcCellEditCommitEvent<TRow>` shape stays the same.
 
-The persistence shape will be defined in the RFC's `BcUserSettings` spec. Wait for the RFC to ratify before final wiring; until then, store toggles in memory + accept a `userSettings` prop that the coordinator will define.
+Tests: unit case for each return shape (void / undefined / Promise<void> / Promise<accepted> / Promise<rejected>), assertions on cell overlay state + `aria-invalid` after rejection, optimistic state during the await window.
 
-**Branch:** `agent/worker3/v05-context-menu-editor-toggles`. **Effort:** ~40-60 min.
+**Branch:** `agent/worker3/v05-on-cell-edit-commit-result-aware`. **Effort:** ~45-60 min.
+
+### After commit-widening → `v05-prepare-result-preload` (worker3-editors §3 pulled forward, ~half day)
+
+Pull the v0.6 §3 task forward from `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`: autocomplete editor preloads the first page of options via `editor.prepare()` so the dropdown paints with options on first frame instead of a blank "Loading…" state. Small `BcCellEditorPrepareParams` extension (add `column: BcColumn` so prepare callbacks can branch on column metadata) — flag the API change in the PR description so coordinator catches it during the api-surface diff review.
+
+Graceful-degradation note from the planning doc: if `prepare` rejects, fall through to the synchronous `column.options` path so the editor still mounts even when preload fails (don't push the state machine back to Navigation on prepare-rejection).
+
+**Branch:** `agent/worker3/v05-prepare-result-preload`. **Effort:** ~half day (includes a custom-editor recipe doc update + tests).
+
+### Previously active → `v05-editor-bundle-1` (DONE — #390)
+
+The 3 editor polish items from your own #387 doc landed (locale-aware number parser §2, multi-mode Combobox `Enter` semantics fix §5, clear-rejection feedback for sighted users via status-bar slot §6).
 
 ### Previously active → `v05-editor-followups-planning-doc` (DONE)
 

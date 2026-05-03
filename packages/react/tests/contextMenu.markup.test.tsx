@@ -199,6 +199,69 @@ describe("BcGridContextMenu — separator markup", () => {
   })
 })
 
+describe("BcGridContextMenu — toggle and submenu markup", () => {
+  test("renders toggle items as checkbox menuitems with checked state hooks", () => {
+    const html = renderMenu([
+      {
+        kind: "toggle",
+        id: "show-filter-row",
+        label: "Show filter row",
+        checked: true,
+        onToggle: () => {},
+      },
+    ])
+
+    expect(html).toContain('role="menuitemcheckbox"')
+    expect(html).toContain('aria-checked="true"')
+    expect(html).toContain('data-state="checked"')
+    expect(html).toContain(">Show filter row</span>")
+    expect(html).toContain("M3 8.5 6.5 12 13 4.5")
+  })
+
+  test("renders radio-style toggle items as radio menuitems", () => {
+    const html = renderMenu([
+      {
+        kind: "toggle",
+        selection: "radio",
+        id: "density-normal",
+        label: "Normal",
+        checked: true,
+        onToggle: () => {},
+      },
+    ])
+
+    expect(html).toContain('role="menuitemradio"')
+    expect(html).toContain('aria-checked="true"')
+    expect(html).toContain(">Normal</span>")
+  })
+
+  test("renders submenu triggers with aria-haspopup and nested menu content", () => {
+    const html = renderMenu([
+      {
+        kind: "submenu",
+        id: "view",
+        label: "View",
+        items: [
+          {
+            kind: "toggle",
+            id: "show-sidebar",
+            label: "Show sidebar",
+            checked: false,
+            onToggle: () => {},
+          },
+        ],
+      },
+    ])
+
+    expect(html).toContain('class="bc-grid-context-menu-submenu"')
+    expect(html).toContain('aria-haspopup="menu"')
+    expect(html).toContain('class="bc-grid-context-menu-submenu-content"')
+    expect(html).toContain('role="menu"')
+    expect(html).toContain('class="bc-grid-context-menu-chevron"')
+    expect(html).toContain(">Show sidebar</span>")
+  })
+})
+
 describe("BcGridContextMenu — column command rendering through BcGridMenuItem", () => {
   // Pure-helper tests in `contextMenu.test.ts` exercise the label /
   // disabled-state predicates; these tests confirm the rendered menu

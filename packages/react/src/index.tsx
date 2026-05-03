@@ -59,6 +59,8 @@ export type {
   BcContextMenuCustomItem,
   BcContextMenuItem,
   BcContextMenuItems,
+  BcContextMenuSubmenuItem,
+  BcContextMenuToggleItem,
   BcDetailPanelParams,
   BcEditGridAction,
   BcEditGridProps,
@@ -112,6 +114,9 @@ export type {
   BcStatusBarContext,
   BcStatusBarCustomSegment,
   BcStatusBarSegment,
+  BcUserColumnSettings,
+  BcUserSettings,
+  BcUserSettingsStore,
   BcValidationResult,
   ColumnId,
   LoadServerBlock,
@@ -133,6 +138,7 @@ export type {
   ServerRowUpdate,
   ServerTreeQuery,
   ServerTreeResult,
+  ServerTreeRow,
   ServerViewDiagnostics,
 } from "./types"
 export type { UseAggregationsOptions } from "./aggregations"

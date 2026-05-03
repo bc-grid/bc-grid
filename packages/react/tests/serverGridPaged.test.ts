@@ -9,6 +9,7 @@ import type {
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import {
   isActiveServerPagedResponse,
+  resolveActiveRowModelMode,
   resolvePrefetchAhead,
   resolveScrollToServerCellAction,
   resolveServerPagedGridShell,
@@ -1113,5 +1114,33 @@ describe("resolvePrefetchAhead (worker1 audit P1 §8)", () => {
   test("falls back to default for NaN / Infinity", () => {
     expect(resolvePrefetchAhead(Number.NaN)).toBe(1)
     expect(resolvePrefetchAhead(Number.POSITIVE_INFINITY)).toBe(1)
+  })
+})
+
+describe("resolveActiveRowModelMode (server-mode-switch RFC §6 stage 1)", () => {
+  test("explicit rowModel wins regardless of groupBy", () => {
+    expect(resolveActiveRowModelMode({ rowModel: "paged", groupBy: [] })).toBe("paged")
+    expect(resolveActiveRowModelMode({ rowModel: "paged", groupBy: ["region"] })).toBe("paged")
+    expect(resolveActiveRowModelMode({ rowModel: "infinite", groupBy: [] })).toBe("infinite")
+    expect(resolveActiveRowModelMode({ rowModel: "infinite", groupBy: ["region"] })).toBe(
+      "infinite",
+    )
+    expect(resolveActiveRowModelMode({ rowModel: "tree", groupBy: [] })).toBe("tree")
+    expect(resolveActiveRowModelMode({ rowModel: "tree", groupBy: ["region"] })).toBe("tree")
+  })
+
+  test("heuristic kicks in when rowModel is undefined: empty groupBy → 'paged'", () => {
+    expect(resolveActiveRowModelMode({ rowModel: undefined, groupBy: [] })).toBe("paged")
+  })
+
+  test("heuristic kicks in when rowModel is undefined: non-empty groupBy → 'tree'", () => {
+    expect(resolveActiveRowModelMode({ rowModel: undefined, groupBy: ["region"] })).toBe("tree")
+    expect(resolveActiveRowModelMode({ rowModel: undefined, groupBy: ["region", "owner"] })).toBe(
+      "tree",
+    )
+  })
+
+  test("heuristic defaults to 'paged' when both rowModel and groupBy are undefined", () => {
+    expect(resolveActiveRowModelMode({ rowModel: undefined, groupBy: undefined })).toBe("paged")
   })
 })

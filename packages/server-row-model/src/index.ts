@@ -719,6 +719,7 @@ class ServerRowModelController<TRow> {
           })
           this.emit({ type: "blockError", blockKey, error })
           this.setLastLoad({ blockKey, error, query, status: "error" })
+          logServerError("paged", error)
         }
         throw error
       })
@@ -910,6 +911,7 @@ class ServerRowModelController<TRow> {
             viewKey,
           })
           this.setLastLoad({ blockKey, error, query, status: "error" })
+          logServerError("tree", error)
         }
         throw error
       })
@@ -951,6 +953,40 @@ class ServerRowModelController<TRow> {
     for (const request of this.#inFlightTree.values()) request.controller.abort()
     this.#inFlightTree.clear()
     this.clearInfiniteQueueTimer()
+  }
+
+  /**
+   * Synchronous probe — returns `true` when at least one request is
+   * in flight in any mode. Used by the React layer's `whenIdle()`
+   * implementation to short-circuit when the model is already
+   * quiescent. Per `docs/design/server-mode-switch-rfc.md §6` Q1
+   * hybrid resolution.
+   */
+  hasInFlightRequests(): boolean {
+    return this.#inFlightPaged.size + this.#inFlightInfinite.size + this.#inFlightTree.size > 0
+  }
+
+  /**
+   * Returns a Promise that resolves when every currently-in-flight
+   * request settles (success OR rejection — including aborts). New
+   * requests started after the call are NOT awaited; the React-layer
+   * `whenIdle()` loops on this until the in-flight maps are stable.
+   * Per `docs/design/server-mode-switch-rfc.md §6` Q1 hybrid
+   * resolution.
+   */
+  awaitAllSettled(): Promise<void> {
+    if (!this.hasInFlightRequests()) return Promise.resolve()
+    const promises: Promise<unknown>[] = []
+    for (const request of this.#inFlightPaged.values()) {
+      promises.push(request.promise.then(noop, noop))
+    }
+    for (const request of this.#inFlightInfinite.values()) {
+      promises.push(request.promise.then(noop, noop))
+    }
+    for (const request of this.#inFlightTree.values()) {
+      promises.push(request.promise.then(noop, noop))
+    }
+    return Promise.all(promises).then(noop)
   }
 
   invalidate(
@@ -1597,6 +1633,7 @@ class ServerRowModelController<TRow> {
             query: input.query,
             status: "error",
           })
+          logServerError("infinite", error)
         }
         input.deferred.reject(error)
       })
@@ -1894,8 +1931,26 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError"
 }
 
+// In dev, surface server-row validator throws (e.g. ServerTreeResult
+// childCount mismatch) so they don't dissolve into a blank grid. The
+// promise is still rejected; production hosts get the error via
+// state.error and the `blockError` event. Surfaced 2026-05-03 by
+// bsncraft v0.5 alpha consumer review — a tree childCount mismatch
+// burned ~30 min before the contract was understood.
+function logServerError(scope: "paged" | "infinite" | "tree", error: unknown): void {
+  if (typeof process === "undefined" || process.env.NODE_ENV === "production") return
+  if (isAbortError(error)) return
+  const message = serverLoadErrorMessage(error)
+  // eslint-disable-next-line no-console
+  console.error(`[bc-grid] ${scope} block rejected: ${message}`, error)
+}
+
 function createAbortError(): DOMException {
   return new DOMException("Aborted", "AbortError")
+}
+
+function noop(): void {
+  /* no-op */
 }
 
 function serverLoadErrorMessage(error: unknown): string {

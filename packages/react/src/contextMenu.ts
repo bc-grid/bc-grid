@@ -5,6 +5,8 @@ import type {
   BcContextMenuCustomItem,
   BcContextMenuItem,
   BcContextMenuItems,
+  BcContextMenuSubmenuItem,
+  BcContextMenuToggleItem,
 } from "./types"
 
 export const DEFAULT_CONTEXT_MENU_ITEMS: readonly BcContextMenuBuiltinItem[] = [
@@ -63,17 +65,38 @@ export function isContextMenuSeparator<TRow>(item: BcContextMenuItem<TRow>): ite
 export function isCustomContextMenuItem<TRow>(
   item: BcContextMenuItem<TRow>,
 ): item is BcContextMenuCustomItem<TRow> {
+  return typeof item === "object" && item.kind !== "toggle" && item.kind !== "submenu"
+}
+
+export function isContextMenuToggleItem<TRow>(
+  item: BcContextMenuItem<TRow>,
+): item is BcContextMenuToggleItem<TRow> {
+  return typeof item === "object" && item.kind === "toggle"
+}
+
+export function isContextMenuSubmenuItem<TRow>(
+  item: BcContextMenuItem<TRow>,
+): item is BcContextMenuSubmenuItem<TRow> {
+  return typeof item === "object" && item.kind === "submenu"
+}
+
+export function isContextMenuObjectItem<TRow>(
+  item: BcContextMenuItem<TRow>,
+): item is
+  | BcContextMenuCustomItem<TRow>
+  | BcContextMenuToggleItem<TRow>
+  | BcContextMenuSubmenuItem<TRow> {
   return typeof item === "object"
 }
 
 export function contextMenuItemKey<TRow>(item: BcContextMenuItem<TRow>, index: number): string {
-  if (isCustomContextMenuItem(item)) return item.id
+  if (isContextMenuObjectItem(item)) return item.id
   if (isContextMenuSeparator(item)) return `separator-${index}`
   return item
 }
 
 export function contextMenuItemLabel<TRow>(item: BcContextMenuItem<TRow>): string {
-  if (isCustomContextMenuItem(item)) return item.label
+  if (isContextMenuObjectItem(item)) return item.label
   return builtInLabels[item] ?? ""
 }
 
@@ -82,9 +105,12 @@ export function contextMenuItemDisabled<TRow>(
   context: BcContextMenuContext<TRow>,
 ): boolean {
   if (isContextMenuSeparator(item)) return true
-  if (isCustomContextMenuItem(item)) {
-    if (typeof item.disabled === "function") return item.disabled(context)
-    return item.disabled === true
+  if (isContextMenuObjectItem(item)) {
+    if (typeof item.disabled === "function" && item.disabled(context)) return true
+    if (item.disabled === true) return true
+    if (isContextMenuSubmenuItem(item))
+      return resolveContextMenuSubmenuItems(item, context).length === 0
+    return false
   }
   if (item === "copy" || item === "copy-with-headers") {
     return context.cell == null && context.api.getRangeSelection().ranges.length === 0
@@ -115,8 +141,8 @@ export function contextMenuItemDisabled<TRow>(
     // Disabled when there's no right-click cell context (the user
     // triggered the menu via Shift+F10 with no active cell, say) OR
     // when the active cell's column has no filter entry to clear.
-    if (!context.cell) return true
-    return !filterHasColumn(context.api.getFilter(), context.cell.columnId)
+    if (!context.columnId) return true
+    return !filterHasColumn(context.api.getFilter(), context.columnId)
   }
   if (
     item === "pin-column-left" ||
@@ -143,6 +169,22 @@ export function contextMenuItemDisabled<TRow>(
   return false
 }
 
+export function contextMenuItemChecked<TRow>(
+  item: BcContextMenuItem<TRow>,
+  context: BcContextMenuContext<TRow>,
+): boolean {
+  if (!isContextMenuToggleItem(item)) return false
+  return typeof item.checked === "function" ? item.checked(context) : item.checked
+}
+
+export function resolveContextMenuSubmenuItems<TRow>(
+  item: BcContextMenuSubmenuItem<TRow>,
+  context: BcContextMenuContext<TRow>,
+): readonly BcContextMenuItem<TRow>[] {
+  const resolved = typeof item.items === "function" ? item.items(context) : item.items
+  return resolved.filter(isContextMenuItem)
+}
+
 function columnCommandEnabled<TRow>(
   item: Extract<
     BcContextMenuBuiltinItem,
@@ -153,7 +195,7 @@ function columnCommandEnabled<TRow>(
   // All five column commands need a column-bound trigger context. Header
   // / cell / filter-row right-clicks supply `context.column`; Shift+F10
   // with no active cell does not.
-  const targetColumnId = context.cell?.columnId ?? null
+  const targetColumnId = context.columnId ?? null
   if (!context.column || !targetColumnId) return false
   const columnState = context.api.getColumnState()
   const entry = columnState.find((row) => row.columnId === targetColumnId)

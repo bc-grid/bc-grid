@@ -39,12 +39,6 @@ describe("editingEnabled gates every editor activation path", () => {
   })
 
   test("double-click cell activation respects editingEnabled (and editorActivation mode)", () => {
-    // The body-cell double-click handler is the pointer activation
-    // path. Gated by both `editingEnabled` (master switch) AND
-    // `editorActivation === "double-click"` so the
-    // `"f2-only"` and `"single-click"` modes skip the dblclick
-    // path entirely. The single-click branch in the onClick
-    // handler picks up activation in `"single-click"` mode.
     expect(gridSource).toMatch(
       /editingEnabled\s*&&\s*\n?\s*editorActivation\s*===\s*"double-click"\s*&&\s*\n?\s*!disabled\s*&&\s*\n?\s*columnId/,
     )
