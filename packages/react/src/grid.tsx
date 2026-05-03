@@ -139,7 +139,7 @@ import {
   viewportStyle,
   visuallyHiddenStyle,
 } from "./gridInternals"
-import { buildGroupedRowModel } from "./grouping"
+import { buildGroupedRowTree, flattenGroupedRowTree } from "./grouping"
 import {
   type ColumnMenuAnchor,
   FilterPopup,
@@ -1257,9 +1257,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         : new Set(leafRowEntries.map((entry) => entry.rowId)),
     [isManualPagination, leafRowEntries, paginationEnabled],
   )
-  const groupedRowModel = useMemo(
+  const groupedRowTree = useMemo(
     () =>
-      buildGroupedRowModel({
+      buildGroupedRowTree({
         rows: allRowEntries,
         columns: consumerResolvedColumns,
         // Manual row processing skips client grouping so server-owned
@@ -1267,19 +1267,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         // controls (`groupByState`) stay current so the host can read
         // them via `query.view.groupBy` and react in `loadPage`.
         groupBy: isManualRowProcessing ? [] : groupByState,
-        expansionState,
         locale,
         visibleRowIds: visibleLeafRowIdSet,
       }),
     [
       allRowEntries,
       consumerResolvedColumns,
-      expansionState,
       groupByState,
       isManualRowProcessing,
       locale,
       visibleLeafRowIdSet,
     ],
+  )
+  const groupedRowModel = useMemo(
+    () => flattenGroupedRowTree(groupedRowTree, expansionState),
+    [expansionState, groupedRowTree],
   )
   const rowEntries = groupedRowModel.rows
   const groupingActive = groupedRowModel.active
