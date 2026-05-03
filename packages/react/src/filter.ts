@@ -5,6 +5,12 @@ import type {
   ServerColumnFilter,
   ServerFilter,
 } from "@bc-grid/core"
+import {
+  columnFilterFromSerializedCriteria,
+  matchesFilter as matchesRegisteredFilter,
+  serializeColumnFilterCriteria,
+} from "@bc-grid/filters"
+import { reportUnknownFilterDefinition } from "./filterRegistry"
 
 /**
  * Internal column-filter state held by `<BcGrid>`. One entry per column
@@ -166,9 +172,19 @@ export function buildGridFilter(
       filters.push({ ...parsed, columnId })
       continue
     }
-    const parsed = parseTextFilterInput(value)
-    if (!parsed) continue
-    filters.push({ ...parsed, columnId })
+    if (filterType === "text") {
+      const parsed = parseTextFilterInput(value)
+      if (!parsed) continue
+      filters.push({ ...parsed, columnId })
+      continue
+    }
+    const parsed = columnFilterFromSerializedCriteria({
+      columnId,
+      serialized: value,
+      type: filterType,
+    })
+    if (parsed) filters.push(parsed)
+    else reportUnknownFilterDefinition(filterType, `column "${columnId}" filter state`)
   }
   if (filters.length === 0) return null
   if (filters.length === 1 && filters[0]) return filters[0]
@@ -330,7 +346,13 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
     return values.length > 0 ? encodeSetFilterInput({ op: filter.op, values }) : undefined
   }
 
-  if (filter.type !== "text") return undefined
+  if (filter.type !== "text") {
+    const encoded = serializeColumnFilterCriteria(filter)
+    if (encoded === undefined) {
+      reportUnknownFilterDefinition(filter.type, `column "${filter.columnId}" filter projection`)
+    }
+    return encoded
+  }
   // Default `contains` filter with no modifier flags serialises as a
   // plain string for legacy round-trip. Anything non-default emits the
   // JSON-encoded TextFilterInput so the editor restores op + modifier
@@ -355,7 +377,10 @@ function encodeColumnFilterInput(filter: ServerColumnFilter): string | undefined
  * Unsupported types / ops fall through to "no match" so new public API
  * shapes can be introduced intentionally.
  */
-function matchesColumnFilter(cellValue: FilterCellValue, filter: ServerColumnFilter): boolean {
+export function matchesColumnFilter(
+  cellValue: FilterCellValue,
+  filter: ServerColumnFilter,
+): boolean {
   const value = normaliseFilterCellValue(cellValue)
   if (filter.type === "boolean") {
     if (filter.op !== "is") return false
@@ -434,13 +459,10 @@ export function matchesGridFilter(
   filter: BcGridFilter,
   valueByColumnId: (columnId: ColumnId) => FilterCellValue,
 ): boolean {
-  if (filter.kind === "column") {
-    return matchesColumnFilter(valueByColumnId(filter.columnId), filter)
-  }
-  if (filter.op === "and") {
-    return filter.filters.every((child: ServerFilter) => matchesGridFilter(child, valueByColumnId))
-  }
-  return filter.filters.some((child: ServerFilter) => matchesGridFilter(child, valueByColumnId))
+  return matchesRegisteredFilter(filter, valueByColumnId, {
+    onUnknownFilter: (type, columnFilter) =>
+      reportUnknownFilterDefinition(type, `column "${columnFilter.columnId}" predicate`),
+  })
 }
 
 function normaliseFilterCellValue(value: FilterCellValue): {

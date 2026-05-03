@@ -59,6 +59,17 @@ interface BcColumnFilterBase {
   variant?: "popup" | "inline"
 }
 
+export type BcBuiltInColumnFilterType =
+  | "text"
+  | "number"
+  | "number-range"
+  | "date"
+  | "date-range"
+  | "set"
+  | "boolean"
+
+export type BcColumnFilterType = BcBuiltInColumnFilterType | "custom" | (string & {})
+
 export type BcColumnFilter =
   | (BcColumnFilterBase & {
       type: "text"
@@ -90,7 +101,7 @@ export type BcColumnFilter =
       type: "boolean"
     })
   | (BcColumnFilterBase & {
-      type: "custom"
+      type: "custom" | (string & {})
     })
 
 export type BcColumnFormat =
@@ -708,7 +719,7 @@ export interface ServerFilterGroup {
 export interface ServerColumnFilter {
   kind: "column"
   columnId: ColumnId
-  type: "text" | "number" | "number-range" | "date" | "date-range" | "set" | "boolean" | "custom"
+  type: BcColumnFilterType
   op: string
   value?: unknown
   values?: unknown[]

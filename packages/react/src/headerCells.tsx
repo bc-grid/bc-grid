@@ -33,6 +33,7 @@ import {
   filterSetFilterOptions,
   nextSetFilterValuesOnToggleAll,
 } from "./filter"
+import { getReactFilterDefinition, reportUnknownFilterDefinition } from "./filterRegistry"
 import {
   type ColumnGroupHeaderCell,
   type ResolvedColumn,
@@ -46,7 +47,7 @@ import {
 import { MoreVerticalIcon } from "./internal/header-icons"
 import { usePopupDismiss } from "./internal/popup-dismiss"
 import { computePopupPosition } from "./internal/popup-position"
-import type { BcGridMessages } from "./types"
+import type { BcGridMessages, BcReactFilterDefinition } from "./types"
 
 /**
  * Modifier flags forwarded from the header click / keyboard handler so the
@@ -519,6 +520,7 @@ export function renderFilterCell<TRow>({
           filterText={filterText}
           filterId={filterId}
           filterLabel={filterLabel}
+          column={column.source}
           getSetFilterOptions={
             loadSetFilterOptions ? () => loadSetFilterOptions(column.columnId) : undefined
           }
@@ -1147,6 +1149,7 @@ function FunnelIcon({ active }: { active: boolean }): ReactNode {
  * and the popup-variant `<FilterPopup>`. One implementation, two surfaces.
  */
 export function FilterEditorBody({
+  column,
   filterType,
   filterText,
   filterId,
@@ -1158,6 +1161,7 @@ export function FilterEditorBody({
   surface = "advanced",
   messages,
 }: {
+  column?: unknown
   filterType: BcColumnFilter["type"]
   filterText: string
   filterId: string
@@ -1277,25 +1281,58 @@ export function FilterEditorBody({
       />
     )
   }
+
+  const filterDefinition = getReactFilterDefinition(filterType)
+  if (!filterDefinition?.Editor) {
+    reportUnknownFilterDefinition(filterType, `${filterLabel} editor`)
+    return null
+  }
   return (
-    <input
-      ref={(el) => {
-        focusRef.current = el
+    <RegisteredFilterControl
+      column={column}
+      definition={filterDefinition}
+      filterText={filterText}
+      onFilterChange={onFilterChange}
+    />
+  )
+}
+
+function RegisteredFilterControl({
+  column,
+  definition,
+  filterText,
+  onFilterChange,
+}: {
+  column?: unknown
+  definition: BcReactFilterDefinition
+  filterText: string
+  onFilterChange: (next: string) => void
+}): ReactNode {
+  const Editor = definition.Editor
+  if (!Editor) return null
+  let value: unknown = null
+  if (filterText.trim().length > 0) {
+    try {
+      value = definition.parse(filterText)
+    } catch {
+      value = null
+    }
+  }
+  return (
+    <Editor
+      value={value}
+      commit={(next) => {
+        onFilterChange(next == null ? "" : definition.serialize(next))
       }}
-      aria-label={filterLabel}
-      className="bc-grid-filter-input"
-      type="text"
-      value={filterText}
-      onChange={(event) => onFilterChange(event.currentTarget.value)}
-      onKeyDown={onFilterKeyDown}
-      id={filterId}
-      placeholder={messages.filterPlaceholder}
+      clear={() => onFilterChange("")}
+      column={column}
     />
   )
 }
 
 interface FilterPopupProps {
   anchor: DOMRect
+  column?: unknown
   columnId: ColumnId
   filterType: BcColumnFilter["type"]
   filterText: string
@@ -1355,6 +1392,7 @@ function computeFilterPopupPosition(anchor: DOMRect, popup: { width: number; hei
  */
 export function FilterPopup({
   anchor,
+  column,
   columnId,
   filterType,
   filterText,
@@ -1428,6 +1466,7 @@ export function FilterPopup({
           filterText={filterText}
           filterId={filterId}
           filterLabel={filterLabel}
+          column={column}
           getSetFilterOptions={getSetFilterOptions}
           onFilterChange={onFilterChange}
           autoFocus
