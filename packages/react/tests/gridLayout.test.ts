@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test"
+import * as internals from "../src/gridInternals"
 import {
   DEFAULT_BODY_HEIGHT,
-  autoHeightHeaderViewportStyle,
-  headerScrollTransform,
-  headerViewportStyle,
+  cellStyle,
+  headerBandStyle,
   pinnedLaneStyle,
   resolveContentFitHeight,
   resolveFallbackBodyHeight,
   resolveGridFitHeight,
   resolveViewportFitHeight,
   rootStyle,
-  scrollerStyle,
+  viewportStyle,
 } from "../src/gridInternals"
 
 describe("rootStyle", () => {
@@ -39,9 +39,9 @@ describe("rootStyle", () => {
   })
 })
 
-describe("scrollerStyle", () => {
+describe("viewportStyle", () => {
   test("undefined body height + fixed mode → flex 1 1 auto, scroll-on-overflow", () => {
-    const style = scrollerStyle(undefined)
+    const style = viewportStyle(undefined)
     expect(style).toMatchObject({
       flex: "1 1 auto",
       minHeight: 0,
@@ -51,8 +51,8 @@ describe("scrollerStyle", () => {
     expect(style.height).toBeUndefined()
   })
 
-  test("numeric body height + fixed mode → fixed-height internal scroller", () => {
-    const style = scrollerStyle(360)
+  test("numeric body height + fixed mode → fixed-height internal viewport", () => {
+    const style = viewportStyle(360)
     expect(style).toMatchObject({
       flex: "0 0 auto",
       height: 360,
@@ -63,56 +63,99 @@ describe("scrollerStyle", () => {
   })
 
   test("page-flow mode hands the scrollbar back to the document", () => {
-    const style = scrollerStyle(undefined, true)
+    const style = viewportStyle(undefined, true)
     expect(style.overflowX).toBe("auto")
     expect(style.overflowY).toBe("hidden")
     expect(style.flex).toBe("0 0 auto")
-    // No fixed height + no minHeight: the scroller grows with its canvas.
     expect(style).not.toHaveProperty("height")
     expect(style).not.toHaveProperty("minHeight")
   })
 
   test("page-flow mode ignores any body-height hint", () => {
-    // Even if a numeric bodyHeight bleeds through, page-flow takes priority.
-    const style = scrollerStyle(360, true)
+    const style = viewportStyle(360, true)
     expect(style.overflowX).toBe("auto")
     expect(style.overflowY).toBe("hidden")
     expect(style).not.toHaveProperty("height")
   })
 })
 
-describe("headerViewportStyle", () => {
-  test("fixed-height mode keeps the header in the normal grid flow", () => {
-    expect(headerViewportStyle).toMatchObject({
-      flex: "0 0 auto",
-      overflow: "hidden",
-      position: "relative",
+describe("headerBandStyle", () => {
+  test("pins the header band at the viewport's top edge with z-index above body cells", () => {
+    expect(headerBandStyle(960, 72)).toMatchObject({
+      height: 72,
+      minWidth: "100%",
+      position: "sticky",
+      top: 0,
+      width: 960,
       zIndex: 3,
     })
   })
 
-  test("auto-height mode makes the header sticky above body cells", () => {
-    expect(autoHeightHeaderViewportStyle).toMatchObject({
-      flex: "0 0 auto",
-      overflow: "hidden",
-      position: "sticky",
-      top: 0,
-      zIndex: 4,
-    })
-  })
-})
-
-describe("headerScrollTransform", () => {
-  test("uses the same translate contract as body horizontal scrolling", () => {
-    expect(headerScrollTransform(0)).toBe("translate3d(0px, 0, 0)")
-    expect(headerScrollTransform(240)).toBe("translate3d(-240px, 0, 0)")
+  test("clamps width below 1 to keep the band layoutable in zero-width canvases", () => {
+    expect(headerBandStyle(0, 36).width).toBe(1)
   })
 })
 
 describe("pinnedLaneStyle", () => {
-  test("keeps lane descendants pointer-interactive", () => {
-    const style = pinnedLaneStyle("left", 36, 120, 600)
-    expect(style.pointerEvents).toBeUndefined()
+  test("left lane sticks at viewport-left=0", () => {
+    const style = pinnedLaneStyle("left", 36, 120)
+    expect(style).toMatchObject({
+      height: 36,
+      position: "sticky",
+      width: 120,
+      zIndex: 3,
+      left: 0,
+    })
+    expect(style).not.toHaveProperty("right")
+  })
+
+  test("right lane sticks at viewport-right=0 via CSS right (no JS-computed left)", () => {
+    const style = pinnedLaneStyle("right", 36, 120)
+    expect(style).toMatchObject({
+      height: 36,
+      position: "sticky",
+      width: 120,
+      zIndex: 3,
+      right: 0,
+    })
+    expect(style).not.toHaveProperty("left")
+  })
+})
+
+describe("cellStyle (post-RFC: no transform; lane wrappers carry sticky)", () => {
+  test("never emits a transform field — sticky composition pins pinned cells natively", () => {
+    expect(
+      cellStyle({ align: "left", height: 36, left: 120, pinned: "left", width: 80 }),
+    ).not.toHaveProperty("transform")
+    expect(
+      cellStyle({ align: "right", height: 36, left: 240, pinned: "right", width: 80 }),
+    ).not.toHaveProperty("transform")
+    expect(
+      cellStyle({ align: "left", height: 36, left: 0, pinned: null, width: 120 }),
+    ).not.toHaveProperty("transform")
+  })
+
+  test("center cells stay absolute-positioned within their row", () => {
+    const style = cellStyle({ align: "left", height: 36, left: 240, pinned: null, width: 120 })
+    expect(style.position).toBe("absolute")
+    expect(style.zIndex).toBe(1)
+  })
+
+  test("pinned cells stay absolute-positioned within their lane wrapper", () => {
+    const style = cellStyle({ align: "left", height: 36, left: 0, pinned: "left", width: 120 })
+    expect(style.position).toBe("absolute")
+    expect(style.zIndex).toBe(2)
+  })
+})
+
+describe("regression guards: deleted JS scroll-sync helpers stay deleted", () => {
+  test("headerScrollTransform / syncHeaderRowsScroll / pinnedTransformValue not exported", () => {
+    expect("headerScrollTransform" in internals).toBe(false)
+    expect("syncHeaderRowsScroll" in internals).toBe(false)
+    expect("pinnedTransformValue" in internals).toBe(false)
+    expect("headerViewportStyle" in internals).toBe(false)
+    expect("autoHeightHeaderViewportStyle" in internals).toBe(false)
+    expect("scrollerStyle" in internals).toBe(false)
   })
 })
 

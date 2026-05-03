@@ -2,7 +2,7 @@ import { normaliseRange } from "@bc-grid/core"
 import type { BcRangeSelection, ColumnId, RowId } from "@bc-grid/core"
 import type { Virtualizer } from "@bc-grid/virtualizer"
 import type { CSSProperties } from "react"
-import { classNames, pinnedClassName, pinnedTransformValue } from "./gridInternals"
+import { classNames, pinnedClassName } from "./gridInternals"
 
 export interface RangeOverlayColumn {
   readonly columnId: ColumnId
@@ -133,6 +133,27 @@ function RangeOverlayLayer({
       ))}
     </div>
   )
+}
+
+// Range overlay rectangles render at the canvas level (sibling of body
+// rows). Pinned-cell rects need to track the visually-pinned cell, which
+// composites at viewport-edge via the lane wrapper's `position: sticky`.
+// Until rectangles can render inside the lane wrappers themselves (a
+// natural future simplification), the rect's `transform` counter-tracks
+// the body's horizontal scroll so the rect stays anchored to its cell.
+// Same algebra as the deleted JS scroll-sync helper used to apply, just
+// scoped to range overlays.
+function pinnedTransformValue(
+  pinned: "left" | "right" | null,
+  scrollLeft: number,
+  totalWidth: number,
+  viewportWidth: number,
+): string | undefined {
+  if (pinned === "left") return `translate3d(${scrollLeft}px, 0, 0)`
+  if (pinned === "right") {
+    return `translate3d(${scrollLeft + viewportWidth - totalWidth}px, 0, 0)`
+  }
+  return undefined
 }
 
 function splitColumnSegments(
