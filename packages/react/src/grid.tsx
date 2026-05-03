@@ -1716,14 +1716,29 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     const activeColumn = resolvedColumns.find((c) => c.columnId === cell.columnId)
     const activeEditor = activeColumn?.source.cellEditor ?? defaultTextEditor
     if (activeEditor?.popup !== true) return null
-    const rootEl = rootRef.current
+    const scrollerEl = scrollerRef.current
     const cellEl = document.getElementById(cellDomId(domBaseId, cell.rowId, cell.columnId))
-    if (cellEl && rootEl) {
+    if (cellEl && scrollerEl) {
+      // Editor portal mounts as a sibling of the canvas inside the
+      // scroller, so its absolute `top` / `left` are relative to the
+      // scroller's positioning context — NOT the grid root. The earlier
+      // 628949c fix subtracted `rootRect` (which includes toolbar +
+      // header viewport) so editors landed offset-down by exactly the
+      // header height. bsncraft hit this on alpha.2 (visible 2026-05-03:
+      // editor input rendering ~1 row below the cell). Compute the
+      // cell's offset within the scrollable canvas:
+      //   cellRect (screen-relative) − scrollerRect.top (screen-relative)
+      //   + scroller.scrollTop (translates to canvas-coords)
+      // The +scrollTop term is the key: absolute children of a
+      // `position: relative; overflow: auto` scroll container scroll
+      // with the scrolled content, so the editor's `top` must encode
+      // the cell's position within the canvas, not within the visible
+      // viewport.
       const cellRect = cellEl.getBoundingClientRect()
-      const rootRect = rootEl.getBoundingClientRect()
+      const scrollerRect = scrollerEl.getBoundingClientRect()
       return {
-        top: cellRect.top - rootRect.top,
-        left: cellRect.left - rootRect.left,
+        top: cellRect.top - scrollerRect.top + scrollerEl.scrollTop,
+        left: cellRect.left - scrollerRect.left + scrollerEl.scrollLeft,
         width: cellRect.width,
         height: cellRect.height,
       }
