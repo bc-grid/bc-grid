@@ -2,12 +2,16 @@ import { describe, expect, test } from "bun:test"
 import type { BcColumnStateEntry, BcGridFilter, BcSelection } from "@bc-grid/core"
 import {
   DEFAULT_CONTEXT_MENU_ITEMS,
+  contextMenuItemChecked,
   contextMenuItemDisabled,
   contextMenuItemKey,
   contextMenuItemLabel,
   isContextMenuSeparator,
+  isContextMenuSubmenuItem,
+  isContextMenuToggleItem,
   isCustomContextMenuItem,
   resolveContextMenuItems,
+  resolveContextMenuSubmenuItems,
 } from "../src/contextMenu"
 import type { BcContextMenuContext, BcContextMenuItem, BcReactGridColumn } from "../src/types"
 
@@ -158,6 +162,63 @@ describe("context menu — separators and shape predicates", () => {
     expect(isCustomContextMenuItem("copy")).toBe(false)
     expect(isCustomContextMenuItem("clear-selection")).toBe(false)
     expect(isCustomContextMenuItem({ id: "x", label: "X", onSelect: () => {} })).toBe(true)
+    expect(
+      isCustomContextMenuItem({
+        kind: "toggle",
+        id: "show-filter-row",
+        label: "Show filter row",
+        checked: true,
+        onToggle: () => {},
+      }),
+    ).toBe(false)
+    expect(
+      isCustomContextMenuItem({
+        kind: "submenu",
+        id: "view",
+        label: "View",
+        items: [],
+      }),
+    ).toBe(false)
+  })
+
+  test("toggle and submenu predicates narrow the new object item shapes", () => {
+    const toggle: BcContextMenuItem<Row> = {
+      kind: "toggle",
+      id: "show-sidebar",
+      label: "Show sidebar",
+      checked: (context) => context.row?.id === "open",
+      onToggle: () => {},
+    }
+    const submenu: BcContextMenuItem<Row> = {
+      kind: "submenu",
+      id: "view",
+      label: "View",
+      items: ["copy", false, null, undefined, "clear-range"],
+    }
+
+    expect(isContextMenuToggleItem(toggle)).toBe(true)
+    expect(isContextMenuSubmenuItem(toggle)).toBe(false)
+    expect(contextMenuItemChecked(toggle, makeContext({ row: { id: "open", name: "Acme" } }))).toBe(
+      true,
+    )
+    expect(
+      contextMenuItemChecked(toggle, makeContext({ row: { id: "closed", name: "Acme" } })),
+    ).toBe(false)
+
+    expect(isContextMenuSubmenuItem(submenu)).toBe(true)
+    expect(isContextMenuToggleItem(submenu)).toBe(false)
+    expect(resolveContextMenuSubmenuItems(submenu, makeContext())).toEqual(["copy", "clear-range"])
+  })
+
+  test("empty submenus are disabled so the renderer skips dead branches", () => {
+    const submenu: BcContextMenuItem<Row> = {
+      kind: "submenu",
+      id: "empty",
+      label: "Empty",
+      items: () => [false, null, undefined],
+    }
+
+    expect(contextMenuItemDisabled(submenu, makeContext())).toBe(true)
   })
 
   test("contextMenuItemDisabled treats every separator as disabled regardless of context", () => {

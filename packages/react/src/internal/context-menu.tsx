@@ -3,17 +3,22 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from "react"
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { dispatchColumnCommand } from "../columnCommands"
 import {
+  contextMenuItemChecked,
   contextMenuItemDisabled,
   contextMenuItemKey,
   contextMenuItemLabel,
   isContextMenuSeparator,
+  isContextMenuSubmenuItem,
+  isContextMenuToggleItem,
   isCustomContextMenuItem,
   resolveContextMenuItems,
+  resolveContextMenuSubmenuItems,
 } from "../contextMenu"
 import type { ResolvedColumn, RowEntry } from "../gridInternals"
 import type { BcContextMenuContext, BcContextMenuItem, BcContextMenuItems } from "../types"
 import { contextMenuBuiltinIcon } from "./context-menu-icons"
-import { BcGridMenuItem } from "./menu-item"
+import { DisclosureChevron } from "./disclosure-icon"
+import { BcGridMenuItem, BcGridMenuToggleItem } from "./menu-item"
 import { usePopupDismiss } from "./popup-dismiss"
 import { computePopupPosition } from "./popup-position"
 
@@ -108,7 +113,12 @@ export function BcGridContextMenu<TRow>({
   const activate = (item: BcContextMenuItem<TRow>) => {
     if (isContextMenuSeparator(item)) return
     if (contextMenuItemDisabled(item, context)) return
-    if (isCustomContextMenuItem(item)) {
+    if (isContextMenuSubmenuItem(item)) {
+      return
+    }
+    if (isContextMenuToggleItem(item)) {
+      item.onToggle(context, !contextMenuItemChecked(item, context))
+    } else if (isCustomContextMenuItem(item)) {
       item.onSelect(context)
     } else if (item === "copy" || item === "copy-with-headers") {
       const activeRange = api.getRangeSelection().ranges.at(-1)
@@ -183,6 +193,100 @@ export function BcGridContextMenu<TRow>({
     onClose()
   }
 
+  const renderItem = (
+    item: BcContextMenuItem<TRow>,
+    index: number,
+    keyPrefix = "",
+    nested = false,
+  ): ReactNode => {
+    if (isContextMenuSeparator(item)) {
+      return (
+        <div
+          aria-orientation="horizontal"
+          className="bc-grid-context-menu-separator"
+          key={contextMenuItemKey(item, index)}
+          role="separator"
+          tabIndex={-1}
+        />
+      )
+    }
+
+    const key = `${keyPrefix}${contextMenuItemKey(item, index)}`
+    const label = contextMenuItemLabel(item)
+    const disabled = contextMenuItemDisabled(item, context)
+    const active = !nested && activeIndex === index
+
+    if (isContextMenuSubmenuItem(item)) {
+      const subItems = resolveContextMenuSubmenuItems(item, context)
+      return (
+        <div className="bc-grid-context-menu-submenu" data-open={active || undefined} key={key}>
+          <BcGridMenuItem
+            active={active}
+            aria-haspopup="menu"
+            aria-expanded={active || undefined}
+            disabled={disabled}
+            id={nested ? undefined : `${menuId}-item-${index}`}
+            label={label}
+            leading={null}
+            trailing={<DisclosureChevron className="bc-grid-context-menu-chevron" />}
+            onClick={(event) => event.stopPropagation()}
+            onActivate={() => activate(item)}
+            onMouseEnter={() => {
+              if (!nested) setActiveIndex(index)
+            }}
+          />
+          <div className="bc-grid-context-menu-submenu-content" role="menu">
+            {subItems.map((child, childIndex) => renderItem(child, childIndex, `${key}-`, true))}
+          </div>
+        </div>
+      )
+    }
+
+    if (isContextMenuToggleItem(item)) {
+      return (
+        <BcGridMenuToggleItem
+          active={active}
+          checked={contextMenuItemChecked(item, context)}
+          disabled={disabled}
+          id={nested ? undefined : `${menuId}-item-${index}`}
+          key={key}
+          label={label}
+          onClick={(event) => event.stopPropagation()}
+          onActivate={() => activate(item)}
+          onMouseEnter={() => {
+            if (!nested) setActiveIndex(index)
+          }}
+        />
+      )
+    }
+
+    const icon = isCustomContextMenuItem(item) ? null : contextMenuBuiltinIcon(item)
+    // Custom items can opt into shadcn's destructive treatment via
+    // `variant: "destructive"`. The renderer emits the same
+    // `data-variant` attribute shadcn DropdownMenu uses so consumer
+    // CSS can target it identically. Built-in IDs don't have a
+    // destructive flavour today (none of the bundled commands are
+    // irreversible), so the attribute is omitted for them.
+    const variant =
+      isCustomContextMenuItem(item) && item.variant === "destructive" ? "destructive" : undefined
+    return (
+      <BcGridMenuItem
+        active={active}
+        disabled={disabled}
+        data-variant={variant}
+        id={nested ? undefined : `${menuId}-item-${index}`}
+        key={key}
+        label={label}
+        leading={icon}
+        onClick={(event) => event.stopPropagation()}
+        onActivate={() => activate(item)}
+        onMouseEnter={() => {
+          if (!nested) setActiveIndex(index)
+        }}
+      />
+    )
+  }
+
   return (
     <div
       aria-activedescendant={activeItemId}
@@ -213,48 +317,7 @@ export function BcGridContextMenu<TRow>({
       style={contextMenuStyle(position)}
       tabIndex={-1}
     >
-      {items.map((item, index) => {
-        if (isContextMenuSeparator(item)) {
-          return (
-            <div
-              aria-orientation="horizontal"
-              className="bc-grid-context-menu-separator"
-              key={contextMenuItemKey(item, index)}
-              role="separator"
-              tabIndex={-1}
-            />
-          )
-        }
-
-        const label = contextMenuItemLabel(item)
-        const disabled = contextMenuItemDisabled(item, context)
-        const active = activeIndex === index
-        const icon = isCustomContextMenuItem(item) ? null : contextMenuBuiltinIcon(item)
-        // Custom items can opt into shadcn's destructive treatment via
-        // `variant: "destructive"`. The renderer emits the same
-        // `data-variant` attribute shadcn DropdownMenu uses so consumer
-        // CSS can target it identically. Built-in IDs don't have a
-        // destructive flavour today (none of the bundled commands are
-        // irreversible), so the attribute is omitted for them.
-        const variant =
-          isCustomContextMenuItem(item) && item.variant === "destructive"
-            ? "destructive"
-            : undefined
-        return (
-          <BcGridMenuItem
-            active={active}
-            disabled={disabled}
-            data-variant={variant}
-            id={`${menuId}-item-${index}`}
-            key={contextMenuItemKey(item, index)}
-            label={label}
-            leading={icon}
-            onClick={(event) => event.stopPropagation()}
-            onActivate={() => activate(item)}
-            onMouseEnter={() => setActiveIndex(index)}
-          />
-        )
-      })}
+      {items.map((item, index) => renderItem(item, index))}
     </div>
   )
 }

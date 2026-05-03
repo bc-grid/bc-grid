@@ -133,6 +133,7 @@ import {
   renderFilterCell,
   renderHeaderCell,
 } from "./headerCells"
+import { buildGridChromeContextMenuItems } from "./internal/chrome-context-menu"
 import type { BcGridContextMenuLayerProps } from "./internal/context-menu-layer"
 import { nextKeyboardNav } from "./keyboard"
 import {
@@ -188,6 +189,7 @@ import type {
   BcGridProps,
   BcReactGridColumn,
   BcSidebarContext,
+  BcUserSettings,
 } from "./types"
 import { useEditingController } from "./useEditingController"
 import { formatCellValue, getCellValue } from "./value"
@@ -259,6 +261,46 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () => readUrlPersistedGridState(props.urlStatePersistence),
     [props.urlStatePersistence],
   )
+  const [userSettingsState, setUserSettingsState] = useState<BcUserSettings | undefined>(() =>
+    props.userSettings?.read(),
+  )
+  const userSettingsRef = useRef(userSettingsState)
+  const applyUserSettingsState = useCallback((next: BcUserSettings | undefined) => {
+    userSettingsRef.current = next
+    setUserSettingsState(next)
+  }, [])
+  useEffect(() => {
+    const store = props.userSettings
+    if (!store) {
+      applyUserSettingsState(undefined)
+      return
+    }
+    applyUserSettingsState(store.read())
+    return store.subscribe?.((next) => applyUserSettingsState(next))
+  }, [applyUserSettingsState, props.userSettings])
+  const updateUserSettings = useCallback(
+    (updater: (prev: BcUserSettings) => BcUserSettings) => {
+      const base = userSettingsRef.current ?? { version: 1 }
+      const next = updater(base)
+      userSettingsRef.current = next
+      setUserSettingsState(next)
+      props.userSettings?.write(next)
+    },
+    [props.userSettings],
+  )
+  const setVisibleUserSetting = useCallback(
+    (key: keyof NonNullable<BcUserSettings["visible"]>, value: boolean) => {
+      updateUserSettings((prev) => ({
+        ...prev,
+        // TODO(vanilla-rfc): draft `visible.*` names are intentionally
+        // mirrored from the RFC until the coordinator ratifies the final
+        // user-settings field names.
+        visible: { ...prev.visible, [key]: value },
+      }))
+    },
+    [updateUserSettings],
+  )
+  const userVisibleSettings = userSettingsState?.visible
   const defaultLayoutState = props.initialLayout ?? props.layoutState
   const layoutColumnIds = useMemo(
     () =>
@@ -437,9 +479,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const selectionAnchorRef = useRef<RowId | null>(null)
   const [columnMenu, setColumnMenu] = useState<ColumnVisibilityMenuAnchor | null>(null)
   const showColumnMenu = props.showColumnMenu !== false
-  const showFilterRow = props.showFilterRow ?? props.showFilters
+  const filterRowLocked = props.showFilterRow !== undefined || props.showFilters !== undefined
+  const showFilterRow = props.showFilterRow ?? props.showFilters ?? userVisibleSettings?.filterRow
   const sidebarPanels = useMemo(() => resolveSidebarPanels(props.sidebar), [props.sidebar])
   const hasSidebar = sidebarPanels.length > 0
+  const sidebarVisible = hasSidebar && (userVisibleSettings?.sidebar ?? true)
 
   const defaultColumnState = useMemo(() => {
     if (props.defaultColumnState !== undefined) return props.defaultColumnState
@@ -492,14 +536,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultActiveCell ?? null,
     props.onActiveCellChange,
   )
+  const sidebarPanelControlled = hasProp(props, "sidebarPanel")
   const [sidebarPanelState, setSidebarPanelState] = useControlledState<string | null>(
-    hasProp(props, "sidebarPanel"),
+    sidebarPanelControlled,
     props.sidebarPanel ?? null,
     resolveInitialSidebarPanelId({
       defaultPanelId: hasProp(props, "defaultSidebarPanel") ? props.defaultSidebarPanel : undefined,
       persistedPanelId: hasLayoutStateValue(defaultLayoutState, "sidebarPanel")
         ? defaultLayoutState.sidebarPanel
-        : persistedGridState.sidebarPanel,
+        : (userSettingsState?.sidebarPanel ?? persistedGridState.sidebarPanel),
       panels: sidebarPanels,
     }),
     props.onSidebarPanelChange,
@@ -513,6 +558,48 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       setSidebarPanelState(normalizeSidebarPanelId(next, sidebarPanels))
     },
     [setSidebarPanelState, sidebarPanels],
+  )
+  useEffect(() => {
+    if (sidebarPanelControlled) return
+    if (!userSettingsState) return
+    if (!Object.prototype.hasOwnProperty.call(userSettingsState, "sidebarPanel")) return
+    setActiveSidebarPanel(userSettingsState.sidebarPanel ?? null)
+  }, [setActiveSidebarPanel, sidebarPanelControlled, userSettingsState])
+  const setSidebarPanelPreference = useCallback(
+    (panelId: string | null) => {
+      const normalized = normalizeSidebarPanelId(panelId, sidebarPanels)
+      setActiveSidebarPanel(normalized)
+      updateUserSettings((prev) => ({
+        ...prev,
+        sidebarPanel: normalized,
+        visible: { ...prev.visible, sidebar: true },
+      }))
+    },
+    [setActiveSidebarPanel, sidebarPanels, updateUserSettings],
+  )
+  const setSidebarVisiblePreference = useCallback(
+    (next: boolean) => {
+      const preferredPanel =
+        activeSidebarPanel ??
+        normalizeSidebarPanelId(userSettingsRef.current?.sidebarPanel, sidebarPanels) ??
+        sidebarPanels[0]?.id ??
+        null
+      if (next && preferredPanel) setActiveSidebarPanel(preferredPanel)
+      updateUserSettings((prev) => ({
+        ...prev,
+        sidebarPanel: preferredPanel,
+        visible: { ...prev.visible, sidebar: next },
+      }))
+    },
+    [activeSidebarPanel, setActiveSidebarPanel, sidebarPanels, updateUserSettings],
+  )
+  const setFilterRowVisiblePreference = useCallback(
+    (next: boolean) => setVisibleUserSetting("filterRow", next),
+    [setVisibleUserSetting],
+  )
+  const setStatusBarVisiblePreference = useCallback(
+    (next: boolean) => setVisibleUserSetting("statusBar", next),
+    [setVisibleUserSetting],
   )
 
   // Consumer columns resolved for filter / sort lookups. The synthetic
@@ -1902,11 +1989,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const statusBarSegments = useMemo<
     readonly NonNullable<BcGridProps<TRow>["statusBar"]>[number][]
   >(() => {
-    const base = props.statusBar ?? []
+    if (userVisibleSettings?.statusBar === false) return []
+    const base =
+      props.statusBar ??
+      (userVisibleSettings?.statusBar === true ? (["total", "filtered", "selected"] as const) : [])
     if (props.activeFilterSummary === "off") return base
     if (base.includes("activeFilters")) return base
     return ["activeFilters", ...base]
-  }, [props.activeFilterSummary, props.statusBar])
+  }, [props.activeFilterSummary, props.statusBar, userVisibleSettings?.statusBar])
+  const statusBarVisible = userVisibleSettings?.statusBar ?? true
 
   const handlePaginationChange = useCallback(
     (next: BcPaginationState) => {
@@ -2410,6 +2501,35 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const ContextMenuLayer = BcGridContextMenuLayer as ComponentType<
     BcGridContextMenuLayerProps<TRow>
   >
+  const chromeContextMenuItems = useMemo(
+    () =>
+      buildGridChromeContextMenuItems<TRow>({
+        activeSidebarPanel,
+        filterRowLocked,
+        filterRowVisible: hasInlineFilters,
+        onFilterRowVisibleChange: setFilterRowVisiblePreference,
+        onSidebarPanelChange: setSidebarPanelPreference,
+        onSidebarVisibleChange: setSidebarVisiblePreference,
+        onStatusBarVisibleChange: setStatusBarVisiblePreference,
+        sidebarAvailable: hasSidebar,
+        sidebarPanels,
+        sidebarVisible,
+        statusBarVisible,
+      }),
+    [
+      activeSidebarPanel,
+      filterRowLocked,
+      hasInlineFilters,
+      hasSidebar,
+      setFilterRowVisiblePreference,
+      setSidebarPanelPreference,
+      setSidebarVisiblePreference,
+      setStatusBarVisiblePreference,
+      sidebarPanels,
+      sidebarVisible,
+      statusBarVisible,
+    ],
+  )
 
   return (
     <div
@@ -2893,14 +3013,14 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           ) : null}
         </div>
 
-        {hasSidebar ? (
+        {sidebarVisible ? (
           <BcGridSidebar
             panels={sidebarPanels}
             activePanelId={activeSidebarPanel}
             context={sidebarContext}
             domBaseId={domBaseId}
             width={props.sidebarWidth}
-            onActivePanelChange={setActiveSidebarPanel}
+            onActivePanelChange={setSidebarPanelPreference}
           />
         ) : null}
       </div>
@@ -2919,7 +3039,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           args={[
             activeCell,
             api,
-            props.contextMenuItems,
+            props.contextMenuItems ?? chromeContextMenuItems,
             clearContextSelection,
             copyRangeToClipboard,
             editController.editState.mode === "navigation",
