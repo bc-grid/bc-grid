@@ -295,6 +295,7 @@ export const apiSurfaceManifest = [
       "BcSidebarCustomPanel",
       "BcSidebarPanel",
       "BcStatusBar",
+      "EditorTabWraparound",
       "BcStatusBarContext",
       "BcStatusBarCustomSegment",
       "BcStatusBarSegment",
