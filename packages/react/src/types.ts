@@ -1078,6 +1078,16 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   loading?: boolean
   loadingOverlay?: ReactNode
+  /**
+   * Render slot for an error state. When set AND `loading` is false,
+   * the grid renders this in place of the no-rows / loading overlay
+   * so consumers can surface a "failed to load + retry" UI without
+   * fighting the overlay precedence. `<BcServerGrid>` populates this
+   * automatically from `props.renderServerError` (or a minimal default
+   * "Failed to load. Retry" fallback) when the active mode's loader
+   * rejects. Worker1 v0.6 server-grid error boundary.
+   */
+  errorOverlay?: ReactNode
 
   ariaLabel?: string
   ariaLabelledBy?: string
@@ -1480,6 +1490,24 @@ export interface BcServerGridProps<TRow>
    * preserve focus across view changes.
    */
   preserveFocusOnViewChange?: boolean
+
+  /**
+   * Render slot for the most-recent failed-load error (worker1 v0.6
+   * server-grid error boundary). When the active mode's loader (paged
+   * `loadPage` / infinite `loadBlock` / tree `loadChildren`) rejects,
+   * `<BcServerGrid>` calls this with the rejected error + a `retry`
+   * thunk that re-fires the active fetch. The returned `ReactNode`
+   * replaces the default loadingOverlay error string.
+   *
+   * When omitted, the grid renders a minimal "Failed to load. Retry"
+   * fallback using `--bc-grid-edit-state-error-*` tokens for theme
+   * consistency. Both paths surface `BcServerGridApi.getLastError()`
+   * for consumers that want imperative access.
+   */
+  renderServerError?: (params: {
+    error: unknown
+    retry: () => void
+  }) => ReactNode
 
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
 }

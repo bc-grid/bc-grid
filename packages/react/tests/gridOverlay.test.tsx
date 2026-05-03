@@ -18,7 +18,9 @@ const columns: readonly BcGridColumn<Row>[] = [
   },
 ]
 
-function renderGrid(props: { loading?: boolean; loadingOverlay?: ReactNode } = {}): string {
+function renderGrid(
+  props: { loading?: boolean; loadingOverlay?: ReactNode; errorOverlay?: ReactNode } = {},
+): string {
   return renderToStaticMarkup(
     <BcGrid<Row>
       ariaLabel="Customers"
@@ -52,5 +54,37 @@ describe("BcGrid loading overlay", () => {
     expect(html).toContain('data-testid="custom-loader"')
     expect(html).toContain("Fetching customers")
     expect(html).not.toContain("bc-grid-loading-spinner")
+  })
+})
+
+describe("BcGrid error overlay (worker1 v06 server-grid error boundary)", () => {
+  test("errorOverlay renders inside bc-grid-overlay with role=alert when loading is false", () => {
+    const html = renderGrid({
+      errorOverlay: <span data-testid="boom">Server hiccup</span>,
+    })
+    expect(html).toContain('class="bc-grid-overlay" role="alert"')
+    expect(html).toContain('data-testid="boom"')
+    expect(html).toContain("Server hiccup")
+    // No-rows fallback is suppressed when errorOverlay wins precedence.
+    expect(html).not.toContain("No rows")
+  })
+
+  test("errorOverlay is suppressed while loading is true (loading wins)", () => {
+    const html = renderGrid({
+      loading: true,
+      errorOverlay: <span data-testid="boom">Should not render</span>,
+    })
+    // Loading overlay renders inside bc-grid-overlay; error overlay does not.
+    expect(html).toContain('class="bc-grid-overlay" role="status"')
+    expect(html).not.toContain('data-testid="boom"')
+  })
+
+  test("no errorOverlay + zero rows + not loading → no-rows fallback renders", () => {
+    const html = renderGrid()
+    // bc-grid-overlay renders with status role + the noRowsLabel.
+    expect(html).toContain('class="bc-grid-overlay" role="status"')
+    expect(html).toContain("No rows")
+    // No bc-grid-overlay with role="alert" when there's no errorOverlay.
+    expect(html).not.toContain('class="bc-grid-overlay" role="alert"')
   })
 })

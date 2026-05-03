@@ -292,6 +292,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     footer,
     loading,
     loadingOverlay,
+    errorOverlay,
     renderDetailPanel,
     detailPanelHeight,
     ariaLabel,
@@ -4307,7 +4308,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             </div>
           ) : null}
 
-          {!loading && rowEntries.length === 0 ? (
+          {!loading && errorOverlay ? (
+            <div className="bc-grid-overlay" role="alert" style={overlayStyle}>
+              {errorOverlay}
+            </div>
+          ) : !loading && rowEntries.length === 0 ? (
             <div className="bc-grid-overlay" role="status" style={overlayStyle}>
               {messages.noRowsLabel}
             </div>

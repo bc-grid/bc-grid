@@ -911,6 +911,12 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         if (mode === "infinite") return infinite.whenIdle()
         if (mode === "tree") return tree.whenIdle()
       },
+      getLastError() {
+        if (mode === "paged") return paged.error ?? null
+        if (mode === "infinite") return infinite.error ?? null
+        if (mode === "tree") return tree.error ?? null
+        return null
+      },
     }
   }, [
     gridApiRef,
@@ -998,15 +1004,27 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
           : activeMode === "tree"
             ? tree.loading
             : true))
-  const loadingOverlay =
-    props.loadingOverlay ??
-    (activeMode === "paged" && paged.error
-      ? "Failed to load rows"
-      : activeMode === "infinite" && infinite.error
-        ? "Failed to load rows"
-        : activeMode === "tree" && tree.error
-          ? "Failed to load rows"
-          : undefined)
+  const activeError: unknown =
+    activeMode === "paged"
+      ? (paged.error ?? null)
+      : activeMode === "infinite"
+        ? (infinite.error ?? null)
+        : activeMode === "tree"
+          ? (tree.error ?? null)
+          : null
+  const retryLoad = useCallback(() => {
+    if (activeMode === "paged") paged.refresh({ purge: true })
+    else if (activeMode === "infinite") infinite.refresh({ purge: true })
+    else if (activeMode === "tree") tree.refresh({ purge: true })
+  }, [activeMode, paged, infinite, tree])
+  const errorOverlay: ReactNode =
+    props.errorOverlay ??
+    (activeError != null
+      ? (props.renderServerError?.({ error: activeError, retry: retryLoad }) ?? (
+          <BcServerGridDefaultErrorOverlay error={activeError} retry={retryLoad} />
+        ))
+      : undefined)
+  const loadingOverlay = props.loadingOverlay ?? undefined
 
   return (
     <BcGrid
@@ -1032,6 +1050,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       {...(activeMode === "paged" ? { footer: pagedFooter } : {})}
       loading={loading}
       loadingOverlay={loadingOverlay}
+      {...(errorOverlay !== undefined ? { errorOverlay } : {})}
       {...(activeMode === "paged" ? { pagination: paged.gridShell.gridPagination } : {})}
       {...(cellEditCommitHandler ? { onCellEditCommit: cellEditCommitHandler } : {})}
       {...(activeMode === "paged" ? { onColumnStateChange: paged.handleColumnStateChange } : {})}
@@ -2349,6 +2368,58 @@ export function createServerEditMutationError<TRow>(result: ServerMutationResult
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Server rejected the edit."
+}
+
+// Exported for unit testing (worker1 v06 server-grid error boundary).
+export function serverErrorMessage(error: unknown): string {
+  if (error == null) return "Failed to load."
+  if (error instanceof Error) return error.message || "Failed to load."
+  if (typeof error === "string") return error
+  return "Failed to load."
+}
+
+// Exported for unit testing (worker1 v06 server-grid error boundary).
+export function BcServerGridDefaultErrorOverlay({
+  error,
+  retry,
+}: {
+  error: unknown
+  retry: () => void
+}): ReactNode {
+  return (
+    <div
+      className="bc-grid-server-error"
+      style={{
+        display: "inline-flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+        padding: 12,
+        color: "var(--bc-grid-edit-state-error-fg, #b91c1c)",
+        background: "var(--bc-grid-edit-state-error-bg, transparent)",
+        border: "1px solid var(--bc-grid-edit-state-error-border, currentColor)",
+        borderRadius: 6,
+      }}
+    >
+      <span>{serverErrorMessage(error)}</span>
+      <button
+        type="button"
+        onClick={retry}
+        data-bc-grid-server-error-retry="true"
+        style={{
+          padding: "4px 12px",
+          cursor: "pointer",
+          background: "transparent",
+          color: "inherit",
+          border: "1px solid currentColor",
+          borderRadius: 4,
+          font: "inherit",
+        }}
+      >
+        Retry
+      </button>
+    </div>
+  )
 }
 
 function findCachedServerRow<TRow>(
