@@ -155,6 +155,72 @@ test(`server row model loads and re-hits 100k cached rows under ${SERVER_ROW_MOD
   expect(metric.durationMs).toBeLessThan(SERVER_ROW_MODEL_BAR_MS)
 })
 
+// `v06-server-perf-block-cache-lru-tuning` (worker1 audit P1 §5).
+// Default `maxBlocks` is 50 (5k rows of 100-row blocks). The existing
+// 100k-row test above pins the IDEAL — every block stays cached. This
+// case pins the EVICTION-ACTIVE workload: 10k rows scrolled top-to-
+// bottom-and-back, causing the second pass to refetch ~half the blocks
+// because the first 50 evicted as the user scrolled past them. Coordinator
+// reads the emitted metrics at merge to decide whether to bump the
+// default to 75 / 100 if the latency or hit-rate numbers warrant it.
+const LRU_TUNING_BAR_MS = 5_000
+test(`server row model under-default-cache eviction stays under ${LRU_TUNING_BAR_MS}ms with sustained scroll`, async ({
+  page,
+}) => {
+  await page.goto("/?rawData=1&mount=false&rows=10000&cols=10")
+  await page.waitForFunction(() => window.__bcGridPerf.rawRowCount === 10_000)
+
+  // 10k rows / 100 per block = 100 blocks. Default `maxBlocks: 50` →
+  // first pass loads 100 (evicting the first 50 as the last 50 land);
+  // second pass re-traverses → cache holds the latest 50, so the first
+  // 50 of the second pass are fresh fetches and the last 50 are hits.
+  // Expected hot-cache hit rate ≈ 50 % under the default; coordinator
+  // can rerun with `maxBlocks: 75 / 100 / 150` to surface the marginal
+  // value of bumping the default.
+  const metric = await page.evaluate(() =>
+    window.__bcGridPerf.serverRowModelBlocks({
+      blockSize: 100,
+      debounceMs: 16,
+      fetchDelayMs: 1,
+      maxConcurrentRequests: 4,
+      rowCount: 10_000,
+      // Intentionally NOT passing `maxBlocks` so the harness picks up
+      // `DEFAULT_BLOCK_CACHE_OPTIONS.maxBlocks` (currently 50). If
+      // coordinator wants to A/B test a tuning bump, override here.
+    }),
+  )
+
+  console.log(
+    [
+      `perf lru-tuning rows=${metric.rowCount}`,
+      `blocks=${metric.loadedBlocks}`,
+      `duration=${metric.durationMs.toFixed(2)}ms`,
+      `bar=${LRU_TUNING_BAR_MS}ms`,
+      `maxBlocks=${metric.maxBlocks}`,
+      `hotCacheHitRate=${metric.hotCacheHitRate.toFixed(3)}`,
+      `overallHitRate=${metric.cacheHitRate.toFixed(3)}`,
+      `fetchAvg=${metric.avgFetchLatencyMs.toFixed(2)}ms`,
+      `fetchMax=${metric.maxFetchLatencyMs.toFixed(2)}ms`,
+      `queueAvg=${metric.avgQueueWaitMs.toFixed(2)}ms`,
+      `queueMax=${metric.maxQueueWaitMs.toFixed(2)}ms`,
+      `queued=${metric.queuedRequests}`,
+      `maxQueueDepth=${metric.maxQueueDepth}`,
+      `blockFetches=${metric.blockFetches}`,
+      `dedupedRequests=${metric.dedupedRequests}`,
+    ].join(" "),
+  )
+  // Loose bars — the case is informational, not gating. Bars catch
+  // gross regressions (e.g. eviction loop running indefinitely) but
+  // leave coordinator the latitude to read the emitted metrics and
+  // decide whether to tune the default upwards.
+  expect(metric.durationMs).toBeLessThan(LRU_TUNING_BAR_MS)
+  expect(metric.maxBlocks).toBe(50) // pin the documented default
+  // Hit rate must stay above zero (cache must be doing SOMETHING) but
+  // we don't pin a floor like the 100k case's 0.99 — under the default
+  // with eviction active, ~0.5 is expected.
+  expect(metric.hotCacheHitRate).toBeGreaterThan(0)
+})
+
 async function measureHeapBytes(page: Page): Promise<number> {
   const client = await page.context().newCDPSession(page)
   try {

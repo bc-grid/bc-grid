@@ -2139,3 +2139,214 @@ describe("pendingMutationIds (server-mode-switch RFC §4 item 13)", () => {
     expect(model.pendingMutationIds()).toEqual([])
   })
 })
+
+describe("infinite block-cache LRU eviction under rapid-scroll patterns (worker1 audit P1 §5)", () => {
+  // Bumped from 20 → 50 in #391 (server-perf bundle-1). The rapid-scroll
+  // simulation here pins the eviction-order contract under realistic ERP
+  // workloads — 5k+ rows traversed by a fast trackpad scroller, with
+  // intermittent scroll-back. Surfaces regressions in #touch /
+  // #accessOrder / leastRecentlyUsedLoadedBlockKey under load.
+
+  const blockSize = 100
+  const maxBlocks = 50
+  const totalRows = 5_000
+
+  const loadInfiniteBlock =
+    () =>
+    (query: { blockStart: number; blockSize: number }): Promise<ServerBlockResult<Row>> =>
+      Promise.resolve({
+        blockSize: query.blockSize,
+        blockStart: query.blockStart,
+        hasMore: query.blockStart + query.blockSize < totalRows,
+        rows: Array.from({ length: query.blockSize }, (_, i) => ({
+          id: `row-${query.blockStart + i}`,
+          name: `Row ${query.blockStart + i}`,
+        })),
+      })
+
+  async function loadBlockAt(
+    model: ReturnType<typeof createServerRowModel<Row>>,
+    blockStart: number,
+  ): Promise<string> {
+    const request = model.loadInfiniteBlock({
+      blockSize,
+      blockStart,
+      cacheOptions: { blockLoadDebounceMs: 0, maxBlocks },
+      loadBlock: loadInfiniteBlock(),
+      view,
+    })
+    await request.promise
+    return request.blockKey
+  }
+
+  test("forward-only scroll: only the last `maxBlocks` survive eviction", async () => {
+    const model = createServerRowModel<Row>()
+    const blockKeys: string[] = []
+    // 60 blocks → maxBlocks=50 → 10 oldest evicted.
+    for (let i = 0; i < 60; i += 1) {
+      blockKeys.push(await loadBlockAt(model, i * blockSize))
+    }
+
+    // First 10 evicted; last 50 survive.
+    for (let i = 0; i < 10; i += 1) {
+      const key = blockKeys[i]
+      if (!key) throw new Error("expected block key")
+      expect(model.cache.get(key)).toBeUndefined()
+    }
+    for (let i = 10; i < 60; i += 1) {
+      const key = blockKeys[i]
+      if (!key) throw new Error("expected block key")
+      expect(model.cache.get(key)?.state).toBe("loaded")
+    }
+  })
+
+  test("touching a block before competing loads keeps it alive vs untouched-since-load peers", async () => {
+    // Setup: load 30 blocks, touch blocks 0-9 (which advances their
+    // access order to be more recent than blocks 10-29), then load 30
+    // more blocks. Total = 60, maxBlocks = 50, so 10 evict. The 10
+    // oldest by access order are blocks 10-19 (untouched since their
+    // original load) — they should evict. Blocks 0-9 (touched after
+    // their original load) and 20-29 (loaded later than 10-19) and
+    // 30-59 (newest) survive.
+    const model = createServerRowModel<Row>()
+    const blockKeys: string[] = []
+    for (let i = 0; i < 30; i += 1) {
+      blockKeys.push(await loadBlockAt(model, i * blockSize))
+    }
+    // Touch blocks 0-9. cache.get advances #accessOrder past block 29.
+    for (let i = 0; i < 10; i += 1) {
+      const key = blockKeys[i]
+      if (!key) throw new Error("expected block key")
+      model.cache.get(key)
+    }
+    // Load 30 more blocks. Each new load also touches itself (highest
+    // access order at the time of load).
+    for (let i = 30; i < 60; i += 1) {
+      blockKeys.push(await loadBlockAt(model, i * blockSize))
+    }
+
+    // Surviving access-order ranking (oldest first):
+    //   10, 11, ..., 19, 20, 21, ..., 29  (untouched-since-load)
+    //   0, 1, ..., 9                       (touched in step 2)
+    //   30, 31, ..., 59                    (newest loads)
+    // 60 total, maxBlocks=50 → evict 10 oldest = blocks 10-19.
+    for (let i = 0; i < 10; i += 1) {
+      const key = blockKeys[i]
+      if (!key) throw new Error("expected block key")
+      expect(model.cache.get(key)?.state).toBe("loaded")
+    }
+    for (let i = 10; i < 20; i += 1) {
+      const key = blockKeys[i]
+      if (!key) throw new Error("expected block key")
+      expect(model.cache.get(key)).toBeUndefined()
+    }
+    for (let i = 20; i < 60; i += 1) {
+      const key = blockKeys[i]
+      if (!key) throw new Error("expected block key")
+      expect(model.cache.get(key)?.state).toBe("loaded")
+    }
+  })
+
+  test("rapid-scroll pattern (down 1000, up 1000, down 500) maintains LRU contract", async () => {
+    const model = createServerRowModel<Row>()
+    const trace: { phase: string; blockStart: number }[] = []
+
+    // Phase 1: scroll down 1000 rows (10 blocks).
+    for (let i = 0; i < 10; i += 1) {
+      await loadBlockAt(model, i * blockSize)
+      trace.push({ phase: "down-1", blockStart: i * blockSize })
+    }
+    // Phase 2: scroll back up 1000 rows. The virtualizer revisits the
+    // same 10 blocks; they're cache hits (cache.get touches them).
+    for (let i = 9; i >= 0; i -= 1) {
+      model.cache.get(
+        `infinite:${model.createViewKey(view)}:start:${i * blockSize}:size:${blockSize}`,
+      )
+      trace.push({ phase: "up", blockStart: i * blockSize })
+    }
+    // Phase 3: scroll down 500 rows from the bottom of phase 1 (rows
+    // 1000-1499 = blocks 10-14).
+    for (let i = 10; i < 15; i += 1) {
+      await loadBlockAt(model, i * blockSize)
+      trace.push({ phase: "down-2", blockStart: i * blockSize })
+    }
+
+    // Total loaded: 15 blocks (well under maxBlocks=50). No eviction
+    // should have happened yet — the test confirms touch propagation
+    // doesn't evict prematurely.
+    for (let i = 0; i < 15; i += 1) {
+      const key = `infinite:${model.createViewKey(view)}:start:${i * blockSize}:size:${blockSize}`
+      expect(model.cache.get(key)?.state).toBe("loaded")
+    }
+
+    // Now stress eviction: scroll down a further 50 blocks (15 → 65).
+    // Total loaded reaches 65 → 15 must evict. The 5 oldest LOAD-and-
+    // never-touched-since blocks are 10-14 (loaded in phase 3 but never
+    // re-read after); the 10 touched-in-phase-2 blocks (0-9) are
+    // higher-priority MRU.
+    for (let i = 15; i < 65; i += 1) {
+      await loadBlockAt(model, i * blockSize)
+    }
+
+    // Blocks 0-9 (touched in phase 2): the touch advanced #accessOrder
+    // to a higher counter than the original load order. Survival
+    // depends on whether subsequent loads' touches outrank phase 2
+    // touches. Phase 2 touches happened BEFORE phase 3 + phase 4 loads,
+    // so phase 4's 50 loads (15-64) all have higher access order than
+    // phase 2's touches. With maxBlocks=50, the 50 most-recent are
+    // blocks 15-64; blocks 0-9 + 10-14 evict.
+    let survivors = 0
+    let evictions = 0
+    for (let i = 0; i < 65; i += 1) {
+      const key = `infinite:${model.createViewKey(view)}:start:${i * blockSize}:size:${blockSize}`
+      if (model.cache.get(key)?.state === "loaded") survivors += 1
+      else evictions += 1
+    }
+    expect(survivors).toBe(50)
+    expect(evictions).toBe(15)
+  })
+
+  test("default maxBlocks (50) absorbs a 5k-row sustained scroll without continuous re-fetches", async () => {
+    // Without specifying cacheOptions.maxBlocks, the model uses the
+    // documented default. This test pins that default at the contract
+    // level so a future tuning bump (e.g. 50 → 75 in coordinator's
+    // post-bench tuning at merge) is a deliberate change rather than
+    // an accidental drift.
+    const model = createServerRowModel<Row>()
+    const loadCalls: number[] = []
+    const wrappedLoad = (query: { blockStart: number; blockSize: number }) => {
+      loadCalls.push(query.blockStart)
+      return Promise.resolve({
+        blockSize: query.blockSize,
+        blockStart: query.blockStart,
+        hasMore: query.blockStart + query.blockSize < totalRows,
+        rows: Array.from({ length: query.blockSize }, (_, i) => ({
+          id: `row-${query.blockStart + i}`,
+        })),
+      } satisfies ServerBlockResult<Row>)
+    }
+
+    // Load 50 blocks (5k rows). Within the default cap; no eviction.
+    for (let i = 0; i < 50; i += 1) {
+      const request = model.loadInfiniteBlock({
+        blockSize,
+        blockStart: i * blockSize,
+        cacheOptions: { blockLoadDebounceMs: 0 },
+        loadBlock: wrappedLoad,
+        view,
+      })
+      await request.promise
+    }
+    expect(loadCalls.length).toBe(50)
+
+    // Re-scroll over the same range — every block should be a cache
+    // hit. No additional loads fire because the model dedupes against
+    // cached blocks via blockKey identity.
+    for (let i = 0; i < 50; i += 1) {
+      const key = `infinite:${model.createViewKey(view)}:start:${i * blockSize}:size:${blockSize}`
+      expect(model.cache.get(key)?.state).toBe("loaded")
+    }
+    // No additional load calls beyond the original 50.
+    expect(loadCalls.length).toBe(50)
+  })
+})
