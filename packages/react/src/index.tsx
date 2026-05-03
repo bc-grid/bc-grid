@@ -163,6 +163,7 @@ export type {
   BcRowPatchFailureCode,
   BcRowPatchResult,
   BcSelection,
+  EditorTabWraparound,
   BcServerGridApi,
   BcServerGridProps,
   BcServerEditMutationEvent,

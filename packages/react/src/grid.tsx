@@ -187,6 +187,7 @@ import {
   isRowSelected,
   selectOnly,
   selectRange,
+  selectionSize,
   toggleRow,
   toggleRows,
 } from "./selection"
@@ -308,6 +309,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const editorActivationProp = props.editorActivation
   const editorBlurActionProp = props.editorBlurAction
   const escDiscardsRowProp = props.escDiscardsRow
+  // editorTabWraparound default: "row-wrap" (matches Excel + Google
+  // Sheets). Per `v06-editor-tab-wraparound-polish` (bsncraft request).
+  const editorTabWraparound = props.editorTabWraparound ?? "row-wrap"
   const editScrollOutAction: "commit" | "cancel" | "preserve" =
     props.editScrollOutAction ?? "commit"
 
@@ -1793,6 +1797,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (!column) return false
       return isCellEditable(column, rowEntry.row)
     }
+    const isRowSelectedAt = (r: number): boolean => {
+      const rowEntry = rowEntries[r]
+      if (!rowEntry || !isDataRowEntry(rowEntry)) return false
+      return isRowSelected(selectionState, rowEntry.rowId)
+    }
     const { row: nextRow, col: nextCol } = nextEditableCellAfterEdit(
       rowIndex,
       colIndex,
@@ -1800,6 +1809,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       lastCol,
       next.move,
       isCellEditableAt,
+      {
+        wraparound: editorTabWraparound,
+        isRowSelected: isRowSelectedAt,
+        selectedRowCount: selectionSize(selectionState),
+      },
     )
     const targetRow = rowEntries[nextRow]
     const targetCol =
@@ -1811,6 +1825,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     editController.dispatchUnmounted()
   }, [
     editController.editState,
+    editorTabWraparound,
     rowEntries,
     resolvedColumns,
     rowIndexById,
@@ -1819,6 +1834,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     isRowDisabled,
     props.flashOnEdit,
     domBaseId,
+    selectionState,
   ])
 
   // Pixel rect of the cell currently being edited — passed to the editor
@@ -2654,6 +2670,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       if (!column) return false
       return isCellEditable(column, rowEntry.row)
     }
+    const isRowSelectedAt = (r: number): boolean => {
+      const rowEntry = rowEntries[r]
+      if (!rowEntry || !isDataRowEntry(rowEntry)) return false
+      return isRowSelected(selectionState, rowEntry.rowId)
+    }
     const { row: nextRow, col: nextCol } = nextEditableCellAfterEdit(
       rowIndex,
       colIndex,
@@ -2661,6 +2682,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       lastCol,
       move,
       isCellEditableAt,
+      {
+        wraparound: editorTabWraparound,
+        isRowSelected: isRowSelectedAt,
+        selectedRowCount: selectionSize(selectionState),
+      },
     )
     const targetRow = rowEntries[nextRow]
     const targetCol =
@@ -2670,10 +2696,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   }, [
     columnIndexById,
     editController.editState,
+    editorTabWraparound,
     isRowDisabled,
     resolvedColumns,
     rowEntries,
     rowIndexById,
+    selectionState,
   ])
   const activeDescendantCell = pendingEditNavigationCell ?? activeCell
   const activeCellId = editorOwnsFocus

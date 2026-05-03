@@ -75,6 +75,7 @@ import type {
   RefObject,
 } from "react"
 import type { BcClientTreeData } from "./clientTree"
+import type { EditorTabWraparound } from "./editingStateMachine"
 import type { BcRowDropAction } from "./rowDragDrop"
 
 export type BcGridDensity = "compact" | "normal" | "comfortable"
@@ -1094,6 +1095,26 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   escDiscardsRow?: boolean
 
   /**
+   * Tab/Shift+Tab edge-handling mode for in-cell editors. v0.6
+   * follow-up to #431 (`v06-editor-tab-wraparound-polish`).
+   *
+   *   - `"none"`: clamp at the trailing/leading edge — Tab past
+   *     the last editable cell stays put.
+   *   - `"row-wrap"` (default): wrap from the trailing edge to
+   *     `(0, 0)` and from the leading edge to `(lastRow, lastCol)`.
+   *     Matches Excel + Google Sheets default; bsncraft requested
+   *     this as the spreadsheet-native behaviour.
+   *   - `"selection-wrap"`: when an explicit selection of ≥2 rows
+   *     is active AND the editing row is part of it, restrict Tab/
+   *     Shift+Tab traversal to selected rows only and wrap within
+   *     the selection. The "data-entry across the selected rows"
+   *     pattern. Falls through to `"row-wrap"` when the gating
+   *     conditions aren't met (editing outside selection, or
+   *     selection size <2).
+   */
+  editorTabWraparound?: EditorTabWraparound
+
+  /**
    * What happens to an in-flight in-cell edit when the editing row
    * scrolls out of the virtualizer's render window. Only applies to
    * editors mounted in-cell (`editor.popup !== true`). Popup editors
@@ -1655,6 +1676,7 @@ export type {
 export type { BcNormalisedRange, BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
 export type { BcRowDropAction } from "./rowDragDrop"
 export { BC_GRID_ROW_DRAG_MIME } from "./rowDragDrop"
+export type { EditorTabWraparound } from "./editingStateMachine"
 export type {
   BcRowPatch,
   BcRowPatchFailure,
