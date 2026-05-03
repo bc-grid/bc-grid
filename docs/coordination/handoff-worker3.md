@@ -96,19 +96,7 @@ The recommended fix per the bsncraft memo is **Option A: add the prop set to all
 
 **Branch:** `agent/worker3/v06-server-grid-actions-column`. **Effort:** ~1-2 days. **bsncraft consumer P1** — closing this lets bsncraft delete their entire `apps/web/components/edit-grid.tsx` wrapper (~150 LOC).
 
-### Active now → `v06-editor-cell-undo-redo` (~half day)
-
-Per-cell-edit undo/redo so a user who's typed in an edit-mode cell can press `Cmd/Ctrl+Z` to revert their typed-but-not-committed value (the input's own `undo` history is sufficient for the in-progress text, but Cmd+Z after blur should restore the previous committed value — that history doesn't exist today). Per-row scope, capped at last 10 commits per row to bound memory.
-
-**Branch:** `agent/worker3/v06-editor-cell-undo-redo`. **Effort:** ~half day.
-
-### Next-after → `v06-editor-focus-retention-on-rerender` (~half day)
-
-Editor portal focus can drop on parent re-renders that change keys or restructure children. Pin the contract: when an editor is mounted and the grid re-renders for an unrelated reason (e.g. data prop swap that doesn't affect the editing cell), focus stays on the input. Add a regression test pinning the contract with a forced-rerender scenario. **Pairs with the bsncraft 0.5.0 GA P0 fix #451** (in-cell editor unmount on `<BcServerGrid>` server fetch) — that PR fixed the rowEntry.row dep array; this task pins the broader focus-retention contract so future regressions catch.
-
-**Branch:** `agent/worker3/v06-editor-focus-retention-on-rerender`. **Effort:** ~half day.
-
-### Then-after → `v06-editor-async-validation` (~1 day)
+### Active now → `v06-editor-async-validation` (~1 day)
 
 Today's `column.validate(value, params): BcValidationResult` is synchronous. Many ERP scenarios need async validation: "is this customer code already taken in our DB?", "does this email match a known account?", "is this SKU still active?". These run against a server endpoint with `AbortSignal` semantics matching the loader contract.
 
@@ -127,12 +115,26 @@ Followup to #453 server-grid actions column. Today the actions column buttons (E
 
 **Branch:** `agent/worker3/v06-server-grid-actions-keyboard`. **Effort:** ~half day.
 
-### Last → `v06-editor-paste-into-cell-detection` (~half day)
+### Then-next → `v06-editor-paste-into-cell-detection` (~half day)
 
 When user pastes text into an editing cell, the input today accepts the text as a string. For numeric / date editors, format-detect the pasted content and convert (e.g. paste `"$1,234.56"` into a number cell → set 1234.56; paste `"2026-05-03"` into a date cell → ISO date). Falls through to the column's `valueParser` if defined; otherwise uses the editor's built-in parser. Pin the contract with unit tests covering currency / percentage / scientific-notation / locale-aware decimals.
 
 **Branch:** `agent/worker3/v06-editor-paste-into-cell-detection`. **Effort:** ~half day.
 
+### After-that → `v06-editor-multi-cell-delete-confirm` (~half day)
+
+When `Delete` is pressed on a range selection (multiple cells highlighted), today the cells clear silently. Excel/Google Sheets show a "Clear contents" confirmation when the range > 1 cell as a guard against accidental wipes. Add an opt-in `confirmRangeDelete?: boolean | (range: BcRange) => Promise<boolean>` prop. Default `false` (preserve existing behavior); when `true`, surfaces the consumer's confirm dialog. Recipe at `docs/recipes/range-delete-confirm.md`.
+
+**Branch:** `agent/worker3/v06-editor-multi-cell-delete-confirm`. **Effort:** ~half day.
+
+### Last → `v06-editing-state-controlled-prop` (~half day)
+
+Companion to `v06-scroll-state-controlled-prop` (#450). Surface the editor controller's `editState.cell` as a controlled prop so consumers can persist + restore "which cell was being edited when user navigated away." Add `BcGridProps.editingCell?: BcCellPosition | null` controlled + `onEditingCellChange?: (next) => void` callback. Pairs with the state-persistence recipe to close the "all available state" story end-to-end.
+
+**Branch:** `agent/worker3/v06-editing-state-controlled-prop`. **Effort:** ~half day.
+
+### Previously active → `v06-editor-cell-undo-redo` (DONE — #454 merged in this session)
+### Previously active → `v06-editor-focus-retention-on-rerender` (DONE — #457 merged in this session)
 ### Previously active → `v06-server-grid-actions-column` (DONE — #453 HEADLINE, bsncraft P1, ~150 LOC saving for bsncraft)
 ### Previously active → `v06-scroll-state-controlled-prop` (DONE — #450 alpha.1 critical, full state-persistence story now possible)
 ### Previously active → `v06-editor-tab-wraparound-polish` (DONE — #448 merged bca5714)
