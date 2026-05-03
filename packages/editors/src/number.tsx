@@ -1,6 +1,7 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useId, useLayoutEffect, useRef } from "react"
+import { type ClipboardEvent, useId, useLayoutEffect, useRef } from "react"
 import { editorInputClassName, editorStateAttrs, visuallyHiddenStyle } from "./chrome"
+import { detectPastedValue } from "./internal/pasteDetection"
 
 /**
  * Number editor — `kind: "number"`. Default for numeric columns per
@@ -138,8 +139,18 @@ function getLocaleParts(locale: string): { group: string; decimal: string } {
 }
 
 function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled, column } =
-    props
+  const {
+    initialValue,
+    error,
+    focusRef,
+    seedKey,
+    pending,
+    required,
+    readOnly,
+    disabled,
+    column,
+    row,
+  } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
   // Stable id per-editor-instance for aria-describedby → hidden error
   // span. Pairs with the cell-level error span the framework renders
@@ -186,6 +197,30 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
   const accessibleName =
     typeof column.header === "string" ? column.header : (column.field ?? column.columnId ?? "")
 
+  // Paste-into-cell format detection (v0.6 §1
+  // `v06-editor-paste-into-cell-detection`). When the user pastes
+  // `"$1,234.56"` or `"(1,234.56)"`, normalize via the column's
+  // valueParser (if wired) or `parseLocaleNumber` so the input
+  // reflects the parsed numeric value immediately. Falls through
+  // to the browser's default paste behaviour for unparseable text
+  // — preserves v0.5 default for non-numeric pastes.
+  const onPaste = (event: ClipboardEvent<HTMLInputElement>): void => {
+    const text = event.clipboardData.getData("text/plain")
+    if (!text) return
+    const result = detectPastedValue({
+      text,
+      column,
+      row,
+      fallback: (raw) => parseLocaleNumber(raw, resolveLocale()),
+      stringify: stringifyNumber,
+    })
+    if (!result.ok) return
+    event.preventDefault()
+    const input = inputRef.current
+    if (!input) return
+    input.value = result.normalised
+  }
+
   return (
     <>
       <input
@@ -203,6 +238,7 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
         aria-disabled={disabled || pending ? true : undefined}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="number"
+        onPaste={onPaste}
         {...editorStateAttrs({ error, pending })}
       />
       {error ? (
@@ -212,4 +248,25 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
       ) : null}
     </>
   )
+}
+
+function resolveLocale(): string {
+  // The editor doesn't receive `locale` directly via props; consumers
+  // wanting strict locale control wire `column.valueParser` for
+  // commit-time parsing AND the paste handler will use that same
+  // parser first via `detectPastedValue`. The fallback only fires
+  // when the consumer hasn't wired one — `Intl`'s resolved locale
+  // matches the runtime's user setting which is typically the
+  // sensible default.
+  try {
+    return new Intl.NumberFormat().resolvedOptions().locale ?? "en-US"
+  } catch {
+    return "en-US"
+  }
+}
+
+function stringifyNumber(parsed: unknown): string {
+  if (typeof parsed === "number" && Number.isFinite(parsed)) return String(parsed)
+  if (typeof parsed === "string") return parsed
+  return ""
 }
