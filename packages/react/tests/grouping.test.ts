@@ -96,14 +96,58 @@ describe("buildGroupedRowModel", () => {
       ["group", visibleGroupIds(byStatus)[2], 1],
     ])
   })
+
+  test("filters visible grouped rows without shrinking full group counts", () => {
+    const model = buildModel(["status"], new Set(), new Set(["1"]))
+
+    expect(model.rows).toHaveLength(1)
+    expect(model.rows[0]).toMatchObject({
+      kind: "group",
+      label: "Status: Open",
+      childCount: 2,
+      childRowIds: ["1", "3"],
+    })
+    expect(model.allGroupRowIds).toHaveLength(3)
+  })
+
+  test("expanded groups render only visible leaf rows while retaining full descendants", () => {
+    const collapsed = buildModel(["status"])
+    const openGroupId = visibleGroupIds(collapsed)[0]
+    if (!openGroupId) throw new Error("expected group id")
+
+    const model = buildModel(["status"], new Set([openGroupId]), new Set(["1"]))
+
+    expect(model.rows.map((entry) => [entry.kind, entry.rowId])).toEqual([
+      ["group", openGroupId],
+      ["data", "1"],
+    ])
+    expect(model.rows[0]).toMatchObject({
+      kind: "group",
+      childCount: 2,
+      childRowIds: ["1", "3"],
+    })
+  })
+
+  test("flat pagination visibility still returns the visible leaf rows", () => {
+    const model = buildModel([], new Set(), new Set(["2", "4"]))
+
+    expect(model.active).toBe(false)
+    expect(model.rows.map((entry) => entry.rowId)).toEqual(["2", "4"])
+    expect(model.rows.map((entry) => entry.index)).toEqual([0, 1])
+  })
 })
 
-function buildModel(groupBy: readonly ColumnId[], expansionState = new Set<string>()) {
+function buildModel(
+  groupBy: readonly ColumnId[],
+  expansionState = new Set<string>(),
+  visibleRowIds?: ReadonlySet<string>,
+) {
   return buildGroupedRowModel({
     rows: rowEntries,
     columns: resolveColumns(columns, []),
     groupBy,
     expansionState,
+    visibleRowIds,
   })
 }
 

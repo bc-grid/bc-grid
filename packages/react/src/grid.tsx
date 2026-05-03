@@ -1011,10 +1011,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     paginationWindow.endIndex,
     paginationWindow.startIndex,
   ])
+  const visibleLeafRowIdSet = useMemo(
+    () =>
+      isManualPagination || !paginationEnabled
+        ? undefined
+        : new Set(leafRowEntries.map((entry) => entry.rowId)),
+    [isManualPagination, leafRowEntries, paginationEnabled],
+  )
   const groupedRowModel = useMemo(
     () =>
       buildGroupedRowModel({
-        rows: leafRowEntries,
+        rows: allRowEntries,
         columns: consumerResolvedColumns,
         // Manual row processing skips client grouping so server-owned
         // pages render in the order the host returned. Grouping
@@ -1023,14 +1030,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         groupBy: isManualRowProcessing ? [] : groupByState,
         expansionState,
         locale,
+        visibleRowIds: visibleLeafRowIdSet,
       }),
     [
+      allRowEntries,
       consumerResolvedColumns,
       expansionState,
       groupByState,
       isManualRowProcessing,
-      leafRowEntries,
       locale,
+      visibleLeafRowIdSet,
     ],
   )
   const rowEntries = groupedRowModel.rows
