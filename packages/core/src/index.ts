@@ -543,6 +543,20 @@ export interface BcGridApi<TRow = unknown> {
   getRangeSelection(): BcRangeSelection
   getColumnState(): BcColumnStateEntry[]
   /**
+   * Snapshot the viewport's current scroll position. Returns
+   * `{ top, left }` in pixels. Together with `BcGridProps.initialScrollOffset`
+   * + `onScrollChange` this closes the "consumer can persist + restore the
+   * grid's exact scroll position across navigation" story (v0.6.0-alpha.1
+   * critical, maintainer ask 2026-05-03).
+   *
+   * The reading is synchronous from the grid's internal scroll-offset
+   * state, mirroring `getActiveCell` / `getSelection`. Per
+   * `docs/recipes/grid-state-persistence.md` for the full state-restore
+   * pattern (layoutState + expansion + selection + rangeSelection +
+   * scrollOffset).
+   */
+  getScrollOffset(): { top: number; left: number }
+  /**
    * Read the active grid filter, or `null` when no filter is set.
    * Companion to `setFilter` / `clearFilter`. Useful for context-menu
    * items and consumer-side affordances that need to reason about the
