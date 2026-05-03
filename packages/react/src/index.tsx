@@ -21,6 +21,7 @@ export {
   BC_SAVED_VIEW_VERSION,
   applySavedViewLayout,
   createSavedView,
+  createServerSyncedSavedViewStore,
   migrateSavedViewLayout,
 } from "./savedView"
 export { BcServerGrid } from "./serverGrid"
@@ -80,7 +81,11 @@ export type {
   BcSavedViewInput,
   BcSavedViewLayoutApplier,
   BcSavedViewLayoutInput,
+  BcSavedViewSyncConflict,
+  BcSavedViewSyncResult,
   BcSavedViewScope,
+  BcServerSyncedSavedViewStore,
+  BcServerSyncedSavedViewStoreOptions,
   CreateSavedViewOptions,
 } from "./savedView"
 

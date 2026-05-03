@@ -4,6 +4,7 @@ import {
   BC_SAVED_VIEW_VERSION,
   applySavedViewLayout,
   createSavedView,
+  createServerSyncedSavedViewStore,
   migrateSavedViewLayout,
 } from "../src/savedView"
 import type { BcGridLayoutState } from "../src/types"
@@ -166,5 +167,87 @@ describe("saved view helpers", () => {
     expect(sortCalls).toEqual([])
     expect(filterCalls).toEqual([])
     expect(groupByCalls).toEqual([])
+  })
+
+  test("server-synced store lists grid views and blocks stale saves as conflicts", async () => {
+    const remote = createSavedView<Row>({
+      id: "view-open",
+      gridId: "ar.customers",
+      name: "Open",
+      layout: { version: 1 },
+      updatedAt: "2026-05-03T02:00:00.000Z",
+    })
+    const calls: Array<{ url: string; method: string | undefined }> = []
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input)
+      calls.push({ url, method: init?.method })
+      if (url === "/api/saved-views?gridId=ar.customers") {
+        return Response.json([remote])
+      }
+      if (url === "/api/saved-views/view-open") {
+        return Response.json(remote)
+      }
+      throw new Error(`unexpected request ${url}`)
+    }
+
+    const store = createServerSyncedSavedViewStore<Row>({
+      endpoint: "/api/saved-views",
+      gridId: "ar.customers",
+      fetch: fetchImpl,
+    })
+
+    expect((await store.list()).map((view) => view.id)).toEqual(["view-open"])
+    const result = await store.upsert({
+      ...remote,
+      updatedAt: "2026-05-03T01:00:00.000Z",
+    })
+
+    expect(result.status).toBe("conflict")
+    if (result.status === "conflict") {
+      expect(result.remote.updatedAt).toBe("2026-05-03T02:00:00.000Z")
+    }
+    expect(calls.map((call) => [call.method, call.url])).toEqual([
+      ["GET", "/api/saved-views?gridId=ar.customers"],
+      ["GET", "/api/saved-views/view-open"],
+    ])
+  })
+
+  test("server-synced store pushes when timestamps match", async () => {
+    const remote = createSavedView<Row>({
+      id: "view-open",
+      gridId: "ar.customers",
+      name: "Open",
+      layout: { version: 1 },
+      updatedAt: "2026-05-03T02:00:00.000Z",
+    })
+    let savedBody: unknown = null
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url === "/api/saved-views/view-open" && init?.method === "GET") {
+        return Response.json(remote)
+      }
+      if (url === "/api/saved-views/view-open" && init?.method === "PUT") {
+        savedBody = JSON.parse(String(init.body))
+        return Response.json({ ...(savedBody as object), updatedAt: "2026-05-03T03:00:00.000Z" })
+      }
+      throw new Error(`unexpected request ${url}`)
+    }
+    const store = createServerSyncedSavedViewStore<Row>({
+      endpoint: "/api/saved-views",
+      gridId: "ar.customers",
+      fetch: fetchImpl,
+    })
+
+    const result = await store.upsert(remote)
+
+    expect(result.status).toBe("saved")
+    if (result.status === "saved") {
+      expect(result.view.updatedAt).toBe("2026-05-03T03:00:00.000Z")
+    }
+    expect(savedBody).toMatchObject({
+      id: "view-open",
+      gridId: "ar.customers",
+      name: "Open",
+    })
   })
 })
