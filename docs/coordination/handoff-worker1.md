@@ -48,7 +48,44 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 You crushed the previous queue — **all 5 v0.6 server-perf items + the client-tree-rowmodel headline merged**: #433 stale-response-flood, #434 stale-viewkey-fetches, #438 client-tree RFC + #447 client-tree phase 1 (HEADLINE), #444 view-change-reset, #445 rollback-vs-invalidate. Updated queue below picks up where your planning doc left off + adds three consumer-facing follow-ons.
 
-### Active now → `v06-client-tree-rowmodel-phase-2` (~1 day, headline polish)
+**bsncraft consumer issues triage 2026-05-04** (`docs/coordination/bsncraft-issues.md`): three items on this lane. Pulled forward into the queue.
+
+### Active now → `v06-tree-validator-error-surfacing` (bsncraft P1 #12, ~30 min, dev-mode only)
+
+Bsncraft consumer report: `validateTreeResult` correctly throws on shape mismatches in `server-row-model/src/index.ts`, but the throw is caught silently in `loadTreeChildren`'s `.catch()` and surfaces only as a blank grid with no console message. A real consumer lost ~30 minutes diagnosing because the contract ("`childCount` echoes the *requested* size, not the returned row count") is non-obvious.
+
+**Implementation:**
+
+1. Find the `.catch()` block in `loadTreeChildren` (`packages/react/src/serverGrid.tsx` tree path) that swallows the error.
+2. Add a dev-mode `console.error("[bc-grid] tree result rejected: ...", error)` BEFORE the swallow. Gate on `process.env.NODE_ENV !== "production"` so prod stays silent (the error already feeds the existing model-state error field for UI surfacing).
+3. Same treatment for `loadInfiniteBlock` and `loadServerPage` if they have analogous swallow-then-degrade paths.
+
+**Branch:** `agent/worker1/v06-tree-validator-error-surfacing`. **Effort:** ~30 min. **3-line PR.**
+
+### Next-after → `v06-server-mutation-result-row-doc` (bsncraft P1 #15, ~15 min, doc-only)
+
+Bsncraft consumer report: after accepted mutations, host returns `{ status: "accepted", row: <something> }`. Multiple plausible shapes (full canonical row vs partial patch vs only changed fields populated) all pass the validator. Consumers will land on different conventions without explicit docs.
+
+**Implementation:** add a JSDoc clarification to `ServerMutationResult.row` in `packages/core/src/index.ts` (or wherever the type lives). Specify: full canonical row (replacement semantics — bc-grid replaces the row in cache with this value, doesn't merge field-by-field). ~3 lines of JSDoc + one sentence in `docs/api.md`.
+
+**Branch:** `agent/worker1/v06-server-mutation-result-row-doc`. **Effort:** ~15 min.
+
+### Then-after → `v06-use-server-tree-grid-dual-output` (bsncraft P1 #14, ~1 day)
+
+Bsncraft consumer report: `useServerTreeGrid` returns `Omit<BcServerTreeProps<TRow>, "columns">` only. Consumers wrapping a plain `<BcGrid>` (not `<BcServerGrid rowModel="tree">`) can't use the hook without switching components. Same gap exists for `useServerPagedGrid` and `useServerInfiniteGrid`.
+
+**Implementation:** dual-output refactor matching the coordinator's v0.5-alpha.1 estimate (~1 day):
+
+1. **`bound`** — `BcGridProps`-shaped output for plain `<BcGrid>` consumers (data array + controlled callbacks for sort/filter/pagination/groupBy/expansion).
+2. **`serverProps`** — `BcServerTreeProps`-shaped output for `<BcServerGrid>` consumers (current behavior).
+
+Both share the same internal orchestration; the hook wraps them. Same dual-output applied to `useServerPagedGrid` and `useServerInfiniteGrid` for symmetry.
+
+**Recipe** at `docs/recipes/server-grid-without-bcservergrid.md` showing the `bound` path so consumers with custom grid wrappers (bsncraft case) can adopt the hooks without switching components.
+
+**Branch:** `agent/worker1/v06-use-server-tree-grid-dual-output`. **Effort:** ~1 day. **Two-spike-confirmed** (bsncraft uses their own wrapper, not `<BcServerGrid>` directly).
+
+### After-that → `v06-client-tree-rowmodel-phase-2` (~1 day, headline polish)
 
 Phase 1 (#447) shipped the foundation: `treeData`, outline column, sort + filter through tree, aggregations integration. Phase 2 closes the production-readiness gaps the RFC §10 open questions surfaced:
 

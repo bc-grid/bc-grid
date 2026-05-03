@@ -103,7 +103,49 @@ The recommended fix per the bsncraft memo is **Option A: add the prop set to all
 
 **Branch:** `agent/worker3/v06-server-grid-actions-column`. **Effort:** ~1-2 days. **bsncraft consumer P1** — closing this lets bsncraft delete their entire `apps/web/components/edit-grid.tsx` wrapper (~150 LOC).
 
-### Active now → `v06-editor-async-validation` (~1 day)
+**bsncraft consumer issues triage 2026-05-04** (`docs/coordination/bsncraft-issues.md`): two items on this lane. Pulled forward into the queue.
+
+### Active now → `v06-builtin-editors-generic-trow` (bsncraft P1 #13, ~half day)
+
+Bsncraft consumer report: `@bc-grid/editors` exports built-in editors typed as `BcCellEditor<unknown, unknown>`. Every column declaration in a typed grid triggers TS2349 and requires a cast: `const text = textEditor as BcCellEditor<CustomerRow>`. Bsncraft has 10+ master grids planned; that's 10+ identical casts.
+
+**Implementation options:**
+
+1. **Make built-in editor factories generic over `TRow` / `TValue`.** `textEditor<TRow>()` returns `BcCellEditor<TRow, string>`. Consumers call `textEditor<CustomerRow>()` to get the right type. **But** that breaks ergonomics — every column declaration becomes `cellEditor: textEditor<CustomerRow>()` instead of `cellEditor: textEditor`.
+
+2. **Make the `Component` prop's `TRow` parameter contravariant** (or use a wider type that accepts any TRow as a subtype). The editor doesn't ACTUALLY need `TRow` typed at the editor object level — only at the `Component` props passed at mount time. So `textEditor: BcCellEditor<unknown, string>` could be widened to be assignable to `BcCellEditor<CustomerRow, string>` via structural subtyping. The audit's prior deferral noted the TS variance trap here — this task is to find the structural shape that lets the existing exports flow into typed columns without a cast.
+
+3. **Emit a TS function-overload signature pair**: `textEditor` is BOTH a `BcCellEditor<unknown, string>` (current, for untyped use) AND assignable to `BcCellEditor<TRow, string>` for any TRow. Use intersection types or const generics to make it work.
+
+Recommend approach 2 (structural widening). Try `BcCellEditor<TRow, TValue>` shape: which fields use TRow contravariantly? Likely the Component's row prop. If we narrow it to `Component: ComponentType<{ row: unknown }>` instead of `ComponentType<{ row: TRow }>`, it's assignable everywhere. Worker3 lane owns the editor types so you have the context.
+
+**Test coverage:** add a typecheck assertion in `packages/editors/tests/typing.test.ts` (create if missing): `const col: BcReactGridColumn<CustomerRow> = { ..., cellEditor: textEditor }` — should compile without cast.
+
+**Branch:** `agent/worker3/v06-builtin-editors-generic-trow`. **Effort:** ~half day. **bsncraft P1.**
+
+### Next-after → `v06-shadcn-native-editors` (bsncraft P2 #17, ~1-2 days, possible v0.7 split)
+
+Bsncraft consumer report: `textEditor` / `selectEditor` / etc. render `<input>` / `<select>` with default browser styling. Visually inconsistent with shadcn-native host apps. For a grid that's "the main way users edit data" (bsncraft framing), this matters.
+
+**Implementation options:**
+
+1. **Companion `@bc-grid/editors-shadcn` package** — imports host shadcn primitives, exports `textEditorShadcn` / `selectEditorShadcn` / etc. with the same `BcCellEditor` contract. Consumer picks one or the other. **Cost:** new package + monorepo plumbing + one-more-thing-to-publish.
+
+2. **Render-prop hook** — `textEditor` accepts an optional `inputComponent` prop that overrides the default `<input>`. Consumer passes their shadcn `<Input>`. bc-grid keeps the lifecycle (focus, commit, validate). **Cleaner; no new package; preserves the simple default for non-shadcn consumers.**
+
+3. **Default-styled inputs** — change the built-in editors to use shadcn classnames + tokens so they look right out of the box. Lowest-friction but most invasive (changes default rendering for every consumer).
+
+Recommend approach 2 (render-prop). Lowest invasion + composable + zero new package.
+
+**Implementation:**
+
+1. Add `inputComponent?: ComponentType<{ ref, value, onChange, onKeyDown, ... }>` to `textEditor`'s factory signature. Default: built-in `<input>`. Override: consumer's shadcn `<Input>`.
+2. Same shape for `numberEditor` / `dateEditor` / `selectEditor`. Each editor's `inputComponent` accepts the props it needs.
+3. **Recipe** at `docs/recipes/shadcn-editors.md` showing how to wire shadcn `<Input>` / `<Select>` into the grid editors.
+
+**Branch:** `agent/worker3/v06-shadcn-native-editors`. **Effort:** ~1-2 days. **bsncraft P2** — large split candidate for v0.7 if v0.6 GA timeline tightens.
+
+### Then-after → `v06-editor-async-validation` (~1 day)
 
 Today's `column.validate(value, params): BcValidationResult` is synchronous. Many ERP scenarios need async validation: "is this customer code already taken in our DB?", "does this email match a known account?", "is this SKU still active?". These run against a server endpoint with `AbortSignal` semantics matching the loader contract.
 

@@ -49,7 +49,25 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 You crushed the previous queue — **all 5 v0.6 chrome+filter items + the fill-handle headline merged**: #432 scroll-shadow overlay, #436 fill-handle (HEADLINE), #439 bulk-action toolbar, #441 saved-view storage recipe, #446 pinned totals row, #429 ERP filter operators. Updated queue below adds five fresh items targeted at consumer ergonomics + the spreadsheet polish that v0.6 still owes.
 
-### Active now → `v06-fill-handle-series-detection` (~1 day)
+**bsncraft consumer issues triage 2026-05-04** (`docs/coordination/bsncraft-issues.md`): one item on this lane. Pulled forward into the queue.
+
+### Active now → `v06-column-resize-clears-flex` (bsncraft P1 #11, ~half day)
+
+Bsncraft consumer report: `BcGridColumn.flex?: number` works for initial sizing — Name + Address columns set `flex: 2` get 2× the auto-distributed width. **But user-driven resize doesn't stick** because `commitColumnWidth` in `react/dist/index.js:670-680` (`packages/react/src/columnResize.ts` in source) sets `width` in column-state but doesn't clear `flex`. Next render reads `state?.flex ?? column.flex` and re-applies flex distribution, snapping the resize back.
+
+**Fix shape (smaller fix path from the bsncraft memo):**
+
+1. **In `commitColumnWidth`**: when committing a width change for a column, ALSO emit `flex: undefined` (or `flex: null`, depending on how `setColumnState` distinguishes "unset" from "absent") in the same column-state update. The next `resolveColumns` pass then reads `state.flex === undefined` → falls through to `column.flex` → user could still see the original `flex` from the column definition... so we need `flex: null` to mean "explicitly cleared, ignore column.flex".
+
+2. **In `resolveColumns`**: confirm `state.flex === null` is treated as "cleared" (matching the existing `state.pinned === null` semantics for unpinning). If the union doesn't permit null, widen it.
+
+3. **Test coverage:** unit test in `packages/react/tests/columnResize.test.ts` (or wherever resize tests live) — column with `flex: 2`, simulate `commitColumnWidth(columnId, 200)`, verify post-state has `width: 200, flex: null`. Render once more, verify the column renders at 200px (no flex re-distribution).
+
+4. **Recipe note** in `docs/api.md` `BcGridColumn.flex` doc: "Resizing a flex column converts it to fixed-width and clears `flex` from layout state. To revert, call `apiRef.resetColumnSizing(columnId)` (v0.7 follow-up)."
+
+**Branch:** `agent/worker2/v06-column-resize-clears-flex`. **Effort:** ~half day. **bsncraft P1.**
+
+### Next-after → `v06-fill-handle-series-detection` (~1 day)
 
 Your fill-handle PR (#436) shipped literal-repeat semantics — the v0.6 RFC §6 deferred Excel-style series detection ("1, 2 → 3, 4, 5"; "Mon → Tue, Wed"; "Q1 → Q2, Q3, Q4") to a follow-up. Pull the follow-up forward into v0.6 since the fill handle is the spreadsheet headline and series detection is what makes it feel like Excel.
 
