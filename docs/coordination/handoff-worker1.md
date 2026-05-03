@@ -32,27 +32,26 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
 - ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
 
-### Active now → `v05-server-mode-switch` (RFC ratified, structural alpha.2 fix, multi-session)
+### Active now → `v05-server-mode-switch` stage 2 — `BcServerGridProps` collapse (RFC §11 stage 2, ~3-5h)
 
-**Context-menu server-toggles shipped as #394** (showPagination prop + useServerTreeGrid expandAllGroups/collapseAllGroups actions). Items 3 + 4 from the original task were deferred: prefetch submenu now plugs into `BcContextMenuSubmenuItem` from worker2's #396; mode-toggle is subsumed by this active task.
+**Stage 1 shipped as #397** (1e2c043): `BcServerGridApi.getActiveRowModelMode()`, `apiRef.whenIdle(): Promise<void>`, `resolveActiveRowModelMode()` pure helper, `hasInFlightRequests()` + `awaitAllSettled()` model primitives. Stage 1 was purely additive (~80 LOC net) and dormant — the heuristic activates in stage 2 when the props collapse lands.
 
-**Maintainer call (2026-05-03):** "this should have been day-1 functionality when server mode + grouping was supported." Land in v0.5.0.
+**Stage 2 scope (~3-5h, this PR):**
 
-**Problem:** today a grid that wants to behave as paged-by-default + tree-when-grouped has to mount one component per mode (`<BcServerGrid rowModel="paged">` vs `rowModel="tree"`), because the three turnkey hooks (`useServerPagedGrid`, `useServerInfiniteGrid`, `useServerTreeGrid`) are three independent state machines. When the user toggles grouping, React unmounts one mode and mounts the other; everything that should carry across (filters, sort, selection, focus, scroll, view-key) is lost. bsncraft's customers grid (~36k rows, server-tree on group, server-paged otherwise) carries ~120 LOC of host-side discriminated wrapper to paper over this — and the carry-over loss is still user-visible.
+- Merge `BcServerPagedProps | BcServerInfiniteProps | BcServerTreeProps` into a single `BcServerGridProps` interface where `rowModel` becomes optional, `loadPage` / `loadBlock` / `loadChildren` become optional fields, and a dev-only mount assertion fires when the active mode's loader is missing.
+- Activate the heuristic in `getActiveRowModelMode` — explicit `rowModel` wins, otherwise `groupBy.length > 0 ⇒ tree`.
+- Keep the legacy interface names exported as type aliases (`type BcServerPagedProps<TRow> = BcServerGridProps<TRow> & { rowModel: "paged"; loadPage: LoadServerPage<TRow> }`) so existing consumers' explicit type annotations keep type-checking.
+- Stage 1's `whenIdle` apiRef method already routes to the active mode's model; stage 2 makes the routing dynamic instead of always-paged.
 
-**Goal:** one bc-grid construct that holds shared state once and switches its row-model engine internally based on a controlled `groupBy` prop (or equivalent). Consumer just sets `groupBy`; the grid handles the rest.
+Per RFC §6 (`docs/design/server-mode-switch-rfc.md`).
 
-**RFC ratified 2026-05-03.** Read `docs/design/server-mode-switch-rfc.md` end-to-end before you start; the §10 ratification block records all 8 maintainer calls. Headline:
+**Branch:** `agent/worker1/v05-server-mode-switch-stage-2`. **Effort:** ~3-5h, single PR.
 
-- **Shape A confirmed** — `<BcServerGrid>` becomes mode-polymorphic internally; controlled `groupBy` drives the switch; `rowModel` prop is the optional override. The three turnkey hooks stay as escape-hatches.
-- **Q1 hybrid** (deviation from rec) — state setters stay sync (matches AG Grid SSRM), but you also implement `apiRef.current.whenIdle(): Promise<void>` so consumers who want await semantics after a state change can opt in. General-purpose, not mode-switch-specific. Implementation tracks pending requests via the existing `createServerRowModel` in-flight map + the `useServerOrchestration` debounce timer; resolves when both are clear. See §6 for the API delta.
-- **Q2-Q8 land with the recommendation:** hard-coded heuristic + `rowModel` override; clean loading frame on switch (no synthesis); pending mutations settle as rejected after 100ms grace; `BcUserSettings.preferredRowModel` deferred to v0.6; `useServerGrid` polymorphic hook split out to alpha.3 / GA; keep `<BcServerGrid>` name; selection carries by default, no opt-in prop.
+### Stage 3 after props collapse → structural mode polymorphism (RFC §11 stage 3, ~6-8h)
 
-**Effort:** 18-25h, single PR. Split if >1500 LOC of net diff: structural change first (alpha.2), polymorphic hook second (alpha.3 / GA — that part is your alpha.3 lane, not this PR).
+The biggest piece of the mode-switch RFC: the three internal hooks each surface a "carry-over snapshot" + "hydrate from snapshot" pair; the top-level `<BcServerGrid>` owns mode resolution and the abort-on-switch flow per RFC §4 (the 14-dimension carry-over contract is the load-bearing section — read it twice) + §5 (server query sequence on the switch). 14 unit cases per §9 + 1 Playwright spec covering the bsncraft case (paged↔tree switch with filter / sort / focused-cell / selection all carried across).
 
-**Gating:** none — context-menu server-toggles already shipped (#394). Branch from current main onto `agent/worker1/v05-server-mode-switch` and start. The carry-over contract (§4) is the load-bearing section; read it twice.
-
-**Branch (when ready):** `agent/worker1/v05-server-mode-switch`. **Effort:** structural change spanning `packages/server-row-model/src/index.ts`, `packages/react/src/serverGrid.tsx`, all three turnkey hooks, plus tests and Playwright spec — likely 2-3 worker sessions, broken into stages per the RFC.
+**Branch:** `agent/worker1/v05-server-mode-switch-stage-3`. **Effort:** ~6-8h.
 
 ### After mode-switch ships → `v05-use-server-grid-polymorphic-hook` (alpha.3 / GA scope, ~6-8h)
 

@@ -38,17 +38,9 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 - ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
 
-### Active now → `v05-editor-portal-polish-bundle-1` (3 items, ~60-90 min total)
+### Active now → `v05-on-cell-edit-commit-result-aware` (~45-60 min)
 
-**Editor-toggle props shipped as #395** (`editingEnabled` / `showValidationMessages` / `showEditorKeyboardHints` props + `EditorKeyboardHints` component). Three editor-portal items now ride on top of those props. Each is independent; bundle them into one PR.
-
-1. **Editor activation modes prop** — `editorActivation?: "f2-only" | "single-click" | "double-click"` on `BcGridProps` (default unchanged: `"f2-only"`). Single-click activation is the common ERP pattern for forms-style data entry; double-click is the AG-Grid-default. Wires into the cell click handler in `grid.tsx`. Add unit tests for each mode + an integration test in `editorPortal.test.tsx`.
-2. **Editor blur semantics prop** — `editorBlurAction?: "commit" | "reject" | "ignore"` on `BcGridProps` (default unchanged: `"commit"`). For forms-style ERP screens that want explicit Tab/Enter commit and treat blur as cancel. Threads through `editorPortal.tsx`'s click-outside handler.
-3. **Esc reverts whole row in row-edit mode** — when `BcEditGrid` is in row-edit mode, `Esc` from any cell of the editing row calls `editController.discardRowEdits(rowId)` instead of just cancelling the single cell. Audit P1-W3-3 follow-up to #381. Pure additive — no API change, just a keyboard handler refinement.
-
-**Branch:** `agent/worker3/v05-editor-portal-polish-bundle-1`. **Effort:** ~60-90 min.
-
-### After bundle-1 → `v05-on-cell-edit-commit-result-aware` (~45-60 min)
+**Editor-portal polish bundle-1 shipped as #398** (editorActivation prop + editorBlurAction prop + escDiscardsRow prop, 3a12ffe).
 
 bsncraft v0.5 alpha.1 editing-pass review (2026-05-03) flagged that `<BcGrid onCellEditCommit>` is fire-and-forget while `<BcServerGrid onServerRowMutation>` is full optimistic / rollback / stale-gate lifecycle. ERP child-CRUD grids that call a server action on every cell commit re-implement the optimistic/rollback dance bc-grid already owns server-side.
 

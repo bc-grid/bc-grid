@@ -35,20 +35,9 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
-### Active now → `v05-context-menu-chrome-bundle-2` (half 2 of 2, ~30-40 min)
+### Active now → `v05-context-menu-row-actions` (~45-60 min)
 
-**Bundle-1 shipped as #396** (filter row toggle, sidebar toggle, status bar toggle, filters panel action — plus you delivered `BcContextMenuSubmenuItem` + `BcContextMenuToggleItem` primitives + `BcUserSettings` / `BcUserColumnSettings` / `BcUserSettingsStore` types in the public surface that worker1's #394 was deferring to). Bundle-2 picks up where bundle-1 left off.
-
-**Items in this PR (~30-40 min):**
-
-5. **Density toggle** — context-menu item View → Density → Compact / Normal / Comfortable (radio group). Wires to the existing `data-density` attribute that the theming layer already styles for.
-6. **Group-by menu** — context-menu item Group → "Group by this column" (only on header context — needs column id from event target). Toggle current column in/out of `groupBy[]`.
-7. **Pin column menu** — context-menu item Pin → "Pin left" / "Pin right" / "Unpin" (on header context).
-8. **Active filter chip strip toggle** — #393 shipped the chip strip; now add a View → "Show active filters" toggle so users can hide it.
-
-**Branch:** `agent/worker2/v05-context-menu-chrome-bundle-2`. **Effort:** ~30-40 min.
-
-### After bundle-2 ships → `v05-context-menu-row-actions` (~45-60 min)
+**Bundles 1 and 2 are shipped** (#396 chrome bundle-1: filter row / sidebar / status bar / filters-panel toggles + the `BcContextMenuSubmenuItem` / `BcContextMenuToggleItem` / `BcUserSettings` primitives. #399 chrome bundle-2: density / group-by / pin column / chip strip + column-only header commands).
 
 The vanilla+context-menu RFC (#392) covers chrome + view + filter toggles, but ERP grids also need row-shaped actions on right-click. Worker2 owns the chrome + the right-click handler + the menu structure, so this lane is yours.
 
