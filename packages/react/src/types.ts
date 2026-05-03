@@ -66,7 +66,15 @@ import type {
   BcFilterUserContext as BcEngineFilterUserContext,
   BcFiscalCalendar as BcEngineFiscalCalendar,
 } from "@bc-grid/filters"
-import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
+import type {
+  CSSProperties,
+  ComponentType,
+  MouseEvent,
+  DragEvent as ReactDragEvent,
+  ReactNode,
+  RefObject,
+} from "react"
+import type { BcRowDropAction } from "./rowDragDrop"
 
 export type BcGridDensity = "compact" | "normal" | "comfortable"
 
@@ -245,6 +253,45 @@ export interface BcRangeCopyEvent {
 }
 
 export type BcRangeCopyHook = (event: BcRangeCopyEvent) => void
+
+/**
+ * `dragover` event payload — the live position handler. Returns a
+ * `BcRowDropAction` to tell the grid where the drop will land.
+ *
+ * `sourceRowIds` carries every dragged row id (multi-row drag — the
+ * grid drags the full selection if the drag origin was inside the
+ * selection). The consumer uses this to reject drops onto the source
+ * row itself (`if (sourceRowIds.includes(rowId)) return "none"`)
+ * or to validate cross-parent drops in tree models.
+ *
+ * v0.6 §1 row-drag-drop-hooks.
+ */
+export interface BcRowDragOverEvent<TRow> {
+  row: TRow
+  rowId: RowId
+  sourceRowIds: readonly RowId[]
+  event: ReactDragEvent<HTMLElement>
+}
+
+export type BcRowDragOverHandler<TRow> = (event: BcRowDragOverEvent<TRow>) => BcRowDropAction
+
+/**
+ * `drop` event payload. `position` is the last value returned by
+ * `onRowDragOver`. Consumer reorders / re-parents and updates its own
+ * state; the grid does not mutate `data` on its own (consumer-owned
+ * ordering, mirrors how `<BcServerGrid>` treats the row model).
+ *
+ * v0.6 §1 row-drag-drop-hooks.
+ */
+export interface BcRowDropEvent<TRow> {
+  row: TRow
+  rowId: RowId
+  sourceRowIds: readonly RowId[]
+  position: BcRowDropAction
+  event: ReactDragEvent<HTMLElement>
+}
+
+export type BcRowDropHandler<TRow> = (event: BcRowDropEvent<TRow>) => void
 
 /**
  * Render context handed to status-bar segment renderers. Rebuilt per
@@ -794,6 +841,56 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   onRowClick?: (row: TRow, event: MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: MouseEvent) => void
+
+  /**
+   * Fires on every `dragover` over a row while a row drag is in
+   * flight. Return a `BcRowDropAction` to tell the grid where the
+   * drop will land relative to the hovered row — `"before"`,
+   * `"after"`, `"into"`, or `"none"` to reject. The grid surfaces
+   * the live position via `data-bc-grid-row-drop="<position>"` on
+   * the hovered row so consumers can paint indicators in their
+   * theme (top/bottom border for before/after, row highlight for
+   * into).
+   *
+   * Returning `"none"` (or omitting the handler) prevents drop on
+   * this row. Defaults to `"none"` when only `onRowDrop` is wired
+   * without `onRowDragOver` — consumers must opt into the position
+   * UX by returning a non-none action.
+   *
+   * `event.sourceRowIds` carries every dragged row id (multi-row
+   * drag — the grid drags the full selection together if the drag
+   * origin was inside the selection). v0.6 §1 row-drag-drop-hooks
+   * (two-spike-confirmed: doc-mgmt #1 + production-estimating #5).
+   */
+  onRowDragOver?: BcRowDragOverHandler<TRow>
+  /**
+   * Fires on `drop` after `onRowDragOver` last returned a non-`"none"`
+   * action. Consumer reorders rows / re-parents the source rows /
+   * updates whatever consumer-owned state ranks the data; the grid
+   * does not mutate `data` on its own.
+   *
+   * `event.sourceRowIds` is the dragged set; `event.position` is
+   * the last position returned by `onRowDragOver` (so a tree drop
+   * onto a folder fires with `position: "into"`).
+   *
+   * v0.6 §1 row-drag-drop-hooks.
+   */
+  onRowDrop?: BcRowDropHandler<TRow>
+  /**
+   * Fires on `dragstart`, before any `dragover` events. Useful for
+   * snapshotting consumer state, custom drag images, or telemetry.
+   * The grid sets `dataTransfer.effectAllowed = "move"` and writes
+   * the source rowIds into `dataTransfer` automatically; consumers
+   * customising the drag preview can call `event.dataTransfer.setDragImage`
+   * here.
+   *
+   * v0.6 §1 row-drag-drop-hooks.
+   */
+  onRowDragStart?: (
+    row: TRow,
+    sourceRowIds: readonly RowId[],
+    event: ReactDragEvent<HTMLElement>,
+  ) => void
   onCellFocus?: (position: BcCellPosition) => void
   /**
    * Fires after the editing overlay commits a cell value. Client grids can
@@ -1492,6 +1589,8 @@ export type {
 }
 
 export type { BcNormalisedRange, BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
+export type { BcRowDropAction } from "./rowDragDrop"
+export { BC_GRID_ROW_DRAG_MIME } from "./rowDragDrop"
 export type {
   BcRowPatch,
   BcRowPatchFailure,
