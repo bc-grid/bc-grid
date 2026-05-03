@@ -405,6 +405,40 @@ export function resolveActiveRowModelMode(input: {
 }
 
 /**
+ * Pure decision helper for view-change reset behaviour (worker1 audit
+ * P1 §1). When `<BcServerGrid>`'s resolved viewKey changes (filter /
+ * sort / search / groupBy / visibleColumns), the grid resets scroll /
+ * selection / focus by default — matches the NetSuite, Salesforce LWC
+ * datatable, and Excel-table convention so the user sees the new
+ * query result from row 0 with no ghost selection or stranded focus.
+ *
+ * Returns `{ resetScroll, resetSelection, resetFocus }` based on the
+ * viewKey-changed signal and the three opt-out props on
+ * `BcServerGridProps`. When the viewKey did NOT change (e.g. a refresh
+ * fired with the same view), no resets fire — the user's scroll
+ * position / selection / focus stay put.
+ */
+export function resolveViewChangeReset(input: {
+  viewKeyChanged: boolean
+  preserveScroll?: boolean | undefined
+  preserveSelection?: boolean | undefined
+  preserveFocus?: boolean | undefined
+}): {
+  resetScroll: boolean
+  resetSelection: boolean
+  resetFocus: boolean
+} {
+  if (!input.viewKeyChanged) {
+    return { resetScroll: false, resetSelection: false, resetFocus: false }
+  }
+  return {
+    resetScroll: !input.preserveScroll,
+    resetSelection: !input.preserveSelection,
+    resetFocus: !input.preserveFocus,
+  }
+}
+
+/**
  * Pure helper exported for unit testing. Resolves the per-tree-fetch
  * `childCount` from the consumer-supplied `BcServerTreeProps.childCount`,
  * defaulting to `DEFAULT_SERVER_BLOCK_SIZE` (100) and clamping to a
@@ -490,6 +524,37 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
     if (message != null) console.error(message)
     // Mount-only — only fire when the active mode itself changes.
   }, [activeMode])
+
+  // View-change reset (worker1 audit P1 §1). When the resolved viewKey
+  // changes (filter / sort / search / groupBy / visibleColumns), reset
+  // scroll-to-top + selection + active cell focus per the
+  // `preserveScrollOnViewChange` / `preserveSelectionOnViewChange` /
+  // `preserveFocusOnViewChange` opt-out props (all default `false` →
+  // reset by default, matches NetSuite / Salesforce LWC datatable /
+  // Excel-table convention). Skips the initial mount so the user's
+  // explicit initial selection survives first render.
+  const activeView =
+    activeMode === "paged" ? paged.view : activeMode === "infinite" ? infinite.view : tree.view
+  const previousViewKeyRef = useRef<string | null>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset triggers on viewKey change only
+  useEffect(() => {
+    const viewKey = JSON.stringify(activeView)
+    if (previousViewKeyRef.current === null) {
+      previousViewKeyRef.current = viewKey
+      return
+    }
+    if (previousViewKeyRef.current === viewKey) return
+    previousViewKeyRef.current = viewKey
+    const decision = resolveViewChangeReset({
+      viewKeyChanged: true,
+      preserveScroll: props.preserveScrollOnViewChange,
+      preserveSelection: props.preserveSelectionOnViewChange,
+      preserveFocus: props.preserveFocusOnViewChange,
+    })
+    if (decision.resetScroll) gridApiRef.current?.scrollToTop()
+    if (decision.resetSelection) gridApiRef.current?.clearSelection()
+    if (decision.resetFocus) gridApiRef.current?.clearActiveCell()
+  }, [activeView])
 
   // Mode-switch RFC §5: render the inner `<BcGrid>` with `loading=true`
   // for one frame between the abort-on-deactivate and the new mode's
@@ -713,6 +778,15 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       },
       setPrefetchAhead(value) {
         gridApiRef.current?.setPrefetchAhead(value)
+      },
+      clearSelection() {
+        gridApiRef.current?.clearSelection()
+      },
+      clearActiveCell() {
+        gridApiRef.current?.clearActiveCell()
+      },
+      scrollToTop() {
+        gridApiRef.current?.scrollToTop()
       },
       refresh() {
         gridApiRef.current?.refresh()

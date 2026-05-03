@@ -2431,6 +2431,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         const clamped = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
         updateUserSettings((prev) => ({ ...prev, prefetchAhead: clamped }))
       },
+      clearSelection() {
+        setSelectionState(createEmptySelection())
+      },
+      clearActiveCell() {
+        setActiveCell(null)
+      },
+      scrollToTop() {
+        const scroller = scrollerRef.current
+        if (scroller) scroller.scrollTop = 0
+      },
       refresh() {
         requestRender()
       },
@@ -2462,7 +2472,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setColumnState,
     setExpansionState,
     applyFilterState,
+    setActiveCell,
     setRangeSelectionState,
+    setSelectionState,
     setSortState,
     setVisibleUserSetting,
     updateUserSettings,
