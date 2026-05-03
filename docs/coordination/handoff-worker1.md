@@ -38,15 +38,13 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 **The next active task is the v0.6 layout architecture pass.** bsncraft consumer review surfaced 5 layout memos in the past 24h — pinned-cell shading, sticky-left detail panel, editor portal mispositioning, nested-grid flex distribution, header-body horizontal scroll lag. 3 of 5 are shipped as point fixes; 2 remain. Maintainer's framing: they share a root cause — bc-grid's render layer uses JS-driven coordinate calculations where the browser layout engine has the right primitives (`position: sticky`).
 
-**RFC drafting now** at `docs/design/layout-architecture-pass-rfc.md` (background subagent). The thesis: rewrite the chrome to use a single scroll container with `position: sticky; top: 0` headers and `position: sticky; left: 0 / right: 0` pinned cells. Deletes ~200 LOC of JS scroll-sync (`syncHeaderRowsScroll`, `pinnedTransformValue`, `headerScrollTransform`, the `availableGridWidth` ResizeObserver from `d7eddaf`) and closes all 5 memos with one structural change instead of 5 patches.
+**RFC delivered** at `docs/design/layout-architecture-pass-rfc.md`. Read end-to-end before you start; §3 has the new render graph, §5 covers the z-index intersection rule (the only sharp edge), §8 is the PR sequencing.
 
-**PR (a) scope (yours):** structural DOM rewrite — single viewport, sticky headers, sticky pinned columns. The virtualizer keeps doing what it does (compute which rows + cols to render). The scroll handler that synced header.scrollLeft to body.scrollLeft is deleted. Existing pinned-cell shading layering (5341af3) composes naturally because sticky positioning is per-cell. Closes memo 5 (header lag) immediately because there's no JS sync point that can drift.
+**PR (a) scope (yours):** structural DOM rewrite — single `.bc-grid-viewport` (replaces the header-viewport + body-scroller pair), `position: sticky; top: 0` on the three header rows (group, leaf, filter), `position: sticky; left: 0 / right: 0` on `.bc-grid-cell-pinned-left/right`. Z-index 4 on the top-left intersection cells per §5. Delete `headerScrollTransform`, `pinnedTransformValue`, `headerViewportStyle`, `autoHeightHeaderViewportStyle`, `headerRowStyle`, `syncHeaderRowsScroll`, `pinnedLaneStyle`, the per-cell `transform` from `cellStyle`. The body scroll handler shrinks to just feeding the virtualizer (~5 lines). Existing pinned-cell shading layering (5341af3) composes naturally because sticky positioning is per-cell.
 
-Your lane gets PR (a) because you have the most React layout context after the mode-switch RFC. PRs (b) (detail panel sticky-left) and (c) (editor portal simplification + flex source-of-truth consolidation) compose on top.
+Closes memo 5 (header lag) immediately and memo 1 (pinned shading) preserved. Your lane because you have the most React layout context from the mode-switch RFC and the broadest read across `grid.tsx`.
 
-**Wait for the RFC.** The RFC pins the structural decisions — the new render graph, the migration plan, perf budget, test plan, sequencing of (a) → (b) → (c), the `availableGridWidth` deletion path. Coordinator will ping you when the RFC lands; in the meantime you can start by reading `gridInternals.ts` headerScrollTransform / pinnedTransformValue / syncHeaderRowsScroll and `grid.tsx` body container + scroller setup to map the surface area.
-
-**Branch (when ready):** `agent/worker1/v06-layout-architecture-pass-pr-a`. **Effort:** ~12-16h structural rewrite.
+**Branch:** `agent/worker1/v06-layout-architecture-pass-pr-a`. **Effort:** ~12-16h structural rewrite, ~600-900 LOC net diff.
 
 ### After PR (a) → `v05-server-mode-switch` stage 3.3 — RFC §9 test sweep + Playwright (~3-4h)
 
