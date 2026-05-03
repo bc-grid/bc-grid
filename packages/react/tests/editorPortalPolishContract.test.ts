@@ -127,4 +127,43 @@ describe("escDiscardsRow prop", () => {
       /<BcGrid\s+\{\.\.\.props\}\s+escDiscardsRow=\{props\.escDiscardsRow\s*\?\?\s*true\}/,
     )
   })
+
+  test("EditorMount layoutEffect deps DON'T include rowEntry.row / column.source / initialValue (bsncraft 0.5.0 GA P0)", () => {
+    // These values change on every server-grid re-fetch (new object
+    // refs even for unchanged data). Putting them in the layoutEffect
+    // dep array re-fires the cleanup mid-edit, which triggers the
+    // scroll-out commit path — the editor unmounts on every render of
+    // the surrounding `<BcServerGrid>` and the consumer sees no input.
+    //
+    // The cleanup MUST read these via `cleanupRowRef.current` /
+    // `cleanupColumnSourceRef.current` / `cleanupInitialValueRef.current`
+    // so values are fresh at unmount without re-firing the effect.
+    // Pinning the contract here so a refactor that re-adds them to
+    // the dep array catches loudly. Surfaced 2026-05-03 by bsncraft
+    // v0.5.0 GA — in-cell editors immediately unmounted on
+    // `<BcServerGrid rowModel="paged">`.
+
+    // The scroll-out detection layoutEffect is the one near the
+    // bottom of the file with the rowEntry / column / initialValue
+    // refs declared above it.
+    expect(portalSource).toContain("cleanupRowRef")
+    expect(portalSource).toContain("cleanupColumnSourceRef")
+    expect(portalSource).toContain("cleanupInitialValueRef")
+
+    // Cleanup reads from the refs, not the closed-over values.
+    expect(portalSource).toMatch(/row:\s*cleanupRowRef\.current/)
+    expect(portalSource).toMatch(/column:\s*cleanupColumnSourceRef\.current/)
+    expect(portalSource).toMatch(/previousValue:\s*cleanupInitialValueRef\.current/)
+
+    // The dep array of the scroll-out layoutEffect must NOT include
+    // the unstable refs. Match the dep array specifically (the one
+    // ending with `cell.columnId` per the post-fix shape) and assert
+    // none of `rowEntry.row`, `column.source`, `initialValue` appear.
+    const depArrayMatch = portalSource.match(/}, \[\s*\n[\s\S]*?cell\.columnId,?\s*\n\s*\]\)/)
+    expect(depArrayMatch).not.toBeNull()
+    const depArray = depArrayMatch?.[0] ?? ""
+    expect(depArray).not.toContain("rowEntry.row")
+    expect(depArray).not.toContain("column.source")
+    expect(depArray).not.toContain("initialValue")
+  })
 })
