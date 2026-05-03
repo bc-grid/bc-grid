@@ -96,27 +96,46 @@ The recommended fix per the bsncraft memo is **Option A: add the prop set to all
 
 **Branch:** `agent/worker3/v06-server-grid-actions-column`. **Effort:** ~1-2 days. **bsncraft consumer P1** — closing this lets bsncraft delete their entire `apps/web/components/edit-grid.tsx` wrapper (~150 LOC).
 
-### Then-after → `v06-editor-tab-wraparound-polish` (~half day)
-
-Followup to #431. Current helper clamps when Tab runs off the end of the last editable cell of last row. Bsncraft asked about wraparound: should Tab from the last editable cell wrap to first editable of first row? Default in spreadsheet editors (Excel / Google Sheets) is YES (wraparound) but with subtle row-traversal restriction to keep within active selection if any. Add `editorTabWraparound: "none" | "row-wrap" | "selection-wrap"` prop (default `"row-wrap"`).
-
-**Branch:** `agent/worker3/v06-editor-tab-wraparound-polish`. **Effort:** ~half day.
-
-### After-that → `v06-editor-cell-undo-redo` (~half day)
+### Active now → `v06-editor-cell-undo-redo` (~half day)
 
 Per-cell-edit undo/redo so a user who's typed in an edit-mode cell can press `Cmd/Ctrl+Z` to revert their typed-but-not-committed value (the input's own `undo` history is sufficient for the in-progress text, but Cmd+Z after blur should restore the previous committed value — that history doesn't exist today). Per-row scope, capped at last 10 commits per row to bound memory.
 
 **Branch:** `agent/worker3/v06-editor-cell-undo-redo`. **Effort:** ~half day.
 
-### Last → `v06-editor-focus-retention-on-rerender` (~half day)
+### Next-after → `v06-editor-focus-retention-on-rerender` (~half day)
 
-Editor portal focus can drop on parent re-renders that change keys or restructure children. Pin the contract: when an editor is mounted and the grid re-renders for an unrelated reason (e.g. data prop swap that doesn't affect the editing cell), focus stays on the input. Add a regression test pinning the contract with a forced-rerender scenario.
+Editor portal focus can drop on parent re-renders that change keys or restructure children. Pin the contract: when an editor is mounted and the grid re-renders for an unrelated reason (e.g. data prop swap that doesn't affect the editing cell), focus stays on the input. Add a regression test pinning the contract with a forced-rerender scenario. **Pairs with the bsncraft 0.5.0 GA P0 fix #451** (in-cell editor unmount on `<BcServerGrid>` server fetch) — that PR fixed the rowEntry.row dep array; this task pins the broader focus-retention contract so future regressions catch.
 
 **Branch:** `agent/worker3/v06-editor-focus-retention-on-rerender`. **Effort:** ~half day.
 
-Followup to #431. Current helper clamps when Tab runs off the end of the last editable cell of last row. Bsncraft asked about wraparound: should Tab from the last editable cell wrap to first editable of first row? Default in spreadsheet editors (Excel / Google Sheets) is YES (wraparound) but with subtle row-traversal restriction to keep within active selection if any. Add `editorTabWraparound: "none" | "row-wrap" | "selection-wrap"` prop (default `"row-wrap"`).
+### Then-after → `v06-editor-async-validation` (~1 day)
 
-**Branch:** `agent/worker3/v06-editor-tab-wraparound-polish`. **Effort:** ~half day.
+Today's `column.validate(value, params): BcValidationResult` is synchronous. Many ERP scenarios need async validation: "is this customer code already taken in our DB?", "does this email match a known account?", "is this SKU still active?". These run against a server endpoint with `AbortSignal` semantics matching the loader contract.
+
+**Implementation:**
+
+1. **Widen `BcValidationResult` to support promises.** Today `validate` returns `{ valid: boolean; error?: string }`. New union: also accept `Promise<{ valid: boolean; error?: string }>` with an in-flight indicator. The editor mount surfaces `pending` state during the fetch.
+2. **`AbortSignal` on validate** — pass the editor's lifecycle signal so a superseded validation aborts. Match the existing prepare-result preload pattern.
+3. **Visual state** — `data-bc-grid-edit-state="pending"` already exists from #424; reuse it for in-flight async validation.
+4. **Recipe** at `docs/recipes/async-validation.md` — Hasura unique-check + REST `/exists` patterns.
+
+**Branch:** `agent/worker3/v06-editor-async-validation`. **Effort:** ~1 day.
+
+### After-that → `v06-server-grid-actions-keyboard` (~half day)
+
+Followup to #453 server-grid actions column. Today the actions column buttons (Edit / Delete / extras) are reachable via mouse + Tab focus, but the **discovery** isn't great — sighted-keyboard users don't know the actions column exists until they Tab to it. Add a keyboard shortcut: `Shift+E` on a row triggers the column's `onEdit`; `Shift+Delete` triggers `onDelete` with the consumer's `confirmDelete` gate. Both gated on the actions column being present.
+
+**Branch:** `agent/worker3/v06-server-grid-actions-keyboard`. **Effort:** ~half day.
+
+### Last → `v06-editor-paste-into-cell-detection` (~half day)
+
+When user pastes text into an editing cell, the input today accepts the text as a string. For numeric / date editors, format-detect the pasted content and convert (e.g. paste `"$1,234.56"` into a number cell → set 1234.56; paste `"2026-05-03"` into a date cell → ISO date). Falls through to the column's `valueParser` if defined; otherwise uses the editor's built-in parser. Pin the contract with unit tests covering currency / percentage / scientific-notation / locale-aware decimals.
+
+**Branch:** `agent/worker3/v06-editor-paste-into-cell-detection`. **Effort:** ~half day.
+
+### Previously active → `v06-server-grid-actions-column` (DONE — #453 HEADLINE, bsncraft P1, ~150 LOC saving for bsncraft)
+### Previously active → `v06-scroll-state-controlled-prop` (DONE — #450 alpha.1 critical, full state-persistence story now possible)
+### Previously active → `v06-editor-tab-wraparound-polish` (DONE — #448 merged bca5714)
 
 ### Previously active → `v06-editor-keyboard-navigation-polish` (DONE — #431 merged cbb65fd)
 
