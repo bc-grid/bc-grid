@@ -39,6 +39,27 @@ interface ServerRowModelPerfInput {
   rowCount?: number
 }
 
+interface PrefetchSweepPerfInput {
+  blockSize?: number
+  fetchDelayMs?: number
+  maxBlocks?: number
+  maxConcurrentRequests?: number
+  prefetchAhead: number
+  rowCount?: number
+  scrollSteps?: number
+  scrollStepRows?: number
+  viewportRows?: number
+}
+
+interface PrefetchSweepPerfMetric extends PerfMetric {
+  blocksCached: number
+  blocksFetched: number
+  cacheHitRate: number
+  immediateContentRate: number
+  prefetchAhead: number
+  scrollSteps: number
+}
+
 interface ServerRowModelPerfMetric extends PerfMetric {
   avgFetchLatencyMs: number
   avgQueueWaitMs: number
@@ -74,6 +95,7 @@ declare global {
       filterRows(): Promise<PerfMetric>
       scrollForFps(durationMs?: number): Promise<ScrollPerfMetric>
       serverRowModelBlocks(input?: ServerRowModelPerfInput): Promise<ServerRowModelPerfMetric>
+      serverRowModelPrefetchSweep(input: PrefetchSweepPerfInput): Promise<PrefetchSweepPerfMetric>
       rawRowCount: number
     }
     __fps__: number[]
@@ -467,6 +489,7 @@ window.__bcGridPerf = {
   },
   scrollForFps,
   serverRowModelBlocks,
+  serverRowModelPrefetchSweep,
 }
 
 async function serverRowModelBlocks(
@@ -555,6 +578,125 @@ async function serverRowModelBlocks(
     maxQueueWaitMs: metrics.blockQueueWaitMs.maxMs,
     queuedRequests: metrics.queuedRequests,
     rowCount,
+  }
+}
+
+// `v06-server-perf-prefetch-budget-tuning` (worker1 audit P1 §6).
+// Simulates a scrolling user under the React layer's
+// `handleVisibleRowRangeChange` contract: each scroll step calls
+// ensureBlock(start), ensureBlock(end), and prefetches the next
+// `prefetchAhead` blocks past the visible window's tail. Tracks
+// per-step cache hits + total fetches so the bench can A/B compare
+// prefetchAhead = 0 / 1 / 2 / 3 against the same scroll trace and
+// surface the marginal value of bumping the default.
+async function serverRowModelPrefetchSweep(
+  input: PrefetchSweepPerfInput,
+): Promise<PrefetchSweepPerfMetric> {
+  const rowCount = input.rowCount ?? 10_000
+  const blockSize = input.blockSize ?? 100
+  const viewportRows = input.viewportRows ?? 50
+  const scrollSteps = input.scrollSteps ?? 100
+  const scrollStepRows = input.scrollStepRows ?? 50
+  const prefetchAhead = Math.max(0, Math.floor(input.prefetchAhead))
+  const fetchDelayMs = input.fetchDelayMs ?? 1
+  const maxConcurrentRequests = input.maxConcurrentRequests ?? 4
+
+  const view: ServerViewState = {
+    groupBy: [],
+    sort: [{ columnId: "amount", direction: "asc" }],
+    visibleColumns: ["customer", "status", "amount"],
+  }
+  const model = createServerRowModel<PerfRow>()
+  const rows = rawRows.length >= rowCount ? rawRows : createPerfRows(rowCount, 10)
+  const loadBlock = async (query: {
+    blockStart: number
+    blockSize: number
+  }): Promise<ServerBlockResult<PerfRow>> => {
+    if (fetchDelayMs > 0) await wait(fetchDelayMs)
+    const resultRows = rows.slice(query.blockStart, query.blockStart + query.blockSize)
+    return {
+      blockSize: query.blockSize,
+      blockStart: query.blockStart,
+      hasMore: query.blockStart + resultRows.length < rowCount,
+      rows: resultRows,
+      totalRows: rowCount,
+    }
+  }
+
+  function ensureBlockAt(rowIndex: number): {
+    cached: boolean
+    deduped: boolean
+    promise: Promise<unknown>
+  } {
+    const blockStart = Math.max(0, Math.floor(rowIndex / blockSize) * blockSize)
+    const cacheOptions = {
+      blockLoadDebounceMs: 0,
+      maxConcurrentRequests,
+      ...(input.maxBlocks !== undefined ? { maxBlocks: input.maxBlocks } : {}),
+    }
+    return model.loadInfiniteBlock({
+      blockSize,
+      blockStart,
+      cacheOptions,
+      loadBlock,
+      view,
+    })
+  }
+
+  let blocksFetched = 0
+  let blocksCached = 0
+  let immediateContentSteps = 0
+
+  const startedAt = performance.now()
+  const allPromises: Promise<unknown>[] = []
+  for (let step = 0; step < scrollSteps; step += 1) {
+    const startIndex = step * scrollStepRows
+    const endIndex = Math.min(startIndex + viewportRows - 1, rowCount - 1)
+    if (endIndex >= rowCount - 1) break
+
+    // Probe whether every block needed for this scroll step is already
+    // cached BEFORE issuing the ensureBlock calls. This is the
+    // user-perceived "instant content on scroll" metric.
+    const startBlockKey = `infinite:${model.createViewKey(view)}:start:${
+      Math.floor(startIndex / blockSize) * blockSize
+    }:size:${blockSize}`
+    const endBlockKey = `infinite:${model.createViewKey(view)}:start:${
+      Math.floor(endIndex / blockSize) * blockSize
+    }:size:${blockSize}`
+    const startCached = model.cache.get(startBlockKey)?.state === "loaded"
+    const endCached = model.cache.get(endBlockKey)?.state === "loaded"
+    if (startCached && endCached) immediateContentSteps += 1
+
+    // Fire ensureBlock per the React layer's algorithm. Track cached vs
+    // fetched per call.
+    const calls = [ensureBlockAt(startIndex), ensureBlockAt(endIndex)]
+    for (let i = 1; i <= prefetchAhead; i += 1) {
+      calls.push(ensureBlockAt(endIndex + blockSize * i))
+    }
+    for (const call of calls) {
+      if (call.cached) blocksCached += 1
+      else if (!call.deduped) blocksFetched += 1
+      allPromises.push(call.promise.catch(() => undefined))
+    }
+
+    // Wait one tick so the model's debounce/queue runs; mirrors how a
+    // real scroll handler interleaves with the model's debouncer.
+    await wait(0)
+  }
+
+  await Promise.all(allPromises)
+  const duration = performance.now() - startedAt
+
+  const totalCalls = blocksFetched + blocksCached
+  return {
+    blocksCached,
+    blocksFetched,
+    cacheHitRate: totalCalls > 0 ? blocksCached / totalCalls : 0,
+    durationMs: duration,
+    immediateContentRate: scrollSteps > 0 ? immediateContentSteps / scrollSteps : 0,
+    prefetchAhead,
+    rowCount,
+    scrollSteps,
   }
 }
 
