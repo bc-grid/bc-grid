@@ -67,6 +67,16 @@ Set `popup: true` on selectEditor / multiSelectEditor / autocompleteEditor. Shou
 
 **Branch:** `agent/worker3/v06-in-cell-editor-mode-pr-c`. **Effort:** ~3-4h.
 
+### After in-cell editor PRs → `v06-layout-architecture-pass` PR (c) — cleanup + editor portal simplification (~4-6h, GATED on worker1's PR (a))
+
+Layout architecture pass RFC at `docs/design/layout-architecture-pass-rfc.md` — your PR (c) is the cleanup leg. Closes the band-aid `availableGridWidth` ResizeObserver from `d7eddaf` (`grid.tsx:381-395`) by consolidating onto `viewport.width` from the existing `useViewportSync`. Simplifies `editorCellRect` (`grid.tsx:1673-1714`) by dropping the `expansionState` invalidation-only dep + the lint suppression at `:1672` — sticky-positioned cells have stable DOM positions, so the rect is correct without re-invalidation when detail panels above the editing row toggle.
+
+Also updates `docs/design.md §4.2 / §4.3` to describe the new render graph + adds a row to the design.md decisions table. Closes memos 3 (editor portal) and 4 (flex distribution) per the RFC §4 table.
+
+**Coordinator will signal when worker1's PR (a) lands.** Until then, do NOT branch on this — PR (a)'s rewrite changes the render graph that PR (c) cleans up against.
+
+**Branch (when ready):** `agent/worker3/v06-layout-architecture-pass-pr-c`. **Effort:** ~4-6h.
+
 ### Previously active → `v05-prepare-result-preload` (DONE — #403)
 
 Autocomplete editor preloads the first page of options via `editor.prepare()` so the dropdown paints with options on first frame. Small `BcCellEditorPrepareParams.column` extension. Graceful prepare-rejection (fall through to synchronous `column.options` instead of bouncing to Navigation). Merged 348ffdc.

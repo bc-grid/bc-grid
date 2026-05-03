@@ -1,14 +1,14 @@
 # @bc-grid/filters
 
-Filter primitives for bc-grid. **v0.1.0-alpha.1 ships an empty placeholder** to lock the `@bc-grid` namespace; the real implementation lands during the v1.0 parity sprint per `docs/design/filter-registry-rfc.md`.
+Filter primitives for bc-grid. This package owns the non-React filter registry, built-in predicate definitions, and `matchesFilter` runtime used by `@bc-grid/react`.
 
-When implemented, this package exposes:
-- Built-in filter definitions: `textFilter`, `numberFilter`, `dateFilter`, `setFilter`, `booleanFilter`
+This package exposes:
+- Built-in filter definitions: `textFilter`, `numberFilter`, `numberRangeFilter`, `dateFilter`, `dateRangeFilter`, `setFilter`, `booleanFilter`
 - The `matchesFilter` runtime
 - A `registerFilter` extension point for consumer-defined filters
 - The `BcFilterDefinition` shape
 
-See the RFC for the full contract.
+See `docs/design/filter-registry-rfc.md` for the full contract.
 
 ## License
 

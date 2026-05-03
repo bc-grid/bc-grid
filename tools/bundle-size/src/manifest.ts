@@ -42,12 +42,18 @@ export const bundleSizeManifest: BundleSizeManifest = {
       // landed: useBcGridState (#359), apiRef expansion (#361/#366/#377),
       // server-hook trio (#363/#368/#371), Combobox migrations (#364/
       // #370/#372), four hero spike grids (#364/#367/#374/#375), and
-      // cleanup train (#358/#362/#369/#373). All the planned v0.5 P0
-      // surface except paste integration is now in. Bumping the soft
-      // drift marker to current so the remaining v0.5 PRs (paste +
-      // cheap P1s) get clean signal. 100 KiB hard cap unchanged
-      // (currently at 86.56 KiB total — 13.4 KiB headroom).
-      baselineGzipBytes: 77824,
+      // Bumped 2026-05-03 for v0.5.0-alpha.2 cut. Accepted feature
+      // work from chrome bundles 1+2 (#396/#399), row actions (#404),
+      // mode-switch RFC stages 1-3.2 (#397/#400/#402/#406), editor-
+      // toggle props + portal polish (#395/#398), result-aware
+      // onCellEditCommit (#401), prepareResult preload (#403),
+      // group-before-paginate (#405), bsncraft paper-cut fixes (pinned
+      // shading, DOM-rect editor, flex distribution), and
+      // rowClassName/rowStyle. 100 KiB hard cap unchanged
+      // (currently at 99.11 KiB total — only ~900 bytes headroom; the
+      // v0.6 layout-architecture-pass deletes ~250 LOC of JS scroll-
+      // sync and should reclaim ~5-8 KiB gzip).
+      baselineGzipBytes: 90562,
     },
   ],
 }

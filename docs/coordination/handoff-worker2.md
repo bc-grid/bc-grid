@@ -35,33 +35,65 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
-### Active now → `v05-grouping-implementation-pull-forward` (~half day)
+### Active now → `v06-filter-registry-implementation` (your planning doc §3, ~half day)
 
-Pull one of the v0.5 → v0.6 grouping items forward from `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`. Pick whichever is at the top of that doc that isn't gated on a breaking change. Suggested first pull: any "group selection algebra" follow-up that builds on bundle-1 #393's basic implementation (e.g. tri-state group checkboxes when partial children selected, or selection-aware aggregations in group rows). Read the doc, pick the item that fits a single-PR shape, write a brief task slug entry into this handoff under "Active now" when you start.
+**Group-before-paginate shipped as #405** (e2c022c, your planning doc §1 — closes audit P0-8 grouping-page-window): the grouped row metadata now builds from the full filtered/sorted client row model, then pagination applies as a visible-leaf set so group counts and descendant ids reflect full data, not one page. Combined with row-actions menu (#404), chrome bundles 1+2 (#396 / #399), and chrome+filter bundle-1 (#393), your v0.5 lane is structurally complete.
 
-Worker2 started the top grouping correctness slice from §1: build grouping over the full filtered/sorted row model before applying the client page-window display. The visible page still controls which leaf rows render; group rows keep full child counts and full descendant metadata.
+**Note on `v06-detail-panel-sticky-left`:** the standalone task is **superseded** by the v0.6 layout architecture pass RFC at `docs/design/layout-architecture-pass-rfc.md` (delivered 2026-05-03; read §3, §4, §8 before your PR (b) work). The detail-sticky-left becomes PR (b) of that RFC, gated on worker1's PR (a) (single scroll container + sticky header/pinned). Don't ship the standalone version — it would conflict with the layout pass's structural rewrite. Coordinator will signal when worker1's PR (a) lands and you can pick up the layout-pass PR (b) as a clean compose-on-top.
 
-**Branch:** `agent/worker2/v05-grouping-pull-forward`. **Effort:** ~half day.
+In the meantime, pull §3 forward from `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`. The audit's P1-W2-1 finding: `@bc-grid/filters` is a placeholder, custom filter definitions are advertised in the type but the registry, predicate dispatch, and editor lookup are all stubs. #384 made the built-in `BcColumnFilter` union safer; it didn't make the extension point real.
 
-### Previously active → `v05-context-menu-row-actions` (DONE — #404)
+Your planning doc's spec is concrete (file:line citations at `packages/filters/src/index.ts:1`, `packages/react/src/filter.ts:334-362`, `packages/react/src/headerCells.tsx:1074-1220`, plus the registry RFC at `docs/design/filter-registry-rfc.md:188-206 / 423-436 / 459-467`). Implement:
 
-**Row-actions menu shipped as #404** (0719ca1) — Insert Above / Insert Below / Duplicate / Delete with consumer-supplied `confirmDelete` gate, all wired through new `editController` actions. Combined with chrome bundles 1+2 (#396 / #399) and #393 chrome+filter polish, the v0.5 context-menu lane is structurally complete on your side.
+1. **`@bc-grid/filters` package** — built-in filter definitions (text/number/date/set/boolean) as first-class registry entries, plus `matchesFilter` predicate dispatch and a `registerFilter` API.
+2. **React adapter** — resolves a column's filter definition to (editor, parse/serialize, predicate) via the registry. Built-ins use the same registry path as registered filters.
+3. **Failure mode** — unknown filter types fail loudly in development (console.error per the same dev-only pattern as the server-row-model validator surfacing) and produce a safe no-match in production rather than silently pretending to be text.
 
-### After grouping pull-forward → `v06-detail-panel-sticky-left` (~30-45 min)
+Tests: registry lookup, duplicate-registration detection, built-in parity (registered text filter behaves identically to today's hardcoded text filter), unknown-type behavior, custom editor rendering, controlled filter evaluation, URL/localStorage round-trips through the registry.
 
-Surfaced 2026-05-03 by bsncraft consumer review on the customers grid. When the master grid scrolls horizontally, the detail panel scrolls with it (it's a child of the same scroll container), revealing empty space beyond the detail's content width. The recommendation matches AG Grid / Linear / Notion / Airtable: `position: sticky; left: 0` on the detail panel wrapper at `packages/react/src/grid.tsx:2941`, with width measured by `ResizeObserver` against the master grid container's `clientWidth` (do **NOT** use `100vw` — sidebars / host chrome reduce the grid's actual width below viewport).
+**Branch:** `agent/worker2/v06-filter-registry-implementation`. **Effort:** ~half day.
 
-Detail content keeps its own horizontal scroll inside the sticky container. Vertical scroll behavior unchanged. Pinned-left disclosure column ▶ stays visually aligned with the detail row's left edge because both anchor to scroll-left = 0.
+### After filter-registry → `v06-set-filter-option-provider` (your planning doc §4, ~half day)
 
-Acceptance criteria (from the consumer thread):
+Pull §4 forward — set filter scales to thousands of distinct values via an async option provider. Audit P1-W2-2 finding: the current set filter synchronously scans `data` and renders all options at menu-open, which doesn't scale to thousands of customers/vendors/items. No virtualization, no async search, no abort, no loading state.
+
+Your planning doc's spec:
+
+```ts
+loadSetFilterOptions({
+  columnId, search, selectedValues, filterWithoutSelf, signal, limit, offset,
+}) => Promise<{
+  options, totalCount?, selectedOptions?, hasMore?
+}>
+```
+
+Plus a small-data sync adapter that preserves today's behavior for grids that don't supply the provider (so it's additive, not breaking).
+
+Implementation:
+- Virtualize the menu body for large option sets (reuse `@bc-grid/virtualizer` if the listbox shape fits).
+- Server-backed search with abort-on-keystroke (mirror the autocomplete pattern from #370/#403).
+- "Selected values hidden by current search" preserved as a distinct section in the menu so the user always sees what they've already selected.
+- "Select all" semantics — clearly means "all currently loaded matching options" unless the provider declares it supports all-matching values.
+
+Tests: 1k and 10k option fixtures, async race handling, selected-value preservation across searches, `not-in` / `blank` behavior, AbortSignal cancellation.
+
+**Branch:** `agent/worker2/v06-set-filter-option-provider`. **Effort:** ~half day.
+
+### After set-filter-option-provider → `v06-layout-architecture-pass` PR (b) — detail panel sticky-left (~2-3h, GATED on worker1's PR (a))
+
+The standalone `v06-detail-panel-sticky-left` task is replaced by PR (b) of the v0.6 layout architecture pass (RFC drafting at `docs/design/layout-architecture-pass-rfc.md`). PR (a) — single scroll container + sticky header/pinned (worker1) — is the foundation. Once it merges, your PR (b) becomes a clean compose-on-top: detail panel wrapper sets `position: sticky; left: 0` inside the canvas with `width: 100%` of the viewport's `clientWidth` (no JS measurement — sticky positioning gives you that for free in the new architecture).
+
+Acceptance criteria from the original consumer thread (preserved):
 
 - Horizontal scroll on master leaves the detail panel anchored to the visible viewport.
 - Detail panel content keeps its own horizontal scroll if it overflows the viewport width.
 - Vertical scroll on master scrolls the detail row off-screen as expected (no sticky-vertical).
 - `detailPanelHeight` (and the row-fn variant) is still honored.
-- Pinned-left disclosure column ▶ button still visually connects to the detail row's left edge.
+- Pinned-left disclosure column ▶ button still visually connects to the detail row's left edge (composes naturally with PR (a)'s sticky-positioned pinned cells).
 
-**Branch:** `agent/worker2/v06-detail-panel-sticky-left`. **Effort:** ~30-45 min including a Playwright spec (coordinator runs the spec). Tagged v0.6 by the consumer; folding in here keeps your lane productive.
+**Coordinator will signal when PR (a) lands.** Until then, do NOT branch on this — PR (a)'s architectural rewrite changes the detail panel mount path, and any work you do here would conflict.
+
+**Branch (when ready):** `agent/worker2/v06-layout-architecture-pass-pr-b`. **Effort:** ~2-3h.
 
 ### Previously active → `v05-chrome-and-filter-bundle-1` (DONE — #393)
 

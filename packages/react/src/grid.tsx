@@ -84,6 +84,7 @@ import {
   assignRef,
   autoHeightHeaderViewportStyle,
   buildLayoutColumnState,
+  rowStyle as buildRowStyle,
   canvasStyle,
   cellDomId,
   classNames,
@@ -114,7 +115,6 @@ import {
   resolveRowHeight,
   resolveViewportFitHeight,
   rootStyle,
-  rowStyle,
   scrollerStyle,
   shouldHandleSearchHotkey,
   syncHeaderRowsScroll,
@@ -2128,6 +2128,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // `aggregations` segment consumes the same `useAggregations` output
   // already feeding the in-grid aggregation footer row, so the segment
   // and the row stay in sync at zero extra cost.
+  // Re-read on every render — the controller bumps state on each new
+  // validation error / auto-clear, which re-renders <BcGrid> and pulls
+  // the fresh entry through. Including it in the useMemo deps means
+  // the context stays stable when no error has fired and refreshes
+  // exactly when one does.
+  const latestValidationError = editController.getLatestValidationError()
   const statusBarContext = useMemo(
     () => ({
       api,
@@ -2138,6 +2144,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       activeFilters: activeFilterSummaryItems,
       clearColumnFilter: clearColumnFilterText,
       clearAllFilters: clearAllColumnFilters,
+      latestValidationError,
     }),
     [
       activeFilterSummaryItems,
@@ -2147,6 +2154,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       clearAllColumnFilters,
       clearColumnFilterText,
       data.length,
+      latestValidationError,
       selectionState,
     ],
   )
@@ -2928,7 +2936,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                       data-row-id={entry.rowId}
                       data-row-index={virtualRow.index}
                       data-bc-grid-row-kind="group"
-                      style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
+                      style={buildRowStyle(
+                        virtualRow.top,
+                        virtualRow.height,
+                        virtualWindow.totalWidth,
+                      )}
                       onClick={(event) => {
                         focusGroupRow(entry)
                         if (
@@ -2965,6 +2977,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                 const cellVirtualRow = expanded
                   ? { ...virtualRow, height: defaultRowHeight }
                   : virtualRow
+                const rowParams = {
+                  row: entry.row,
+                  rowId: entry.rowId,
+                  rowIndex: virtualRow.index,
+                  selected,
+                  focused,
+                  disabled,
+                }
+                const consumerRowClassName =
+                  typeof props.rowClassName === "function"
+                    ? props.rowClassName(rowParams)
+                    : props.rowClassName
+                const consumerRowStyle =
+                  typeof props.rowStyle === "function" ? props.rowStyle(rowParams) : props.rowStyle
                 return (
                   <div
                     key={entry.rowId}
@@ -2974,6 +3000,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                       focused ? "bc-grid-row-focused" : undefined,
                       disabled ? "bc-grid-row-disabled" : undefined,
                       expanded ? "bc-grid-row-expanded" : undefined,
+                      consumerRowClassName,
                     )}
                     role="row"
                     aria-rowindex={virtualRow.index + bodyAriaRowOffset}
@@ -2985,7 +3012,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     data-bc-grid-focused-row={focused || undefined}
                     data-bc-grid-row-kind="data"
                     data-bc-grid-expanded={expanded || undefined}
-                    style={rowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth)}
+                    style={{
+                      ...buildRowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth),
+                      ...consumerRowStyle,
+                    }}
                     onClick={(event) => {
                       // Selection logic. Shift+click → range from anchor; ctrl/
                       // cmd+click → toggle this row in current selection;
@@ -3115,6 +3145,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             getCellEditEntry: editController.getCellEditEntry,
                             getRowEditState: editController.getRowEditState,
                             renderInCellEditor,
+                            isCellFlashing: editController.isCellFlashing,
                           }),
                         )}
                       </div>
@@ -3144,6 +3175,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         getCellEditEntry: editController.getCellEditEntry,
                         getRowEditState: editController.getRowEditState,
                         renderInCellEditor,
+                        isCellFlashing: editController.isCellFlashing,
                       }),
                     )}
                     {virtualRightPinnedCols.length > 0 ? (
@@ -3183,6 +3215,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             getCellEditEntry: editController.getCellEditEntry,
                             getRowEditState: editController.getRowEditState,
                             renderInCellEditor,
+                            isCellFlashing: editController.isCellFlashing,
                           }),
                         )}
                       </div>
@@ -3366,6 +3399,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             return (
               <FilterPopup
                 anchor={filterPopupState.anchor}
+                column={popupColumn.source}
                 columnId={popupColumnId}
                 filterType={popupFilter.type}
                 filterText={columnFilterText[popupColumnId] ?? ""}

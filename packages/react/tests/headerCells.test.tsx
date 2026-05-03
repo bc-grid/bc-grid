@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
+import { registerReactFilterDefinition } from "../src/filterRegistry"
 import { type ResolvedColumn, defaultMessages } from "../src/gridInternals"
 import { FilterPopup, renderFilterCell, renderHeaderCell } from "../src/headerCells"
 
@@ -349,6 +350,56 @@ describe("renderFilterCell — compact text filter row", () => {
     expect(html).not.toContain('placeholder="Regex pattern"')
     expect(html).not.toMatch(/spell[Cc]heck=/)
     expect(html).not.toMatch(/auto[Cc]omplete=/)
+  })
+})
+
+describe("renderFilterCell — registered filters", () => {
+  test("renders the registered React filter editor instead of the text fallback", () => {
+    registerReactFilterDefinition({
+      type: "header-registered-filter",
+      predicate: (value, criteria) => value.formattedValue.startsWith(String(criteria)),
+      serialize: (criteria) => String(criteria),
+      parse: (serialized) => serialized.trim(),
+      Editor: ({ value }) => (
+        <span className="custom-filter-editor" data-value={String(value ?? "")}>
+          Custom filter {String(value ?? "")}
+        </span>
+      ),
+    })
+    const column: ResolvedColumn<Row> = {
+      align: "left",
+      columnId: "account",
+      left: 0,
+      pinned: null,
+      position: 0,
+      source: {
+        columnId: "account",
+        field: "name",
+        header: "Account",
+        filter: { type: "header-registered-filter" },
+      },
+      width: 200,
+    }
+
+    const html = renderToStaticMarkup(
+      renderFilterCell({
+        column,
+        domBaseId: "grid",
+        filterText: "VIP",
+        headerHeight: 40,
+        index: 0,
+        messages: defaultMessages,
+        onFilterChange: () => {},
+        pinnedEdge: null,
+        scrollLeft: 0,
+        totalWidth: 200,
+        viewportWidth: 200,
+      }),
+    )
+
+    expect(html).toContain("custom-filter-editor")
+    expect(html).toContain('data-value="VIP"')
+    expect(html).not.toContain("bc-grid-filter-input")
   })
 })
 

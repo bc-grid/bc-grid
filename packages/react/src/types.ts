@@ -1,7 +1,9 @@
 import type { AggregationResult } from "@bc-grid/aggregations"
 import type {
+  BcBuiltInColumnFilterType,
   BcCellPosition,
   BcColumnFilter,
+  BcColumnFilterType,
   BcColumnFormat,
   BcColumnStateEntry,
   BcGridColumn as BcCoreGridColumn,
@@ -54,6 +56,7 @@ import type {
   ServerTreeRow,
   ServerViewDiagnostics,
 } from "@bc-grid/core"
+import type { BcFilterDefinition as BcEngineFilterDefinition } from "@bc-grid/filters"
 import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
 
 export type BcGridDensity = "compact" | "normal" | "comfortable"
@@ -213,6 +216,13 @@ export interface BcStatusBarContext<TRow = unknown> {
   clearColumnFilter(columnId: ColumnId): void
   clearAllFilters(): void
   api: BcGridApi<TRow>
+  /**
+   * Most recent validation rejection on any cell. `null` until a
+   * rejection fires; auto-clears 8s after a rejection or immediately
+   * on a successful commit on the same cell. Drives the built-in
+   * `"latestError"` segment. Audit P1-W3-4.
+   */
+  latestValidationError: BcLatestValidationError | null
 }
 
 export interface BcActiveFilterSummaryItem {
@@ -230,12 +240,36 @@ export interface BcStatusBarCustomSegment<TRow = unknown> {
 }
 
 /**
+ * Most recent validation rejection on any cell. Surfaced through
+ * `BcStatusBarContext` so the built-in `"latestError"` segment can
+ * render "{column header}: {error}" without the consumer wiring its
+ * own announce listener. Auto-clears 8s after the rejection or
+ * immediately on a successful commit on the same cell — see
+ * `useEditingController` for the lifecycle. Audit P1-W3-4.
+ */
+export interface BcLatestValidationError {
+  rowId: RowId
+  columnId: ColumnId
+  /**
+   * Pre-resolved column header for status-bar rendering. Pulled from
+   * `column.header` when it's a string; falls back to
+   * `column.field` / `column.columnId` for non-string headers
+   * (consumer-supplied React nodes can't render inside the segment
+   * text). Lets the built-in segment stay dependency-free.
+   */
+  columnHeader: string
+  error: string
+}
+
+/**
  * Status-bar segment shape per `chrome-rfc §Status bar`. Strings
  * resolve to built-ins; objects render the consumer-supplied node.
  * Built-ins: `total` always shown when listed; `filtered` shows only
  * when a filter is active; `activeFilters` shows removable filter
  * chips when any column filter is active; `selected` shows only when
- * selectionSize > 0; `aggregations` shows when results are non-empty.
+ * selectionSize > 0; `aggregations` shows when results are non-empty;
+ * `latestError` shows the most recent validation rejection (audit
+ * P1-W3-4) and auto-clears via the editing controller.
  */
 export type BcStatusBarSegment<TRow = unknown> =
   | "total"
@@ -243,6 +277,7 @@ export type BcStatusBarSegment<TRow = unknown> =
   | "activeFilters"
   | "selected"
   | "aggregations"
+  | "latestError"
   | BcStatusBarCustomSegment<TRow>
 
 export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
@@ -433,6 +468,15 @@ export interface BcDetailPanelParams<TRow> {
   rowIndex: number
 }
 
+export interface BcGridRowParams<TRow> {
+  row: TRow
+  rowId: RowId
+  rowIndex: number
+  selected: boolean
+  focused: boolean
+  disabled: boolean
+}
+
 export type BcSidebarBuiltInPanel = "columns" | "filters" | "pivot"
 
 export type BcSidebarPanel<TRow = unknown> = BcSidebarBuiltInPanel | BcSidebarCustomPanel<TRow>
@@ -618,6 +662,26 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * for predictable variable-height panels; auto-measurement is deferred.
    */
   detailPanelHeight?: number | ((params: BcDetailPanelParams<TRow>) => number)
+
+  /**
+   * Conditional row className. Applied to data rows only (not group
+   * rows or detail panels). Function form receives the row's render
+   * context and returns a class name string (or `undefined` to skip).
+   * Composes with the framework's built-in row classes via
+   * `classNames(...)` — your class wins on collisions.
+   *
+   * Common pattern: tint overdue rows red, archived rows muted, etc.
+   * Surfaced 2026-05-03 by bsncraft consumer feedback.
+   */
+  rowClassName?: string | ((params: BcGridRowParams<TRow>) => string | undefined)
+
+  /**
+   * Conditional row inline style. Applied to data rows only. Composes
+   * with the framework's dimensional `top` / `height` / `width` row
+   * styling — your fields override on collision via spread order.
+   * Function form receives the row's render context.
+   */
+  rowStyle?: CSSProperties | ((params: BcGridRowParams<TRow>) => CSSProperties | undefined)
 
   onRowClick?: (row: TRow, event: MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: MouseEvent) => void
@@ -1238,12 +1302,7 @@ export type BcCellEditCommitHandler<TRow> = (
   event: BcCellEditCommitEvent<TRow>,
 ) => void | Promise<undefined | BcCellEditCommitResult<TRow>>
 
-export interface BcFilterDefinition<TValue = unknown> {
-  type: string
-  predicate: (value: TValue, criteria: unknown) => boolean
-  serialize: (criteria: unknown) => string
-  parse: (serialized: string) => unknown
-}
+export type BcFilterDefinition<TValue = unknown> = BcEngineFilterDefinition<TValue>
 
 export interface BcReactFilterDefinition<TValue = unknown> extends BcFilterDefinition<TValue> {
   Editor?: ComponentType<BcFilterEditorProps<TValue>>
@@ -1253,12 +1312,15 @@ export interface BcFilterEditorProps<TValue = unknown> {
   value: TValue | null
   commit(next: TValue | null): void
   clear(): void
+  column?: unknown
   locale?: string
 }
 
 export type {
   BcCellPosition,
+  BcBuiltInColumnFilterType,
   BcColumnFilter,
+  BcColumnFilterType,
   BcColumnFormat,
   BcColumnStateEntry,
   BcGridApi,

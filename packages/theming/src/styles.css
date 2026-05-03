@@ -1082,6 +1082,30 @@
   box-shadow: inset 3px 0 0 var(--bc-grid-invalid);
 }
 
+/* Validation-rejection flash (audit P1-W3-4). The
+ * `data-bc-grid-error-flash="true"` attribute lands on the cell that
+ * was *just* rejected and auto-clears ~600 ms later via the editing
+ * controller. The animation pulses the existing red stripe so sighted
+ * users can tell which cell errored when several stripes are stacked
+ * on screen (e.g. Tab-driven entry across an 80-row sales-estimating
+ * grid). The pulse is purely visual; AT users still get the assertive
+ * announce on rejection. */
+.bc-grid-cell[data-bc-grid-error-flash="true"],
+.bc-grid [data-bc-grid-error-flash="true"] {
+  animation: bc-grid-error-flash 600ms ease-out;
+}
+
+@keyframes bc-grid-error-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--bc-grid-invalid) 25%, transparent);
+    box-shadow: inset 3px 0 0 var(--bc-grid-invalid);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 3px 0 0 var(--bc-grid-invalid);
+  }
+}
+
 .bc-grid-cell[data-bc-grid-dirty="true"],
 .bc-grid [data-bc-grid-dirty="true"],
 .bc-grid-cell[data-bc-grid-cell-state="dirty"],
@@ -4175,6 +4199,24 @@ table.bc-grid-detail-nested-grid {
   display: inline-flex;
   align-items: baseline;
   gap: 0.25rem;
+}
+
+/* `latestError` segment (audit P1-W3-4). Highlights the most recent
+ * validation rejection in the status bar so sighted users can read
+ * "{column header}: {error}" after the assertive announce. The
+ * controller auto-clears the entry 8 s after the rejection or
+ * immediately on a successful re-commit on the same cell, so the
+ * styling can stay simple — no fade-out keyframe needed. */
+.bc-grid-statusbar-latest-error {
+  color: var(--bc-grid-invalid);
+}
+
+.bc-grid-statusbar-latest-error-column {
+  font-weight: 600;
+}
+
+.bc-grid-statusbar-latest-error-message {
+  color: var(--bc-grid-statusbar-fg);
 }
 
 .bc-grid-statusbar-filter-list {
