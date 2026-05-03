@@ -1051,6 +1051,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       loading={loading}
       loadingOverlay={loadingOverlay}
       {...(errorOverlay !== undefined ? { errorOverlay } : {})}
+      {...(activeMode === "infinite" && typeof infinite.rowCount === "number"
+        ? { expectedRowCount: infinite.rowCount }
+        : {})}
       {...(activeMode === "paged" ? { pagination: paged.gridShell.gridPagination } : {})}
       {...(cellEditCommitHandler ? { onCellEditCommit: cellEditCommitHandler } : {})}
       {...(activeMode === "paged" ? { onColumnStateChange: paged.handleColumnStateChange } : {})}

@@ -110,10 +110,33 @@ export interface GroupRowEntry {
   expanded: boolean
 }
 
-export type RowEntry<TRow> = DataRowEntry<TRow> | GroupRowEntry
+/**
+ * Skeleton placeholder row (worker1 v06 server skeleton rows). Emitted
+ * when the consumer's `expectedRowCount` exceeds `rowEntries.length`
+ * AND `serverLoadingSkeleton !== false`. Renders as a single
+ * full-width skeleton bar (lines or shimmer) so scrolling past
+ * not-yet-loaded positions feels continuous instead of empty. Filters
+ * out of `visibleDataRowEntries` so editing / selection / range /
+ * keyboard nav skip these synthetic positions.
+ */
+export interface SkeletonRowEntry {
+  kind: "skeleton"
+  rowId: RowId
+  index: number
+}
+
+export type RowEntry<TRow> = DataRowEntry<TRow> | GroupRowEntry | SkeletonRowEntry
 
 export function isDataRowEntry<TRow>(entry: RowEntry<TRow>): entry is DataRowEntry<TRow> {
   return entry.kind === "data"
+}
+
+export function isSkeletonRowEntry<TRow>(entry: RowEntry<TRow>): entry is SkeletonRowEntry {
+  return entry.kind === "skeleton"
+}
+
+export function isGroupRowEntry<TRow>(entry: RowEntry<TRow>): entry is GroupRowEntry {
+  return entry.kind === "group"
 }
 
 export interface ResolvedColumn<TRow> {

@@ -74,7 +74,7 @@ describe("server-tree group-row overrides (bsncraft v0.6.0-alpha.1 P1)", () => {
     // grouping the consumer also configured (manual mode + overrides
     // is the bsncraft case; client mode + overrides would be
     // unusual but the synthesis is still correct).
-    expect(gridSource).toMatch(/const rowEntries = useMemo<readonly RowEntry<TRow>\[\]>/)
+    expect(gridSource).toMatch(/const rowEntriesBase = useMemo<readonly RowEntry<TRow>\[\]>/)
     expect(gridSource).toMatch(/const overrides = props\.serverRowEntryOverrides/)
     expect(gridSource).toMatch(
       /if \(!overrides \|\| overrides\.size === 0\) return groupedRowModel\.rows/,

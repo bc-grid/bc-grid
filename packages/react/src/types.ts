@@ -1119,6 +1119,32 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   loading?: boolean
   loadingOverlay?: ReactNode
+
+  /**
+   * Total expected row count. When set AND larger than `data.length`,
+   * the grid extends its visible row count to this number; positions
+   * beyond `data.length` render as skeleton placeholder rows (per
+   * `serverLoadingSkeleton`). Used by `<BcServerGrid rowModel="infinite">`
+   * to surface the server-reported `totalRows` so unloaded positions
+   * render skeleton chrome during scroll instead of empty space.
+   * Worker1 v0.6 server skeleton rows.
+   */
+  expectedRowCount?: number
+  /**
+   * Skeleton placeholder visual for positions beyond `data.length`
+   * (when `expectedRowCount > data.length`).
+   *
+   *   - `"lines"` (default): static horizontal bar.
+   *   - `"shimmer"`: animated shimmer effect.
+   *   - `false`: no skeleton; positions beyond `data.length` render
+   *     as empty space (today's behaviour).
+   *
+   * Composes with `<BcServerGrid rowModel="infinite">` + the prefetch
+   * radio (#428): when prefetched blocks are in-flight, the rows
+   * those blocks will populate render skeletons until the loader
+   * resolves. Worker1 v0.6 server skeleton rows.
+   */
+  serverLoadingSkeleton?: "lines" | "shimmer" | false
   /**
    * Render slot for an error state. When set AND `loading` is false,
    * the grid renders this in place of the no-rows / loading overlay
