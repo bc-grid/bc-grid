@@ -11,6 +11,16 @@ interface AutocompletePrepareResult {
  * Autocomplete editor — `kind: "autocomplete"`. Default for free-form
  * fields with a long candidate list per `editing-rfc §editor-autocomplete`.
  *
+ * **Mount mode:** popup (`popup: true` per
+ * `in-cell-editor-mode-rfc.md` §4 — the async-option dropdown panel
+ * overflows the cell box). The `SearchCombobox`'s `<input>` trigger
+ * fits the cell, but its dropdown surface routinely shows 5-15 rows
+ * of `column.fetchOptions(query)` results plus a loading row plus a
+ * no-matches row, all of which need vertical room beyond the cell's
+ * height. The framework mounts this editor via `<EditorPortal>` in
+ * the overlay sibling so the dropdown can paint above adjacent rows
+ * without being clipped by the cell's `overflow: hidden`.
+ *
  * v0.5 (audit P0-4 / synthesis P0-4): replaces the v0.1 `<input list>`
  * + `<datalist>` shell with the shadcn-native `SearchCombobox`. The
  * `<datalist>` shell was inconsistent across browsers (Safari announced
@@ -48,6 +58,7 @@ interface AutocompletePrepareResult {
 export const autocompleteEditor: BcCellEditor<unknown, unknown> = {
   Component: AutocompleteEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
   kind: "autocomplete",
+  popup: true,
   // First-page preload via `column.fetchOptions("", signal)` so the
   // dropdown paints with options on first frame. The framework's
   // prepare path is race-safe (a token guards a stale resolve), but

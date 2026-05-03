@@ -7,6 +7,15 @@ import { Combobox } from "./internal/combobox"
  * Select editor — `kind: "select"`. Default for enum / one-of-many
  * columns per `editing-rfc §editor-select`.
  *
+ * **Mount mode:** popup (`popup: true` per
+ * `in-cell-editor-mode-rfc.md` §4 — the dropdown listbox overflows
+ * the cell box). The Combobox primitive's `<button>` trigger fits
+ * the cell, but the listbox container floats below and routinely
+ * exceeds the cell's height. The framework mounts this editor via
+ * `<EditorPortal>` in the overlay sibling so the listbox can paint
+ * above adjacent rows without being clipped by the cell's
+ * `overflow: hidden`.
+ *
  * v0.5 (audit P0-4 / synthesis P0-4): replaces the v0.1 native
  * `<select>` shell with a shadcn-native Combobox primitive that supports
  * 16×16 colour swatch chips, optional icons, type-ahead, and a fully
@@ -33,6 +42,7 @@ import { Combobox } from "./internal/combobox"
 export const selectEditor: BcCellEditor<unknown, unknown> = {
   Component: SelectEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
   kind: "select",
+  popup: true,
 }
 
 function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {

@@ -306,6 +306,55 @@ describe("built-in editors — categorisation per RFC §4", () => {
     const source = readEditorSource("datetime.tsx")
     expect(source).not.toMatch(/popup:\s*true\s*[,\n}]/)
   })
+
+  test("selectEditor sets popup: true (dropdown listbox overflows the cell)", () => {
+    // Per RFC §4: select / multi-select / autocomplete are popup-mode
+    // because their dropdown / chip lane / async option panel
+    // overflows the cell box. The framework mounts them via
+    // <EditorPortal> in the overlay sibling. Worker3 PR (c).
+    const source = readEditorSource("select.tsx")
+    expect(source).toMatch(/popup:\s*true/)
+  })
+
+  test("multiSelectEditor sets popup: true (dropdown + chip lane overflow)", () => {
+    const source = readEditorSource("multiSelect.tsx")
+    expect(source).toMatch(/popup:\s*true/)
+  })
+
+  test("autocompleteEditor sets popup: true (async option panel overflows)", () => {
+    const source = readEditorSource("autocomplete.tsx")
+    expect(source).toMatch(/popup:\s*true/)
+  })
+})
+
+describe("select / multiSelect / autocomplete editors — popup-mode annotation per RFC §4", () => {
+  function readEditorSource(file: string): string {
+    return readFileSync(
+      fileURLToPath(new URL(`../../editors/src/${file}`, import.meta.url)),
+      "utf8",
+    )
+  }
+
+  test("selectEditor JSDoc names it as popup with dropdown-overflow rationale", () => {
+    const source = readEditorSource("select.tsx")
+    expect(source).toMatch(/Mount mode:\*\*\s*popup/i)
+    expect(source).toMatch(/dropdown listbox overflows/i)
+  })
+
+  test("multiSelectEditor JSDoc names it as popup with overflow rationale", () => {
+    const source = readEditorSource("multiSelect.tsx")
+    expect(source).toMatch(/Mount mode:\*\*\s*popup/i)
+    // Multi mode flags BOTH the listbox + the chip lane as overflow
+    // sources — pin the chip-lane mention since it's the multi-mode-
+    // specific reason vs. the shared listbox reason from select.
+    expect(source).toMatch(/chip lane/i)
+  })
+
+  test("autocompleteEditor JSDoc names it as popup with async-option-panel rationale", () => {
+    const source = readEditorSource("autocomplete.tsx")
+    expect(source).toMatch(/Mount mode:\*\*\s*popup/i)
+    expect(source).toMatch(/async-option dropdown panel/i)
+  })
 })
 
 describe("date / datetime editors — in-cell hybrid annotation per RFC §4", () => {
