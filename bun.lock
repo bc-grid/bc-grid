@@ -60,25 +60,25 @@
     },
     "packages/aggregations": {
       "name": "@bc-grid/aggregations",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/animations": {
       "name": "@bc-grid/animations",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/core": {
       "name": "@bc-grid/core",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
     },
     "packages/editors": {
       "name": "@bc-grid/editors",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -92,7 +92,7 @@
     },
     "packages/enterprise": {
       "name": "@bc-grid/enterprise",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -103,7 +103,7 @@
     },
     "packages/export": {
       "name": "@bc-grid/export",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
@@ -118,14 +118,14 @@
     },
     "packages/filters": {
       "name": "@bc-grid/filters",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/react": {
       "name": "@bc-grid/react",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/aggregations": "workspace:*",
         "@bc-grid/animations": "workspace:*",
@@ -148,21 +148,21 @@
     },
     "packages/server-row-model": {
       "name": "@bc-grid/server-row-model",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/theming": {
       "name": "@bc-grid/theming",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/virtualizer": {
       "name": "@bc-grid/virtualizer",
-      "version": "0.5.0",
+      "version": "0.6.0-alpha.1",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
@@ -615,7 +615,7 @@
 
     "base64-js": ["base64-js@1.5.1", "", {}, "sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA=="],
 
-    "baseline-browser-mapping": ["baseline-browser-mapping@2.10.25", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-QO/VHsXCQdnzADMfmkeOPvHdIAkoB7i0/rGjINPJEetLx75hNttVWGQ/jycHUDP9zZ9rupbm60WRxcwViB0MiA=="],
+    "baseline-browser-mapping": ["baseline-browser-mapping@2.10.27", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-zEs/ufmZoUd7WftKpKyXaT6RFxpQ5Qm9xytKRHvJfxFV9DFJkZph9RvJ1LcOUi0Z1ZVijMte65JbILeV+8QQEA=="],
 
     "better-path-resolve": ["better-path-resolve@1.0.0", "", { "dependencies": { "is-windows": "^1.0.0" } }, "sha512-pbnl5XzGBdrFU/wT4jqmJVPn2B6UHPBOhzMQkY/SPUPB6QtUXtmBHBIwCbXJol93mOpGMnQyP/+BB19q04xj7g=="],
 

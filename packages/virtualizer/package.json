@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/virtualizer",
-  "version": "0.5.0",
+  "version": "0.6.0-alpha.1",
   "description": "Virtualizer engine for bc-grid (Fenwick offsets, in-flight retention, RAF throttling)",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",
