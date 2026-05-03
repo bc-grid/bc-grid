@@ -1629,7 +1629,19 @@ export interface BcEditGridAction<TRow> {
 
 ### 5.3 `<BcServerGrid>` (frozen at v0.1)
 
-Server-side row model. Three modes (paged, infinite, tree) discriminated by `rowModel`. All three modes share the same `BcGridProps` surface for state + columns; the only difference is how rows are fetched.
+Server-side row model. Three modes (paged, infinite, tree); `rowModel` is optional and resolves from controlled `groupBy` (`groupBy.length > 0` → `tree`, else `paged`) when omitted, per [`docs/design/server-mode-switch-rfc.md`](./design/server-mode-switch-rfc.md). Pass an explicit `rowModel` to override (e.g. force `infinite` while `groupBy` is empty). All three modes share the same `BcGridProps` surface for state + columns; the only difference is how rows are fetched.
+
+**Recommended turnkey hook:** `useServerGrid` (polymorphic). Owns one apiRef, one debounce, one mutation-id stream, and a controlled `groupBy` pair; routes to the loader matching the resolved active mode. The single-mode hooks (`useServerPagedGrid` / `useServerInfiniteGrid` / `useServerTreeGrid`) remain as escape hatches for grids that never switch modes.
+
+```tsx
+const grid = useServerGrid<Customer>({
+  gridId: "ar.customers",
+  rowId: (row) => row.id,
+  loadPage,         // used when groupBy is []
+  loadChildren,     // used when groupBy is non-empty
+})
+return <BcServerGrid<Customer> {...grid.props} columns={columns} />
+```
 
 ```tsx
 // Paged mode
