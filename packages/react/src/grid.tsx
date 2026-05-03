@@ -122,7 +122,7 @@ import {
   useControlledState,
   useFlipOnRowInsertion,
   useLiveRegionAnnouncements,
-  useViewportSync,
+  useViewportSize,
   viewportStyle,
   visuallyHiddenStyle,
 } from "./gridInternals"
@@ -372,31 +372,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [viewportFitHeight, setViewportFitHeight] = useState<number | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
-  // Available width feeds `resolveColumns` so columns with `flex` set
-  // can distribute the spare space between fixed-width siblings. We
-  // need this BEFORE `useViewportSync` runs (which itself sits late
-  // in the function because it depends on the virtualizer, which
-  // depends on the resolved-column count). Initial value 0 means
-  // "no flex distribution" — the first paint uses explicit widths;
-  // after the scroller mounts, ResizeObserver fires and the
-  // resolved-column memo re-runs with the real width. Surfaced
-  // 2026-05-03 by bsncraft: nested grid in renderDetailPanel rendered
-  // with empty space because column.flex was a typed-but-dormant prop.
-  const [availableGridWidth, setAvailableGridWidth] = useState<number>(0)
-  useEffect(() => {
-    const scroller = scrollerRef.current
-    if (!scroller) return
-    const sync = () => setAvailableGridWidth(scroller.clientWidth)
-    sync()
-    if (typeof ResizeObserver === "undefined") return
-    const observer = new ResizeObserver(() => {
-      sync()
-    })
-    observer.observe(scroller)
-    return () => {
-      observer.disconnect()
-    }
-  }, [])
   // Transient visible toast for clear-rejection feedback (audit
   // P1-W3 / v0.5 → v0.6 §6). When `editController.clearCell` /
   // `commit` rejects validation, the assertive live region tells AT
@@ -414,6 +389,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const requestRender = useCallback(() => {
     setRenderVersion((version) => (version + 1) % Number.MAX_SAFE_INTEGER)
   }, [])
+  // Single source of truth for viewport size (audit `layout-architecture-
+  // pass-rfc.md` §4 memo 4). The hook observes `.bc-grid-viewport`'s
+  // `clientWidth` / `clientHeight` and surfaces them as state. `viewport.width`
+  // feeds `resolveColumns` so columns with `column.flex` set distribute
+  // the spare space between fixed-width siblings (closes the bsncraft
+  // 2026-05-03 nested-grid gap that originally landed as a second
+  // ResizeObserver). The virtualizer.setViewport hand-off lives in a
+  // small effect below — `useViewportSize` itself is virtualizer-
+  // agnostic so it can run early (the virtualizer construction depends
+  // on `resolvedColumns`, which depends on this hook's `viewport.width`).
+  const { viewport } = useViewportSize({ scrollerRef, requestRender })
   const updateScrollOffset = useCallback((next: { top: number; left: number }) => {
     scrollOffsetRef.current = next
     setScrollOffset(next)
@@ -672,8 +658,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [columns],
   )
   const consumerResolvedColumns = useMemo(
-    () => resolveColumns(columns, columnState, availableGridWidth || undefined),
-    [columns, columnState, availableGridWidth],
+    () => resolveColumns(columns, columnState, viewport.width || undefined),
+    [columns, columnState, viewport.width],
   )
   // Persist the consumer-supplied column state only — the synthetic
   // selection-checkbox column (added later when `checkboxSelection` is on)
@@ -1174,8 +1160,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     () =>
       layoutColumnDefinitions === columns
         ? consumerResolvedColumns
-        : resolveColumns(layoutColumnDefinitions, columnState, availableGridWidth || undefined),
-    [availableGridWidth, columnState, columns, consumerResolvedColumns, layoutColumnDefinitions],
+        : resolveColumns(layoutColumnDefinitions, columnState, viewport.width || undefined),
+    [columnState, columns, consumerResolvedColumns, layoutColumnDefinitions, viewport.width],
   )
   const rangeInteractionModel = useMemo(
     () => createRangeInteractionModel(rangeRowIds, resolvedColumns),
@@ -1502,12 +1488,17 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     rowEntries.length,
   ])
 
-  const { viewport } = useViewportSync({
-    scrollerRef,
-    virtualizer,
-    fallbackBodyHeight,
-    requestRender,
-  })
+  // Hand-off the early `useViewportSize` state into the virtualizer.
+  // Pre-v0.6 these were a single `useViewportSync` hook, but its
+  // dep on `virtualizer` meant it had to run late — forcing a second
+  // ResizeObserver to feed `resolveColumns` earlier. PR (c) of
+  // `layout-architecture-pass-rfc.md` collapses the two: the hook
+  // runs early without a virtualizer dep, and the virtualizer wiring
+  // is this small downstream effect.
+  useEffect(() => {
+    virtualizer.setViewport(viewport.height, viewport.width)
+    requestRender()
+  }, [virtualizer, viewport.height, viewport.width, requestRender])
 
   const activeRowIndex = activeCell ? rowIndexById.get(activeCell.rowId) : undefined
   const activeColIndex = activeCell ? columnIndexById.get(activeCell.columnId) : undefined
@@ -1708,7 +1699,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // number / checkbox / time editors stop calling
   // `getBoundingClientRect` on every state change; only popup-mode
   // select / multi-select / autocomplete editing pays that cost.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: expansionState is an invalidation-only dep — toggling detail panels above the editing row shifts cell DOM position without changing any value-deps
+  //
+  // Pre-PR (a) of `layout-architecture-pass-rfc.md` this `useMemo` had
+  // an `expansionState` invalidation-only dep + a biome-ignore for
+  // useExhaustiveDependencies — toggling detail panels above the
+  // editing row shifted the cell's DOM y-position without changing
+  // any value-dep. With sticky-positioned cells from PR (a), the
+  // browser's layout pass owns cell positioning and `getBound-
+  // ingClientRect` reads correctly without an explicit invalidation
+  // hint. The dep dropped + the suppression dropped per RFC §4 memo 3.
   const editorCellRect = useMemo(() => {
     if (editController.editState.mode === "navigation") return null
     if (editController.editState.mode === "unmounting") return null
@@ -1749,10 +1748,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     resolvedColumns,
     scrollOffset,
     domBaseId,
-    // expansionState is an invalidation trigger, not a value dep:
-    // expanding/collapsing detail panels above the editing row shifts
-    // the cell's DOM y-position without changing any of the deps above.
-    expansionState,
   ])
 
   // In-cell editor mount slot for `renderBodyCell` (audit

@@ -1188,19 +1188,39 @@ export function useLiveRegionAnnouncements<TRow>({
 // Viewport sync via ResizeObserver, coalesced to one render per RAF.
 // ---------------------------------------------------------------------------
 
-export interface UseViewportSyncParams {
+export interface UseViewportSizeParams {
   scrollerRef: RefObject<HTMLDivElement | null>
-  virtualizer: Virtualizer
-  fallbackBodyHeight: number
+  /**
+   * Seed value for `viewport.height` until the ResizeObserver fires
+   * with the real `scroller.clientHeight`. Optional — defaults to
+   * `DEFAULT_BODY_HEIGHT` so the hook can run early in `<BcGrid>`
+   * (before the late `resolveFallbackBodyHeight` call) without a
+   * placeholder.
+   */
+  fallbackBodyHeight?: number
   requestRender: () => void
 }
 
-export function useViewportSync({
+/**
+ * Observes the viewport's `clientHeight` + `clientWidth` via a single
+ * RAF-coalesced ResizeObserver and returns them as React state. The
+ * hook is virtualizer-agnostic so it can run early in `<BcGrid>` —
+ * its width feeds `resolveColumns` (for `column.flex` distribution)
+ * before the virtualizer is even constructed. The virtualizer wiring
+ * is a caller responsibility — see `<BcGrid>`'s `useEffect` that
+ * forwards the viewport state into `virtualizer.setViewport`.
+ *
+ * Per `layout-architecture-pass-rfc.md` §4 memo 4: this is the single
+ * source of truth for "viewport width". The pre-v0.6 design ran a
+ * second ResizeObserver in `grid.tsx` (`availableGridWidth`) because
+ * `useViewportSync` had a circular dep on the virtualizer. PR (c)
+ * removed that dep here so the two observers collapse into one.
+ */
+export function useViewportSize({
   scrollerRef,
-  virtualizer,
-  fallbackBodyHeight,
+  fallbackBodyHeight = DEFAULT_BODY_HEIGHT,
   requestRender,
-}: UseViewportSyncParams): {
+}: UseViewportSizeParams): {
   viewport: ViewportSize
   setViewport: (next: ViewportSize) => void
 } {
@@ -1220,7 +1240,6 @@ export function useViewportSync({
         height: scroller.clientHeight || fallbackBodyHeight,
         width: scroller.clientWidth || DEFAULT_VIEWPORT_WIDTH,
       }
-      virtualizer.setViewport(nextViewport.height, nextViewport.width)
       setViewport(nextViewport)
       requestRender()
     }
@@ -1239,7 +1258,7 @@ export function useViewportSync({
       if (frame !== 0) cancelAnimationFrame(frame)
       resizeObserver.disconnect()
     }
-  }, [fallbackBodyHeight, requestRender, scrollerRef, virtualizer])
+  }, [fallbackBodyHeight, requestRender, scrollerRef])
 
   return { viewport, setViewport }
 }
