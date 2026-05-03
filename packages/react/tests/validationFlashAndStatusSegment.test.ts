@@ -151,10 +151,17 @@ describe("useEditingController — latestValidationError + flash window plumbing
     )
   })
 
-  test("the controller exposes getLatestValidationError + isCellFlashing", () => {
-    // Pin the read API so a refactor that drops them trips the test
-    // instead of silently regressing the status-bar segment + flash.
-    expect(source).toMatch(/getLatestValidationError,\s*\n\s*isCellFlashing,/)
+  test("the controller exposes getLatestValidationError + clearLatestValidationError + isCellFlashing", () => {
+    // Pin the read API so a refactor that drops any of these trips
+    // the test instead of silently regressing the status-bar segment
+    // + flash. `clearLatestValidationError` was added in worker3
+    // v05-default-context-menu-wiring as the chrome-menu "Dismiss
+    // latest error" handler — it sits between the read accessor and
+    // the per-cell `clearValidationErrorIfFor` helper in the return
+    // shape.
+    expect(source).toMatch(
+      /getLatestValidationError,\s*\n\s*clearLatestValidationError,\s*\n\s*isCellFlashing,/,
+    )
     expect(source).toMatch(/export function resolveColumnHeader/)
   })
 

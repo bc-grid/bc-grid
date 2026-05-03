@@ -20,8 +20,17 @@ const here = fileURLToPath(new URL(".", import.meta.url))
 const gridSource = readFileSync(`${here}../src/grid.tsx`, "utf8")
 
 describe("editingEnabled gates every editor activation path", () => {
-  test("the prop reads with default true", () => {
-    expect(gridSource).toMatch(/const\s+editingEnabled\s*=\s*props\.editingEnabled\s*!==\s*false/)
+  test("editingEnabled resolves through the prop → userSettings → default chain", () => {
+    // Updated for worker3 v05-default-context-menu-wiring: the
+    // resolution order is now (1) `BcGridProps.editingEnabled`
+    // when set (locked-by-prop), (2)
+    // `BcUserSettings.visible.editingEnabled` from the persistence
+    // layer, (3) the v0.5 default `true`. Pin the prop capture +
+    // the resolved-value shape.
+    expect(gridSource).toMatch(/const editingEnabledProp = props\.editingEnabled/)
+    expect(gridSource).toMatch(
+      /editingEnabled\s*=\s*\n?\s*editingEnabledProp\s*!==\s*undefined[\s\S]*?userVisibleSettings\?\.editingEnabled\s*\?\?\s*true/,
+    )
   })
 
   test("keyboard activation handler checks editingEnabled before isCellEditable", () => {
@@ -46,16 +55,20 @@ describe("editingEnabled gates every editor activation path", () => {
 })
 
 describe("showValidationMessages + showEditorKeyboardHints flow through to EditorPortal", () => {
-  test("BcGrid reads both props with the right defaults", () => {
-    // showValidationMessages defaults to true (preserve current
-    // behaviour — the popover from #356 stays visible).
+  test("both resolve through the prop → userSettings → default chain", () => {
+    // Updated for worker3 v05-default-context-menu-wiring.
+    // showValidationMessages defaults to true (preserve the v0.4
+    // popover-visible behaviour from #356); showEditorKeyboardHints
+    // defaults to false (opt-in chrome, not on by default). The
+    // chrome context menu's `Editor → Show validation messages` /
+    // `Show keyboard hints` toggles write through to userSettings.
+    expect(gridSource).toMatch(/const showValidationMessagesProp = props\.showValidationMessages/)
     expect(gridSource).toMatch(
-      /const\s+showValidationMessages\s*=\s*props\.showValidationMessages\s*!==\s*false/,
+      /showValidationMessages\s*=\s*\n?\s*showValidationMessagesProp\s*!==\s*undefined[\s\S]*?userVisibleSettings\?\.showValidationMessages\s*\?\?\s*true/,
     )
-    // showEditorKeyboardHints defaults to false (the caption is opt-in
-    // chrome, not on by default).
+    expect(gridSource).toMatch(/const showEditorKeyboardHintsProp = props\.showEditorKeyboardHints/)
     expect(gridSource).toMatch(
-      /const\s+showEditorKeyboardHints\s*=\s*props\.showEditorKeyboardHints\s*===\s*true/,
+      /showEditorKeyboardHints\s*=\s*\n?\s*showEditorKeyboardHintsProp\s*!==\s*undefined[\s\S]*?userVisibleSettings\?\.showEditorKeyboardHints\s*\?\?\s*false/,
     )
   })
 

@@ -101,8 +101,36 @@ export interface BcUserSettings {
     activeFilterSummary?: boolean
     flashOnEdit?: boolean
     checkboxSelection?: boolean
+    /**
+     * Editor toggles wired through the chrome context menu's
+     * `Editor` submenu (worker3 v05-default-context-menu-wiring).
+     * Each field overrides the matching `BcGridProps` default when
+     * set; consumer-supplied props take precedence (the prop is
+     * "locked" — the menu toggle becomes disabled). The grid reads
+     * `userVisibleSettings?.editingEnabled ?? props.editingEnabled
+     * !== false`, so persisted user prefs survive remount.
+     */
+    editingEnabled?: boolean
+    showValidationMessages?: boolean
+    showEditorKeyboardHints?: boolean
+    escDiscardsRow?: boolean
   }
   density?: BcGridDensity
+  /**
+   * Editor activation mode persisted across remounts via the chrome
+   * context menu's `Editor → Activation` submenu. Stored top-level
+   * (rather than under `visible`) because the value is an enum, not
+   * a boolean. Consumer-supplied `BcGridProps.editorActivation`
+   * takes precedence — see `BcUserSettings.visible.editingEnabled`
+   * for the locked-by-prop pattern.
+   */
+  editorActivation?: "f2-only" | "single-click" | "double-click"
+  /**
+   * Click-outside semantics for the active editor, persisted across
+   * remounts via the chrome context menu's `Editor → On blur`
+   * submenu. Same locked-by-prop pattern as `editorActivation`.
+   */
+  editorBlurAction?: "commit" | "reject" | "ignore"
   layout?: BcGridLayoutState
   sidebarPanel?: string | null
   perColumn?: Record<ColumnId, BcUserColumnSettings>
