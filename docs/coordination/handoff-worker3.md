@@ -1,6 +1,13 @@
 # Worker3 Handoff (Claude — editor + keyboard/a11y + lookup UX lane)
 
 **Last updated:** 2026-05-03 by Claude coordinator
+
+## ⏸ URGENT: review needed on pinned-lane positioning RFC
+
+**Maintainer asked for a group decision** on the v0.6.0-alpha.1 pinned-right CSS architecture before coordinator picks a fix. Read `docs/coordination/pinned-lane-positioning-decision.md` and add your verdict at the bottom (~30 sec — pick option A/B/C/D/E + 2-4 lines on why for your lane). Coordinator merges + ships once all 3 workers have weighed in.
+
+---
+
 **Worktree:** `~/work/bcg-worker3`
 **Branch convention:** `agent/worker3/<task-slug>`
 
