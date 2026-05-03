@@ -44,6 +44,12 @@ import {
 import { BcGridAggregationFooterRow, useAggregations } from "./aggregations"
 import { renderBodyCell, renderGroupRowCell } from "./bodyCells"
 import { BcGridBulkActions, resolveBulkActionSelectedRowIds } from "./bulkActions"
+import {
+  buildClientTree,
+  compactVisibleAncestors,
+  expandVisibleAncestors,
+  flattenClientTree,
+} from "./clientTree"
 import { computeAutosizeWidth, measureColumnWidths, upsertColumnStateEntry } from "./columnCommands"
 import {
   type ColumnVisibilityItem,
@@ -848,6 +854,54 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const rowProcessingMode: "client" | "manual" = props.rowProcessingMode ?? "client"
   const isManualRowProcessing = rowProcessingMode === "manual"
 
+  // Client tree row model (worker1 v06 headline). Active when
+  // `treeData` is set AND groupBy is empty (per RFC §4 collision rule:
+  // groupBy wins, tree dormant). Builds the parent → children
+  // adjacency once per `data` change; the index then drives the
+  // flatten step inside `allRowEntries` below. Manual row processing
+  // skips client tree just like it skips client grouping — the host
+  // owns row membership in manual mode.
+  const treeModeActive = !isManualRowProcessing && !!props.treeData && groupByState.length === 0
+  // biome-ignore lint/correctness/useExhaustiveDependencies: groupByState.length signals the collision toggle
+  useEffect(() => {
+    if (props.treeData && groupByState.length > 0) {
+      console.warn(
+        "[bc-grid] BcGridProps.treeData and groupBy are both set — groupBy wins, tree mode is dormant. Per docs/design/client-tree-rowmodel-rfc.md §4.",
+      )
+    }
+  }, [props.treeData, groupByState.length])
+  const clientTreeIndex = useMemo(() => {
+    if (!treeModeActive || !props.treeData) return null
+    return buildClientTree(data, props.treeData.getRowParentId, rowId)
+  }, [treeModeActive, data, props.treeData, rowId])
+
+  // Outline-cell affordance lookup. Returned to `renderBodyCell` for
+  // columns marked `outline: true`. Returns the chevron + child-count
+  // metadata + onToggle for the row's expansion state, OR `null`
+  // when tree mode is inactive / row has no entry. Worker1 v06
+  // client tree row model.
+  const getTreeOutlineInfo = useCallback(
+    (targetRowId: RowId) => {
+      if (!treeModeActive || !clientTreeIndex || !props.treeData) return null
+      const row = clientTreeIndex.byId.get(targetRowId)
+      if (!row) return null
+      const declared = props.treeData.getRowChildCount?.(row)
+      const computed = clientTreeIndex.childrenByParent.get(targetRowId)?.length ?? 0
+      const childCount = typeof declared === "number" ? declared : computed
+      return {
+        childCount,
+        expanded: expansionState.has(targetRowId),
+        onToggle: () => {
+          const next = new Set(expansionState)
+          if (next.has(targetRowId)) next.delete(targetRowId)
+          else next.add(targetRowId)
+          setExpansionState(next)
+        },
+      }
+    },
+    [treeModeActive, clientTreeIndex, props.treeData, expansionState, setExpansionState],
+  )
+
   const allRowEntries = useMemo<readonly DataRowEntry<TRow>[]>(() => {
     // Manual row processing: render `data` as the host gave it, with
     // no client-side sort/filter/search transforms. The active-filter
@@ -916,6 +970,25 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       rowId: rowId(row, index),
     }))
 
+    // Tree-mode branch (worker1 v06 client tree row model). When
+    // `treeData` is active, the flat sort below is replaced by a
+    // tree-flatten step: keep-ancestors expansion of the visible
+    // (matched) set, then DFS pre-order walk gated on `expansionState`.
+    // Per-subtree sort (sort siblings under each parent) is a phase 2.5
+    // follow-up — v0.6 ships data-order children as the default.
+    if (treeModeActive && clientTreeIndex && props.treeData) {
+      const matchedSet = new Set(built.map((entry) => entry.rowId))
+      const visibleRowIds =
+        props.treeData.keepAncestors === false
+          ? compactVisibleAncestors({ index: clientTreeIndex, matchedRowIds: matchedSet })
+          : expandVisibleAncestors({ index: clientTreeIndex, matchedRowIds: matchedSet })
+      return flattenClientTree({
+        index: clientTreeIndex,
+        expansionState,
+        visibleRowIds,
+      })
+    }
+
     if (sortState.length === 0) return built
 
     // Sort using each column's comparator (or the default). Multi-column:
@@ -938,16 +1011,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     return sorted.map((entry, index) => ({ ...entry, index }))
   }, [
     activeFilter,
+    clientTreeIndex,
     data,
+    expansionState,
     isManualRowProcessing,
     locale,
     props.filterPredicateContext,
     props.showInactive,
+    props.treeData,
     consumerResolvedColumns,
     rowId,
     rowIsInactive,
     searchText,
     sortState,
+    treeModeActive,
   ])
   const effectivePageSize = pageSizeState ?? pageSizeOptions[0] ?? DEFAULT_CLIENT_PAGE_SIZE
   // Manual pagination — the consumer (typically `BcServerGrid` paged
@@ -3699,6 +3776,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             getRowEditState: editController.getRowEditState,
                             renderInCellEditor,
                             isCellFlashing: editController.isCellFlashing,
+                            getTreeOutlineInfo,
                           }),
                         )}
                       </div>
@@ -3726,6 +3804,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         getRowEditState: editController.getRowEditState,
                         renderInCellEditor,
                         isCellFlashing: editController.isCellFlashing,
+                        getTreeOutlineInfo,
                       }),
                     )}
                     {virtualRightPinnedCols.length > 0 ? (
@@ -3758,6 +3837,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             getRowEditState: editController.getRowEditState,
                             renderInCellEditor,
                             isCellFlashing: editController.isCellFlashing,
+                            getTreeOutlineInfo,
                           }),
                         )}
                       </div>

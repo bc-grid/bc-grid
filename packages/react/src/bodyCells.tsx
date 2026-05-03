@@ -92,6 +92,17 @@ interface RenderBodyCellParams<TRow> {
    * sighted users see which cell was just rejected. Audit P1-W3-4.
    */
   isCellFlashing?: (rowId: RowId, columnId: ColumnId) => boolean
+  /**
+   * Tree-mode outline-cell affordance lookup (worker1 v06 client tree
+   * row model). Returns the chevron + indent + child-count metadata
+   * for `rowId` when the grid is in client tree mode AND this column
+   * carries `outline: true`. Returns `null` when the grid is NOT in
+   * tree mode OR the column is not the outline column. Per
+   * `docs/design/client-tree-rowmodel-rfc.md §4`.
+   */
+  getTreeOutlineInfo?: (
+    rowId: RowId,
+  ) => { childCount: number; expanded: boolean; onToggle: () => void } | null
 }
 
 interface RenderGroupRowCellParams<TRow> {
@@ -130,6 +141,7 @@ export function renderBodyCell<TRow>({
   getCellEditEntry,
   getRowEditState,
   isCellFlashing,
+  getTreeOutlineInfo,
   renderInCellEditor,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
@@ -281,9 +293,71 @@ export function renderBodyCell<TRow>({
             ? renderInCellEditor?.(position, column, entry)
             : null
           if (inCellEditor) return inCellEditor
-          if (column.source.cellRenderer) return column.source.cellRenderer(params)
-          if (searchText) return highlightSearchText(formattedValue, searchText)
-          return formattedValue
+          let inner: ReactNode
+          if (column.source.cellRenderer) {
+            inner = column.source.cellRenderer(params)
+          } else if (searchText) {
+            inner = highlightSearchText(formattedValue, searchText)
+          } else {
+            inner = formattedValue
+          }
+          // Tree outline column (worker1 v06 client tree row model). Wraps
+          // the cell content with an indent (per row level) + chevron
+          // (toggles expansion when the row has children) + content
+          // slot. Per `docs/design/client-tree-rowmodel-rfc.md §4`.
+          if (column.source.outline) {
+            const outlineInfo = getTreeOutlineInfo?.(entry.rowId) ?? null
+            if (outlineInfo) {
+              const level = entry.level ?? 0
+              return (
+                <span
+                  className="bc-grid-cell-outline"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    paddingLeft: `calc(var(--bc-grid-tree-indent-step, 20px) * ${level})`,
+                    minWidth: 0,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {outlineInfo.childCount > 0 ? (
+                    <button
+                      type="button"
+                      className="bc-grid-tree-toggle"
+                      aria-expanded={outlineInfo.expanded}
+                      aria-label={outlineInfo.expanded ? "Collapse row" : "Expand row"}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        outlineInfo.onToggle()
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        marginRight: 4,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      <DisclosureChevron className="bc-grid-tree-toggle-icon" />
+                    </button>
+                  ) : (
+                    <span
+                      className="bc-grid-tree-leaf-spacer"
+                      aria-hidden="true"
+                      style={{ display: "inline-block", width: 20, marginRight: 4 }}
+                    />
+                  )}
+                  <span className="bc-grid-cell-outline-label" style={{ minWidth: 0 }}>
+                    {inner}
+                  </span>
+                </span>
+              )
+            }
+          }
+          return inner
         })()}
         {errorId ? (
           <span id={errorId} style={visuallyHiddenCellErrorStyle}>
