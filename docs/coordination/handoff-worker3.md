@@ -38,34 +38,40 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 - ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
 
-### Active now → `v05-on-cell-edit-commit-result-aware` (~45-60 min)
+### Active now → `v06-in-cell-editor-mode` PR (a) — framework + flag + scroll-out + 4-editor migration (~8-10h)
 
-**Editor-portal polish bundle-1 shipped as #398** (editorActivation prop + editorBlurAction prop + escDiscardsRow prop, 3a12ffe).
+**Editor-portal polish bundle-1 (#398, 3a12ffe), result-aware onCellEditCommit (#401, d173ff4), and prepareResult preload (#403, 348ffdc) all shipped.** Your v0.5 lane is structurally complete — all editor-side audit findings closed, both bsncraft editing-pass paper-cuts shipped, autocomplete paints with options on first frame.
 
-bsncraft v0.5 alpha.1 editing-pass review (2026-05-03) flagged that `<BcGrid onCellEditCommit>` is fire-and-forget while `<BcServerGrid onServerRowMutation>` is full optimistic / rollback / stale-gate lifecycle. ERP child-CRUD grids that call a server action on every cell commit re-implement the optimistic/rollback dance bc-grid already owns server-side.
+The next active task is the v0.6 in-cell editor mode RFC. **Read `docs/design/in-cell-editor-mode-rfc.md` end-to-end before you start** — the categorisation table in §4 + the scroll-out semantics in §5 are the load-bearing sections.
 
-**Widen `onCellEditCommit` (additive, backwards-compatible):**
+PR (a) scope per RFC §7:
 
-```ts
-// Before:
-onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) => void | Promise<void>
+- New `popup?: boolean` field on `BcCellEditor` (default `false`).
+- `EditorMount` lifted to a public-internal component with `mountStyle: "in-cell" | "popup"` branch — in-cell drops the absolute-positioning wrapper, popup keeps it.
+- `<EditorPortal>` shrinks to popup-mode only (returns `null` when active editor is in-cell).
+- `editorCellRect` `useMemo` short-circuits to `null` for in-cell mode — saves the DOM lookup + `expansionState` invalidation for the common case.
+- `BcGridProps.editScrollOutAction?: "commit" | "cancel" | "preserve"` (default `"commit"`) governs in-cell editor unmount when row scrolls out of virtualizer's render window.
+- Migrate `textEditor` / `numberEditor` / `checkboxEditor` / `timeEditor` to in-cell mode (default flag carries them automatically; tests pin the contract).
 
-// After:
-onCellEditCommit?: (event: BcCellEditCommitEvent<TRow>) =>
-  | void
-  | Promise<void>
-  | Promise<{ status: "accepted" | "rejected"; reason?: string; row?: TRow }>
-```
+**Branch:** `agent/worker3/v06-in-cell-editor-mode-pr-a`. **Effort:** ~8-10h.
 
-When the host returns `{ status, reason?, row? }`, `<BcGrid>` runs the same cell-overlay lifecycle as `<BcServerGrid>` already does for `ServerMutationResult`: optimistic update on mount, await handler, roll back on rejected and surface `reason` as the cell error overlay (existing #356 popover). Returning `void | Promise<void>` keeps fire-and-forget behavior unchanged.
+### After PR (a) → `v06-in-cell-editor-mode` PR (b) — date/datetime hybrid (~3-4h)
 
-The implementation lives in `useEditingController` — the commit path already routes through there. Reuse the optimistic-overlay state machine the server-row-model edit pathway uses. `BcCellEditCommitEvent<TRow>` shape stays the same.
+Annotate dateEditor / datetimeEditor as in-cell. Native `<input type="date">` / `<input type="datetime-local">` stay (their popovers are OS-chrome, not React DOM, so no `data-bc-grid-editor-portal` wiring needed for v0.6.0). Cross-browser validation Chromium / Firefox / Safari. One Playwright spec.
 
-Tests: unit case for each return shape (void / undefined / Promise<void> / Promise<accepted> / Promise<rejected>), assertions on cell overlay state + `aria-invalid` after rejection, optimistic state during the await window.
+**Branch:** `agent/worker3/v06-in-cell-editor-mode-pr-b`. **Effort:** ~3-4h.
 
-**Branch:** `agent/worker3/v05-on-cell-edit-commit-result-aware`. **Effort:** ~45-60 min.
+### After PR (b) → `v06-in-cell-editor-mode` PR (c) — verify popup editors (~3-4h)
 
-### After commit-widening → `v05-prepare-result-preload` (worker3-editors §3 pulled forward, ~half day)
+Set `popup: true` on selectEditor / multiSelectEditor / autocompleteEditor. Should be near-zero code change since today's portal path already works for them. One Playwright spec for the select case happy-path with detail panel above.
+
+**Branch:** `agent/worker3/v06-in-cell-editor-mode-pr-c`. **Effort:** ~3-4h.
+
+### Previously active → `v05-prepare-result-preload` (DONE — #403)
+
+Autocomplete editor preloads the first page of options via `editor.prepare()` so the dropdown paints with options on first frame. Small `BcCellEditorPrepareParams.column` extension. Graceful prepare-rejection (fall through to synchronous `column.options` instead of bouncing to Navigation). Merged 348ffdc.
+
+### Previously active → `v05-on-cell-edit-commit-result-aware` (DONE — #401)
 
 Pull the v0.6 §3 task forward from `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md`: autocomplete editor preloads the first page of options via `editor.prepare()` so the dropdown paints with options on first frame instead of a blank "Loading…" state. Small `BcCellEditorPrepareParams` extension (add `column: BcColumn` so prepare callbacks can branch on column metadata) — flag the API change in the PR description so coordinator catches it during the api-surface diff review.
 

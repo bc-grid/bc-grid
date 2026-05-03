@@ -35,24 +35,13 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
-### Active now → `v05-context-menu-row-actions` (~45-60 min)
+### Active now → `v05-grouping-implementation-pull-forward` (~half day)
 
-**Bundles 1 and 2 are shipped** (#396 chrome bundle-1: filter row / sidebar / status bar / filters-panel toggles + the `BcContextMenuSubmenuItem` / `BcContextMenuToggleItem` / `BcUserSettings` primitives. #399 chrome bundle-2: density / group-by / pin column / chip strip + column-only header commands).
+**Row-actions menu shipped as #404** (0719ca1) — Insert Above / Insert Below / Duplicate / Delete with consumer-supplied `confirmDelete` gate, all wired through new `editController` actions. Combined with chrome bundles 1+2 (#396 / #399) and #393 chrome+filter polish, the v0.5 context-menu lane is structurally complete on your side.
 
-The vanilla+context-menu RFC (#392) covers chrome + view + filter toggles, but ERP grids also need row-shaped actions on right-click. Worker2 owns the chrome + the right-click handler + the menu structure, so this lane is yours.
+### Previously active → `v05-context-menu-row-actions` (DONE — #404)
 
-Items in this PR — context-menu category "Row":
-
-1. **Insert row above** — context-menu action when right-clicking a body row. Routes to `editController.insertRow({ at: rowIndex })` (you'll need to add the action if it doesn't exist; coordinate with worker3 if so via a one-line PR comment, or add a pass-through prop `onInsertRow?` that consumers wire).
-2. **Insert row below** — same shape, `at: rowIndex + 1`.
-3. **Duplicate row** — `editController.duplicateRow(rowId)` or pass-through `onDuplicateRow?(rowId, rowData)`.
-4. **Delete row** — `editController.deleteRow(rowId)` or pass-through `onDeleteRow?(rowId)`. Behind a confirmation gate (consumer-supplied `confirmDelete?: (rowId) => boolean | Promise<boolean>`).
-
-These are all `<BcEditGrid>` patterns; `<BcGrid>` (read-only) shouldn't show them. Branch off the existing right-click handler from bundle-1; the menu structure scales naturally.
-
-**Branch:** `agent/worker2/v05-context-menu-row-actions`. **Effort:** ~45-60 min.
-
-### After row-actions → `v05-grouping-implementation-pull-forward` (~half day)
+The grouping pull-forward task below was previously queued behind row-actions; promoting it to Active now.
 
 Pull one of the v0.5 → v0.6 grouping items forward from `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`. Pick whichever is at the top of that doc that isn't gated on a breaking change. Suggested first pull: any "group selection algebra" follow-up that builds on bundle-1 #393's basic implementation (e.g. tri-state group checkboxes when partial children selected, or selection-aware aggregations in group rows). Read the doc, pick the item that fits a single-PR shape, write a brief task slug entry into this handoff under "Active now" when you start.
 

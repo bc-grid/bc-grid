@@ -32,26 +32,21 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
 - ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
 
-### Active now → `v05-server-mode-switch` stage 2 — `BcServerGridProps` collapse (RFC §11 stage 2, ~3-5h)
+### Active now → `v05-server-mode-switch` stage 3.2 — pending-mutation grace + loading frame + carry-over tests (RFC final stage)
 
-**Stage 1 shipped as #397** (1e2c043): `BcServerGridApi.getActiveRowModelMode()`, `apiRef.whenIdle(): Promise<void>`, `resolveActiveRowModelMode()` pure helper, `hasInFlightRequests()` + `awaitAllSettled()` model primitives. Stage 1 was purely additive (~80 LOC net) and dormant — the heuristic activates in stage 2 when the props collapse lands.
+**Stages 1, 2, 3.1 all shipped** (1e2c043, 5fc890f, 0db97a1). The structural mode polymorphism is in main: each inner state hook computes its own `activeMode` via `resolveActiveRowModelMode`, gates on `isPagedActive` / `isInfiniteActive` / `isTreeActive`, and aborts in-flight requests + clears cache when its mode flips active→inactive.
 
-**Stage 2 scope (~3-5h, this PR):**
+**Stage 3.2 closes the RFC:**
 
-- Merge `BcServerPagedProps | BcServerInfiniteProps | BcServerTreeProps` into a single `BcServerGridProps` interface where `rowModel` becomes optional, `loadPage` / `loadBlock` / `loadChildren` become optional fields, and a dev-only mount assertion fires when the active mode's loader is missing.
-- Activate the heuristic in `getActiveRowModelMode` — explicit `rowModel` wins, otherwise `groupBy.length > 0 ⇒ tree`.
-- Keep the legacy interface names exported as type aliases (`type BcServerPagedProps<TRow> = BcServerGridProps<TRow> & { rowModel: "paged"; loadPage: LoadServerPage<TRow> }`) so existing consumers' explicit type annotations keep type-checking.
-- Stage 1's `whenIdle` apiRef method already routes to the active mode's model; stage 2 makes the routing dynamic instead of always-paged.
+- **Pending-mutation grace per RFC §5:** when the active mode flips, await `pendingMutations.size === 0` for ≤ 100ms. Anything still pending after the grace window settles as `{ status: "rejected", reason: "mode switch" }`.
+- **Synchronous loading frame per RFC §5:** abort + drop result + render `loading={true}` `data={[]}` for one frame; the new mode's first query then fires asynchronously. Today's stage-3.1 abort happens but the new mode's first paint can flash the previous data; pin the loading-frame contract.
+- **Carry-over tests per RFC §9:** 14 unit cases covering each dimension in §4 (sort / filter / searchText / groupBy / columnState / pageSize / expansion-drop / selection / rangeSelection-drop / focusedRowId / scroll / viewKey / pending-mutations-settled / block-cache-dropped). Plus 1 Playwright spec covering the bsncraft happy-path (paged↔tree switch with filter / sort / focused-cell / selection all carried).
 
-Per RFC §6 (`docs/design/server-mode-switch-rfc.md`).
+**Branch:** `agent/worker1/v05-server-mode-switch-stage-3-2`. **Effort:** ~4-6h.
 
-**Branch:** `agent/worker1/v05-server-mode-switch-stage-2`. **Effort:** ~3-5h, single PR.
+### Previously active → mode-switch stages 1, 2, 3.1 (DONE)
 
-### Stage 3 after props collapse → structural mode polymorphism (RFC §11 stage 3, ~6-8h)
-
-The biggest piece of the mode-switch RFC: the three internal hooks each surface a "carry-over snapshot" + "hydrate from snapshot" pair; the top-level `<BcServerGrid>` owns mode resolution and the abort-on-switch flow per RFC §4 (the 14-dimension carry-over contract is the load-bearing section — read it twice) + §5 (server query sequence on the switch). 14 unit cases per §9 + 1 Playwright spec covering the bsncraft case (paged↔tree switch with filter / sort / focused-cell / selection all carried across).
-
-**Branch:** `agent/worker1/v05-server-mode-switch-stage-3`. **Effort:** ~6-8h.
+#397 (1e2c043) Stage 1 additive apiRef. #400 (5fc890f) Stage 2 props collapse. #402 (0db97a1) Stage 3.1 runtime polymorphism + abort-on-deactivate.
 
 ### After mode-switch ships → `v05-use-server-grid-polymorphic-hook` (alpha.3 / GA scope, ~6-8h)
 
