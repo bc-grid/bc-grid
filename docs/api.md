@@ -2140,6 +2140,8 @@ results. The consumer still owns server validation copy, permission/conflict
 policy, and deciding when an accepted edit should invalidate or reload the
 current server view. The contract is documented in
 [`docs/design/server-edit-grid-contract.md`](./design/server-edit-grid-contract.md).
+
+`ServerMutationResult.row` uses **replacement semantics**: when set, the value entirely supplants the cached row at this `rowId`. The host MUST return the FULL canonical row (every column the `loadX` loaders return) — fields omitted from `row` become `undefined` on the cached row, they are NOT inherited from the prior cached value. Hosts that only want to update changed columns should still return the full row (re-fetched from the backend OR merged client-side from the prior cached row + the patch).
 The consumer-facing guide is in
 [`apps/docs/src/pages/server-edit-grid.astro`](../apps/docs/src/pages/server-edit-grid.astro),
 with a live example in `apps/examples/#server-edit-grid`.

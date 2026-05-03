@@ -1118,9 +1118,27 @@ export interface ServerMutationResult<TRow> {
    * `LoadServerBlock.rows[number]` / `LoadServerTreeChildren.rows[number].data`.
    * Merged into the block cache with **replacement semantics** — the value
    * entirely supplants the cached row at this `rowId`, not a partial patch.
-   * Hosts that only want to update changed columns should still return the
-   * full row (re-fetched or merged client-side from the prior cached row +
-   * the patch). Omit when the mutation didn't change the row (e.g. a
+   *
+   * **MUST** be the FULL canonical row (every column the consumer's `loadX`
+   * loaders return), not just the changed columns. Fields omitted from `row`
+   * become `undefined` on the cached row — they are NOT inherited from the
+   * prior cached value. Hosts that only want to update changed columns
+   * should still return the full row (re-fetched OR merged client-side
+   * from the prior cached row + the patch).
+   *
+   * Example — a server accepting a `{ status: "approved" }` patch on row
+   * `r1` should return:
+   * ```ts
+   * { mutationId, status: "accepted", row: { id: "r1", name: "Acme",
+   *     status: "approved", amount: 1234 } } // ✅ full row
+   * ```
+   * NOT:
+   * ```ts
+   * { mutationId, status: "accepted", row: { status: "approved" } }
+   * // ❌ partial patch — name + amount become undefined in cache
+   * ```
+   *
+   * Omit when the mutation didn't change the row (e.g. a
    * `status: "rejected"` result with `reason` but no new row data).
    */
   row?: TRow
