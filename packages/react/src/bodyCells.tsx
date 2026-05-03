@@ -75,6 +75,16 @@ interface RenderBodyCellParams<TRow> {
    * Per `editing-rfc §Server commit + optimistic UI` (concurrency).
    */
   getRowEditState?: (rowId: RowId) => { pending: boolean; error?: string } | null
+  /**
+   * Validation-rejection flash predicate from the controller. When
+   * true for `(rowId, columnId)`, the cell renders the
+   * `data-bc-grid-error-flash="true"` attribute that the theming
+   * package pairs with a 600 ms keyframe pulse so sighted users see
+   * which cell was *just* rejected. The controller manages the timer
+   * + auto-clear (immediate clear on a successful re-commit on the
+   * same cell). Audit P1-W3-4.
+   */
+  isCellFlashing?: (rowId: RowId, columnId: ColumnId) => boolean
 }
 
 interface RenderGroupRowCellParams<TRow> {
@@ -115,6 +125,7 @@ export function renderBodyCell<TRow>({
   getOverlayValue,
   getCellEditEntry,
   getRowEditState,
+  isCellFlashing,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
 
@@ -161,6 +172,11 @@ export function renderBodyCell<TRow>({
       : isDirty
         ? "dirty"
         : undefined
+  // Flash window for the most-recent validation rejection (audit
+  // P1-W3-4). Theming pairs `data-bc-grid-error-flash="true"` with a
+  // ~600 ms keyframe pulse so sighted users see WHICH cell was just
+  // rejected when several stripes are stacked on screen.
+  const errorFlashing = isCellFlashing?.(entry.rowId, column.columnId) ?? false
 
   const isEditingThisCell =
     editingCell?.rowId === entry.rowId && editingCell?.columnId === column.columnId
@@ -228,6 +244,7 @@ export function renderBodyCell<TRow>({
         aria-current={isEditingThisCell ? "true" : undefined}
         data-bc-grid-active-cell={active || undefined}
         data-bc-grid-cell-state={cellEditState}
+        data-bc-grid-error-flash={errorFlashing ? "true" : undefined}
         data-column-id={column.columnId}
         style={{
           ...cellStyle({

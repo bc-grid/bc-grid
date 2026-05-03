@@ -2028,6 +2028,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // `aggregations` segment consumes the same `useAggregations` output
   // already feeding the in-grid aggregation footer row, so the segment
   // and the row stay in sync at zero extra cost.
+  // Re-read on every render — the controller bumps state on each new
+  // validation error / auto-clear, which re-renders <BcGrid> and pulls
+  // the fresh entry through. Including it in the useMemo deps means
+  // the context stays stable when no error has fired and refreshes
+  // exactly when one does.
+  const latestValidationError = editController.getLatestValidationError()
   const statusBarContext = useMemo(
     () => ({
       api,
@@ -2038,6 +2044,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       activeFilters: activeFilterSummaryItems,
       clearColumnFilter: clearColumnFilterText,
       clearAllFilters: clearAllColumnFilters,
+      latestValidationError,
     }),
     [
       activeFilterSummaryItems,
@@ -2047,6 +2054,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       clearAllColumnFilters,
       clearColumnFilterText,
       data.length,
+      latestValidationError,
       selectionState,
     ],
   )
@@ -3014,6 +3022,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             getOverlayValue: editController.getOverlayValue,
                             getCellEditEntry: editController.getCellEditEntry,
                             getRowEditState: editController.getRowEditState,
+                            isCellFlashing: editController.isCellFlashing,
                           }),
                         )}
                       </div>
@@ -3042,6 +3051,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         getOverlayValue: editController.getOverlayValue,
                         getCellEditEntry: editController.getCellEditEntry,
                         getRowEditState: editController.getRowEditState,
+                        isCellFlashing: editController.isCellFlashing,
                       }),
                     )}
                     {virtualRightPinnedCols.length > 0 ? (
@@ -3080,6 +3090,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             getOverlayValue: editController.getOverlayValue,
                             getCellEditEntry: editController.getCellEditEntry,
                             getRowEditState: editController.getRowEditState,
+                            isCellFlashing: editController.isCellFlashing,
                           }),
                         )}
                       </div>
