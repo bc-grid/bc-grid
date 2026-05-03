@@ -7,7 +7,12 @@ import {
   useRef,
   useState,
 } from "react"
-import { type EditorOption, editorOptionToString, visuallyHiddenStyle } from "../chrome"
+import {
+  type EditorOption,
+  editorOptionToString,
+  editorStateAttrs,
+  visuallyHiddenStyle,
+} from "../chrome"
 
 /**
  * shadcn-native Combobox primitive used by the v0.5 lookup editor
@@ -344,7 +349,7 @@ export function Combobox(props: ComboboxProps): ReactNode {
         data-bc-grid-editor-seeded={
           typeof seedKey === "string" && [...seedKey].length === 1 ? "true" : undefined
         }
-        data-bc-grid-editor-state={pending ? "pending" : error ? "error" : "idle"}
+        {...editorStateAttrs({ error, pending })}
         data-state={open ? "open" : "closed"}
         aria-invalid={error ? true : undefined}
         aria-required={required ? true : undefined}

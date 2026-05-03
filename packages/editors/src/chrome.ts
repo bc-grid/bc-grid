@@ -16,6 +16,38 @@ export function editorControlState({
   return "idle"
 }
 
+/**
+ * Returns the dual data-attribute pair for the editor's current state.
+ * Stamps the new canonical `data-bc-grid-edit-state` (planning doc §4
+ * single source of truth) AND the legacy `data-bc-grid-editor-state`
+ * (deprecated alias — preserved for one release so consumer style
+ * overrides keying off the v0.5 attribute keep working through v0.6).
+ * Removal of the legacy stamp is scheduled for v0.7 — see
+ * `docs/migration/v0.6.md`.
+ *
+ * Editor implementations spread the result onto the input element:
+ *
+ * ```tsx
+ * <input
+ *   {...editorStateAttrs({ error, pending })}
+ *   ...
+ * />
+ * ```
+ */
+export function editorStateAttrs(args: {
+  error?: string | undefined
+  pending?: boolean | undefined
+}): {
+  "data-bc-grid-edit-state": EditorControlState
+  "data-bc-grid-editor-state": EditorControlState
+} {
+  const state = editorControlState(args)
+  return {
+    "data-bc-grid-edit-state": state,
+    "data-bc-grid-editor-state": state,
+  }
+}
+
 export function editorAccessibleName(
   column: { header?: unknown; field?: unknown; columnId?: unknown },
   fallback: string,

@@ -1,6 +1,6 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useId, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName, visuallyHiddenStyle } from "./chrome"
+import { editorInputClassName, editorStateAttrs, visuallyHiddenStyle } from "./chrome"
 
 /**
  * Number editor — `kind: "number"`. Default for numeric columns per
@@ -203,7 +203,7 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
         aria-disabled={disabled || pending ? true : undefined}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="number"
-        data-bc-grid-editor-state={editorControlState({ error, pending })}
+        {...editorStateAttrs({ error, pending })}
       />
       {error ? (
         <span id={errorId} style={visuallyHiddenStyle}>

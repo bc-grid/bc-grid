@@ -2,8 +2,8 @@ import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useId, useLayoutEffect, useRef } from "react"
 import {
   editorAccessibleName,
-  editorControlState,
   editorInputClassName,
+  editorStateAttrs,
   visuallyHiddenStyle,
 } from "./chrome"
 
@@ -72,7 +72,7 @@ function CheckboxEditor(props: BcCellEditorProps<unknown, unknown>) {
         aria-invalid={error ? true : undefined}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="checkbox"
-        data-bc-grid-editor-state={editorControlState({ error, pending })}
+        {...editorStateAttrs({ error, pending })}
       >
         <input
           ref={inputRef}

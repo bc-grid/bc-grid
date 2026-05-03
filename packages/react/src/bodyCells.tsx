@@ -248,6 +248,10 @@ export function renderBodyCell<TRow>({
         aria-describedby={errorId}
         aria-current={isEditingThisCell ? "true" : undefined}
         data-bc-grid-active-cell={active || undefined}
+        data-bc-grid-edit-state={cellEditState}
+        // Legacy alias from v0.5; preserved for one release. Removal
+        // scheduled for v0.7. New consumer overrides should target
+        // `[data-bc-grid-edit-state]` per `docs/migration/v0.6.md`.
         data-bc-grid-cell-state={cellEditState}
         data-bc-grid-error-flash={errorFlashing ? "true" : undefined}
         data-column-id={column.columnId}

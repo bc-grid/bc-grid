@@ -1,6 +1,6 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useId, useLayoutEffect, useRef } from "react"
-import { editorControlState, editorInputClassName, visuallyHiddenStyle } from "./chrome"
+import { editorInputClassName, editorStateAttrs, visuallyHiddenStyle } from "./chrome"
 
 /**
  * Text editor — `kind: "text"`. The default for string-typed columns
@@ -114,7 +114,7 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
         aria-disabled={disabled || pending ? true : undefined}
         data-bc-grid-editor-input="true"
         data-bc-grid-editor-kind="text"
-        data-bc-grid-editor-state={editorControlState({ error, pending })}
+        {...editorStateAttrs({ error, pending })}
       />
       {error ? (
         <span id={errorId} style={visuallyHiddenStyle}>
