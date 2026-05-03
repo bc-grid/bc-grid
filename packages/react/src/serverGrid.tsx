@@ -1398,6 +1398,15 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
           modelRef.current.isAbortError(nextError)
         )
           return
+        // Dev-mode surfacing (worker1 v06 bsncraft P1 #12): surface
+        // `loadPage` rejections (including `validateServerPagedResult`
+        // throws) immediately in the console so consumers can diagnose
+        // contract violations without waiting for the error UI to
+        // render. Production stays silent — `setError` already feeds
+        // the error overlay path and `getLastError()`.
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[bc-grid] paged loadPage rejected:", nextError)
+        }
         setError(nextError)
         setLoading(false)
         drainAwaiters({ ok: false, error: nextError })
@@ -1648,6 +1657,15 @@ function useInfiniteServerState<TRow>(
         })
         .catch((nextError: unknown) => {
           if (modelRef.current.isAbortError(nextError)) return
+          // Dev-mode surfacing (worker1 v06 bsncraft P1 #12): surface
+          // `loadBlock` rejections (including
+          // `validateServerBlockResult` throws) immediately in the
+          // console so consumers can diagnose contract violations
+          // without waiting for the error UI to render. Production
+          // stays silent.
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[bc-grid] infinite loadBlock rejected:", nextError)
+          }
           setError(nextError)
         })
     },
@@ -2018,6 +2036,16 @@ function useTreeServerState<TRow>(
         })
         .catch((nextError: unknown) => {
           if (modelRef.current.isAbortError(nextError)) return
+          // Dev-mode surfacing (worker1 v06 bsncraft P1 #12): surface
+          // `loadTreeChildren` rejections (most commonly
+          // `validateTreeResult` throws when `childCount` doesn't echo
+          // the requested size) immediately in the console so
+          // consumers can diagnose contract violations without
+          // waiting for the error UI to render. Production stays
+          // silent — `setError` already feeds the error overlay path.
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[bc-grid] tree loadChildren rejected:", nextError)
+          }
           setError(nextError)
           if (node) {
             setTree((prev) =>
