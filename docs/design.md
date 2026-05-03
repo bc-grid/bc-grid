@@ -260,23 +260,32 @@ We could fork it and extend, but at that point we're maintaining the fork withou
 
 ### 6.3 Layout (DOM structure)
 
+After the v0.6 layout architecture pass (`docs/design/layout-architecture-pass-rfc.md`):
+
 ```
-.bc-grid                              (CSS Grid: rows = header / body / footer)
-├── .bc-grid-header                   (sticky top, contains pinned + center column header)
-│   ├── .bc-grid-header-pinned-left
-│   ├── .bc-grid-header-center
-│   └── .bc-grid-header-pinned-right
-├── .bc-grid-body                     (scrollable container)
-│   ├── .bc-grid-body-pinned-top      (sticky)
-│   ├── .bc-grid-body-rows            (the virtualized scroll area)
-│   │   ├── .bc-grid-row              (one per visible row)
-│   │   │   └── .bc-grid-cell         (one per visible cell in this row)
-│   │   └── ...
-│   └── .bc-grid-body-pinned-bottom   (sticky)
-└── .bc-grid-footer                   (sticky bottom, optional)
+.bc-grid                              (root)
+└── .bc-grid-viewport                 (single scroll container — was .bc-grid-scroller pre-v0.6)
+    ├── .bc-grid-canvas               (totalWidth × totalHeight; virtualized window)
+    │   ├── .bc-grid-header           (position: sticky; top: 0)
+    │   │   └── .bc-grid-cell         (per visible header cell;
+    │   │                              position: sticky; left: <px> for pinned)
+    │   ├── .bc-grid-row              (per visible body row)
+    │   │   └── .bc-grid-cell         (per visible body cell;
+    │   │                              position: sticky; left: <px> for pinned)
+    │   └── .bc-grid-detail-panel     (per expanded row;
+    │                                  position: sticky; left: 0)
+    └── (no sibling header / footer rails — all chrome lives inside the viewport)
 ```
 
-CSS Grid for the macro structure; absolute positioning for the virtualized rows inside `.bc-grid-body-rows`. Pinned columns via `position: sticky`.
+**Key structural moves vs. pre-v0.6:**
+
+- **Single scroll container.** `.bc-grid-viewport` is the only element with `overflow: auto`. Header rows and pinned columns scroll IN it via `position: sticky`. Pre-v0.6, the header sat in a sibling `.bc-grid-header` viewport whose horizontal scroll was JS-synced to the body (`syncHeaderRowsScroll` + `headerScrollTransform`); that synchronization is deleted because sticky-positioned headers are compositor-aligned with body cells in the same scroll container — header cannot lag because there is no synchronization point that can drift.
+- **Sticky cells, not transformed cells.** Pinned columns are `position: sticky; left: 0` (or `right: 0`); the per-cell `transform: translateX(-scrollLeft)` from `cellStyle` is deleted. The browser's compositor handles sticky offsets at the GPU level — no React render churn on horizontal scroll.
+- **Z-index intersection rule.** `position: sticky; z-index` follows §5 of the layout RFC: center body cell 1, pinned body cell 2, center header cell 3, pinned header cell 4 (sticky in BOTH axes — must paint above either single-axis sticky), range overlay 5, popup-mode editor 6.
+- **Single viewport ResizeObserver.** `useViewportSize` (`gridInternals.ts`) observes the viewport's `clientWidth` / `clientHeight` once and feeds both the column-flex distribution (`resolveColumns(..., viewport.width)`) and the virtualizer (`virtualizer.setViewport(height, width)` via a small downstream effect). Pre-v0.6 ran two ResizeObservers because the original `useViewportSync` hook had a circular dep on the virtualizer; PR (c) of the layout pass collapsed them.
+- **Editor portal positioning.** Popup-mode editors (select / multi-select / autocomplete per the in-cell editor mode RFC §4) anchor via `getBoundingClientRect` on the now-stably-positioned cell. The pre-v0.6 `expansionState` invalidation-only `useMemo` dep on `editorCellRect` is gone — the browser's layout pass owns cell positioning, so the rect reads correctly without an explicit invalidation hint when detail panels above the editing row toggle.
+
+CSS Grid for the macro structure; absolute positioning for the virtualized rows inside `.bc-grid-canvas`. Pinned cells via `position: sticky`.
 
 ### 6.4 Performance targets (covered in §3.2)
 
@@ -546,6 +555,7 @@ Any architectural change to this document must:
 | 2026-05-01 | **Charts clarified as post-1.0.** Earlier sprint text temporarily treated charts as a v1.0 peer-dep adapter. That was over-scoped for the ERP grid 1.0 target. v1.0 now excludes chart adapter work; `docs/design/charts-rfc.md` remains as a post-1.0 planning draft. | JohnC + Codex coordinator |
 | 2026-04-30 | **Bundle-size hard cap raised 60 KB → 100 KB after `v0.1.0-alpha.2`.** Alpha.2 shipped at 57.75 KiB gzip for `core+virtualizer+animations+react`, leaving too little room for deliberate v1 parity features such as pivot/group UI without blocking the merge train. The hard cap is now 100 KiB, but baselines reset to alpha.2 exact package sizes and the 10% per-PR drift guard remains. This lets substantial features land while still forcing review of sudden multi-KiB jumps. | JohnC + Codex coordinator |
 | 2026-05-03 | **Bundle-size hard cap raised 100 KB → 150 KB after `v0.5.0-alpha.2`.** Alpha.2 shipped at 99.11 KiB / 100 KiB hard cap, leaving ~900 bytes headroom. The v0.5 audit-driven feature train (mode switch RFC stages 1-3.2, in-cell editor mode, filter registry, context menu lanes, validation flash + status-bar segment) plus the pending v0.6 layout architecture pass and in-cell editor PR (c) each push individual PRs past the 100 KiB cap (102.16 / 101.75 KiB respectively). The 100 KiB target predates the audit-refactor's intentional API-surface growth and bc-grid's trajectory toward AG-Grid-Enterprise feature parity. New cap: 150 KiB gives ~50 KiB headroom past current ~102 KiB so v0.6 + v0.7 + v0.8 feature work fits without revisiting; 10% per-PR drift guard from the latest accepted main baseline remains. Hosts that ship every bc-grid feature pay a small per-page-load cost; consumers needing tighter bundles can tree-shake by importing only the packages they use (`@bc-grid/core` is 2 KiB, the editor + filter packages are opt-in). | JohnC + Claude coordinator |
+| 2026-05-03 | **Layout architecture pass: single scroll container + sticky positioning, no JS scroll-sync.** Replaces the pre-v0.6 dual-viewport DOM (sibling header rail + body scroller, JS-synced via `syncHeaderRowsScroll` + `headerScrollTransform` + `pinnedTransformValue`) with a single `.bc-grid-viewport` container in which headers are `position: sticky; top: 0` and pinned cells are `position: sticky; left: <px>` (or `right: <px>`). The compositor handles sticky offsets at the GPU level — header cannot lag because there is no synchronization point that can drift. PR (a) (#415, worker1) shipped the structural rewrite; PR (b) (worker2) lands the detail-panel sticky-left composition; PR (c) (worker3) consolidated the second `availableGridWidth` ResizeObserver in `grid.tsx` onto the single `useViewportSize` source of truth (closing the chicken-and-egg between `resolveColumns` flex distribution and `useViewportSync`'s late virtualizer dep), and dropped the `expansionState` invalidation-only dep from `editorCellRect` (now stable because cells are stably positioned by browser layout). `.bc-grid-scroller` hard-renamed to `.bc-grid-viewport` (no alias — `docs/migration/v0.6.md`). Closes layout-architecture-pass-rfc.md. | JohnC + Claude coordinator |
 
 ## 14. Quality bars (full list)
 
