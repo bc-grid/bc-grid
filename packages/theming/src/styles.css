@@ -1760,6 +1760,7 @@ select.bc-grid-editor-input {
 
 .bc-grid-filter-number > .bc-grid-filter-input,
 .bc-grid-filter-number > .bc-grid-filter-select,
+.bc-grid-filter-number > .bc-grid-filter-text-toggle,
 .bc-grid-filter-number-range > .bc-grid-filter-input,
 .bc-grid-filter-date > .bc-grid-filter-input,
 .bc-grid-filter-date > .bc-grid-filter-select,
@@ -3222,6 +3223,7 @@ select.bc-grid-editor-input {
 
 .bc-grid-filters-panel .bc-grid-filter-number > .bc-grid-filter-input,
 .bc-grid-filters-panel .bc-grid-filter-number > .bc-grid-filter-select,
+.bc-grid-filters-panel .bc-grid-filter-number > .bc-grid-filter-text-toggle,
 .bc-grid-filters-panel .bc-grid-filter-number-range > .bc-grid-filter-input,
 .bc-grid-filters-panel .bc-grid-filter-date > .bc-grid-filter-input,
 .bc-grid-filters-panel .bc-grid-filter-date > .bc-grid-filter-select,

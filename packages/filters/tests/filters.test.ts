@@ -96,10 +96,71 @@ describe("@bc-grid/filters registry", () => {
 
   test("built-in definitions expose operator metadata", () => {
     expect(textFilter.operators?.map((operator) => operator.op)).toContain("does-not-contain")
+    expect(textFilter.operators?.map((operator) => operator.op)).toContain("regex")
+    expect(textFilter.operators?.map((operator) => operator.op)).toContain("fuzzy")
     expect(textFilter.operators?.map((operator) => operator.op)).toContain("current-user")
     expect(dateFilter.operators?.map((operator) => operator.op)).toContain("last-n-days")
+    expect(dateFilter.operators?.map((operator) => operator.op)).toContain("mtd")
+    expect(dateFilter.operators?.map((operator) => operator.op)).toContain("qtd")
+    expect(dateFilter.operators?.map((operator) => operator.op)).toContain("ytd")
+    expect(dateFilter.operators?.map((operator) => operator.op)).toContain("last-fiscal-week")
     expect(dateFilter.operators?.map((operator) => operator.op)).toContain("this-fiscal-year")
     expect(setFilter.operators?.map((operator) => operator.op)).toContain("current-team")
+  })
+
+  test("text regex and fuzzy operators use built-in predicates", () => {
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "name", type: "text", op: "regex", value: "^acme\\s+trad" },
+        () => "Acme Trading",
+      ),
+    ).toBe(true)
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "name", type: "text", op: "regex", value: "^trade" },
+        () => "Acme Trading",
+      ),
+    ).toBe(false)
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "name", type: "text", op: "fuzzy", value: "tradin" },
+        () => "Acme Trading",
+      ),
+    ).toBe(true)
+    expect(
+      matchesFilter(
+        {
+          kind: "column",
+          columnId: "name",
+          type: "text",
+          op: "fuzzy",
+          value: "tradin",
+          values: [0],
+        },
+        () => "Acme Trading",
+      ),
+    ).toBe(false)
+  })
+
+  test("slow regex patterns are safe no-match with a development warning", () => {
+    const originalWarn = console.warn
+    const warnings: string[] = []
+    console.warn = (message?: unknown) => {
+      warnings.push(String(message))
+    }
+    try {
+      expect(
+        matchesFilter(
+          { kind: "column", columnId: "name", type: "text", op: "regex", value: "(a+)+" },
+          () => "aaaa",
+        ),
+      ).toBe(false)
+    } finally {
+      console.warn = originalWarn
+    }
+
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain("may be slow")
   })
 
   test("text negative operators use the built-in registry predicate", () => {
@@ -236,6 +297,72 @@ describe("@bc-grid/filters registry", () => {
         { context: { now } },
       ),
     ).toBe(true)
+  })
+
+  test("month, quarter, year, and fiscal week to-date tokens resolve against context", () => {
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "due", type: "date", op: "mtd" },
+        () => "2026-05-01",
+        { context: { now: "2026-05-13" } },
+      ),
+    ).toBe(true)
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "due", type: "date", op: "mtd" },
+        () => "2026-04-30",
+        { context: { now: "2026-05-13" } },
+      ),
+    ).toBe(false)
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "postedOn", type: "date", op: "qtd" },
+        () => "2026-07-01",
+        { context: { now: "2026-08-15", fiscalCalendar: { startMonth: 7, startDay: 1 } } },
+      ),
+    ).toBe(true)
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "postedOn", type: "date", op: "qtd" },
+        () => "2026-09-30",
+        { context: { now: "2026-08-15", fiscalCalendar: { startMonth: 7, startDay: 1 } } },
+      ),
+    ).toBe(false)
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "postedOn", type: "date", op: "ytd" },
+        () => "2026-07-01",
+        { context: { now: "2026-08-15", fiscalCalendar: { startMonth: 7, startDay: 1 } } },
+      ),
+    ).toBe(true)
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "postedOn", type: "date", op: "last-fiscal-week" },
+        () => "2026-05-10",
+        { context: { now: "2026-05-13", weekStartsOn: 1 } },
+      ),
+    ).toBe(true)
+    expect(
+      matchesFilter(
+        { kind: "column", columnId: "postedOn", type: "date", op: "last-fiscal-week" },
+        () => "2026-05-11",
+        { context: { now: "2026-05-13", weekStartsOn: 1 } },
+      ),
+    ).toBe(false)
+  })
+
+  test("number between supports exclusive bounds", () => {
+    const filter = {
+      kind: "column" as const,
+      columnId: "balance",
+      type: "number" as const,
+      op: "between",
+      value: { min: 10, max: 20, includeMin: false, includeMax: false },
+    }
+
+    expect(matchesFilter(filter, () => "10")).toBe(false)
+    expect(matchesFilter(filter, () => "15")).toBe(true)
+    expect(matchesFilter(filter, () => "20")).toBe(false)
   })
 
   test("fiscal date operators use the supplied fiscal calendar", () => {
