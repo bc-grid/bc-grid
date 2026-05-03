@@ -70,6 +70,8 @@ export function BcGridContextMenu<TRow>({
         : null,
       columnId,
       row: entry?.kind === "data" ? entry.row : null,
+      rowId: entry?.kind === "data" ? entry.rowId : undefined,
+      rowIndex: entry?.kind === "data" ? entry.index : undefined,
       selection,
     }
   }, [api, columnId, resolvedColumns, rowId, rowsById, selection])

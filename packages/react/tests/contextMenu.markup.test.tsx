@@ -10,7 +10,7 @@ import type {
 import { renderToStaticMarkup } from "react-dom/server"
 import type { ResolvedColumn, RowEntry } from "../src/gridInternals"
 import { BcGridContextMenu } from "../src/internal/context-menu"
-import type { BcContextMenuItems } from "../src/types"
+import type { BcContextMenuContext, BcContextMenuItems } from "../src/types"
 
 interface Row {
   id: string
@@ -50,7 +50,7 @@ const resolvedColumns: readonly ResolvedColumn<Row>[] = [
 ]
 
 const rowsById: ReadonlyMap<RowId, RowEntry<Row>> = new Map([
-  ["r1", { kind: "data", level: 0, row: { id: "r1", name: "Acme" }, rowId: "r1" }],
+  ["r1", { kind: "data", index: 0, level: 0, row: { id: "r1", name: "Acme" }, rowId: "r1" }],
 ])
 
 const emptySelection: BcSelection = { mode: "explicit", rowIds: new Set() }
@@ -74,6 +74,20 @@ function renderMenu(items?: BcContextMenuItems<Row>, api: BcGridApi<Row> = noopA
 }
 
 describe("BcGridContextMenu — Radix-style attribute contract", () => {
+  test("passes row identity and index through the trigger context", () => {
+    let seen: Pick<BcContextMenuContext<Row>, "row" | "rowId" | "rowIndex"> | null = null
+    renderMenu((ctx) => {
+      seen = { row: ctx.row, rowId: ctx.rowId, rowIndex: ctx.rowIndex }
+      return []
+    })
+
+    expect(seen).toEqual({
+      row: { id: "r1", name: "Acme" },
+      rowId: "r1",
+      rowIndex: 0,
+    })
+  })
+
   test("emits data-state='open' on the menu root", () => {
     // The right-click menu is point-anchored and unmount-on-close, so
     // the value is constant — but the attribute is set so apps can

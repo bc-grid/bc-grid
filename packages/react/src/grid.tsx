@@ -185,6 +185,7 @@ import { BcStatusBar } from "./statusBar"
 import type {
   BcCellEditCommitEvent,
   BcCellEditor,
+  BcEditGridProps,
   BcGridDensity,
   BcGridLayoutState,
   BcGridProps,
@@ -202,6 +203,10 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
 const DEFAULT_DETAIL_HEIGHT = 144
 const editableKeyTargetTags = new Set(["INPUT", "TEXTAREA", "SELECT"])
 const BcGridContextMenuLayer = lazy(() => import("./internal/context-menu-layer"))
+type BcGridEditRowActionProps<TRow> = Pick<
+  BcEditGridProps<TRow>,
+  "canDelete" | "confirmDelete" | "onDelete" | "onDuplicateRow" | "onInsertRow"
+>
 
 function hasLayoutStateValue<K extends keyof BcGridLayoutState>(
   layout: BcGridLayoutState | undefined,
@@ -239,6 +244,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     onCopy,
     onVisibleRowRangeChange,
   } = props
+  const {
+    canDelete: rowContextCanDelete,
+    confirmDelete: rowContextConfirmDelete,
+    onDelete: rowContextDelete,
+    onDuplicateRow: rowContextDuplicate,
+    onInsertRow: rowContextInsert,
+  } = props as Partial<BcGridEditRowActionProps<TRow>>
 
   // Editor toggles forward-compatible with the v0.5
   // vanilla-and-context-menu RFC. Defaults preserve current
@@ -1667,7 +1679,6 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     // expansionState is an invalidation trigger, not a value dep:
     // expanding/collapsing detail panels above the editing row shifts
     // the cell's DOM y-position without changing any of the deps above.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: invalidation-only dep
     expansionState,
   ])
 
@@ -2559,6 +2570,22 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const ContextMenuLayer = BcGridContextMenuLayer as ComponentType<
     BcGridContextMenuLayerProps<TRow>
   >
+  const rowContextMenuActions = useMemo(() => {
+    if (!rowContextInsert && !rowContextDuplicate && !rowContextDelete) return undefined
+    return {
+      canDelete: rowContextCanDelete,
+      confirmDelete: rowContextConfirmDelete,
+      onDelete: rowContextDelete,
+      onDuplicateRow: rowContextDuplicate,
+      onInsertRow: rowContextInsert,
+    }
+  }, [
+    rowContextCanDelete,
+    rowContextConfirmDelete,
+    rowContextDelete,
+    rowContextDuplicate,
+    rowContextInsert,
+  ])
   const chromeContextMenuItems = useMemo(
     () =>
       buildGridChromeContextMenuItems<TRow>({
@@ -2578,6 +2605,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         onSidebarPanelChange: setSidebarPanelPreference,
         onSidebarVisibleChange: setSidebarVisiblePreference,
         onStatusBarVisibleChange: setStatusBarVisiblePreference,
+        rowActions: rowContextMenuActions,
         sidebarAvailable: hasSidebar,
         sidebarPanels,
         sidebarVisible,
@@ -2595,6 +2623,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       hasSidebar,
       props.density,
       props.layoutState?.density,
+      rowContextMenuActions,
       setActiveFilterSummaryVisiblePreference,
       setDensityPreference,
       setFilterRowVisiblePreference,
