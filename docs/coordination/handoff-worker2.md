@@ -35,7 +35,15 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
 
-### Active now → `v06-filter-registry-implementation` (your planning doc §3, ~half day)
+### Active now → `v06-set-filter-option-provider` (your planning doc §4, ~half day)
+
+**Filter registry shipped as #410** (ec6f6d5): `@bc-grid/filters` is no longer a placeholder — built-in filter definitions (text/number/date/set/boolean) are first-class registry entries; `matchesFilter` predicate dispatch + `registerFilter` API + dev-mode console.error for unknown filter types + URL/localStorage round-trip via the registry. Closes audit P1-W2-1.
+
+The next active task continues from your planning doc §4 (set filter scales to thousands via async option provider — see spec below).
+
+### Previously active → `v06-filter-registry-implementation` (DONE — #410)
+
+### Old anchor: `v06-filter-registry-implementation` (your planning doc §3, ~half day)
 
 **Group-before-paginate shipped as #405** (e2c022c, your planning doc §1 — closes audit P0-8 grouping-page-window): the grouped row metadata now builds from the full filtered/sorted client row model, then pagination applies as a visible-leaf set so group counts and descendant ids reflect full data, not one page. Combined with row-actions menu (#404), chrome bundles 1+2 (#396 / #399), and chrome+filter bundle-1 (#393), your v0.5 lane is structurally complete.
 

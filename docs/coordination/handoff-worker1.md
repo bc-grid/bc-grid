@@ -34,6 +34,10 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 ### Active now → `v06-layout-architecture-pass` PR (a) — single scroll container + sticky header/pinned (~12-16h)
 
+**Polymorphic `useServerGrid` hook shipped as #409** (928d9d7) — alpha.3 / GA scope per RFC §6 + §7 + Q6 ratification. Single `useServerGrid({ gridId, rowId, loadPage?, loadBlock?, loadChildren?, ... })` that owns one apiRef, one debounce, one mutation-id stream, one controlled `groupBy` pair; routes to whichever loader matches the resolved active mode. Three single-mode hooks remain as escape hatches per RFC §7. Stage 3.3 (RFC §9 carry-over test sweep) still queued as a small follow-up — see below.
+
+### Old anchor: `v06-layout-architecture-pass` PR (a) — single scroll container + sticky header/pinned (~12-16h)
+
 **Stages 1-3.2 of the server-mode-switch RFC all shipped** (1e2c043, 5fc890f, 0db97a1, 772a3b6). The structural mode polymorphism + pending-mutation grace + abort-on-deactivate are all in main; only the 14-dimension carry-over test sweep + Playwright spec remain as RFC §9 follow-up (worth a small PR after PR (a) below if your alpha.2 lane has bandwidth).
 
 **The next active task is the v0.6 layout architecture pass.** bsncraft consumer review surfaced 5 layout memos in the past 24h — pinned-cell shading, sticky-left detail panel, editor portal mispositioning, nested-grid flex distribution, header-body horizontal scroll lag. 3 of 5 are shipped as point fixes; 2 remain. Maintainer's framing: they share a root cause — bc-grid's render layer uses JS-driven coordinate calculations where the browser layout engine has the right primitives (`position: sticky`).

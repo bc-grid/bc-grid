@@ -38,7 +38,39 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 - ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
 
-### Active now → `v06-in-cell-editor-mode` PR (a) — framework + flag + scroll-out + 4-editor migration (~8-10h)
+### Active now → `v06-in-cell-editor-mode` PR (c) — verify popup editors (~3-4h)
+
+**PR (a) shipped as #408** (51dd7c2 — framework + popup flag + scroll-out semantics + text/number/checkbox/time migration). **PR (b) shipped as #412** (edee30a — date/datetime hybrid annotations: in-cell mount with OS-chrome popovers, JSDoc `Mount mode: in-cell` markers + `popup intentionally unset` export-site comments). **#407 validation-flash-and-status-segment** (f12c270, audit P1-W3-4) also landed: `data-bc-grid-error-flash="true"` 600ms keyframe pulse + `latestError` status-bar segment + 8s decay.
+
+PR (c) closes the in-cell editor RFC: set `popup: true` on selectEditor / multiSelectEditor / autocompleteEditor and verify they continue to mount via the existing `<EditorPortal>` overlay path. Should be near-zero code change since the portal path already works for them — the test surface is the categorisation regression guard (each built-in editor's expected popup mode pinned in `inCellEditorMode.test.ts`) plus 1 Playwright spec covering the select-editor happy path with a detail panel above (verifies the listbox dropdown still overflows the cell box and click-outside on a dropdown option commits without firing the click-outside-cancel path).
+
+**Branch:** `agent/worker3/v06-in-cell-editor-mode-pr-c`. **Effort:** ~3-4h.
+
+### After PR (c) → `v06-layout-architecture-pass` PR (c) — cleanup (~4-6h, GATED on worker1's PR (a))
+
+(Same as before — gated on worker1's layout PR (a). Coordinator will signal when ready.)
+
+### After layout PR (c) → `v06-editor-visual-contract-consolidation` (your planning doc §4, ~half day)
+
+Pull §4 forward from `docs/coordination/v05-audit-followups/worker3-editors-and-validation.md` once the layout pass clears. The audit item (P1-W3 visual surface drift): cell-state styling lives in two places — `data-bc-grid-cell-state="error"` on the cell + the validation popover's `.bc-grid-validation-popover` chrome. Different visual contracts between them; consumer overrides must touch both. Consolidate into one cell-state contract with the popover composing on top.
+
+The planning doc flagged this as breaking-change risk because consumer overrides on `data-bc-grid-cell-state="error"` would break. The original recommendation was to land it in v0.6 with a one-release back-compat alias attribute. With the layout pass already establishing v0.6 as the chrome-rewrite release line, this composes naturally — pair the migration note with the layout pass's `.bc-grid-scroller` → `.bc-grid-viewport` rename note in `docs/migration/v0.6.md`.
+
+**Branch:** `agent/worker3/v06-editor-visual-contract-consolidation`. **Effort:** ~half day.
+
+### Previously active → `v06-in-cell-editor-mode` PR (a) (DONE — #408)
+
+51dd7c2: framework + popup flag + scroll-out semantics + 4-editor migration.
+
+### Previously active → `v06-in-cell-editor-mode` PR (b) (DONE — #412)
+
+edee30a: date/datetime hybrid annotations (in-cell with OS-chrome popovers).
+
+### Previously active → `v05-validation-flash-and-status-segment` (DONE — #407)
+
+f12c270: 600ms cell-flash on validation rejection + 8s status-bar `latestError` segment. Audit P1-W3-4. Pulled forward from worker3-editors-and-validation.md §1.
+
+### Old anchor: `v06-in-cell-editor-mode` PR (a) — framework + flag + scroll-out + 4-editor migration (~8-10h)
 
 **Editor-portal polish bundle-1 (#398, 3a12ffe), result-aware onCellEditCommit (#401, d173ff4), and prepareResult preload (#403, 348ffdc) all shipped.** Your v0.5 lane is structurally complete — all editor-side audit findings closed, both bsncraft editing-pass paper-cuts shipped, autocomplete paints with options on first frame.
 
