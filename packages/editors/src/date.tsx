@@ -1,6 +1,7 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useLayoutEffect, useRef } from "react"
+import { type ClipboardEvent, useLayoutEffect, useRef } from "react"
 import { editorInputClassName, editorStateAttrs } from "./chrome"
+import { detectPastedValue } from "./internal/pasteDetection"
 
 /**
  * Date editor — `kind: "date"`. Default for date columns per
@@ -47,7 +48,18 @@ export const dateEditor: BcCellEditor<unknown, unknown> = {
 }
 
 function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled } = props
+  const {
+    initialValue,
+    error,
+    focusRef,
+    seedKey,
+    pending,
+    required,
+    readOnly,
+    disabled,
+    column,
+    row,
+  } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   // Hand the input back to the framework via `focusRef`. Runs in
@@ -84,6 +96,32 @@ function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
 
   const seeded = normalizeDateValue(initialValue)
 
+  // Paste-into-cell format detection (v0.6 §1
+  // `v06-editor-paste-into-cell-detection`). `<input type="date">`
+  // strictly accepts ISO `YYYY-MM-DD`; pasting `"5/4/2026"` or
+  // `"May 4, 2026"` would otherwise be rejected by the browser
+  // (silent — the input keeps its prior value). normalizeDateValue
+  // already handles many shapes (RFC2822, locale, Date instance);
+  // wire it as the paste fallback so the input reflects ISO
+  // immediately on paste. Consumer's `column.valueParser` runs first
+  // for parity with commit-time parsing.
+  const onPaste = (event: ClipboardEvent<HTMLInputElement>): void => {
+    const text = event.clipboardData.getData("text/plain")
+    if (!text) return
+    const result = detectPastedValue({
+      text,
+      column,
+      row,
+      fallback: (raw) => normalizeDateValue(raw),
+      stringify: stringifyDate,
+    })
+    if (!result.ok) return
+    event.preventDefault()
+    const input = inputRef.current
+    if (!input) return
+    input.value = result.normalised
+  }
+
   return (
     <input
       ref={inputRef}
@@ -97,9 +135,23 @@ function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
       aria-disabled={disabled || pending ? true : undefined}
       data-bc-grid-editor-input="true"
       data-bc-grid-editor-kind="date"
+      onPaste={onPaste}
       {...editorStateAttrs({ error, pending })}
     />
   )
+}
+
+function stringifyDate(parsed: unknown): string {
+  // The fallback (`normalizeDateValue`) returns ISO YYYY-MM-DD or
+  // empty string. The consumer's valueParser may return a Date
+  // instance, an ISO string, or epoch ms — normalize all three.
+  if (parsed instanceof Date && !Number.isNaN(parsed.valueOf())) return toIsoDate(parsed)
+  if (typeof parsed === "string") return parsed
+  if (typeof parsed === "number" && Number.isFinite(parsed)) {
+    const date = new Date(parsed)
+    if (!Number.isNaN(date.valueOf())) return toIsoDate(date)
+  }
+  return ""
 }
 
 /**
