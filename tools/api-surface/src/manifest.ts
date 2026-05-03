@@ -149,6 +149,7 @@ export const apiSurfaceManifest = [
     runtimePath: "packages/react/dist/index.js",
     mode: "enforced",
     runtimeExports: [
+      "BC_GRID_ROW_DRAG_MIME",
       "BC_SAVED_VIEW_VERSION",
       "BcEditGrid",
       "BcGrid",
@@ -173,6 +174,7 @@ export const apiSurfaceManifest = [
       "useServerTreeGrid",
     ],
     declarationExports: [
+      "BC_GRID_ROW_DRAG_MIME",
       "BcAggregationFormatterParams",
       "BcAggregationScope",
       "BcBuiltInColumnFilterType",
@@ -245,6 +247,11 @@ export const apiSurfaceManifest = [
       "BcRangeSelection",
       "BcReactFilterDefinition",
       "BcReactGridColumn",
+      "BcRowDragOverEvent",
+      "BcRowDragOverHandler",
+      "BcRowDropAction",
+      "BcRowDropEvent",
+      "BcRowDropHandler",
       "BcSavedView",
       "BcSavedViewInput",
       "BcSavedViewLayoutApplier",
