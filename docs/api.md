@@ -864,10 +864,11 @@ consumer-owned toolbar and storage flow:
   layout-only fields such as `groupBy`, `searchText`, `pagination`, `density`,
   and `sidebarPanel`.
 
-The full saved-view toolbar recipe is in `docs/recipes/saved-views.md`. URL
-state should carry the current layout blob only; consumers that need active
-saved-view identity can add their own `activeSavedViewId` URL parameter next to
-the grid payload.
+The full saved-view toolbar recipe is in `docs/recipes/saved-views.md`.
+Reference storage adapters for localStorage, IndexedDB, and server-backed
+storage are in `docs/recipes/saved-view-persistence.md`. URL state should carry
+the current layout blob only; consumers that need active saved-view identity can
+add their own `activeSavedViewId` URL parameter next to the grid payload.
 
 Compact example:
 

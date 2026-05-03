@@ -4,6 +4,8 @@ Saved views are consumer-owned named snapshots around `BcGridLayoutState`. The g
 
 Use this pattern when users need saved queues such as "My Past Due", "South Region Disputed", or "Unassigned This Week".
 
+For persistence adapters, see `docs/recipes/saved-view-persistence.md`.
+
 ```ts
 import {
   type BcGridLayoutState,
