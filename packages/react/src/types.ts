@@ -433,6 +433,15 @@ export interface BcDetailPanelParams<TRow> {
   rowIndex: number
 }
 
+export interface BcGridRowParams<TRow> {
+  row: TRow
+  rowId: RowId
+  rowIndex: number
+  selected: boolean
+  focused: boolean
+  disabled: boolean
+}
+
 export type BcSidebarBuiltInPanel = "columns" | "filters" | "pivot"
 
 export type BcSidebarPanel<TRow = unknown> = BcSidebarBuiltInPanel | BcSidebarCustomPanel<TRow>
@@ -618,6 +627,26 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * for predictable variable-height panels; auto-measurement is deferred.
    */
   detailPanelHeight?: number | ((params: BcDetailPanelParams<TRow>) => number)
+
+  /**
+   * Conditional row className. Applied to data rows only (not group
+   * rows or detail panels). Function form receives the row's render
+   * context and returns a class name string (or `undefined` to skip).
+   * Composes with the framework's built-in row classes via
+   * `classNames(...)` — your class wins on collisions.
+   *
+   * Common pattern: tint overdue rows red, archived rows muted, etc.
+   * Surfaced 2026-05-03 by bsncraft consumer feedback.
+   */
+  rowClassName?: string | ((params: BcGridRowParams<TRow>) => string | undefined)
+
+  /**
+   * Conditional row inline style. Applied to data rows only. Composes
+   * with the framework's dimensional `top` / `height` / `width` row
+   * styling — your fields override on collision via spread order.
+   * Function form receives the row's render context.
+   */
+  rowStyle?: CSSProperties | ((params: BcGridRowParams<TRow>) => CSSProperties | undefined)
 
   onRowClick?: (row: TRow, event: MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: MouseEvent) => void

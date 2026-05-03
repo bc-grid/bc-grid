@@ -88,6 +88,7 @@ export type {
   BcGridPasteTsvSkippedCell,
   BcGridPasteTsvSuccess,
   BcGridProps,
+  BcGridRowParams,
   BcGridSort,
   BcGridStateProps,
   BcGridUrlStatePersistence,

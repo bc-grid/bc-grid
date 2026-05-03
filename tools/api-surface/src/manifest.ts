@@ -206,6 +206,7 @@ export const apiSurfaceManifest = [
       "BcGridPasteTsvSkippedCell",
       "BcGridPasteTsvSuccess",
       "BcGridProps",
+      "BcGridRowParams",
       "BcGridSort",
       "BcGridStateBindings",
       "BcGridStateBoundProps",
