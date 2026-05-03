@@ -240,24 +240,38 @@
   border-bottom: 0;
 }
 
-.bc-grid-row:hover {
+/*
+ * Row-state cascade scoping (RFC `row-state-cascade-scoping-rfc.md`,
+ * bsncraft v0.5.0-alpha.2 P0 #2). Each row-state rule is gated with
+ * `:not(.bc-grid-detail-panel .bc-grid-row)` so that hovering /
+ * focusing / selecting a master row does not paint nested grid rows
+ * rendered inside that row's `renderDetailPanel`. The descendant
+ * combinator (`A B`) matched across nested grid boundaries pre-fix;
+ * the guard rejects any `.bc-grid-row` that is itself a descendant
+ * of a `.bc-grid-detail-panel`, which is exactly the nested-grid
+ * case. Universal browser support (Selectors L4); +2 specificity
+ * uniformly applied so cascade ordering is preserved.
+ */
+.bc-grid-row:hover:not(.bc-grid-detail-panel .bc-grid-row) {
   background: var(--bc-grid-row-hover);
 }
 
-.bc-grid-row[data-bc-grid-focused-row="true"] {
+.bc-grid-row[data-bc-grid-focused-row="true"]:not(.bc-grid-detail-panel .bc-grid-row) {
   background: var(--bc-grid-row-focused-bg);
 }
 
-.bc-grid-row[aria-selected="true"] {
+.bc-grid-row[aria-selected="true"]:not(.bc-grid-detail-panel .bc-grid-row) {
   background: var(--bc-grid-row-selected);
   color: var(--bc-grid-row-selected-fg);
 }
 
-.bc-grid-row[aria-selected="true"]:hover {
+.bc-grid-row[aria-selected="true"]:hover:not(.bc-grid-detail-panel .bc-grid-row) {
   background: var(--bc-grid-row-selected-hover-bg);
 }
 
-.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] {
+.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"]:not(
+    .bc-grid-detail-panel .bc-grid-row
+  ) {
   background: var(--bc-grid-row-selected-focused-bg);
 }
 
@@ -821,25 +835,34 @@
   box-shadow: inset 0 -1px 0 var(--bc-grid-row-border);
 }
 
-.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell {
+/*
+ * Row+cell rules — the cell-side gate `:not(.bc-grid-detail-panel
+ * .bc-grid-cell)` rejects any cell that is a descendant of a
+ * `.bc-grid-detail-panel`, which is exactly the nested-grid case.
+ * Master cells (siblings of the detail panel inside the master row)
+ * still match. RFC `row-state-cascade-scoping-rfc.md`.
+ */
+.bc-grid-row[data-bc-grid-focused-row="true"]
+  .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {
   background: color-mix(in srgb, var(--bc-grid-focus-ring) 7%, var(--bc-grid-bg));
 }
 
-.bc-grid-row:hover .bc-grid-cell {
+.bc-grid-row:hover .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {
   background: var(--bc-grid-row-hover);
 }
 
-.bc-grid-row[aria-selected="true"] .bc-grid-cell,
-.bc-grid-cell[aria-selected="true"] {
+.bc-grid-row[aria-selected="true"] .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell),
+.bc-grid-cell[aria-selected="true"]:not(.bc-grid-detail-panel .bc-grid-cell) {
   background: var(--bc-grid-row-selected);
   color: var(--bc-grid-row-selected-fg);
 }
 
-.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell {
+.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {
   background: color-mix(in srgb, var(--bc-grid-row-selected) 88%, var(--bc-grid-row-hover));
 }
 
-.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"] .bc-grid-cell {
+.bc-grid-row[aria-selected="true"][data-bc-grid-focused-row="true"]
+  .bc-grid-cell:not(.bc-grid-detail-panel .bc-grid-cell) {
   background: color-mix(in srgb, var(--bc-grid-row-selected) 84%, var(--bc-grid-focus-ring));
   color: var(--bc-grid-row-selected-fg);
 }
@@ -866,8 +889,11 @@
   outline-offset: -2px;
 }
 
-.bc-grid-row[aria-selected="true"] .bc-grid-cell[data-bc-grid-active-cell="true"],
-.bc-grid-cell[aria-selected="true"][data-bc-grid-active-cell="true"] {
+.bc-grid-row[aria-selected="true"]
+  .bc-grid-cell[data-bc-grid-active-cell="true"]:not(.bc-grid-detail-panel .bc-grid-cell),
+.bc-grid-cell[aria-selected="true"][data-bc-grid-active-cell="true"]:not(
+    .bc-grid-detail-panel .bc-grid-cell
+  ) {
   background: color-mix(in srgb, var(--bc-grid-focus-ring) 12%, var(--bc-grid-row-selected));
   color: var(--bc-grid-row-selected-fg);
 }
@@ -900,26 +926,45 @@
   background-image: none;
 }
 
-.bc-grid-row:hover .bc-grid-cell-pinned-left,
-.bc-grid-row:hover .bc-grid-cell-pinned-right {
+/*
+ * Pinned-cell row-state tints — same `:not(.bc-grid-detail-panel
+ * .bc-grid-cell-pinned-{left,right})` cell-side guard as the body
+ * cells above. The pinned-cell shading parity from #5341af3 stays
+ * load-bearing (opaque base + linear-gradient state layer); the
+ * guard adds +2 specificity uniformly across all four pinned-state
+ * rules so the existing cascade order stays correct.
+ */
+.bc-grid-row:hover .bc-grid-cell-pinned-left:not(.bc-grid-detail-panel .bc-grid-cell-pinned-left),
+.bc-grid-row:hover
+  .bc-grid-cell-pinned-right:not(.bc-grid-detail-panel .bc-grid-cell-pinned-right) {
   background-image: linear-gradient(var(--bc-grid-row-hover), var(--bc-grid-row-hover));
 }
 
-.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-left,
-.bc-grid-row[data-bc-grid-focused-row="true"] .bc-grid-cell-pinned-right {
+.bc-grid-row[data-bc-grid-focused-row="true"]
+  .bc-grid-cell-pinned-left:not(.bc-grid-detail-panel .bc-grid-cell-pinned-left),
+.bc-grid-row[data-bc-grid-focused-row="true"]
+  .bc-grid-cell-pinned-right:not(.bc-grid-detail-panel .bc-grid-cell-pinned-right) {
   background-image: linear-gradient(var(--bc-grid-row-focused-bg), var(--bc-grid-row-focused-bg));
 }
 
-.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-left,
-.bc-grid-row[aria-selected="true"] .bc-grid-cell-pinned-right,
-.bc-grid-cell-pinned-left[aria-selected="true"],
-.bc-grid-cell-pinned-right[aria-selected="true"] {
+.bc-grid-row[aria-selected="true"]
+  .bc-grid-cell-pinned-left:not(.bc-grid-detail-panel .bc-grid-cell-pinned-left),
+.bc-grid-row[aria-selected="true"]
+  .bc-grid-cell-pinned-right:not(.bc-grid-detail-panel .bc-grid-cell-pinned-right),
+.bc-grid-cell-pinned-left[aria-selected="true"]:not(
+    .bc-grid-detail-panel .bc-grid-cell-pinned-left
+  ),
+.bc-grid-cell-pinned-right[aria-selected="true"]:not(
+    .bc-grid-detail-panel .bc-grid-cell-pinned-right
+  ) {
   background-image: linear-gradient(var(--bc-grid-row-selected), var(--bc-grid-row-selected));
   color: var(--bc-grid-row-selected-fg);
 }
 
-.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-left,
-.bc-grid-row[aria-selected="true"]:hover .bc-grid-cell-pinned-right {
+.bc-grid-row[aria-selected="true"]:hover
+  .bc-grid-cell-pinned-left:not(.bc-grid-detail-panel .bc-grid-cell-pinned-left),
+.bc-grid-row[aria-selected="true"]:hover
+  .bc-grid-cell-pinned-right:not(.bc-grid-detail-panel .bc-grid-cell-pinned-right) {
   background-image: linear-gradient(
     var(--bc-grid-row-selected-hover-bg),
     var(--bc-grid-row-selected-hover-bg)
