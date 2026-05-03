@@ -705,6 +705,24 @@ export interface BcRangeSelectionOptions {
   preventRowSelection?: boolean
 }
 
+/**
+ * Group-row metadata for `BcGridProps.serverRowEntryOverrides`. Internal
+ * shape used by `<BcServerGrid rowModel="tree">` to pass server-supplied
+ * group rows through to `<BcGrid>`'s render pipeline without losing the
+ * `kind: "group"` discriminator + `level` / `label` / `childCount` data.
+ * Mirrors `GroupRowEntry` from `gridInternals.ts` (excluding the `index`
+ * field — `<BcGrid>` re-stamps that during entry construction so DOM
+ * order stays contiguous after expansion-state changes).
+ */
+export interface ServerRowEntryOverride {
+  kind: "group"
+  level: number
+  label: string
+  childCount: number
+  childRowIds: readonly RowId[]
+  expanded: boolean
+}
+
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   data: readonly TRow[]
   columns: readonly BcReactGridColumn<TRow>[]
@@ -725,6 +743,26 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * `treeData` before phase 2 lands has no rendering effect.
    */
   treeData?: BcClientTreeData<TRow>
+
+  /**
+   * Internal escape hatch for `<BcServerGrid rowModel="tree">` to
+   * pass pre-built group-row entries through to the render pipeline.
+   * In server-tree mode the response carries `kind: "group"` rows
+   * with `groupKey` / `level` / `childCount` metadata; the React
+   * adapter strips that metadata when mapping `flatNodes` to the
+   * flat `data` array. This map preserves the metadata keyed by
+   * rowId — when a row's id is in this map, `<BcGrid>` builds a
+   * `GroupRowEntry` for it (in manual row processing mode) instead
+   * of a `DataRowEntry`. Surfaced 2026-05-04 by bsncraft v0.6.0-
+   * alpha.1 — server-tree group rows rendered as empty data rows
+   * because the render loop only saw `kind: "data"`.
+   *
+   * Internal — not part of the consumer-facing API. `<BcServerGrid>`
+   * sets this from its tree-mode `flatNodes` array; consumers should
+   * not pass this directly. Will move to a `__internal` namespace
+   * in v0.7 once the broader tree-render contract is reviewed.
+   */
+  serverRowEntryOverrides?: ReadonlyMap<RowId, ServerRowEntryOverride>
 
   density?: BcGridDensity
   height?: "auto" | number

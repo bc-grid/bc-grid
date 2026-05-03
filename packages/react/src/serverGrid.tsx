@@ -49,6 +49,7 @@ import type {
   BcServerEditMutationHandler,
   BcServerEditPatchFactory,
   BcServerGridProps,
+  ServerRowEntryOverride,
 } from "./types"
 
 const DEFAULT_SERVER_PAGE_SIZE = 100
@@ -180,6 +181,7 @@ interface TreeServerState<TRow> {
   rowId: (row: TRow, index: number) => RowId
   rows: readonly TRow[]
   rowCount: number | "unknown"
+  serverRowEntryOverrides: ReadonlyMap<RowId, ServerRowEntryOverride>
   settleMutation: (result: ServerMutationResult<TRow>) => void
   view: ServerViewState
 }
@@ -1025,6 +1027,7 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
               ? tree.rows
               : []
       }
+      {...(activeMode === "tree" ? { serverRowEntryOverrides: tree.serverRowEntryOverrides } : {})}
       apiRef={gridApiRef}
       {...(activeMode === "paged" ? { footer: pagedFooter } : {})}
       loading={loading}
@@ -1882,6 +1885,32 @@ function useTreeServerState<TRow>(
     [expansionState, tree],
   )
   const rows = flatNodes.map((node) => node.row)
+  // Build the server-tree group-row override map. Bsncraft v0.6.0-
+  // alpha.1 P1: server-tree rows with `kind: "group"` rendered as
+  // empty data rows because `flatNodes.map((n) => n.row)` above
+  // strips the metadata. The override map preserves it keyed by
+  // rowId so `<BcGrid>` can synthesize the GroupRowEntry shape its
+  // render loop expects. Label is derived from the latest groupKey
+  // in the node's groupPath (per the server-tree contract — the
+  // `groupPath` ends with the row's own groupKey for group nodes).
+  const serverRowEntryOverrides = useMemo(() => {
+    const map = new Map<RowId, ServerRowEntryOverride>()
+    for (const node of flatNodes) {
+      if (node.kind !== "group") continue
+      const groupKey = node.groupPath[node.groupPath.length - 1]
+      const label = groupKey ? String(groupKey.value ?? "") : ""
+      const childCount = node.childCount === "unknown" ? 0 : node.childCount
+      map.set(node.rowId, {
+        kind: "group",
+        level: node.level,
+        label,
+        childCount,
+        childRowIds: node.childIds,
+        expanded: expansionState.has(node.rowId),
+      })
+    }
+    return map
+  }, [flatNodes, expansionState])
 
   const setExpansion = useCallback(
     (next: ReadonlySet<RowId>) => {
@@ -2202,6 +2231,7 @@ function useTreeServerState<TRow>(
     }),
     rowId,
     rows,
+    serverRowEntryOverrides,
     settleMutation,
     view,
   }
