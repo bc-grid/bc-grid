@@ -102,15 +102,12 @@ export function BcFiltersToolPanel<TRow>({
               <div className="bc-grid-filters-panel-control">
                 <FilterEditorBody
                   allowEscapeKeyPropagation
+                  columnId={item.columnId}
                   filterId={`${idBase}-${domToken(item.columnId)}-control`}
                   filterLabel={context.messages.filterAriaLabel({ columnLabel: item.label })}
                   filterText={item.filterText}
                   filterType={item.type}
-                  getSetFilterOptions={
-                    context.getSetFilterOptions
-                      ? () => context.getSetFilterOptions?.(item.columnId) ?? []
-                      : undefined
-                  }
+                  loadSetFilterOptions={context.loadSetFilterOptions}
                   messages={context.messages}
                   onFilterChange={(next) => context.setColumnFilterText(item.columnId, next)}
                 />

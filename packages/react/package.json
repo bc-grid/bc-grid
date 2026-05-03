@@ -29,7 +29,7 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup src/index.tsx --format esm --dts --sourcemap --clean --tsconfig tsconfig.build.json",
+    "build": "tsup src/index.tsx --format esm --dts --sourcemap --clean --tsconfig tsconfig.build.json --minify-syntax",
     "dev": "tsup src/index.tsx --format esm --dts --sourcemap --watch --tsconfig tsconfig.build.json",
     "type-check": "tsc -b"
   },
