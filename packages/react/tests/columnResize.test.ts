@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { type ColumnResizeSession, computeResizedWidth } from "../src/columnResize"
+import {
+  type ColumnResizeSession,
+  commitColumnWidthState,
+  computeResizedWidth,
+} from "../src/columnResize"
 
 const baseSession: ColumnResizeSession = {
   columnId: "name",
@@ -49,5 +53,30 @@ describe("computeResizedWidth", () => {
   test("equal min and max collapse to a fixed width", () => {
     expect(computeResizedWidth({ ...baseSession, minWidth: 200, maxWidth: 200 }, 500)).toBe(200)
     expect(computeResizedWidth({ ...baseSession, minWidth: 200, maxWidth: 200 }, 0)).toBe(200)
+  })
+})
+
+describe("commitColumnWidthState", () => {
+  test("updates width and clears flex on an existing column state entry", () => {
+    expect(
+      commitColumnWidthState(
+        [
+          { columnId: "code", width: 80 },
+          { columnId: "name", flex: 2, pinned: "left", position: 1, width: 120 },
+        ],
+        "name",
+        200,
+      ),
+    ).toEqual([
+      { columnId: "code", width: 80 },
+      { columnId: "name", flex: null, pinned: "left", position: 1, width: 200 },
+    ])
+  })
+
+  test("adds width and flex null for a new column state entry", () => {
+    expect(commitColumnWidthState([{ columnId: "code", width: 80 }], "name", 200)).toEqual([
+      { columnId: "code", width: 80 },
+      { columnId: "name", flex: null, width: 200 },
+    ])
   })
 })

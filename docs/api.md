@@ -603,7 +603,7 @@ export type BcSelection =
 export interface BcColumnStateEntry {
   columnId: ColumnId
   width?: number
-  flex?: number
+  flex?: number | null
   hidden?: boolean
   pinned?: "left" | "right" | null
   sortDirection?: "asc" | "desc" | null
@@ -2290,6 +2290,12 @@ only mounts visible rows). The result is clamped to the column's `minWidth` /
 `maxWidth` (defaulting to `[48, 800]`). No-op if the grid root is unmounted or
 the column has no DOM cells. See `docs/design/context-menu-command-map.md`
 §2.4 / §5.2.
+
+When a user resizes a flex column, or `autoSizeColumn` commits a measured width,
+the grid converts that column to fixed-width by writing `{ width, flex: null }`
+into `BcColumnStateEntry`. `flex: null` is an explicit layout-state marker that
+suppresses the column definition's original `flex` weight; omitting `flex` still
+falls back to `BcGridColumn.flex`.
 
 `startEdit(rowId, columnId, opts?)` programmatically activates the cell editor
 on the supplied cell with `activation: "api"` (so consumer telemetry can split

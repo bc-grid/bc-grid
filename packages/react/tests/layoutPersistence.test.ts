@@ -65,6 +65,32 @@ describe("layout persistence helpers", () => {
     ])
   })
 
+  test("preserves flex null as an explicit cleared-flex layout state", () => {
+    const current = [
+      { columnId: "amount", flex: null, hidden: false, pinned: null, position: 2, width: 220 },
+    ] satisfies readonly BcColumnStateEntry[]
+
+    const saved = buildLayoutColumnState(columns, current)
+    const restored = mergeLayoutColumnState(columns, [], saved)
+
+    expect(saved.find((entry) => entry.columnId === "amount")).toEqual({
+      columnId: "amount",
+      flex: null,
+      hidden: false,
+      pinned: null,
+      position: 2,
+      width: 220,
+    })
+    expect(restored.find((entry) => entry.columnId === "amount")).toEqual({
+      columnId: "amount",
+      flex: null,
+      hidden: false,
+      pinned: null,
+      position: 2,
+      width: 220,
+    })
+  })
+
   test("restores known column layout after schema changes without corrupting new columns", () => {
     const nextColumns = [
       { columnId: "account", field: "account", header: "Account", pinned: "left", width: 140 },

@@ -29,7 +29,11 @@ import {
   useRef,
   useState,
 } from "react"
-import { type ColumnResizeSession, computeResizedWidth } from "./columnResize"
+import {
+  type ColumnResizeSession,
+  commitColumnWidthState,
+  computeResizedWidth,
+} from "./columnResize"
 import type { BcGridDensity, BcGridMessages, BcGridProps, BcReactGridColumn } from "./types"
 
 // ---------------------------------------------------------------------------
@@ -180,11 +184,13 @@ export function resolveColumns<TRow>(
       const stateWidth = state?.width
       const stateFlex = state?.flex
       const flex =
-        typeof stateFlex === "number" && stateFlex > 0
-          ? stateFlex
-          : typeof column.flex === "number" && column.flex > 0
-            ? column.flex
-            : undefined
+        stateFlex === null
+          ? undefined
+          : typeof stateFlex === "number" && stateFlex > 0
+            ? stateFlex
+            : typeof column.flex === "number" && column.flex > 0
+              ? column.flex
+              : undefined
       const requestedWidth = stateWidth ?? column.width ?? DEFAULT_COL_WIDTH
       const minWidth = column.minWidth ?? 48
       const maxWidth = column.maxWidth ?? Number.POSITIVE_INFINITY
@@ -485,8 +491,23 @@ export function buildLayoutColumnState<TRow>(
         width: state?.width ?? column.width ?? DEFAULT_COL_WIDTH,
       }
 
-      const flex = state?.flex ?? column.flex
-      if (typeof flex === "number" && Number.isFinite(flex) && flex > 0) entry.flex = flex
+      if (hasOwnColumnStateValue(state, "flex")) {
+        if (state.flex === null) {
+          entry.flex = null
+        } else if (
+          typeof state.flex === "number" &&
+          Number.isFinite(state.flex) &&
+          state.flex > 0
+        ) {
+          entry.flex = state.flex
+        }
+      } else if (
+        typeof column.flex === "number" &&
+        Number.isFinite(column.flex) &&
+        column.flex > 0
+      ) {
+        entry.flex = column.flex
+      }
       if (hasOwnColumnStateValue(state, "sortDirection")) {
         entry.sortDirection = state.sortDirection ?? null
       }
@@ -527,8 +548,8 @@ export function mergeLayoutColumnState<TRow>(
     if (position !== undefined) next.position = position
     const width = normalizeStateNumber(layoutEntry.width, baseEntry.width)
     if (width !== undefined) next.width = width
-    const flex = normalizeStateNumber(layoutEntry.flex, baseEntry.flex)
-    if (flex !== undefined && flex > 0) next.flex = flex
+    const flex = normalizeFlexState(layoutEntry.flex, baseEntry.flex)
+    if (flex !== undefined) next.flex = flex
     if (hasOwnColumnStateValue(layoutEntry, "sortDirection")) {
       next.sortDirection =
         layoutEntry.sortDirection === "asc" || layoutEntry.sortDirection === "desc"
@@ -598,6 +619,18 @@ function normalizeStateNumber(
 ): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value
   return typeof fallback === "number" && Number.isFinite(fallback) ? fallback : undefined
+}
+
+function normalizeFlexState(
+  value: BcColumnStateEntry["flex"] | undefined,
+  fallback: BcColumnStateEntry["flex"] | undefined,
+): number | null | undefined {
+  if (value === null) return null
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value
+  if (fallback === null) return null
+  return typeof fallback === "number" && Number.isFinite(fallback) && fallback > 0
+    ? fallback
+    : undefined
 }
 
 function normalizePinned(
@@ -1311,10 +1344,7 @@ export function useColumnResize<TRow>({ columnState, setColumnState }: UseColumn
 
   const commitColumnWidth = useCallback(
     (columnId: ColumnId, width: number) => {
-      const next = columnState.some((entry) => entry.columnId === columnId)
-        ? columnState.map((entry) => (entry.columnId === columnId ? { ...entry, width } : entry))
-        : [...columnState, { columnId, width }]
-      setColumnState(next)
+      setColumnState(commitColumnWidthState(columnState, columnId, width))
     },
     [columnState, setColumnState],
   )

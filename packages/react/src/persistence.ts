@@ -317,7 +317,7 @@ function parseColumnStateEntry(value: unknown): BcColumnStateEntry | undefined {
 
   const entry: BcColumnStateEntry = { columnId: value.columnId }
   assignPositiveNumber(entry, "width", value.width)
-  assignPositiveNumber(entry, "flex", value.flex)
+  assignFlex(entry, value.flex)
   assignNonNegativeNumber(entry, "position", value.position)
   assignBoolean(entry, "hidden", value.hidden)
 
@@ -501,12 +501,16 @@ function isNonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0
 }
 
-function assignPositiveNumber(
-  entry: BcColumnStateEntry,
-  key: "width" | "flex",
-  value: unknown,
-): void {
+function assignPositiveNumber(entry: BcColumnStateEntry, key: "width", value: unknown): void {
   if (isPositiveNumber(value)) entry[key] = value
+}
+
+function assignFlex(entry: BcColumnStateEntry, value: unknown): void {
+  if (value === null) {
+    entry.flex = null
+    return
+  }
+  if (isPositiveNumber(value)) entry.flex = value
 }
 
 function assignNonNegativeNumber(entry: BcColumnStateEntry, key: "position", value: unknown): void {

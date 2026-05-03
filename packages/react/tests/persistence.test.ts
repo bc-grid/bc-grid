@@ -58,6 +58,7 @@ describe("grid state persistence", () => {
       JSON.stringify([
         {
           columnId: "customer",
+          flex: null,
           hidden: false,
           pinned: "left",
           position: 1,
@@ -112,6 +113,7 @@ describe("grid state persistence", () => {
       columnState: [
         {
           columnId: "customer",
+          flex: null,
           hidden: false,
           pinned: "left",
           position: 1,
