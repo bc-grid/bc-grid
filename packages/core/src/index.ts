@@ -409,6 +409,12 @@ export {
   serializeRangeSelection,
 } from "./range"
 export type { BcNormalisedRange, BcRangeKeyAction, BcRangeSelection } from "./range"
+export {
+  forEachSelectedRowId,
+  isAllSelection,
+  isExplicitSelection,
+  isFilteredSelection,
+} from "./selection"
 
 export interface BcPaginationState {
   page: number
