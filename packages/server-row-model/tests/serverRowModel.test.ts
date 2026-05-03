@@ -1980,6 +1980,260 @@ describe("paged stale-response flood (worker1 audit P1 §9)", () => {
       if (block) expect(block.state).not.toBe("loaded")
     }
   })
+
+  test("lastLoad diagnostic ends pointing at the FINAL request (not an intermediate)", async () => {
+    const model = createServerRowModel<Row>()
+
+    const buildView = (id: number): ServerViewState => ({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["name"],
+      filter: {
+        columnId: "name",
+        kind: "column",
+        op: "contains",
+        type: "text",
+        value: `tail-${id}`,
+      },
+    })
+
+    const requests: Array<{
+      blockKey: string
+      load: ReturnType<typeof deferred<ServerPagedResult<Row>>>
+      promise: Promise<ServerPagedResult<Row>>
+      viewKey: string
+    }> = []
+
+    for (let i = 0; i < 10; i++) {
+      const view = buildView(i)
+      const viewKey = model.createViewKey(view)
+      const load = deferred<ServerPagedResult<Row>>()
+      const request = model.loadPagedPage({
+        loadPage: () => load.promise,
+        pageIndex: 0,
+        pageSize: 25,
+        view,
+        viewKey,
+      })
+      request.promise.catch(() => {})
+      model.abortExcept(request.blockKey)
+      requests.push({ blockKey: request.blockKey, load, promise: request.promise, viewKey })
+    }
+
+    // Resolve out of order: an intermediate (i=4) lands BEFORE the final
+    // (i=9). The diagnostic must NOT regress to point at the
+    // intermediate — `isOlderServerRequest` guards against the older
+    // requestId overwriting a newer one.
+    const fourth = requests[4]
+    const last = requests[9]
+    if (!fourth || !last) throw new Error("missing requests")
+
+    fourth.load.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "row-4", name: "tail-4" }],
+      totalRows: 1,
+      viewKey: fourth.viewKey,
+    })
+    await fourth.promise.catch(() => undefined)
+
+    last.load.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "row-9", name: "tail-9" }],
+      totalRows: 1,
+      viewKey: last.viewKey,
+    })
+    await last.promise
+
+    // Resolve all the rest so the test cleans up; they're already
+    // aborted so resolution is a no-op for the diagnostic.
+    for (let i = 0; i < 10; i++) {
+      if (i === 4 || i === 9) continue
+      const r = requests[i]
+      if (!r) continue
+      r.load.resolve({
+        pageIndex: 0,
+        pageSize: 25,
+        rows: [{ id: `row-${i}`, name: `tail-${i}` }],
+        totalRows: 1,
+        viewKey: r.viewKey,
+      })
+      await r.promise.catch(() => undefined)
+    }
+
+    // Diagnostic points at the final request's view, status=success.
+    const diagnostics = model.getDiagnostics({
+      mode: "paged",
+      rowCount: 1,
+      selection: emptySelection,
+      view: buildView(9),
+      viewKey: last.viewKey,
+    })
+    expect(diagnostics.lastLoad.status).toBe("success")
+    expect(diagnostics.lastLoad.blockKey).toBe(last.blockKey)
+  })
+
+  test("controller.signal.aborted === true for every prior request after a flood", async () => {
+    const model = createServerRowModel<Row>()
+
+    const buildView = (id: number): ServerViewState => ({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["name"],
+      filter: {
+        columnId: "name",
+        kind: "column",
+        op: "contains",
+        type: "text",
+        value: `signal-${id}`,
+      },
+    })
+
+    const capturedSignals: AbortSignal[] = []
+    const requests: Array<{
+      blockKey: string
+      load: ReturnType<typeof deferred<ServerPagedResult<Row>>>
+      promise: Promise<ServerPagedResult<Row>>
+      viewKey: string
+    }> = []
+
+    for (let i = 0; i < 10; i++) {
+      const view = buildView(i)
+      const viewKey = model.createViewKey(view)
+      const load = deferred<ServerPagedResult<Row>>()
+      const request = model.loadPagedPage({
+        loadPage: (_query, ctx) => {
+          capturedSignals.push(ctx.signal)
+          return load.promise
+        },
+        pageIndex: 0,
+        pageSize: 25,
+        view,
+        viewKey,
+      })
+      request.promise.catch(() => {})
+      // Abort all-except-latest after every fire (mirrors the React
+      // serverGrid layer's abortExcept-on-each-load pattern).
+      model.abortExcept(request.blockKey)
+      requests.push({ blockKey: request.blockKey, load, promise: request.promise, viewKey })
+    }
+
+    // Every loadPage was invoked → 10 captured signals.
+    expect(capturedSignals).toHaveLength(10)
+
+    // Settle all so the test cleans up.
+    for (let i = 0; i < 10; i++) {
+      const r = requests[i]
+      if (!r) throw new Error("missing")
+      r.load.resolve({
+        pageIndex: 0,
+        pageSize: 25,
+        rows: [{ id: `row-${i}`, name: `signal-${i}` }],
+        totalRows: 1,
+        viewKey: r.viewKey,
+      })
+      await r.promise.catch(() => undefined)
+    }
+
+    // The first 9 controllers MUST be aborted; the 10th must NOT be.
+    for (let i = 0; i < 9; i++) {
+      const signal = capturedSignals[i]
+      if (!signal) throw new Error("missing signal")
+      expect(signal.aborted).toBe(true)
+    }
+    const lastSignal = capturedSignals[9]
+    if (!lastSignal) throw new Error("missing last signal")
+    expect(lastSignal.aborted).toBe(false)
+  })
+
+  test("an intermediate response landing AFTER abortExcept does not repopulate the cache", async () => {
+    // Race scenario: request 0 fires, request 1 fires (aborts 0), but
+    // 0's loadPage resolves anyway — perhaps the consumer's fetch
+    // adapter ignored ctx.signal. The model's blockKey-based cache
+    // gate must prevent the stale result from landing.
+    const model = createServerRowModel<Row>()
+
+    const buildView = (id: number): ServerViewState => ({
+      groupBy: [],
+      sort: [],
+      visibleColumns: ["name"],
+      filter: {
+        columnId: "name",
+        kind: "column",
+        op: "contains",
+        type: "text",
+        value: `race-${id}`,
+      },
+    })
+
+    const view0 = buildView(0)
+    const view1 = buildView(1)
+    const viewKey0 = model.createViewKey(view0)
+    const viewKey1 = model.createViewKey(view1)
+    const load0 = deferred<ServerPagedResult<Row>>()
+    const load1 = deferred<ServerPagedResult<Row>>()
+
+    const request0 = model.loadPagedPage({
+      loadPage: () => load0.promise,
+      pageIndex: 0,
+      pageSize: 25,
+      view: view0,
+      viewKey: viewKey0,
+    })
+    request0.promise.catch(() => {})
+
+    const request1 = model.loadPagedPage({
+      loadPage: () => load1.promise,
+      pageIndex: 0,
+      pageSize: 25,
+      view: view1,
+      viewKey: viewKey1,
+    })
+    request1.promise.catch(() => {})
+
+    // Abort request 0 in favor of request 1.
+    model.abortExcept(request1.blockKey)
+
+    // Consumer's loadPage for request 0 RESOLVES anyway (didn't honor
+    // signal). The model must drop the result because the request was
+    // already removed from #inFlightPaged when abortExcept fired —
+    // the .then continuation hits markLoaded on a key that's been
+    // detached from in-flight tracking.
+    load0.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "row-0", name: "race-0" }],
+      totalRows: 1,
+      viewKey: viewKey0,
+    })
+    await request0.promise.catch(() => undefined)
+
+    // Now resolve request 1 normally.
+    load1.resolve({
+      pageIndex: 0,
+      pageSize: 25,
+      rows: [{ id: "row-1", name: "race-1" }],
+      totalRows: 1,
+      viewKey: viewKey1,
+    })
+    await request1.promise
+
+    // Cache reflects request 1 only. Request 0's blockKey may exist as
+    // a fetching/error placeholder but NOT as a "loaded" state with
+    // race-0 rows (the React layer's `isActiveServerPagedResponse`
+    // gate would catch this at the higher level too — this test pins
+    // the model-layer guarantee).
+    const block1 = model.cache.get(request1.blockKey)
+    expect(block1?.state).toBe("loaded")
+    expect(block1?.rows).toEqual([{ id: "row-1", name: "race-1" }])
+
+    const block0 = model.cache.get(request0.blockKey)
+    if (block0?.state === "loaded") {
+      // If a "loaded" entry survives, it must NOT carry the race-0 rows.
+      expect(block0.rows).not.toEqual([{ id: "row-0", name: "race-0" }])
+    }
+  })
 })
 
 describe("hasInFlightRequests + awaitAllSettled (server-mode-switch RFC §6)", () => {
