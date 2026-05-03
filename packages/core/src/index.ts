@@ -917,6 +917,16 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
     columnId: ColumnId,
     opts?: BcScrollOptions & { pageIndex?: number },
   ): Promise<{ scrolled: boolean }>
+
+  /**
+   * Returns the most-recent failed-load error from the active row-model
+   * mode (paged `loadPage` / infinite `loadBlock` / tree
+   * `loadChildren`), or `null` when the latest fetch succeeded.
+   * Cleared on the next successful response. Mirrors the consumer
+   * surface used by `BcServerGridProps.renderServerError`. Worker1
+   * v0.6 server-grid error boundary.
+   */
+  getLastError(): unknown | null
 }
 
 export type ServerRowModelMode = "paged" | "infinite" | "tree"
