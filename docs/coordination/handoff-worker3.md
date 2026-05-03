@@ -1,6 +1,6 @@
 # Worker3 Handoff (Claude — editor + keyboard/a11y + lookup UX lane)
 
-**Last updated:** 2026-05-02 by Claude coordinator
+**Last updated:** 2026-05-03 by Claude coordinator
 **Worktree:** `~/work/bcg-worker3`
 **Branch convention:** `agent/worker3/<task-slug>`
 
@@ -37,32 +37,39 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#382** `BcCellEditor.getValue?` hook for custom editors (audit P1-W3-6) + custom-editor recipe doc
 - ✅ **#385** `aria-required` / `aria-readonly` / `aria-disabled` on built-in editors (audit P1-W3-7) — closes the cheap-P1 train
 - ✅ **#390** v0.5 editor-bundle-1 (locale parser + multi-Enter fix + clear-rejection toast)
+- ✅ **#421** `v05-default-context-menu-wiring` editor + row-action slice — `Editor` submenu (edit mode / show validation / show keyboard hints / activation / blur / esc-discards-row) + row actions + dismiss-latest-error
+- ✅ **#424** `v06-editor-visual-contract-consolidation` — `data-bc-grid-edit-state` canonical attribute + six `--bc-grid-edit-state-*` tokens + dual-attribute helper for one-release migration
 
-### Active now → `v06-editor-visual-contract-consolidation` (your planning doc §4, ~half day)
+### Active now → `v06-popup-editor-verification-pr-c` (in-cell editor RFC closure)
 
-**Editor + row-action slice of `v05-default-context-menu-wiring` shipped as #421** (CI: smoke + smoke-perf green; e2e finishing — coordinator merging when complete). `Editor` submenu wired into the contextual default menu: `Edit mode` toggle, `Show validation messages` toggle, `Show keyboard hints` toggle, `Activation` submenu (Single click / Double click / F2 only), `On blur` submenu (Commit / Reject / Ignore), `Esc reverts row` toggle. Row-action items (Insert above/below + Duplicate + Delete with confirmDelete gate) wired in for `<BcEditGrid>` row-context right-clicks. `Dismiss latest error` action when there's an active validation error in the status-bar slot.
+`#421` and `#424` both merged. **In-cell editor RFC PRs (a) + (b) shipped.** **Default context menu editor + row actions wired.** **Editor visual contract consolidated.** Coordinator cut alpha.3 with the full v0.5 surface.
 
-**In-cell editor RFC fully shipped** (PRs a/b/c). **Validation flash + status segment shipped** (#407). **Layout pass PR (c) shipped** (#418). **Default context menu editor + row actions wired** (#421 in review). Your v0.5 alpha.2 → GA work is structurally complete.
-
-The next active task is the v0.6 visual contract consolidation from your planning doc §4 (cell-state styling lives in two places — `data-bc-grid-cell-state="error"` on the cell + `.bc-grid-validation-popover` chrome — different visual contracts; consumer overrides must touch both). Consolidate into one cell-state contract with the popover composing on top.
+The next active task is **PR (c) of `v06-in-cell-editor-mode`** — verify popup editors (select / multi-select / autocomplete) under the in-cell editor framework introduced in PR (a). The framework already supports popup-mode mounting via the `popup: true` flag; PR (c) is the verification pass + regression test sweep so we can claim the full editor migration done.
 
 Implementation:
 
-1. **Single source of truth** for cell-state visual tokens. Move the `--bc-grid-cell-error-bg` / `--bc-grid-cell-error-fg` / etc. into a single `data-bc-grid-cell-state` selector cascade. The popover's chrome composes via `inherit` from the cell rather than duplicating the tokens.
+1. **Audit each popup editor** (`packages/editors/src/select.tsx`, `packages/editors/src/multi-select.tsx`, `packages/editors/src/autocomplete.tsx`) and confirm:
+   - The `popup: true` flag is set in their `BcCellEditor` config so the framework mounts them in the popup wrapper.
+   - The dropdown panels still anchor correctly under the cell (use `editorCellRect` from the framework — DON'T compute their own positioning).
+   - Keyboard shortcuts (Esc / Enter / Tab) still route through the editor controller.
+   - The `data-bc-grid-edit-state` attribute (introduced in #424) lands on the popup wrapper AND the input.
 
-2. **Migration alias** for one release. `data-bc-grid-cell-state="error"` continues to apply via the existing path AND also via the new consolidated path; deprecation note in `docs/migration/v0.6.md` (already exists for the layout pass — pair the visual-contract migration there).
+2. **Add a per-editor mount-mode regression test** under `packages/react/tests/inCellEditorMode.test.ts` (or extend the existing harness if one exists) — pins the `popup: true` declaration so a future refactor that drops the flag catches.
 
-3. **Test coverage** — pin the consolidated contract via theming.test.ts (computed-value assertions for each cell state) + 1 Playwright spec covering the popover-inherits-from-cell behavior.
+3. **Document the closure** in `docs/design/in-cell-editor-rfc.md` §closure: PRs (a), (b), (c) shipped; framework migration complete; future editors default to in-cell unless they explicitly opt into popup.
 
-Pair the migration note with the layout pass's `.bc-grid-scroller` → `.bc-grid-viewport` rename note in `docs/migration/v0.6.md` so consumers see both v0.6 chrome migrations in one place.
+**Branch:** `agent/worker3/v06-popup-editor-verification-pr-c`. **Effort:** ~half day.
 
-**Branch:** `agent/worker3/v06-editor-visual-contract-consolidation`. **Effort:** ~half day.
+### Optionally pick up the bsncraft RFCs queued for v0.6
 
-### After visual-contract consolidation → bsncraft migration co-pilot (editor side, consumer-paced)
+Two new bsncraft P0 items hit the queue 2026-05-03 (alpha.2 consumer pass surfaced them; both require an RFC):
 
-Same as before — when bsncraft's customers grid migration draft surfaces editor-side rough edges, your role is editor + lookup expertise.
+- **`v05-bsncraft-row-state-cascade-scoping`** — master `.bc-grid-row:hover` cascades into nested grid cells via descendant selectors. Likely fix: `@scope (.bc-grid) to (.bc-grid-detail-panel .bc-grid)` OR `:not(:has(.bc-grid-detail-panel:hover))` per row-state selector.
+- **`v05-bsncraft-pinned-scroll-shadow-overlay`** — pseudo-element gradient at pinned boundary paints over row hover bg. Likely fix: `mix-blend-mode: multiply` or negative z-index on the pseudo.
 
-### Previously active → `v05-default-context-menu-wiring` editor + row-action slice (DONE — #421 in review)
+If you'd rather pick up one of these instead of the popup editor verification, flag it; the visual-contract token expertise from #424 is the natural fit for the row-state cascade scoping work.
+
+### Previously active → `v06-editor-visual-contract-consolidation` (DONE — #424 merged 21b86e5)
 
 ### Old anchor: `v05-default-context-menu-wiring` — editor + row-action slice (~1.5-2h)
 

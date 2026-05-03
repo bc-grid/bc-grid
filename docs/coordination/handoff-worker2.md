@@ -1,6 +1,6 @@
 # Worker2 Handoff (Codex — filters + aggregations + chrome consistency lane)
 
-**Last updated:** 2026-05-02 by Claude coordinator
+**Last updated:** 2026-05-03 by Claude coordinator
 **Worktree:** `~/work/bcg-worker2`
 **Branch convention:** `agent/worker2/<task-slug>`
 
@@ -32,16 +32,37 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#380** `BcGridApi.pasteTsv` + native paste-event listener + bulk edit overlay commit path (audit **P0-1 fully closed** — you also subsumed the editor-side binding worker3 was originally going to write)
 - ✅ **#384** `BcColumnFilter` discriminated union (per-type narrowing for text/number/number-range/date/date-range/set/boolean/custom)
 - ✅ **#393** v0.5 chrome+filter bundle-1 (active filter chip strip in toolbar + group selection algebra basic + filter operators blank/not-blank for every scalar type)
+- ✅ **#419** `v05-default-context-menu-wiring` chrome slice — `Column` submenu + top-level `Clear all filters` + in-memory `BcUserSettings` fallback for View toggles
+- ✅ **#423** `v06-saved-view-dto-recipe` — `BcSavedView` DTO + `createSavedView` / `applySavedViewLayout` / `migrateSavedViewLayout` helpers + consumer toolbar recipe at `docs/recipes/saved-views.md`
 
-v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. v0.5 PRs continue into the v0.5.0-alpha.2 candidate.
+v0.5.0-alpha.1 is **published** to GitHub Packages and bsncraft is consuming it. Coordinator cut alpha.3 with the full v0.5 surface.
 
-### Active now → `v06-saved-view-dto-recipe` (your planning doc §5, ~half day)
+### Active now → `v06-erp-filter-operators` (your planning doc §6, ~half day)
 
-**Chrome slice of `v05-default-context-menu-wiring` shipped as #419** (CI: smoke + smoke-perf green; e2e finishing — coordinator merging when complete). Top-level `Clear all filters` action; `Column` submenu (pin/unpin/hide/autosize/show-all/clear-filter) for any column-bound right-click; in-memory `BcUserSettings` fallback so View toggles work without consumer persistence; `View` submenu wired through that fallback.
+`#419`, `#423` both merged. **Filter registry + set-filter option provider + layout pass PR (b) + default context menu chrome wiring + saved-view DTO are complete.** Your v0.5 alpha.2 → GA work is structurally complete.
 
-**Filter registry shipped** (#410). **Set filter option provider shipped** (#413). **Layout pass PR (b) shipped** (#416). **Default context menu chrome wired** (#419 in review). Your v0.5 alpha.2 → GA work is structurally complete.
+The next active task is **§6 of `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md`** — ERP filter operators (audit P1-W2-4). The `blank` / `not blank` operators shipped in #393 for every scalar type, but the rest are missing — `not equals` for text/date, relative dates (today / this week / last N days / this month), fiscal-period buckets, current-user/team predicates, `does not contain`. Composes with the filter registry from #410 (operators land as registry entries with predicate + editor).
 
-The next active task is the v0.6 saved-view DTO from your planning doc §5 (audit P1-W2-3). Publish the canonical `BcSavedView` DTO + helpers (`createSavedView`, `applySavedViewLayout`, `migrateSavedViewLayout`) + a toolbar recipe doc. No runtime UI required — the DTO + helpers + recipe are the deliverable. Composes with the filter-registry + set-filter-option-provider work since saved views serialize through the registry.
+Implementation:
+
+1. **Add the missing scalar operators** to the filter registry (`packages/filters/src/`): `not-equals` for text and date types; `does-not-contain` for text. Reuse the existing predicate + editor patterns from `equals` / `contains`.
+
+2. **Add a relative-date operator family** keyed off the host's `Date.now()` injectable: `today`, `yesterday`, `this-week`, `last-week`, `last-N-days`, `this-month`, `last-month`. The registry's predicate signature is `(value, payload, ctx) => boolean`; the host can inject `ctx.now` for SSR / test stability.
+
+3. **Add a fiscal-period operator family** that closes over a consumer-supplied `BcFiscalCalendar` (Jan-start vs custom). Bsncraft uses calendar quarters today; document the boundary cleanly so other ERPs can ship a fiscal-year calendar.
+
+4. **Add an active-user / active-team operator** that closes over a consumer-supplied `ctx.user`. This is the gateway to "rows assigned to me" / "rows assigned to my team" filters that ERP toolbars universally want.
+
+**Branch:** `agent/worker2/v06-erp-filter-operators`. **Effort:** ~half day.
+
+### Optionally pick up the bsncraft RFCs queued for v0.6
+
+Two new bsncraft P0 items hit the queue 2026-05-03 (alpha.2 consumer pass surfaced them; both require an RFC):
+
+- **`v05-bsncraft-row-state-cascade-scoping`** — master `.bc-grid-row:hover` cascades into nested grid cells via descendant selectors. Likely fix: `@scope (.bc-grid) to (.bc-grid-detail-panel .bc-grid)` OR `:not(:has(.bc-grid-detail-panel:hover))` per row-state selector. Symmetric scoping needed for hover, focused, selected (and their permutations).
+- **`v05-bsncraft-pinned-scroll-shadow-overlay`** — pseudo-element gradient at pinned boundary paints over row hover bg. Likely fix: `mix-blend-mode: multiply` or negative z-index on the pseudo.
+
+If you'd rather pick up one of these instead of the filter operators, flag it; the chrome+CSS architecture knowledge from your layout pass PR (b) and default context menu wiring is the natural fit.
 
 Spec from your planning doc:
 

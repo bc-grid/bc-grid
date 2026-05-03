@@ -1,6 +1,6 @@
 # Worker1 Handoff (Claude — server grid stability lane)
 
-**Last updated:** 2026-05-02 by Claude coordinator
+**Last updated:** 2026-05-03 by Claude coordinator
 **Worktree:** `~/work/bcg-worker1`
 **Branch convention:** `agent/worker1/<task-slug>`
 
@@ -31,30 +31,30 @@ You implement code; the coordinator reviews and runs the slow gates.
 - ✅ **#383** v0.5 → v0.6 server-perf follow-ups planning doc — 11 v0.6 task proposals + 5 open questions for coordinator
 - ✅ **#389** `useServerTreeGrid` `rootChildCount` / `pageSize` / `cacheLimit` options pulled forward from v0.6 backlog
 - ✅ **#391** v0.5 server-perf bundle-1 (LRU eviction tuning + `prefetchAhead` knob + stale-flood test + per-row request-id supersedure)
+- ✅ **#420** `v05-default-context-menu-wiring` server slice — `Server` submenu (`Show pagination`, `Expand all groups`, `Collapse all groups`)
+- ✅ **#422** `v06-server-perf-block-cache-lru-tuning` — LRU eviction order unit tests + smoke-perf bench (your planning doc §5)
 
-### Active now → `v06-server-perf-block-cache-lru-tuning` (your planning doc §5, ~half day)
+### Active now → `v06-server-perf-prefetch-budget-tuning` (your planning doc §6, ~half day)
 
-**Server slice of `v05-default-context-menu-wiring` shipped as #420** (CI: smoke + smoke-perf green; e2e finishing — coordinator merging when complete). `Server` submenu wired into the contextual default menu: `Show pagination` toggle, `Expand all groups` / `Collapse all groups` (tree mode), `Prefetch ahead` submenu (0/1/2/3 blocks for infinite mode), `Server pagination` toggle (Server-paged vs Load all visible).
+`#420`, `#421`, `#422`, `#423`, `#424` all merged. **Mode-switch RFC + layout pass + default context menu + saved-view DTO + editor visual-contract consolidation are complete.** Coordinator cut alpha.3 with the full v0.5 surface.
 
-**Mode-switch RFC fully shipped** stages 1-3.3 + polymorphic `useServerGrid` hook. **Layout pass PR (a) shipped.** **Default context menu wired.** Your v0.5 alpha.2 → GA work is structurally complete.
-
-The next active task is the v0.6 server-perf train. Pull §5 forward from `docs/coordination/v05-audit-followups/worker1-server-perf.md`: block-cache LRU eviction tuning under realistic ERP scroll patterns. The current `maxBlocks: 50` default (bumped 20 → 50 in #391 server-perf bundle-1) was set empirically; your planning doc §5 flagged that we don't have a unit test or perf bench measuring eviction order under realistic ERP usage (5k+ rows with rapid up/down scrolling, varied page sizes, viewport-driven prefetch).
+The next v0.6 server-perf task is **§6 of `docs/coordination/v05-audit-followups/worker1-server-perf.md`**: prefetch-budget tuning. The current default `prefetchAhead: 1` (one block ahead) was a conservative initial value introduced in #391. The bench from #422 measured eviction-active workloads but didn't sweep prefetch budgets.
 
 Implementation:
 
-1. **Pin the eviction order with a unit test** in `packages/server-row-model/tests/serverRowModel.test.ts`. Simulate the rapid-scroll pattern (scroll 1000 rows down, then 1000 up, then 500 down, etc.); assert that the most-recently-used blocks survive eviction and the least-recently-used blocks are evicted in LRU order.
+1. **Add a prefetch budget sweep to the smoke-perf bench** at `apps/benchmarks/tests/perf.perf.pw.ts` — same 10k-row scroll, but sweep `prefetchAhead` over `0 / 1 / 2 / 3` and emit per-budget metrics (hit rate, fetches issued, queue depth, time-to-content-on-scroll).
 
-2. **Add a smoke-perf bench case** at `apps/benchmarks/tests/perf.perf.pw.ts` measuring scroll-with-eviction latency: 5k row infinite grid, 200px/frame trackpad scroll for 5s, measure paint cadence + GC pauses + cache hit rate. Bar: zero dropped frames at 60Hz.
+2. **Pin the prefetch-trigger contract with a unit test** in `packages/server-row-model/tests/serverRowModel.test.ts`. Today's contract: when the visible window approaches the bottom of the loaded range, prefetch the next `prefetchAhead` blocks. Test that the prefetch fires at the right scroll position and that block requests dedupe against in-flight fetches.
 
-3. **Tune the default if the bench surfaces a better number.** The current 50 was a conservative bump; ERP scroll patterns may want 75 or 100 if memory cost stays bounded (each block holds N rows; ~50KB per block at our typical row size).
+3. **Optionally add a `Prefetch budget` submenu to the default context menu's `Server` submenu** (deferred from #420 — needs `BcUserSettings.layout.prefetchAhead` field + serverGrid wiring). Mode-conditional: visible only when `getActiveRowModelMode() === "infinite"`. Submenu items: `0 (off)`, `1 (default)`, `2`, `3`. Mirrors the existing `Show pagination` toggle pattern from #420.
 
-**Branch:** `agent/worker1/v06-server-perf-block-cache-lru-tuning`. **Effort:** ~half day.
+**Branch:** `agent/worker1/v06-server-perf-prefetch-budget-tuning`. **Effort:** ~half day.
 
-### After LRU tuning → bsncraft migration co-pilot (consumer-paced) OR continue pulling v0.6 server-perf items
+### After prefetch tuning → continue down planning doc §7 / §8 / §9
 
 Your planning doc has 11 v0.6 task proposals; pick the next at the top of the unfinished list when you're ready.
 
-### Previously active → `v05-default-context-menu-wiring` server slice (DONE — #420 in review)
+### Previously active → `v06-server-perf-block-cache-lru-tuning` (DONE — #422 merged 976344c)
 
 ### Old anchor: `v05-default-context-menu-wiring` — server + pagination slice (~1-1.5h)
 
