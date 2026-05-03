@@ -1,5 +1,12 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useId, useLayoutEffect, useRef } from "react"
+import {
+  type ComponentType,
+  type InputHTMLAttributes,
+  type Ref,
+  useId,
+  useLayoutEffect,
+  useRef,
+} from "react"
 import { editorInputClassName, editorStateAttrs, visuallyHiddenStyle } from "./chrome"
 
 /**
@@ -16,17 +23,92 @@ import { editorInputClassName, editorStateAttrs, visuallyHiddenStyle } from "./c
  *   - No portal — single inline input.
  *
  * Native `<input type="text">` styled via the theme's CSS variables —
- * no library dep. Consumers wanting a richer popover wrap via
- * `column.cellEditor` with their own factory.
+ * no library dep. Consumers wanting shadcn-native styling pass an
+ * `inputComponent` to `createTextEditor({ inputComponent })` — the
+ * factory keeps the editor lifecycle (focus, ref, seed, ARIA) and
+ * delegates rendering to the consumer's primitive. See
+ * `docs/recipes/shadcn-editors.md`.
  *
  * Typed as `BcCellEditor<unknown, unknown>` so it assigns cleanly to any
  * column under `exactOptionalPropertyTypes`. The TextEditor component
  * internally narrows `props.initialValue` to a string at render.
  */
-export const textEditor: BcCellEditor<unknown, unknown> = {
-  Component: TextEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "text",
+
+/**
+ * Props the framework hands to a custom `inputComponent` — mirrors
+ * the native `<input>` props the built-in editor wires (ref +
+ * defaultValue + ARIA + edit-state attributes). Custom components
+ * MUST forward `ref` to a real input element so the framework's
+ * commit / focus / select-all paths reach the DOM input. shadcn's
+ * `<Input>` already forwards refs via `React.forwardRef`, so it
+ * drops in directly. Per `v06-shadcn-native-editors`.
+ */
+export interface TextEditorInputProps
+  extends Pick<
+    InputHTMLAttributes<HTMLInputElement>,
+    | "className"
+    | "type"
+    | "defaultValue"
+    | "disabled"
+    | "aria-invalid"
+    | "aria-label"
+    | "aria-describedby"
+    | "aria-required"
+    | "aria-readonly"
+    | "aria-disabled"
+  > {
+  ref: Ref<HTMLInputElement>
+  // Data attributes the framework's commit path reads to locate the
+  // active input. Custom inputComponents MUST stamp these on their
+  // root input element or commit-on-blur breaks.
+  "data-bc-grid-editor-input": "true"
+  "data-bc-grid-editor-kind": string
 }
+
+export interface TextEditorOptions {
+  /**
+   * Override the built-in `<input>` with a custom component (e.g.
+   * shadcn's `<Input>`). The component receives every prop the
+   * built-in input would have applied — ref forwarding + defaultValue
+   * + ARIA + edit-state data attributes. Lifecycle (focus, select-all
+   * on mount, value reading at commit) stays on the editor; the
+   * consumer just owns the visual primitive.
+   *
+   * Defaults to a native `<input>` styled via theme CSS variables.
+   */
+  inputComponent?: ComponentType<TextEditorInputProps>
+}
+
+/**
+ * Factory for the text editor. Returns a fresh `BcCellEditor` with
+ * the supplied options baked in. Default-export `textEditor` is
+ * `createTextEditor()` for the zero-config case; consumers wanting
+ * shadcn / custom rendering call the factory directly:
+ *
+ * ```tsx
+ * import { Input } from "@/components/ui/input"
+ * import { createTextEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnTextEditor = createTextEditor({ inputComponent: Input })
+ *
+ * const col: BcReactGridColumn<CustomerRow> = {
+ *   field: "name",
+ *   header: "Name",
+ *   cellEditor: shadcnTextEditor,
+ * }
+ * ```
+ *
+ * Per `v06-shadcn-native-editors` (bsncraft P2 #17).
+ */
+export function createTextEditor(options: TextEditorOptions = {}): BcCellEditor<unknown, unknown> {
+  const Component = createTextEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "text",
+  }
+}
+
+export const textEditor: BcCellEditor<unknown, unknown> = createTextEditor()
 
 /**
  * Compute the value that mounts on the input.
@@ -43,9 +125,32 @@ export function resolveTextEditorSeed(initialValue: unknown, seedKey: string | u
   return String(initialValue)
 }
 
-function TextEditor(props: BcCellEditorProps<unknown, string>) {
-  const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled, column } =
-    props
+function createTextEditorComponent(
+  options: TextEditorOptions,
+): (props: BcCellEditorProps<unknown, string>) => ReturnType<typeof TextEditorBody> {
+  const InputComponent = options.inputComponent
+  return function TextEditor(props) {
+    return <TextEditorBody {...props} InputComponent={InputComponent} />
+  }
+}
+
+function TextEditorBody(
+  props: BcCellEditorProps<unknown, string> & {
+    InputComponent: ComponentType<TextEditorInputProps> | undefined
+  },
+) {
+  const {
+    initialValue,
+    error,
+    focusRef,
+    seedKey,
+    pending,
+    required,
+    readOnly,
+    disabled,
+    column,
+    InputComponent,
+  } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
   // Stable id per-editor-instance so aria-describedby can target the
   // hidden error message text. `useId()` is stable across renders.
@@ -98,24 +203,34 @@ function TextEditor(props: BcCellEditorProps<unknown, string>) {
   // editor portal — the input is uncontrolled and the portal reads
   // `inputRef.current.value` at commit time. Document-level click-outside
   // commits via the portal's pointerdown listener.
+  //
+  // Custom inputComponent: the consumer's component receives the
+  // ref + same defaultValue/disabled/ARIA props, plus the
+  // load-bearing data-bc-grid-editor-input + data-bc-grid-editor-kind
+  // attributes that the framework's commit path uses to locate the
+  // input. The consumer's component MUST forward `ref` to a real
+  // input element (shadcn's Input does via React.forwardRef).
+  // editorStateAttrs is applied AFTER so it overrides any
+  // edit-state attrs the consumer's primitive may set.
+  const inputProps: TextEditorInputProps = {
+    ref: inputRef,
+    className: editorInputClassName,
+    type: "text",
+    defaultValue: seeded,
+    disabled: pending,
+    "aria-invalid": error ? true : undefined,
+    "aria-label": accessibleName || undefined,
+    "aria-describedby": error ? errorId : undefined,
+    "aria-required": required ? true : undefined,
+    "aria-readonly": readOnly ? true : undefined,
+    "aria-disabled": disabled || pending ? true : undefined,
+    "data-bc-grid-editor-input": "true",
+    "data-bc-grid-editor-kind": "text",
+    ...editorStateAttrs({ error, pending }),
+  }
   return (
     <>
-      <input
-        ref={inputRef}
-        className={editorInputClassName}
-        type="text"
-        defaultValue={seeded}
-        disabled={pending}
-        aria-invalid={error ? true : undefined}
-        aria-label={accessibleName || undefined}
-        aria-describedby={error ? errorId : undefined}
-        aria-required={required ? true : undefined}
-        aria-readonly={readOnly ? true : undefined}
-        aria-disabled={disabled || pending ? true : undefined}
-        data-bc-grid-editor-input="true"
-        data-bc-grid-editor-kind="text"
-        {...editorStateAttrs({ error, pending })}
-      />
+      {InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />}
       {error ? (
         <span id={errorId} style={visuallyHiddenStyle}>
           {error}
