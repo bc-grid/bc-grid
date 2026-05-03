@@ -1,3 +1,4 @@
+import type { BcServerGridApi, ServerRowModelMode } from "@bc-grid/core"
 import { filterHasColumn } from "./filter"
 import type {
   BcContextMenuBuiltinItem,
@@ -9,7 +10,7 @@ import type {
   BcContextMenuToggleItem,
 } from "./types"
 
-export const DEFAULT_CONTEXT_MENU_ITEMS: readonly BcContextMenuBuiltinItem[] = [
+export const DEFAULT_CONTEXT_MENU_ITEMS: readonly BcContextMenuItem<unknown>[] = [
   // Clipboard — useful at every right-click point. `copy` adapts: it
   // uses the active range when one exists, otherwise the right-clicked
   // cell. `copy-row` covers the common bsncraft case ("copy this whole
@@ -23,7 +24,84 @@ export const DEFAULT_CONTEXT_MENU_ITEMS: readonly BcContextMenuBuiltinItem[] = [
   // affordance when there's nothing to clear.
   "clear-selection",
   "clear-range",
+  // Server submenu — only renders for `<BcServerGrid>` mounts (probed
+  // at runtime via `getActiveRowModelMode`). Items inside gate further
+  // on the resolved active mode so each mode surfaces only the actions
+  // that make sense for it.
+  {
+    kind: "submenu",
+    id: "server",
+    label: "Server",
+    items: (ctx) => buildServerSubmenuItems(ctx),
+  },
 ]
+
+function buildServerSubmenuItems<TRow>(
+  ctx: BcContextMenuContext<TRow>,
+): readonly BcContextMenuItem<TRow>[] {
+  const serverApi = asServerApi(ctx.api)
+  if (!serverApi) return []
+  const mode = serverApi.getActiveRowModelMode()
+  const items: BcContextMenuItem<TRow>[] = []
+
+  if (mode === "paged") {
+    items.push({
+      kind: "toggle",
+      id: "server-show-pagination",
+      label: "Show pagination",
+      checked: (c) => c.api.getVisibleSetting("pagination") !== false,
+      onToggle: (c, next) => c.api.setVisibleSetting("pagination", next),
+    })
+  }
+
+  if (mode === "tree") {
+    if (items.length > 0) items.push("separator")
+    items.push(
+      {
+        kind: "item",
+        id: "server-expand-all",
+        label: "Expand all groups",
+        onSelect: (c) => c.api.expandAll(),
+      },
+      {
+        kind: "item",
+        id: "server-collapse-all",
+        label: "Collapse all groups",
+        onSelect: (c) => c.api.collapseAll(),
+      },
+    )
+  }
+
+  return items
+}
+
+function asServerApi<TRow>(api: BcContextMenuContext<TRow>["api"]): BcServerGridApi<TRow> | null {
+  // Runtime probe: BcServerGridApi extends BcGridApi with
+  // `getActiveRowModelMode`. The default context menu doesn't know
+  // ahead of time whether the host mounted `<BcGrid>` or
+  // `<BcServerGrid>`, so we check at item-build time.
+  if (typeof (api as Partial<BcServerGridApi<TRow>>).getActiveRowModelMode === "function") {
+    return api as BcServerGridApi<TRow>
+  }
+  return null
+}
+
+// Re-exported for unit testability — lets tests assert the returned
+// items shape against a stub api without spinning up a full grid.
+export function _resolveServerSubmenuItems<TRow>(
+  ctx: BcContextMenuContext<TRow>,
+): readonly BcContextMenuItem<TRow>[] {
+  return buildServerSubmenuItems(ctx)
+}
+
+// Re-exported for unit testability — lets tests assert mode resolution
+// independently of the React render path.
+export function _resolveServerActiveMode<TRow>(
+  ctx: BcContextMenuContext<TRow>,
+): ServerRowModelMode | null {
+  const serverApi = asServerApi(ctx.api)
+  return serverApi ? serverApi.getActiveRowModelMode() : null
+}
 
 const builtInLabels: Partial<Record<BcContextMenuBuiltinItem, string>> = {
   copy: "Copy",
@@ -47,8 +125,15 @@ export function resolveContextMenuItems<TRow>(
   items: BcContextMenuItems<TRow> | undefined,
   context: BcContextMenuContext<TRow>,
 ): readonly BcContextMenuItem<TRow>[] {
+  // DEFAULT_CONTEXT_MENU_ITEMS is typed against `unknown` because it's a
+  // module-scope constant that has to outlive any single grid's TRow.
+  // The cast here is safe: the items inside use `(c: BcContextMenuContext<TRow>)`
+  // shape only via the submenu's `items` builder, which receives the
+  // typed context at call time.
   const resolved =
-    typeof items === "function" ? items(context) : (items ?? DEFAULT_CONTEXT_MENU_ITEMS)
+    typeof items === "function"
+      ? items(context)
+      : (items ?? (DEFAULT_CONTEXT_MENU_ITEMS as readonly BcContextMenuItem<TRow>[]))
   return resolved.filter(isContextMenuItem)
 }
 

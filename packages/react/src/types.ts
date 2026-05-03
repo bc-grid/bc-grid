@@ -102,13 +102,19 @@ export interface BcUserSettings {
     flashOnEdit?: boolean
     checkboxSelection?: boolean
     /**
+     * Pagination chrome visibility. Mirrors the `<BcGrid showPagination>`
+     * prop shape: when `false`, the pager chrome is hidden but page-window
+     * slicing / `aria-rowcount` / `onPaginationChange` still fire.
+     * `<BcGrid>` resolves the effective value as `props.showPagination ??
+     * userSettings?.visible?.pagination ?? true`. Surfaced for the
+     * `DEFAULT_CONTEXT_MENU_ITEMS` Server → Show pagination toggle.
+     */
+    pagination?: boolean
+    /**
      * Editor toggles wired through the chrome context menu's
      * `Editor` submenu (worker3 v05-default-context-menu-wiring).
      * Each field overrides the matching `BcGridProps` default when
-     * set; consumer-supplied props take precedence (the prop is
-     * "locked" — the menu toggle becomes disabled). The grid reads
-     * `userVisibleSettings?.editingEnabled ?? props.editingEnabled
-     * !== false`, so persisted user prefs survive remount.
+     * set; consumer-supplied props take precedence.
      */
     editingEnabled?: boolean
     showValidationMessages?: boolean
