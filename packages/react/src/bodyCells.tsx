@@ -75,6 +75,27 @@ interface RenderBodyCellParams<TRow> {
    * Per `editing-rfc §Server commit + optimistic UI` (concurrency).
    */
   getRowEditState?: (rowId: RowId) => { pending: boolean; error?: string } | null
+  /**
+   * In-cell editor mount slot (audit `in-cell-editor-mode-rfc.md` §3).
+   * `<BcGrid>` builds this once per render via `useCallback`,
+   * capturing the editing controller + supporting props (validation
+   * messages toggle, blur action, escDiscardsRow, scroll-out action,
+   * virtualizer + index lookups). Returns the `<EditorMount
+   * mountStyle="in-cell">` JSX when the cell at `(rowId, columnId)`
+   * is the active edit target AND its editor is non-popup; returns
+   * `null` otherwise (popup editors are mounted by `<EditorPortal>`
+   * in the overlay sibling, and read-only cells return null trivially).
+   *
+   * bodyCells calls this when `editingCell` matches the cell — the
+   * factory's null-return branch is what falls the cell back to its
+   * normal renderer output. Standalone bodyCell consumers that don't
+   * supply the slot get the v0.5 read-only behaviour automatically.
+   */
+  renderInCellEditor?: (
+    cell: BcCellPosition,
+    column: ResolvedColumn<TRow>,
+    rowEntry: DataRowEntry<TRow>,
+  ) => ReactNode
 }
 
 interface RenderGroupRowCellParams<TRow> {
@@ -115,6 +136,7 @@ export function renderBodyCell<TRow>({
   getOverlayValue,
   getCellEditEntry,
   getRowEditState,
+  renderInCellEditor,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
 
@@ -247,11 +269,21 @@ export function renderBodyCell<TRow>({
           onCellFocus?.(position)
         }}
       >
-        {column.source.cellRenderer
-          ? column.source.cellRenderer(params)
-          : searchText
-            ? highlightSearchText(formattedValue, searchText)
-            : formattedValue}
+        {(() => {
+          // In-cell editor takes over the cell content when the cell is
+          // the active edit target AND the active editor is non-popup
+          // (popup editors mount via <EditorPortal> in the overlay
+          // sibling — those cells keep their read-only renderer output
+          // visible underneath the popup). Per
+          // `in-cell-editor-mode-rfc.md` §3.
+          const inCellEditor = isEditingThisCell
+            ? renderInCellEditor?.(position, column, entry)
+            : null
+          if (inCellEditor) return inCellEditor
+          if (column.source.cellRenderer) return column.source.cellRenderer(params)
+          if (searchText) return highlightSearchText(formattedValue, searchText)
+          return formattedValue
+        })()}
         {errorId ? (
           <span id={errorId} style={visuallyHiddenCellErrorStyle}>
             {editError}

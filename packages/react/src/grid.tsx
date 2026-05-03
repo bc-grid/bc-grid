@@ -54,6 +54,7 @@ import {
 import { nextActiveCellAfterEdit } from "./editingStateMachine"
 import { getEditorActivationIntent } from "./editorKeyboard"
 import {
+  EditorMount,
   EditorPortal,
   defaultTextEditor,
   findActiveEditorInput,
@@ -77,6 +78,7 @@ import {
   DEFAULT_COL_WIDTH,
   type DataRowEntry,
   type GroupRowEntry,
+  type ResolvedColumn,
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
@@ -265,6 +267,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.editorActivation ?? "double-click"
   const editorBlurAction: "commit" | "reject" | "ignore" = props.editorBlurAction ?? "commit"
   const escDiscardsRow = props.escDiscardsRow === true
+  const editScrollOutAction: "commit" | "cancel" | "preserve" =
+    props.editScrollOutAction ?? "commit"
 
   // The spread preserves all defaultMessages required fields; cast back
   // to the full BcGridMessages shape since `Partial<>` overrides widen
@@ -1669,11 +1673,22 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // by the cumulative panel height. AG Grid uses the DOM-rect approach
   // for the same reason. Fallback to the virtualizer math when the
   // cell isn't yet in the DOM (rare first-paint edge case).
+  //
+  // Short-circuits to `null` for in-cell editors (audit
+  // `in-cell-editor-mode-rfc.md` §3): the popup overlay is not
+  // mounted in that case, so the rect is unused and the DOM lookup +
+  // invalidation deps would be wasted work. Net effect: text /
+  // number / checkbox / time editors stop calling
+  // `getBoundingClientRect` on every state change; only popup-mode
+  // select / multi-select / autocomplete editing pays that cost.
   // biome-ignore lint/correctness/useExhaustiveDependencies: expansionState is an invalidation-only dep — toggling detail panels above the editing row shifts cell DOM position without changing any value-deps
   const editorCellRect = useMemo(() => {
     if (editController.editState.mode === "navigation") return null
     if (editController.editState.mode === "unmounting") return null
     const cell = editController.editState.cell
+    const activeColumn = resolvedColumns.find((c) => c.columnId === cell.columnId)
+    const activeEditor = activeColumn?.source.cellEditor ?? defaultTextEditor
+    if (activeEditor?.popup !== true) return null
     const rootEl = rootRef.current
     const cellEl = document.getElementById(cellDomId(domBaseId, cell.rowId, cell.columnId))
     if (cellEl && rootEl) {
@@ -1712,6 +1727,57 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     // the cell's DOM y-position without changing any of the deps above.
     expansionState,
   ])
+
+  // In-cell editor mount slot for `renderBodyCell` (audit
+  // `in-cell-editor-mode-rfc.md` §3). Returns the `<EditorMount
+  // mountStyle="in-cell">` JSX when the cell is the active edit
+  // target AND its editor is non-popup. Popup editors are mounted by
+  // `<EditorPortal>` in the overlay sibling — this factory returns
+  // null for them so bodyCells falls back to the cell's normal
+  // renderer output (which then shows under the popup).
+  const renderInCellEditor = useCallback(
+    (
+      cellPos: BcCellPosition,
+      cellColumnArg: ResolvedColumn<TRow>,
+      rowEntryArg: DataRowEntry<TRow>,
+    ): ReactNode => {
+      const editorSpec = (cellColumnArg.source.cellEditor ?? defaultTextEditor) as
+        | BcCellEditor<TRow>
+        | undefined
+      if (!editorSpec || editorSpec.popup === true) return null
+      const rowIndex = rowIndexById.get(cellPos.rowId)
+      const colIndex = columnIndexById.get(cellPos.columnId)
+      return (
+        <EditorMount
+          controller={editController}
+          cell={cellPos}
+          column={cellColumnArg}
+          rowEntry={rowEntryArg}
+          editor={editorSpec}
+          mountStyle="in-cell"
+          showValidationMessages={showValidationMessages}
+          showKeyboardHints={showEditorKeyboardHints}
+          blurAction={editorBlurAction}
+          escDiscardsRow={escDiscardsRow}
+          editScrollOutAction={editScrollOutAction}
+          {...(virtualizer ? { virtualizer } : {})}
+          {...(typeof rowIndex === "number" ? { rowIndex } : {})}
+          {...(typeof colIndex === "number" ? { colIndex } : {})}
+        />
+      )
+    },
+    [
+      editController,
+      rowIndexById,
+      columnIndexById,
+      virtualizer,
+      showValidationMessages,
+      showEditorKeyboardHints,
+      editorBlurAction,
+      escDiscardsRow,
+      editScrollOutAction,
+    ],
+  )
 
   const scrollToRow = useCallback(
     (targetRowId: RowId, align: "start" | "center" | "end" | "nearest" = "nearest") => {
@@ -3048,6 +3114,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             getOverlayValue: editController.getOverlayValue,
                             getCellEditEntry: editController.getCellEditEntry,
                             getRowEditState: editController.getRowEditState,
+                            renderInCellEditor,
                           }),
                         )}
                       </div>
@@ -3076,6 +3143,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         getOverlayValue: editController.getOverlayValue,
                         getCellEditEntry: editController.getCellEditEntry,
                         getRowEditState: editController.getRowEditState,
+                        renderInCellEditor,
                       }),
                     )}
                     {virtualRightPinnedCols.length > 0 ? (
@@ -3114,6 +3182,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                             getOverlayValue: editController.getOverlayValue,
                             getCellEditEntry: editController.getCellEditEntry,
                             getRowEditState: editController.getRowEditState,
+                            renderInCellEditor,
                           }),
                         )}
                       </div>

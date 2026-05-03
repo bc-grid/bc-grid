@@ -23,7 +23,14 @@ interface EditorPortalProps<TRow> {
   rowEntries: readonly DataRowEntry<TRow>[]
   /** Resolved columns (for resolving the column from a columnId). */
   resolvedColumns: readonly ResolvedColumn<TRow>[]
-  /** Pixel position of the cell being edited. */
+  /**
+   * Pixel position of the cell being edited. `null` when the active
+   * editor is in-cell (audit `in-cell-editor-mode-rfc.md` §3) — the
+   * portal only mounts popup-mode editors, which is when this rect is
+   * load-bearing. `<BcGrid>`'s `editorCellRect` `useMemo` returns
+   * `null` for in-cell editors so the DOM lookup + invalidation deps
+   * only fire when a popup editor is active.
+   */
   cellRect: { top: number; left: number; width: number; height: number } | null
   /**
    * Virtualizer + index lookup for in-flight retention while editing.
@@ -59,11 +66,13 @@ interface EditorPortalProps<TRow> {
 }
 
 /**
- * Mounts the active editor at the cell position determined by the
- * controller's state. Handles:
- *   - Real DOM focus shift to `focusRef`
- *   - Tab / Shift+Tab / Enter / Shift+Enter / Escape interception
- *   - Lifecycle dispatch (`mounted` / `unmounted`)
+ * Mounts a popup-mode editor at the cell position determined by the
+ * controller's state. After audit `in-cell-editor-mode-rfc.md` v0.6,
+ * this component only fires when the active editor sets
+ * `popup: true`; in-cell editors mount inline inside the cell DOM via
+ * `bodyCells.tsx`'s `renderInCellEditor` slot. Both paths share the
+ * same `<EditorMount>` component — the only difference is the wrapper
+ * style (positioned overlay vs. cell-content-fill).
  *
  * Defers actual input rendering to `column.cellEditor.Component` (or
  * `defaultEditor.Component` when the column doesn't supply one).
@@ -111,6 +120,15 @@ export function EditorPortal<TRow>({
   const editorSpec = (column.source.cellEditor ?? defaultEditor) as BcCellEditor<TRow> | undefined
   if (!editorSpec) return null
 
+  // Per `in-cell-editor-mode-rfc.md` §3: only popup-mode editors mount
+  // through this overlay path. In-cell editors (`popup !== true`,
+  // default) are handled by `bodyCells.tsx`'s `renderInCellEditor` slot
+  // — the EditorMount renders inside the cell DOM with no positioning
+  // wrapper. Returning `null` here when the active editor is in-cell
+  // is what makes the portal cost (DOM lookup, useMemo invalidation
+  // deps) entirely skipped for the common case.
+  if (editorSpec.popup !== true) return null
+
   // Resolve indices for in-flight retention. If the lookup maps weren't
   // supplied, retention is a no-op — the editor still works for the
   // common case where the row + column are inside the viewport, but
@@ -126,10 +144,12 @@ export function EditorPortal<TRow>({
       column={column}
       rowEntry={rowEntry}
       editor={editorSpec}
+      mountStyle="popup"
       showValidationMessages={showValidationMessages}
       showKeyboardHints={showKeyboardHints}
       blurAction={blurAction}
       escDiscardsRow={escDiscardsRow}
+      editScrollOutAction="commit"
       {...(virtualizer ? { virtualizer } : {})}
       {...(typeof rowIndex === "number" ? { rowIndex } : {})}
       {...(typeof colIndex === "number" ? { colIndex } : {})}
@@ -137,13 +157,33 @@ export function EditorPortal<TRow>({
   )
 }
 
-interface EditorMountProps<TRow> {
+export interface EditorMountProps<TRow> {
   controller: EditingController<TRow>
   cell: BcCellPosition
-  cellRect: { top: number; left: number; width: number; height: number }
+  /**
+   * Pixel position of the cell. Required for popup mode (drives the
+   * absolute-positioning wrapper); ignored for in-cell mode (the cell
+   * already positions itself).
+   */
+  cellRect?: { top: number; left: number; width: number; height: number } | null
   column: ResolvedColumn<TRow>
   rowEntry: DataRowEntry<TRow>
   editor: BcCellEditor<TRow>
+  /**
+   * `"in-cell"` (default for non-popup editors): renders the editor
+   * inline inside the cell DOM with no positioning wrapper.
+   * `"popup"` (only for editors with `popup: true`): renders the
+   * editor inside the overlay sibling, positioned via `cellRect`.
+   * Per `in-cell-editor-mode-rfc.md` §3.
+   */
+  mountStyle: "in-cell" | "popup"
+  /**
+   * Virtualizer retention is acquired in `"popup"` mode only —
+   * popup editors live outside the row's DOM and need the row+col
+   * indices held alive across scroll. `"in-cell"` editors deliberately
+   * skip retention so the cell DOM unmount triggers the configured
+   * `editScrollOutAction` (audit RFC §5).
+   */
   virtualizer?: Virtualizer
   rowIndex?: number
   colIndex?: number
@@ -151,15 +191,22 @@ interface EditorMountProps<TRow> {
   showKeyboardHints: boolean
   blurAction: "commit" | "reject" | "ignore"
   escDiscardsRow: boolean
+  /**
+   * What happens to an in-flight in-cell edit when the cell unmounts
+   * under it (typically from virtualizer scroll-out). Per RFC §5.
+   * Ignored in popup mode (popup editors live outside the row's DOM).
+   */
+  editScrollOutAction: "commit" | "cancel" | "preserve"
 }
 
-function EditorMount<TRow>({
+export function EditorMount<TRow>({
   controller,
   cell,
   cellRect,
   column,
   rowEntry,
   editor,
+  mountStyle,
   virtualizer,
   rowIndex,
   colIndex,
@@ -167,6 +214,7 @@ function EditorMount<TRow>({
   showKeyboardHints,
   blurAction,
   escDiscardsRow,
+  editScrollOutAction,
 }: EditorMountProps<TRow>) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const focusRef = useRef<HTMLElement | null>(null)
@@ -178,6 +226,7 @@ function EditorMount<TRow>({
     dispatchMounted,
     dispatchUnmounted,
     getOverlayValue,
+    getEditMode,
   } = controller
 
   // editState is narrowed to Mounting / Editing / Validating here.
@@ -205,29 +254,107 @@ function EditorMount<TRow>({
         ? (rowEntry.row as Record<string, unknown>)[column.source.field]
         : undefined
 
+  // Stable ref so the scroll-out cleanup branch picks up the latest
+  // editor's tag-dispatch / getValue contract instead of the closure
+  // captured at mount.
+  const editorRef = useRef(editor)
+  editorRef.current = editor
+  // Stable ref for handleCommit / cancel so the cleanup-time
+  // scroll-out path runs the latest closures, not the mount-time
+  // ones (the controller's commit closure may have re-bound on each
+  // render due to rowEntry / column changes).
+  const scrollOutCommitRef = useRef<
+    | ((opts: {
+        rowId: BcCellPosition["rowId"]
+        row: TRow
+        columnId: BcCellPosition["columnId"]
+        column: typeof column.source
+        value: unknown
+        previousValue: unknown
+      }) => void)
+    | null
+  >(null)
+  const scrollOutCancelRef = useRef(cancel)
+  scrollOutCancelRef.current = cancel
+
   // Move DOM focus to the editor's `focusRef` after mount, then dispatch
   // `mounted` to advance the state machine to Editing. Cleanup releases
   // the focus back to the grid root via `unmounted`.
   //
-  // Per `editing-rfc §Virtualizer retention contract`, also acquire
-  // row + column retention so scroll / sort / filter during edit doesn't
-  // unmount the editor's DOM. The retained row + col are held until
-  // either handle is released.
+  // Retention contract per `editing-rfc §Virtualizer retention contract`
+  // is acquired in `"popup"` mount style ONLY. In-cell editors
+  // deliberately skip retention so the cell's natural unmount on
+  // virtualizer scroll-out triggers the configured
+  // `editScrollOutAction` (audit `in-cell-editor-mode-rfc.md` §5).
   useLayoutEffect(() => {
     focusRef.current?.focus({ preventScroll: true })
     dispatchMounted()
     const handles: InFlightHandle[] = []
-    if (virtualizer && typeof rowIndex === "number" && rowIndex >= 0) {
+    if (mountStyle === "popup" && virtualizer && typeof rowIndex === "number" && rowIndex >= 0) {
       handles.push(virtualizer.beginInFlightRow(rowIndex))
     }
-    if (virtualizer && typeof colIndex === "number" && colIndex >= 0) {
+    if (mountStyle === "popup" && virtualizer && typeof colIndex === "number" && colIndex >= 0) {
       handles.push(virtualizer.beginInFlightCol(colIndex))
     }
     return () => {
       for (const handle of handles) handle.release()
+
+      // Scroll-out detection (in-cell mode only). Per RFC §5: if the
+      // controller is still in an editing-active mode at cleanup
+      // time, the cell unmounted under an in-flight edit (the
+      // virtualizer dropped the row from its render window). For an
+      // intentional unmount (commit / cancel / discardRow), the
+      // controller will already be in `committing` / `cancelling`
+      // / `unmounting` so this branch is skipped. `getEditMode()`
+      // reads the live mode from the controller's ref — captured
+      // closures here would see stale state.
+      if (mountStyle === "in-cell") {
+        const liveMode = getEditMode()
+        const inFlight =
+          liveMode === "editing" || liveMode === "mounting" || liveMode === "validating"
+        if (inFlight) {
+          if (editScrollOutAction === "cancel") {
+            scrollOutCancelRef.current?.()
+          } else {
+            // Default + "preserve" both fall through to commit for
+            // v0.6.0; "preserve" (auto-promote-to-popup-mid-edit)
+            // is reserved for v0.7 per RFC.
+            const commitFn = scrollOutCommitRef.current
+            if (commitFn) {
+              const value = readEditorInputValue(
+                focusRef.current,
+                editorRef.current as BcCellEditor<unknown>,
+              )
+              commitFn({
+                rowId: cell.rowId,
+                row: rowEntry.row,
+                columnId: cell.columnId,
+                column: column.source,
+                value,
+                previousValue: initialValue,
+              })
+            }
+          }
+        }
+      }
+
       dispatchUnmounted()
     }
-  }, [dispatchMounted, dispatchUnmounted, virtualizer, rowIndex, colIndex])
+  }, [
+    dispatchMounted,
+    dispatchUnmounted,
+    virtualizer,
+    rowIndex,
+    colIndex,
+    mountStyle,
+    editScrollOutAction,
+    getEditMode,
+    cell.rowId,
+    cell.columnId,
+    rowEntry.row,
+    column.source,
+    initialValue,
+  ])
 
   const handleCommit = (
     newValue: unknown,
@@ -246,6 +373,14 @@ function EditorMount<TRow>({
       },
       moveOnSettle,
     )
+  }
+  // Bind the scroll-out commit ref to the live commit closure so the
+  // useLayoutEffect cleanup can fire `commit({...source: "scroll-out"})`
+  // without re-binding the cleanup on every render. `"stay"` move
+  // semantics — the user scrolled away; we shouldn't tug the active
+  // cell to a new position they didn't ask for.
+  scrollOutCommitRef.current = (opts) => {
+    void commit({ ...opts, source: "scroll-out" }, "stay")
   }
   // Stable ref to handleCommit so the document-level pointerdown
   // listener can invoke the latest closure without re-binding the
@@ -364,14 +499,28 @@ function EditorMount<TRow>({
   const requiredFlag = resolveColumnRequired(column.source.required, rowEntry.row)
   const disabledFlag = pending
 
+  // Wrapper style branches on mount style. Popup mode keeps the
+  // absolute-positioning overlay anchored to `cellRect` (rendered as a
+  // sibling to the body row container in `grid.tsx`). In-cell mode
+  // drops the positioning entirely — the cell is the wrapper's
+  // containing block, and the cell already owns its position via the
+  // virtualizer's row + col offsets. The validation popover (a child
+  // of this wrapper) anchors against the wrapper's own positioning,
+  // so in-cell mode sets `position: relative` to keep the popover's
+  // `position: absolute` math anchored to the cell box. Per
+  // `in-cell-editor-mode-rfc.md` §3.
+  const wrapperStyle: CSSProperties =
+    mountStyle === "popup" && cellRect ? popupWrapperStyle(cellRect) : inCellWrapperStyle()
+
   return (
     <div
       ref={wrapperRef}
-      className="bc-grid-editor-portal"
+      className={mountStyle === "popup" ? "bc-grid-editor-portal" : "bc-grid-editor-in-cell"}
       data-bc-grid-editor-root="true"
+      data-bc-grid-editor-mount={mountStyle}
       data-bc-grid-editor-state={editorStateAttribute({ error, pending })}
       onKeyDown={handleKeyDown}
-      style={editorWrapperStyle(cellRect)}
+      style={wrapperStyle}
     >
       <Component
         initialValue={initialValue}
@@ -461,7 +610,7 @@ export function EditorValidationPopover({ error }: { error?: string | undefined 
   )
 }
 
-function editorWrapperStyle(rect: {
+function popupWrapperStyle(rect: {
   top: number
   left: number
   width: number
@@ -474,6 +623,22 @@ function editorWrapperStyle(rect: {
     width: rect.width,
     height: rect.height,
     zIndex: 5,
+  }
+}
+
+/**
+ * Wrapper style for in-cell editor mounts. The cell itself is
+ * absolutely positioned by the virtualizer; the in-cell wrapper just
+ * needs to fill its containing block and provide a positioning
+ * context for the validation popover (which is `position: absolute`
+ * anchored to the wrapper). No coordinates needed — the cell already
+ * owns its on-screen position. Per `in-cell-editor-mode-rfc.md` §3.
+ */
+function inCellWrapperStyle(): CSSProperties {
+  return {
+    position: "relative",
+    width: "100%",
+    height: "100%",
   }
 }
 

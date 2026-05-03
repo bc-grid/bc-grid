@@ -791,6 +791,30 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * Audit P1-W3-3 follow-up to #381.
    */
   escDiscardsRow?: boolean
+
+  /**
+   * What happens to an in-flight in-cell edit when the editing row
+   * scrolls out of the virtualizer's render window. Only applies to
+   * editors mounted in-cell (`editor.popup !== true`). Popup editors
+   * are unaffected by row scroll-out — their DOM lives in the editor-
+   * portal sibling and is held alive by the virtualizer's retention
+   * contract regardless.
+   *
+   *   - `"commit"` (default): read the editor's current value, commit
+   *     it. Matches AG Grid's behaviour and the user's mental model
+   *     ("I scrolled away, my edit is done"). Validation runs as on
+   *     any other commit; rejection is announced via the assertive
+   *     live region.
+   *   - `"cancel"`: discard the pending value, return the cell to its
+   *     previous overlay or data value. Useful for grids where partial
+   *     edits are dangerous (financial entry, etc.).
+   *   - `"preserve"`: deferred to v0.7. Currently behaves as
+   *     `"commit"`; the RFC reserves the name for an auto-promote-
+   *     to-popup-mid-edit follow-up.
+   *
+   * Per `in-cell-editor-mode-rfc.md` §5.
+   */
+  editScrollOutAction?: "commit" | "cancel" | "preserve"
 }
 
 export interface BcEditGridProps<TRow> extends BcGridProps<TRow> {
@@ -1019,6 +1043,22 @@ export interface BcCellEditor<TRow, TValue = unknown> {
    * fallback. Pure — no side effects expected.
    */
   getValue?: (focusEl: HTMLElement | null) => unknown
+  /**
+   * Mount the editor outside the cell's DOM, anchored by absolute
+   * coordinates from the editor portal. Default `false` — the editor
+   * renders inline inside the cell box (audit `in-cell-editor-mode-rfc`
+   * §4). Set `true` for editors whose UI overflows the cell —
+   * dropdowns, chip lists, async option panels.
+   *
+   * Hybrid editors that need an overflowing popover but a fitting
+   * trigger (date / datetime pickers) should keep `popup: false` and
+   * render the overlay via a Radix `Popover` anchored to the trigger;
+   * stamp the overlay content with `data-bc-grid-editor-portal` so the
+   * framework's click-outside handler treats it as in-the-editor.
+   *
+   * Per `in-cell-editor-mode-rfc.md` §6.
+   */
+  popup?: boolean
 }
 
 export interface BcCellEditorPrepareParams<TRow> {
@@ -1143,7 +1183,15 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
   column: BcReactGridColumn<TRow, TValue>
   previousValue: TValue
   nextValue: TValue
-  source: "keyboard" | "pointer" | "api" | "paste"
+  /**
+   * How the commit was triggered. `"scroll-out"` (added in v0.6 with
+   * the in-cell editor mode RFC) fires when the editing row scrolls
+   * out of the virtualizer's render window AND the grid's
+   * `editScrollOutAction === "commit"` (the default for in-cell
+   * editors). Consumer telemetry can split scroll-out commits from
+   * deliberate keyboard / pointer commits via this discriminator.
+   */
+  source: "keyboard" | "pointer" | "api" | "paste" | "scroll-out"
 }
 
 /**
