@@ -2206,6 +2206,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       setVisibleSetting(key, value) {
         setVisibleUserSetting(key as keyof NonNullable<BcUserSettings["visible"]>, value)
       },
+      getPrefetchAhead() {
+        return userSettingsRef.current?.prefetchAhead
+      },
+      setPrefetchAhead(value) {
+        const clamped = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
+        updateUserSettings((prev) => ({ ...prev, prefetchAhead: clamped }))
+      },
       refresh() {
         requestRender()
       },
@@ -2239,6 +2246,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setRangeSelectionState,
     setSortState,
     setVisibleUserSetting,
+    updateUserSettings,
     virtualizer,
   ])
 

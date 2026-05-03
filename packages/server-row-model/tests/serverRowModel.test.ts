@@ -2350,3 +2350,232 @@ describe("infinite block-cache LRU eviction under rapid-scroll patterns (worker1
     expect(loadCalls.length).toBe(50)
   })
 })
+
+describe("infinite prefetch trigger contract (worker1 audit P1 §6)", () => {
+  // The React layer's `handleVisibleRowRangeChange` (serverGrid.tsx:1455)
+  // implements: ensureBlock(start), ensureBlock(end), then prefetch the
+  // next `prefetchAhead` blocks at `endIndex + blockSize * i`. These
+  // tests pin the contract at the model layer — the prefetch budget
+  // translates directly to N additional `loadInfiniteBlock` calls past
+  // the visible window's tail, dedupe holds for in-flight prefetch
+  // requests, cached blocks return without a fresh fetch, and a viewKey
+  // change isolates the new view's fetches from the old view's pending
+  // ones.
+
+  const prefetchBlockSize = 100
+  const prefetchTotalRows = 10_000
+
+  // Mirror the React layer's ensureBlock(rowIndex) → loadInfiniteBlock.
+  function ensureBlockAt(
+    model: ReturnType<typeof createServerRowModel<Row>>,
+    rowIndex: number,
+    loadBlock: (q: { blockStart: number; blockSize: number }) => Promise<ServerBlockResult<Row>>,
+    viewState: ServerViewState,
+    viewKeyOverride?: string,
+  ) {
+    const blockStart = Math.max(0, Math.floor(rowIndex / prefetchBlockSize) * prefetchBlockSize)
+    return model.loadInfiniteBlock({
+      blockSize: prefetchBlockSize,
+      blockStart,
+      // Bench/test isolation: drop debounce + raise concurrency so every
+      // ensureBlock call fires a fetch immediately (no queuing). The
+      // React layer's defaults (debounce 80ms, concurrency 2) are
+      // production heuristics; this test exercises the prefetch-trigger
+      // contract independently of those.
+      cacheOptions: { blockLoadDebounceMs: 0, maxConcurrentRequests: 16 },
+      loadBlock,
+      view: viewState,
+      ...(viewKeyOverride ? { viewKey: viewKeyOverride } : {}),
+    })
+  }
+
+  function makePrefetchLoadBlock(): (q: {
+    blockStart: number
+    blockSize: number
+  }) => Promise<ServerBlockResult<Row>> {
+    return (q) =>
+      Promise.resolve({
+        blockSize: q.blockSize,
+        blockStart: q.blockStart,
+        hasMore: q.blockStart + q.blockSize < prefetchTotalRows,
+        rows: Array.from({ length: q.blockSize }, (_, i) => ({ id: `row-${q.blockStart + i}` })),
+      })
+  }
+
+  test("prefetchAhead=N fetches exactly 1 + N blocks past the visible window's tail block", async () => {
+    const model = createServerRowModel<Row>()
+    const loadBlock = makePrefetchLoadBlock()
+    const fetchedStarts: number[] = []
+    const wrappedLoad = (q: { blockStart: number; blockSize: number }) => {
+      fetchedStarts.push(q.blockStart)
+      return loadBlock(q)
+    }
+
+    // Visible range fits in one block (rows 0..49 inside block 0).
+    // With prefetchAhead=3 the React layer schedules loadInfiniteBlock
+    // for blockStart in {0 (start), 0 (end — deduped), 100, 200, 300}.
+    const range = { startIndex: 0, endIndex: 49 }
+    const prefetchAhead = 3
+    const requests = [
+      ensureBlockAt(model, range.startIndex, wrappedLoad, view),
+      ensureBlockAt(model, range.endIndex, wrappedLoad, view),
+      ...Array.from({ length: prefetchAhead }, (_, i) =>
+        ensureBlockAt(model, range.endIndex + prefetchBlockSize * (i + 1), wrappedLoad, view),
+      ),
+    ]
+    await Promise.all(requests.map((r) => r.promise))
+
+    // Block starts that should be fetched: 0, 100, 200, 300 (= 1 + 3).
+    expect(new Set(fetchedStarts)).toEqual(new Set([0, 100, 200, 300]))
+    // Second ensureBlock for `range.endIndex` dedupes against the
+    // in-flight start request — only ONE fetch fires for block 0.
+    expect(fetchedStarts.filter((s) => s === 0).length).toBe(1)
+  })
+
+  test("prefetchAhead=0 issues no fetches past the visible window's tail block", async () => {
+    const model = createServerRowModel<Row>()
+    const fetchedStarts: number[] = []
+    const wrappedLoad = (q: { blockStart: number; blockSize: number }) => {
+      fetchedStarts.push(q.blockStart)
+      return makePrefetchLoadBlock()(q)
+    }
+
+    // Visible range spans two blocks (rows 0..149 = block 0 + block 100).
+    // With prefetchAhead=0 the only fetches are for blocks 0 and 100.
+    const range = { startIndex: 0, endIndex: 149 }
+    const requests = [
+      ensureBlockAt(model, range.startIndex, wrappedLoad, view),
+      ensureBlockAt(model, range.endIndex, wrappedLoad, view),
+    ]
+    await Promise.all(requests.map((r) => r.promise))
+
+    expect(new Set(fetchedStarts)).toEqual(new Set([0, 100]))
+  })
+
+  test("in-flight dedupe holds when ensureBlock is called for a still-pending prefetch", async () => {
+    const model = createServerRowModel<Row>()
+    const fetchedStarts: number[] = []
+    const deferreds: Array<{
+      resolve: (v: ServerBlockResult<Row>) => void
+      blockStart: number
+    }> = []
+    const wrappedLoad = (q: { blockStart: number; blockSize: number }) => {
+      fetchedStarts.push(q.blockStart)
+      const d = deferred<ServerBlockResult<Row>>()
+      deferreds.push({ blockStart: q.blockStart, resolve: d.resolve })
+      return d.promise
+    }
+
+    // First call: visible range with prefetchAhead=2.
+    const first = [
+      ensureBlockAt(model, 0, wrappedLoad, view),
+      ensureBlockAt(model, 49, wrappedLoad, view),
+      ensureBlockAt(model, 149, wrappedLoad, view),
+      ensureBlockAt(model, 249, wrappedLoad, view),
+    ]
+    expect(fetchedStarts).toEqual([0, 100, 200])
+
+    // Second call: same range, same prefetch budget. Every loadInfiniteBlock
+    // dedupes against the in-flight requests — no new fetches fire.
+    const second = [
+      ensureBlockAt(model, 0, wrappedLoad, view),
+      ensureBlockAt(model, 49, wrappedLoad, view),
+      ensureBlockAt(model, 149, wrappedLoad, view),
+      ensureBlockAt(model, 249, wrappedLoad, view),
+    ]
+    expect(fetchedStarts).toEqual([0, 100, 200]) // unchanged
+    for (const request of second) {
+      expect(request.deduped).toBe(true)
+    }
+
+    for (const d of deferreds) {
+      d.resolve({
+        blockSize: prefetchBlockSize,
+        blockStart: d.blockStart,
+        hasMore: true,
+        rows: Array.from({ length: prefetchBlockSize }, (_, i) => ({
+          id: `row-${d.blockStart + i}`,
+        })),
+      })
+    }
+    await Promise.all([...first, ...second].map((r) => r.promise))
+  })
+
+  test("cached blocks return cached=true with no new fetch (third+ call into a stable visible window)", async () => {
+    const model = createServerRowModel<Row>()
+    const fetchedStarts: number[] = []
+    const wrappedLoad = (q: { blockStart: number; blockSize: number }) => {
+      fetchedStarts.push(q.blockStart)
+      return makePrefetchLoadBlock()(q)
+    }
+
+    // First scroll position: visible 0..49, prefetch 1 ahead.
+    const first = [
+      ensureBlockAt(model, 0, wrappedLoad, view),
+      ensureBlockAt(model, 49, wrappedLoad, view),
+      ensureBlockAt(model, 149, wrappedLoad, view),
+    ]
+    await Promise.all(first.map((r) => r.promise))
+    expect(fetchedStarts).toEqual([0, 100])
+
+    // User holds scroll position — handleVisibleRowRangeChange fires
+    // again with the same range. All three loadInfiniteBlock calls hit
+    // cache; no new fetches.
+    const second = [
+      ensureBlockAt(model, 0, wrappedLoad, view),
+      ensureBlockAt(model, 49, wrappedLoad, view),
+      ensureBlockAt(model, 149, wrappedLoad, view),
+    ]
+    expect(fetchedStarts).toEqual([0, 100]) // unchanged
+    for (const request of second) {
+      expect(request.cached).toBe(true)
+    }
+  })
+
+  test("viewKey change isolates the new view's prefetch from the old view's pending fetches", async () => {
+    const model = createServerRowModel<Row>()
+    const deferreds: Array<{
+      resolve: (v: ServerBlockResult<Row>) => void
+      blockStart: number
+    }> = []
+    const fetchedStarts: Array<{ start: number; viewKey: string }> = []
+    const wrappedLoad = (q: { blockStart: number; blockSize: number; viewKey?: string }) => {
+      fetchedStarts.push({ start: q.blockStart, viewKey: q.viewKey ?? "?" })
+      const d = deferred<ServerBlockResult<Row>>()
+      deferreds.push({ blockStart: q.blockStart, resolve: d.resolve })
+      return d.promise
+    }
+
+    // View K1: visible range with prefetch=2.
+    const k1 = "view-k1"
+    const k1Requests = [
+      ensureBlockAt(model, 0, wrappedLoad, view, k1),
+      ensureBlockAt(model, 49, wrappedLoad, view, k1),
+      ensureBlockAt(model, 149, wrappedLoad, view, k1),
+      ensureBlockAt(model, 249, wrappedLoad, view, k1),
+    ]
+    expect(fetchedStarts.filter((f) => f.viewKey === k1)).toHaveLength(3)
+
+    // View K2 fires (e.g. user changed filter). blockKey includes
+    // viewKey, so K2 fetches do NOT dedupe against K1's in-flight
+    // requests. Independent set of fetches.
+    const k2 = "view-k2"
+    const k2Requests = [
+      ensureBlockAt(model, 0, wrappedLoad, view, k2),
+      ensureBlockAt(model, 149, wrappedLoad, view, k2),
+    ]
+    expect(fetchedStarts.filter((f) => f.viewKey === k2)).toHaveLength(2)
+
+    for (const d of deferreds) {
+      d.resolve({
+        blockSize: prefetchBlockSize,
+        blockStart: d.blockStart,
+        hasMore: true,
+        rows: Array.from({ length: prefetchBlockSize }, (_, i) => ({
+          id: `row-${d.blockStart + i}`,
+        })),
+      })
+    }
+    await Promise.all([...k1Requests, ...k2Requests].map((r) => r.promise))
+  })
+})

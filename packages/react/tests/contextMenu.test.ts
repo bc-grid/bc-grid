@@ -864,6 +864,8 @@ function makeServerApi(input: {
   expandAll?: () => void
   collapseAll?: () => void
   setVisible?: (key: string, value: boolean) => void
+  prefetchAhead?: number
+  setPrefetchAhead?: (value: number) => void
 }): BcContextMenuContext<Row>["api"] {
   return {
     getRangeSelection: () => ({ ranges: [], anchor: null }),
@@ -873,6 +875,8 @@ function makeServerApi(input: {
     getVisibleSetting: (key: string) =>
       key === "pagination" ? input.visiblePagination : undefined,
     setVisibleSetting: input.setVisible ?? (() => {}),
+    getPrefetchAhead: () => input.prefetchAhead,
+    setPrefetchAhead: input.setPrefetchAhead ?? (() => {}),
   } as unknown as BcContextMenuContext<Row>["api"]
 }
 
@@ -1012,16 +1016,76 @@ describe("DEFAULT_CONTEXT_MENU_ITEMS server submenu", () => {
     expect(collapseCalls).toBe(1)
   })
 
-  test("infinite mode currently surfaces no items (Prefetch submenu is a v0.6 follow-up)", () => {
+  test("infinite mode surfaces a Prefetch ahead radio submenu (4 options)", () => {
     const ctx = makeContext({ api: makeServerApi({ mode: "infinite" }) })
     const items = resolveContextMenuSubmenuItems(
       findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
       ctx,
     )
-    // Empty for now — Prefetch budget submenu (handoff item 2) needs
-    // BcUserSettings.layout.prefetchAhead + serverGrid wiring; queued
-    // as a v0.6 follow-up. The submenu collapses to "disabled" when
-    // empty per the shared predicate.
-    expect(items).toEqual([])
+    expect(items).toHaveLength(1)
+    const [submenu] = items
+    if (!submenu || !isContextMenuSubmenuItem(submenu)) {
+      throw new Error("expected prefetch submenu")
+    }
+    expect(submenu.id).toBe("server-prefetch-ahead")
+    expect(submenu.label).toBe("Prefetch ahead")
+    const radioItems = resolveContextMenuSubmenuItems(submenu, ctx)
+    expect(
+      radioItems.map((item) => (typeof item === "object" && "id" in item ? item.id : item)),
+    ).toEqual([
+      "server-prefetch-ahead-0",
+      "server-prefetch-ahead-1",
+      "server-prefetch-ahead-2",
+      "server-prefetch-ahead-3",
+    ])
+  })
+
+  test("infinite Prefetch ahead radio reflects undefined as the default 1", () => {
+    const ctx = makeContext({ api: makeServerApi({ mode: "infinite" }) })
+    const submenu = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )[0]
+    if (!submenu || !isContextMenuSubmenuItem(submenu)) throw new Error("expected submenu")
+    const radios = resolveContextMenuSubmenuItems(submenu, ctx)
+    const checkedFlags = radios.map((item) =>
+      isContextMenuToggleItem(item) ? contextMenuItemChecked(item, ctx) : false,
+    )
+    // Default 1 → second option (index 1) is checked.
+    expect(checkedFlags).toEqual([false, true, false, false])
+  })
+
+  test("infinite Prefetch ahead radio reflects the persisted value", () => {
+    const ctx = makeContext({ api: makeServerApi({ mode: "infinite", prefetchAhead: 2 }) })
+    const submenu = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )[0]
+    if (!submenu || !isContextMenuSubmenuItem(submenu)) throw new Error("expected submenu")
+    const radios = resolveContextMenuSubmenuItems(submenu, ctx)
+    const checkedFlags = radios.map((item) =>
+      isContextMenuToggleItem(item) ? contextMenuItemChecked(item, ctx) : false,
+    )
+    expect(checkedFlags).toEqual([false, false, true, false])
+  })
+
+  test("infinite Prefetch ahead radio writes through setPrefetchAhead", () => {
+    const writes: number[] = []
+    const ctx = makeContext({
+      api: makeServerApi({
+        mode: "infinite",
+        setPrefetchAhead: (value) => writes.push(value),
+      }),
+    })
+    const submenu = resolveContextMenuSubmenuItems(
+      findServerSubmenu(resolveContextMenuItems(undefined, ctx)),
+      ctx,
+    )[0]
+    if (!submenu || !isContextMenuSubmenuItem(submenu)) throw new Error("expected submenu")
+    const radios = resolveContextMenuSubmenuItems(submenu, ctx)
+    const third = radios[2] // value=2
+    if (!third || !isContextMenuToggleItem(third)) throw new Error("expected toggle")
+    third.onToggle(ctx, true)
+    expect(writes).toEqual([2])
   })
 })

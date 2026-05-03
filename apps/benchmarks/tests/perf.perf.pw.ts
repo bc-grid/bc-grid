@@ -14,6 +14,7 @@ declare global {
       sortRows(): Promise<PerfMetric>
       filterRows(): Promise<PerfMetric>
       serverRowModelBlocks(input?: ServerRowModelPerfInput): Promise<ServerRowModelPerfMetric>
+      serverRowModelPrefetchSweep(input: PrefetchSweepPerfInput): Promise<PrefetchSweepPerfMetric>
       rawRowCount: number
     }
     __fps__: number[]
@@ -33,6 +34,27 @@ interface ServerRowModelPerfInput {
   maxBlocks?: number
   maxConcurrentRequests?: number
   rowCount?: number
+}
+
+interface PrefetchSweepPerfInput {
+  blockSize?: number
+  fetchDelayMs?: number
+  maxBlocks?: number
+  maxConcurrentRequests?: number
+  prefetchAhead: number
+  rowCount?: number
+  scrollSteps?: number
+  scrollStepRows?: number
+  viewportRows?: number
+}
+
+interface PrefetchSweepPerfMetric extends PerfMetric {
+  blocksCached: number
+  blocksFetched: number
+  cacheHitRate: number
+  immediateContentRate: number
+  prefetchAhead: number
+  scrollSteps: number
 }
 
 interface ServerRowModelPerfMetric extends PerfMetric {
@@ -219,6 +241,76 @@ test(`server row model under-default-cache eviction stays under ${LRU_TUNING_BAR
   // we don't pin a floor like the 100k case's 0.99 — under the default
   // with eviction active, ~0.5 is expected.
   expect(metric.hotCacheHitRate).toBeGreaterThan(0)
+})
+
+// `v06-server-perf-prefetch-budget-tuning` (worker1 audit P1 §6).
+// Sweeps `prefetchAhead` over 0/1/2/3 against the same 10k-row scroll
+// trace. The harness simulates the React layer's
+// `handleVisibleRowRangeChange` algorithm: each scroll step calls
+// ensureBlock(start), ensureBlock(end), and prefetches the next N
+// blocks past the visible window's tail. Coordinator reads the emitted
+// per-budget metrics at merge to decide whether the default of 1 is
+// still right or whether 2 / 3 measurably improves the user-perceived
+// "instant content on scroll" rate enough to justify the extra fetch
+// bandwidth.
+const PREFETCH_SWEEP_BAR_MS = 10_000
+test(`server row model prefetch-budget sweep stays under ${PREFETCH_SWEEP_BAR_MS}ms`, async ({
+  page,
+}) => {
+  await page.goto("/?rawData=1&mount=false&rows=10000&cols=10")
+  await page.waitForFunction(() => window.__bcGridPerf.rawRowCount === 10_000)
+
+  const budgets = [0, 1, 2, 3]
+  const results: Array<{ budget: number; metric: PrefetchSweepPerfMetric }> = []
+  for (const budget of budgets) {
+    const metric = await page.evaluate(
+      (prefetchAhead) =>
+        window.__bcGridPerf.serverRowModelPrefetchSweep({
+          blockSize: 100,
+          fetchDelayMs: 1,
+          prefetchAhead,
+          rowCount: 10_000,
+          scrollSteps: 100,
+          scrollStepRows: 50,
+          viewportRows: 50,
+        }),
+      budget,
+    )
+    results.push({ budget, metric })
+    console.log(
+      [
+        `perf prefetch-sweep budget=${budget}`,
+        `duration=${metric.durationMs.toFixed(2)}ms`,
+        `cacheHitRate=${metric.cacheHitRate.toFixed(3)}`,
+        `immediateContentRate=${metric.immediateContentRate.toFixed(3)}`,
+        `blocksFetched=${metric.blocksFetched}`,
+        `blocksCached=${metric.blocksCached}`,
+        `scrollSteps=${metric.scrollSteps}`,
+      ].join(" "),
+    )
+  }
+
+  // Loose bars — the case is informational. A nonzero result for every
+  // budget proves the harness ran; the per-budget contrast is what
+  // coordinator reads to decide on tuning.
+  for (const { budget, metric } of results) {
+    expect(metric.durationMs, `budget=${budget} duration`).toBeLessThan(PREFETCH_SWEEP_BAR_MS)
+    expect(metric.prefetchAhead).toBe(budget)
+  }
+
+  // Contract: prefetch SHOULD improve the immediate-content rate (more
+  // blocks already in cache when the next scroll step lands). The
+  // sweep won't be monotonic in every micro-detail (queueing + LRU
+  // interact), but budget=3 should never be WORSE than budget=0 for
+  // the immediate-content rate. If this assertion ever fails, the
+  // prefetch trigger has a bug — investigate before tuning the default.
+  const zeroBudget = results[0]
+  const maxBudget = results[results.length - 1]
+  if (zeroBudget && maxBudget) {
+    expect(maxBudget.metric.immediateContentRate).toBeGreaterThanOrEqual(
+      zeroBudget.metric.immediateContentRate,
+    )
+  }
 })
 
 async function measureHeapBytes(page: Page): Promise<number> {

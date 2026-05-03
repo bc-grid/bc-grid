@@ -295,15 +295,30 @@ export function resolveServerVisibleColumns<TRow>(
 
 /**
  * Pure helper exported for unit testing. Resolves the prefetch-ahead
- * block budget for `<BcServerGrid rowModel="infinite">` from the
- * consumer-supplied `BcServerInfiniteProps.prefetchAhead`. Default 1
- * (matches prior implicit behavior of one block past the visible
- * range). Clamps to non-negative integers; `0` disables prefetch
- * entirely.
+ * block budget for `<BcServerGrid rowModel="infinite">`. Resolution
+ * order:
+ *
+ *   1. Explicit `BcServerInfiniteProps.prefetchAhead` prop (consumer
+ *      pin, takes precedence — locked-by-prop pattern matching
+ *      `showPagination` / `editingEnabled`).
+ *   2. `BcUserSettings.prefetchAhead` (set by the
+ *      `DEFAULT_CONTEXT_MENU_ITEMS` Server → Prefetch ahead radio
+ *      submenu — worker1 v06-server-perf-prefetch-budget-tuning).
+ *   3. Default `1` (one block past the visible range).
+ *
+ * Clamps to non-negative integers; `0` disables prefetch entirely.
  */
-export function resolvePrefetchAhead(prefetchAhead: number | undefined): number {
-  if (typeof prefetchAhead !== "number" || !Number.isFinite(prefetchAhead)) return 1
-  return Math.max(0, Math.floor(prefetchAhead))
+export function resolvePrefetchAhead(
+  prefetchAhead: number | undefined,
+  userSettingsValue?: number | undefined,
+): number {
+  if (typeof prefetchAhead === "number" && Number.isFinite(prefetchAhead)) {
+    return Math.max(0, Math.floor(prefetchAhead))
+  }
+  if (typeof userSettingsValue === "number" && Number.isFinite(userSettingsValue)) {
+    return Math.max(0, Math.floor(userSettingsValue))
+  }
+  return 1
 }
 
 /**
@@ -649,6 +664,12 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       },
       setVisibleSetting(key, value) {
         gridApiRef.current?.setVisibleSetting(key, value)
+      },
+      getPrefetchAhead() {
+        return gridApiRef.current?.getPrefetchAhead()
+      },
+      setPrefetchAhead(value) {
+        gridApiRef.current?.setPrefetchAhead(value)
       },
       refresh() {
         gridApiRef.current?.refresh()
@@ -1318,13 +1339,31 @@ function useInfiniteServerState<TRow>(
     resetInfiniteRows,
   )
 
+  // Subscribe to userSettings so the `Prefetch ahead` radio submenu
+  // (DEFAULT_CONTEXT_MENU_ITEMS Server → Prefetch ahead) can flip the
+  // budget without the consumer manually re-threading the prop. The
+  // explicit `props.prefetchAhead` still wins per `resolvePrefetchAhead`'s
+  // resolution order.
+  const [userSettingsSnapshot, setUserSettingsSnapshot] = useState(() => props.userSettings?.read())
+  useEffect(() => {
+    const store = props.userSettings
+    if (!store) {
+      setUserSettingsSnapshot(undefined)
+      return
+    }
+    setUserSettingsSnapshot(store.read())
+    return store.subscribe?.((next) => setUserSettingsSnapshot(next))
+  }, [props.userSettings])
+
   const blockSize = isInfiniteActive
     ? (props.blockSize ?? DEFAULT_SERVER_BLOCK_SIZE)
     : DEFAULT_SERVER_BLOCK_SIZE
   const maxCachedBlocks = isInfiniteActive ? props.maxCachedBlocks : undefined
   const blockLoadDebounceMs = isInfiniteActive ? props.blockLoadDebounceMs : undefined
   const maxConcurrentRequests = isInfiniteActive ? props.maxConcurrentRequests : undefined
-  const prefetchAhead = isInfiniteActive ? resolvePrefetchAhead(props.prefetchAhead) : 1
+  const prefetchAhead = isInfiniteActive
+    ? resolvePrefetchAhead(props.prefetchAhead, userSettingsSnapshot?.prefetchAhead)
+    : 1
   const loadBlock = isInfiniteActive ? props.loadBlock : undefined
   const searchText = props.searchText ?? props.defaultSearchText
   const groupBy = props.groupBy ?? props.defaultGroupBy ?? []

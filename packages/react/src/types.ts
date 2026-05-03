@@ -137,6 +137,16 @@ export interface BcUserSettings {
    * submenu. Same locked-by-prop pattern as `editorActivation`.
    */
   editorBlurAction?: "commit" | "reject" | "ignore"
+  /**
+   * Server-infinite prefetch budget. Number of blocks to fetch ahead
+   * of the visible viewport on each `onVisibleRowRangeChange`. Mirrors
+   * the `BcServerInfiniteProps.prefetchAhead` prop shape; consumer-
+   * supplied prop takes precedence. Surfaced for the
+   * `DEFAULT_CONTEXT_MENU_ITEMS` Server → Prefetch ahead radio submenu
+   * (worker1 v06-server-perf-prefetch-budget-tuning). Allowed values
+   * are 0 (off) / 1 (default) / 2 / 3.
+   */
+  prefetchAhead?: number
   layout?: BcGridLayoutState
   sidebarPanel?: string | null
   perColumn?: Record<ColumnId, BcUserColumnSettings>

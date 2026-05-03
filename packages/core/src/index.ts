@@ -666,6 +666,24 @@ export interface BcGridApi<TRow = unknown> {
    */
   setVisibleSetting(key: string, value: boolean): void
 
+  /**
+   * Read the persisted server-infinite prefetch budget (number of
+   * blocks to fetch ahead of the visible viewport on each
+   * `onVisibleRowRangeChange`). Returns `undefined` when no
+   * `userSettings` store is wired or the setting hasn't been written
+   * yet — `<BcServerGrid>`'s `resolvePrefetchAhead` then falls through
+   * to the consumer-supplied prop or the default `1`. Surfaced for
+   * the `DEFAULT_CONTEXT_MENU_ITEMS` Server → Prefetch ahead radio
+   * submenu.
+   */
+  getPrefetchAhead(): number | undefined
+  /**
+   * Write the persisted server-infinite prefetch budget. The next
+   * `<BcServerGrid rowModel="infinite">` re-render reads it via
+   * `resolvePrefetchAhead`. Clamped to non-negative integers.
+   */
+  setPrefetchAhead(value: number): void
+
   refresh(): void
 }
 

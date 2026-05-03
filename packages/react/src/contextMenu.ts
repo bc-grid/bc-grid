@@ -36,6 +36,14 @@ export const DEFAULT_CONTEXT_MENU_ITEMS: readonly BcContextMenuItem<unknown>[] =
   },
 ]
 
+const PREFETCH_AHEAD_DEFAULT = 1
+const PREFETCH_AHEAD_OPTIONS: readonly { value: number; label: string }[] = [
+  { value: 0, label: "0 (off)" },
+  { value: 1, label: "1 (default)" },
+  { value: 2, label: "2 blocks" },
+  { value: 3, label: "3 blocks" },
+]
+
 function buildServerSubmenuItems<TRow>(
   ctx: BcContextMenuContext<TRow>,
 ): readonly BcContextMenuItem<TRow>[] {
@@ -72,7 +80,36 @@ function buildServerSubmenuItems<TRow>(
     )
   }
 
+  if (mode === "infinite") {
+    if (items.length > 0) items.push("separator")
+    items.push({
+      kind: "submenu",
+      id: "server-prefetch-ahead",
+      label: "Prefetch ahead",
+      items: PREFETCH_AHEAD_OPTIONS.map(
+        (option): BcContextMenuItem<TRow> => ({
+          kind: "toggle",
+          selection: "radio",
+          id: `server-prefetch-ahead-${option.value}`,
+          label: option.label,
+          checked: (c) => resolveActivePrefetchAhead(c) === option.value,
+          onToggle: (c) => {
+            c.api.setPrefetchAhead(option.value)
+          },
+        }),
+      ),
+    })
+  }
+
   return items
+}
+
+function resolveActivePrefetchAhead<TRow>(ctx: BcContextMenuContext<TRow>): number {
+  const stored = ctx.api.getPrefetchAhead()
+  if (typeof stored === "number" && Number.isFinite(stored)) {
+    return Math.max(0, Math.floor(stored))
+  }
+  return PREFETCH_AHEAD_DEFAULT
 }
 
 function asServerApi<TRow>(api: BcContextMenuContext<TRow>["api"]): BcServerGridApi<TRow> | null {
