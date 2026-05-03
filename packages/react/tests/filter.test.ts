@@ -66,6 +66,30 @@ describe("buildGridFilter", () => {
     })
   })
 
+  test("text ERP operators produce explicit ServerColumnFilter payloads", () => {
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "does-not-contain", value: "hold" }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "does-not-contain",
+      value: "hold",
+    })
+    expect(
+      buildGridFilter({
+        name: encodeTextFilterInput({ op: "current-user", value: "" }),
+      }),
+    ).toEqual({
+      kind: "column",
+      columnId: "name",
+      type: "text",
+      op: "current-user",
+    })
+  })
+
   test("multiple non-empty inputs → ServerFilterGroup with op: and", () => {
     const result = buildGridFilter({ name: "John", email: "@acme" })
     expect(result?.kind).toBe("group")
@@ -199,6 +223,38 @@ describe("buildGridFilter", () => {
       op: "before",
       value: "2026-03-01",
     })
+  })
+
+  test("date ERP operators keep relative tokens in ServerColumnFilter payloads", () => {
+    expect(
+      buildGridFilter(
+        { lastInvoice: encodeDateFilterInput({ op: "today", value: "" }) },
+        { lastInvoice: "date" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "lastInvoice",
+      type: "date",
+      op: "today",
+    })
+    expect(
+      buildGridFilter(
+        { lastInvoice: encodeDateFilterInput({ op: "last-n-days", value: "14" }) },
+        { lastInvoice: "date" },
+      ),
+    ).toEqual({
+      kind: "column",
+      columnId: "lastInvoice",
+      type: "date",
+      op: "last-n-days",
+      value: 14,
+    })
+    expect(
+      buildGridFilter(
+        { lastInvoice: encodeDateFilterInput({ op: "last-n-days", value: "0" }) },
+        { lastInvoice: "date" },
+      ),
+    ).toBeNull()
   })
 
   test("between date inputs produce inclusive min/max values", () => {
@@ -941,6 +997,58 @@ describe("matchesGridFilter — column", () => {
     expect(matchesGridFilter(betweenFilter, lookup({ lastInvoice: "Apr 1, 2026" }))).toBe(false)
   })
 
+  test("relative date filters use predicate context", () => {
+    const today = buildGridFilter(
+      { lastInvoice: encodeDateFilterInput({ op: "today", value: "" }) },
+      { lastInvoice: "date" },
+    )
+    const lastNDays = buildGridFilter(
+      { lastInvoice: encodeDateFilterInput({ op: "last-n-days", value: "7" }) },
+      { lastInvoice: "date" },
+    )
+    if (!today || !lastNDays) throw new Error("expected filters")
+
+    expect(
+      matchesGridFilter(today, lookup({ lastInvoice: "2026-05-13" }), {
+        context: { now: "2026-05-13" },
+      }),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(today, lookup({ lastInvoice: "2026-05-12" }), {
+        context: { now: "2026-05-13" },
+      }),
+    ).toBe(false)
+    expect(
+      matchesGridFilter(lastNDays, lookup({ lastInvoice: "2026-05-07" }), {
+        context: { now: "2026-05-13" },
+      }),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(lastNDays, lookup({ lastInvoice: "2026-05-06" }), {
+        context: { now: "2026-05-13" },
+      }),
+    ).toBe(false)
+  })
+
+  test("fiscal date filters use predicate fiscal calendar context", () => {
+    const filter = buildGridFilter(
+      { postedOn: encodeDateFilterInput({ op: "this-fiscal-quarter", value: "" }) },
+      { postedOn: "date" },
+    )
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, lookup({ postedOn: "2026-09-30" }), {
+        context: { now: "2026-08-15", fiscalCalendar: { startMonth: 7, startDay: 1 } },
+      }),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(filter, lookup({ postedOn: "2026-10-01" }), {
+        context: { now: "2026-08-15", fiscalCalendar: { startMonth: 7, startDay: 1 } },
+      }),
+    ).toBe(false)
+  })
+
   test("date-range filters apply inclusive between semantics", () => {
     const filter = buildGridFilter(
       {
@@ -1472,6 +1580,46 @@ describe("text filter operators — matchesGridFilter", () => {
     if (!filter) throw new Error("expected filter")
     expect(matchesGridFilter(filter, lookup({ name: "John" }))).toBe(true)
     expect(matchesGridFilter(filter, lookup({ name: "john" }))).toBe(false)
+  })
+
+  test("negative text operators invert equals and contains", () => {
+    const notEquals = buildGridFilter({
+      name: encodeTextFilterInput({ op: "not-equals", value: "Closed" }),
+    })
+    const doesNotContain = buildGridFilter({
+      name: encodeTextFilterInput({ op: "does-not-contain", value: "hold" }),
+    })
+    if (!notEquals || !doesNotContain) throw new Error("expected filters")
+
+    expect(matchesGridFilter(notEquals, lookup({ name: "Open" }))).toBe(true)
+    expect(matchesGridFilter(notEquals, lookup({ name: "closed" }))).toBe(false)
+    expect(matchesGridFilter(doesNotContain, lookup({ name: "Ready" }))).toBe(true)
+    expect(matchesGridFilter(doesNotContain, lookup({ name: "On Hold" }))).toBe(false)
+
+    const doesNotMatchRegex = buildGridFilter({
+      name: encodeTextFilterInput({ op: "does-not-contain", value: "^hold", regex: true }),
+    })
+    if (!doesNotMatchRegex) throw new Error("expected regex filter")
+    expect(matchesGridFilter(doesNotMatchRegex, lookup({ name: "Ready" }))).toBe(true)
+    expect(matchesGridFilter(doesNotMatchRegex, lookup({ name: "Hold for review" }))).toBe(false)
+  })
+
+  test("current-user text operator reads predicate context", () => {
+    const filter = buildGridFilter({
+      ownerId: encodeTextFilterInput({ op: "current-user", value: "" }),
+    })
+    if (!filter) throw new Error("expected filter")
+
+    expect(
+      matchesGridFilter(filter, () => ({ formattedValue: "Alice", rawValue: "u-1" }), {
+        context: { user: { id: "u-1" } },
+      }),
+    ).toBe(true)
+    expect(
+      matchesGridFilter(filter, () => ({ formattedValue: "Bob", rawValue: "u-2" }), {
+        context: { user: { id: "u-1" } },
+      }),
+    ).toBe(false)
   })
 
   test("starts-with / ends-with anchor the comparison (case-insensitive default)", () => {

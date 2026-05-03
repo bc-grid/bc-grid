@@ -870,15 +870,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     if (activeFilter) {
       const columnsById = new Map(consumerResolvedColumns.map((c) => [c.columnId, c]))
       visibleRows = visibleRows.filter((row) =>
-        matchesGridFilter(activeFilter, (columnId) => {
-          const column = columnsById.get(columnId)
-          if (!column) return ""
-          const value = getCellValue(row, column.source)
-          return {
-            formattedValue: formatCellValue(value, row, column.source, locale),
-            rawValue: value,
-          }
-        }),
+        matchesGridFilter(
+          activeFilter,
+          (columnId) => {
+            const column = columnsById.get(columnId)
+            if (!column) return ""
+            const value = getCellValue(row, column.source)
+            return {
+              formattedValue: formatCellValue(value, row, column.source, locale),
+              rawValue: value,
+            }
+          },
+          { context: props.filterPredicateContext },
+        ),
       )
     }
 
@@ -929,6 +933,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     data,
     isManualRowProcessing,
     locale,
+    props.filterPredicateContext,
     props.showInactive,
     consumerResolvedColumns,
     rowId,
@@ -1361,15 +1366,19 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         if (props.showInactive === false && rowIsInactive?.(row)) continue
         if (
           otherFilter &&
-          !matchesGridFilter(otherFilter, (filterColumnId) => {
-            const filterColumn = columnsById.get(filterColumnId)
-            if (!filterColumn) return ""
-            const value = getCellValue(row, filterColumn.source)
-            return {
-              formattedValue: formatCellValue(value, row, filterColumn.source, locale),
-              rawValue: value,
-            }
-          })
+          !matchesGridFilter(
+            otherFilter,
+            (filterColumnId) => {
+              const filterColumn = columnsById.get(filterColumnId)
+              if (!filterColumn) return ""
+              const value = getCellValue(row, filterColumn.source)
+              return {
+                formattedValue: formatCellValue(value, row, filterColumn.source, locale),
+                rawValue: value,
+              }
+            },
+            { context: props.filterPredicateContext },
+          )
         ) {
           continue
         }
@@ -1409,6 +1418,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       consumerResolvedColumns,
       data,
       locale,
+      props.filterPredicateContext,
       props.showInactive,
       resolvedColumns,
       rowIsInactive,

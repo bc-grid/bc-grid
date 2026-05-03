@@ -114,7 +114,7 @@ describe("renderFilterCell — set filter trigger", () => {
     )
   })
 
-  test("operator select renders all three operators in v0.3 contract order", () => {
+  test("operator select renders operators in the expected contract order", () => {
     const html = renderSetFilterCell({ filterText: "" })
 
     // The DOM order is the user-facing operator-list order; pin it so
@@ -124,12 +124,16 @@ describe("renderFilterCell — set filter trigger", () => {
     const opIndex = html.indexOf('aria-label="Filter Status operator"')
     const inIndex = html.indexOf(">In</option>")
     const notInIndex = html.indexOf(">Not in</option>")
+    const currentUserIndex = html.indexOf(">Current user</option>")
+    const currentTeamIndex = html.indexOf(">Current team</option>")
     const blankIndex = html.indexOf(">Blank</option>")
 
     expect(opIndex).toBeGreaterThan(-1)
     expect(inIndex).toBeGreaterThan(opIndex)
     expect(notInIndex).toBeGreaterThan(inIndex)
-    expect(blankIndex).toBeGreaterThan(notInIndex)
+    expect(currentUserIndex).toBeGreaterThan(notInIndex)
+    expect(currentTeamIndex).toBeGreaterThan(currentUserIndex)
+    expect(blankIndex).toBeGreaterThan(currentTeamIndex)
   })
 
   test("unknown values from filterText project as themselves (legacy compat)", () => {

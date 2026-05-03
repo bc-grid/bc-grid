@@ -517,6 +517,33 @@ function isBlankFilterOperator(value: unknown): value is BlankFilterOperator {
   return value === "blank" || value === "not-blank"
 }
 
+function isTextContextFilterOperator(value: unknown): value is "current-user" | "current-team" {
+  return value === "current-user" || value === "current-team"
+}
+
+function isTextValueLessOperator(value: TextFilterOperator): boolean {
+  return isBlankFilterOperator(value) || isTextContextFilterOperator(value)
+}
+
+function isDateValueLessOperator(value: DateFilterOperator): boolean {
+  return (
+    value === "today" ||
+    value === "yesterday" ||
+    value === "this-week" ||
+    value === "last-week" ||
+    value === "this-month" ||
+    value === "last-month" ||
+    value === "this-fiscal-quarter" ||
+    value === "last-fiscal-quarter" ||
+    value === "this-fiscal-year" ||
+    value === "last-fiscal-year"
+  )
+}
+
+function isSetValueLessOperator(value: SetFilterOperator): boolean {
+  return isBlankFilterOperator(value) || value === "current-user" || value === "current-team"
+}
+
 function BlankFilterToggle({
   filterLabel,
   op,
@@ -598,7 +625,7 @@ function TextFilterControl({
     caseSensitive: boolean
     regex: boolean
   }) => {
-    if (isBlankFilterOperator(next.op)) {
+    if (isTextValueLessOperator(next.op)) {
       onFilterChange(encodeTextFilterInput({ op: next.op, value: "" }))
       return
     }
@@ -622,6 +649,7 @@ function TextFilterControl({
   }
   const update = (next: Partial<typeof flat>) => emit({ ...flat, ...next })
   const blankOp = isBlankFilterOperator(input.op) ? input.op : null
+  const contextOp = isTextContextFilterOperator(input.op)
 
   return (
     <div className="bc-grid-filter-text">
@@ -633,9 +661,13 @@ function TextFilterControl({
         onKeyDown={onFilterKeyDown}
       >
         <option value="contains">Contains</option>
+        <option value="does-not-contain">Does not contain</option>
         <option value="equals">Equals</option>
+        <option value="not-equals">Does not equal</option>
         <option value="starts-with">Starts with</option>
         <option value="ends-with">Ends with</option>
+        <option value="current-user">Current user</option>
+        <option value="current-team">Current team</option>
         <option value="blank">Blank</option>
         <option value="not-blank">Not blank</option>
       </select>
@@ -646,7 +678,7 @@ function TextFilterControl({
           onChange={(op) => update({ op, value: "", caseSensitive: false, regex: false })}
           onKeyDown={onFilterKeyDown}
         />
-      ) : (
+      ) : contextOp ? null : (
         <>
           <input
             ref={(el) => {
@@ -711,7 +743,15 @@ function DateFilterControl({
     const merged = { ...input, ...next }
     onFilterChange(encodeDateFilterInput(merged))
   }
+  const updateOperator = (op: DateFilterOperator) => {
+    if (isBlankFilterOperator(op) || isDateValueLessOperator(op) || op === "last-n-days") {
+      update({ op, value: "", valueTo: "" })
+      return
+    }
+    update({ op })
+  }
   const blankOp = isBlankFilterOperator(input.op) ? input.op : null
+  const valueLessOp = isDateValueLessOperator(input.op)
 
   return (
     <div className="bc-grid-filter-date">
@@ -719,13 +759,25 @@ function DateFilterControl({
         aria-label={`${filterLabel} operator`}
         className="bc-grid-filter-select"
         value={input.op}
-        onChange={(event) => update({ op: event.currentTarget.value as DateFilterOperator })}
+        onChange={(event) => updateOperator(event.currentTarget.value as DateFilterOperator)}
         onKeyDown={onFilterKeyDown}
       >
         <option value="is">Is</option>
+        <option value="not-equals">Is not</option>
         <option value="before">Before</option>
         <option value="after">After</option>
         <option value="between">Between</option>
+        <option value="today">Today</option>
+        <option value="yesterday">Yesterday</option>
+        <option value="this-week">This week</option>
+        <option value="last-week">Last week</option>
+        <option value="last-n-days">Last N days</option>
+        <option value="this-month">This month</option>
+        <option value="last-month">Last month</option>
+        <option value="this-fiscal-quarter">This fiscal quarter</option>
+        <option value="last-fiscal-quarter">Last fiscal quarter</option>
+        <option value="this-fiscal-year">This fiscal year</option>
+        <option value="last-fiscal-year">Last fiscal year</option>
         <option value="blank">Blank</option>
         <option value="not-blank">Not blank</option>
       </select>
@@ -736,7 +788,23 @@ function DateFilterControl({
           onChange={(op) => update({ op, value: "", valueTo: "" })}
           onKeyDown={onFilterKeyDown}
         />
-      ) : (
+      ) : input.op === "last-n-days" ? (
+        <input
+          ref={(el) => {
+            if (primaryRef) primaryRef.current = el
+          }}
+          aria-label={filterLabel}
+          className="bc-grid-filter-input"
+          id={filterId}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          step={1}
+          value={input.value}
+          onChange={(event) => update({ value: event.currentTarget.value })}
+          onKeyDown={onFilterKeyDown}
+        />
+      ) : valueLessOp ? null : (
         <>
           <input
             ref={(el) => {
@@ -816,7 +884,7 @@ function SetFilterControl({
   const commit = (next: { op: SetFilterOperator; values: readonly string[] }) => {
     setDraftOp(next.op)
     const values = Array.from(new Set(next.values.filter((value) => value.length > 0)))
-    if (isBlankFilterOperator(next.op)) {
+    if (isSetValueLessOperator(next.op)) {
       onFilterChange(encodeSetFilterInput({ op: next.op, values: [] }))
       return
     }
@@ -843,12 +911,16 @@ function SetFilterControl({
       ? "Blank rows"
       : op === "not-blank"
         ? "Not blank rows"
-        : selectedValueList.length === 0
-          ? "Select values"
-          : `${selectedValueList.length} selected`
-  const isActive = isBlankFilterOperator(op) || selectedValueList.length > 0
+        : op === "current-user"
+          ? "Current user"
+          : op === "current-team"
+            ? "Current team"
+            : selectedValueList.length === 0
+              ? "Select values"
+              : `${selectedValueList.length} selected`
+  const isActive = isSetValueLessOperator(op) || selectedValueList.length > 0
   const menuId = `${filterId}-set-menu`
-  const pickerDisabled = isBlankFilterOperator(op)
+  const pickerDisabled = isSetValueLessOperator(op)
 
   return (
     <div ref={rootRef} className="bc-grid-filter-set">
@@ -863,6 +935,8 @@ function SetFilterControl({
       >
         <option value="in">In</option>
         <option value="not-in">Not in</option>
+        <option value="current-user">Current user</option>
+        <option value="current-team">Current team</option>
         <option value="blank">Blank</option>
         <option value="not-blank">Not blank</option>
       </select>
