@@ -65,6 +65,20 @@ describe("@bc-grid/theming", () => {
     expect(css).not.toContain("hsl(var(")
   })
 
+  test("bulk-actions bar has themed surface, action buttons, and coarse-pointer hit targets", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain(".bc-grid-bulk-actions {")
+    expect(css).toContain(
+      "background: color-mix(in srgb, var(--bc-grid-accent) 8%, var(--bc-grid-bg))",
+    )
+    expect(css).toContain(".bc-grid-bulk-actions-slot button,")
+    expect(css).toContain(".bc-grid-bulk-actions-clear")
+    expect(css).toContain(".bc-grid-bulk-actions-slot button:focus-visible,")
+    expect(css).toContain(".bc-grid-bulk-actions-slot button,\n.bc-grid-bulk-actions-clear,")
+    expect(css).toContain(".bc-grid-bulk-actions-slot button:hover:not(:disabled),")
+  })
+
   test("row-hover token mixes accent with --bc-grid-bg (opaque) so body and pinned composite to the same pixels", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     // Body cells paint hover via `background: var(--bc-grid-row-hover)`
@@ -1644,6 +1658,24 @@ describe("@bc-grid/theming", () => {
     const inputRule = css.slice(inputIdx, css.indexOf("}", inputIdx))
     expect(inputRule).toContain("height: 1.875rem")
     expect(inputRule).toContain("background: color-mix")
+  })
+
+  test("range fill handle is an 8px pointer target with forced-colors support", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+    const idx = css.indexOf(".bc-grid-fill-handle {")
+    expect(idx).toBeGreaterThan(-1)
+    const rule = css.slice(idx, css.indexOf("}", idx))
+
+    expect(rule).toContain("width: 8px")
+    expect(rule).toContain("height: 8px")
+    expect(rule).toContain("background: var(--bc-grid-range-overlay-border)")
+    expect(rule).toContain("pointer-events: auto")
+
+    const forcedIdx = css.indexOf(".bc-grid-fill-handle {", css.indexOf("@media (forced-colors"))
+    expect(forcedIdx).toBeGreaterThan(-1)
+    const forcedRule = css.slice(forcedIdx, css.indexOf("}", forcedIdx))
+    expect(forcedRule).toContain("background: Highlight")
+    expect(forcedRule).toContain("forced-color-adjust: none")
   })
 
   test("inline filter row containers carry a min-height floor so compact density stays readable", () => {

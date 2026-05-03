@@ -391,6 +391,46 @@ export type BcGridPasteTsvResult<TRow = unknown> =
       error: BcGridPasteTsvFailure
     }
 
+/**
+ * Atomic bulk-update primitive — `BcGridApi.applyRowPatches([...])`.
+ * Each patch describes one row (`rowId`) and the fields to overwrite
+ * on it (`fields: Partial<TRow>`, keyed by `column.field`). The grid
+ * resolves each `(rowId, field)` to its column, runs that column's
+ * `valueParser` (when supplied) and `validate` first; if any patch
+ * fails, the operation rejects atomically (no overlay writes, no
+ * `onCellEditCommit` invocations) and the result is `{ ok: false,
+ * failures }`. When every patch passes, the grid applies all overlay
+ * updates in a single render pass and fires `onCellEditCommit` once
+ * per cell with `source: "api"`.
+ *
+ * The recipe doc at `docs/recipes/bulk-row-patch.md` covers the three
+ * canonical patterns (fill-down, set-field-on-selection, shift-dates).
+ */
+export interface BcRowPatch<TRow = unknown> {
+  rowId: RowId
+  fields: Partial<TRow>
+}
+
+export type BcRowPatchFailureCode =
+  | "row-not-found"
+  | "column-not-found"
+  | "cell-readonly"
+  | "value-parser-error"
+  | "validation-error"
+
+export interface BcRowPatchFailure {
+  rowId: RowId
+  field: string
+  columnId?: ColumnId
+  code: BcRowPatchFailureCode
+  message: string
+  rejectedValue?: unknown
+}
+
+export type BcRowPatchResult<_TRow = unknown> =
+  | { ok: true; applied: number; rowsAffected: number }
+  | { ok: false; failures: readonly BcRowPatchFailure[] }
+
 export {
   emptyBcRangeSelection,
   expandRangeTo,
@@ -409,6 +449,12 @@ export {
   serializeRangeSelection,
 } from "./range"
 export type { BcNormalisedRange, BcRangeKeyAction, BcRangeSelection } from "./range"
+export {
+  forEachSelectedRowId,
+  isAllSelection,
+  isExplicitSelection,
+  isFilteredSelection,
+} from "./selection"
 
 export interface BcPaginationState {
   page: number
@@ -631,6 +677,41 @@ export interface BcGridApi<TRow = unknown> {
   cancelEdit(): void
 
   /**
+   * Atomic bulk update — apply many patches across many rows in a
+   * single render pass. Each patch is `{ rowId, fields: Partial<TRow> }`.
+   *
+   * Pipeline (per `docs/coordination/v06-task-plans/bulk-row-patch.md`):
+   *
+   *   1. Resolve each `(rowId, field)` pair: locate the row by id and
+   *      the column by `field`. Missing rows / columns produce a
+   *      `row-not-found` / `column-not-found` failure.
+   *   2. Run `column.editable` (function form receives the row); a
+   *      false result is `cell-readonly`.
+   *   3. Run `column.valueParser` when the supplied value is a string.
+   *      A throw is `value-parser-error`.
+   *   4. Run `column.validate` (sync or async). `valid: false` is
+   *      `validation-error`.
+   *   5. **Atomic gate.** If any cell failed any of steps 1–4, return
+   *      `{ ok: false, failures }` and apply NOTHING. Otherwise apply
+   *      every patch in one render pass and fire one
+   *      `onCellEditCommit` per cell with `source: "api"`.
+   *
+   * The whole point: every "fill down", "shift dates", "set status to
+   * Approved" toolbar in an ERP wants this primitive — iterating
+   * `setRow` loses atomicity, fires N validates, N renders, and skips
+   * the existing pending-overlay rollback path. With `applyRowPatches`,
+   * partial-failure scenarios surface as one rejection envelope so the
+   * consumer can show a single toast + the offending fields.
+   *
+   * Returns `{ ok: true, applied, rowsAffected }` on success — `applied`
+   * is the cell count, `rowsAffected` is the unique-row count.
+   *
+   * v0.6 §1 headline (HEADLINE / two-spike-confirmed: doc-mgmt #6 +
+   * production-estimating #4).
+   */
+  applyRowPatches(patches: readonly BcRowPatch<TRow>[]): Promise<BcRowPatchResult<TRow>>
+
+  /**
    * Discard every uncommitted edit on a row — the multi-cell rollback
    * the user reaches for after Tab-driven entry into 4 cells then
    * "actually, never mind, revert this row." Mirrors a row-scoped
@@ -665,6 +746,32 @@ export interface BcGridApi<TRow = unknown> {
    * change takes effect even without persistence).
    */
   setVisibleSetting(key: string, value: boolean): void
+
+  /**
+   * Clear the row selection — sets selection to an empty explicit set.
+   * Surfaced for view-change reset flows on `<BcServerGrid>` (worker1
+   * audit P1 §1) where the prior view's selected rowIds become "ghost
+   * selection" once a filter / sort / search / groupBy change shifts
+   * the visible row set. Consumers can also call this from custom
+   * "Clear selection" affordances.
+   */
+  clearSelection(): void
+  /**
+   * Clear the active cell focus — sets the active cell to `null` and
+   * blurs any cell-level focus indicator. Use after a view change when
+   * the previously-focused cell's row no longer participates in the
+   * new query result. Pairs with `focusCell` (which sets a position).
+   * Worker1 audit P1 §1.
+   */
+  clearActiveCell(): void
+  /**
+   * Scroll the grid viewport to the top — sets `scrollTop` to 0 on the
+   * scroll container. Companion to `scrollToRow` (which scrolls to a
+   * specific rowId) for the "scroll to top of view" flow that doesn't
+   * need a row identifier. Surfaced for view-change reset on
+   * `<BcServerGrid>` per worker1 audit P1 §1.
+   */
+  scrollToTop(): void
 
   /**
    * Read the persisted server-infinite prefetch budget (number of

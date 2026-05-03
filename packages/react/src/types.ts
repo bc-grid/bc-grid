@@ -66,7 +66,15 @@ import type {
   BcFilterUserContext as BcEngineFilterUserContext,
   BcFiscalCalendar as BcEngineFiscalCalendar,
 } from "@bc-grid/filters"
-import type { CSSProperties, ComponentType, MouseEvent, ReactNode, RefObject } from "react"
+import type {
+  CSSProperties,
+  ComponentType,
+  MouseEvent,
+  DragEvent as ReactDragEvent,
+  ReactNode,
+  RefObject,
+} from "react"
+import type { BcRowDropAction } from "./rowDragDrop"
 
 export type BcGridDensity = "compact" | "normal" | "comfortable"
 
@@ -247,6 +255,45 @@ export interface BcRangeCopyEvent {
 export type BcRangeCopyHook = (event: BcRangeCopyEvent) => void
 
 /**
+ * `dragover` event payload — the live position handler. Returns a
+ * `BcRowDropAction` to tell the grid where the drop will land.
+ *
+ * `sourceRowIds` carries every dragged row id (multi-row drag — the
+ * grid drags the full selection if the drag origin was inside the
+ * selection). The consumer uses this to reject drops onto the source
+ * row itself (`if (sourceRowIds.includes(rowId)) return "none"`)
+ * or to validate cross-parent drops in tree models.
+ *
+ * v0.6 §1 row-drag-drop-hooks.
+ */
+export interface BcRowDragOverEvent<TRow> {
+  row: TRow
+  rowId: RowId
+  sourceRowIds: readonly RowId[]
+  event: ReactDragEvent<HTMLElement>
+}
+
+export type BcRowDragOverHandler<TRow> = (event: BcRowDragOverEvent<TRow>) => BcRowDropAction
+
+/**
+ * `drop` event payload. `position` is the last value returned by
+ * `onRowDragOver`. Consumer reorders / re-parents and updates its own
+ * state; the grid does not mutate `data` on its own (consumer-owned
+ * ordering, mirrors how `<BcServerGrid>` treats the row model).
+ *
+ * v0.6 §1 row-drag-drop-hooks.
+ */
+export interface BcRowDropEvent<TRow> {
+  row: TRow
+  rowId: RowId
+  sourceRowIds: readonly RowId[]
+  position: BcRowDropAction
+  event: ReactDragEvent<HTMLElement>
+}
+
+export type BcRowDropHandler<TRow> = (event: BcRowDropEvent<TRow>) => void
+
+/**
  * Render context handed to status-bar segment renderers. Rebuilt per
  * grid render so segments always reflect current row / selection /
  * aggregation state. Per `chrome-rfc §Status bar`.
@@ -332,6 +379,18 @@ export type BcStatusBarSegment<TRow = unknown> =
   | "aggregations"
   | "latestError"
   | BcStatusBarCustomSegment<TRow>
+
+export interface BcBulkActionsContext {
+  /**
+   * Selected row IDs resolved against rows currently known to this
+   * client grid. For explicit selection this is the selected set; for
+   * all/filtered selection modes it is the known row population minus
+   * `selection.except`.
+   */
+  selectedRowIds: readonly RowId[]
+  selectedRowCount: number
+  clearSelection(): void
+}
 
 export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
   value: unknown
@@ -568,6 +627,30 @@ export interface BcSidebarContext<TRow = unknown> {
   pivot?: unknown
 }
 
+export interface BcRangeSelectionOptions {
+  /**
+   * Allow multiple disjoint ranges. The current interaction layer only
+   * renders the active range; the option is reserved for the range RFC's
+   * multi-range path.
+   */
+  multiRange?: boolean
+  /**
+   * Show the active-range fill handle. Defaults to true when range
+   * selection is otherwise active.
+   */
+  fillHandle?: boolean
+  /**
+   * Cap future pointer-created range selections. Keyboard-created ranges
+   * already clamp to the current row/column model.
+   */
+  maxCellCount?: number
+  /**
+   * Future pointer-range option: when true, pointer range selection will
+   * not also update row selection.
+   */
+  preventRowSelection?: boolean
+}
+
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   data: readonly TRow[]
   columns: readonly BcReactGridColumn<TRow>[]
@@ -686,6 +769,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   rowIsDisabled?: (row: TRow) => boolean
 
   toolbar?: ReactNode
+  /**
+   * Consumer-owned action slot rendered as a grid-supplied bulk-actions
+   * bar whenever one or more rows are selected. The grid owns the bar,
+   * selected-count label, and clear-selection button; the slot supplies
+   * domain actions such as "Mark paid", "Move to folder", or "Delete".
+   */
+  bulkActions?: ReactNode | ((ctx: BcBulkActionsContext) => ReactNode)
   footer?: ReactNode
   /**
    * Footer status bar segments rendered below the body, above any
@@ -751,6 +841,56 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
 
   onRowClick?: (row: TRow, event: MouseEvent) => void
   onRowDoubleClick?: (row: TRow, event: MouseEvent) => void
+
+  /**
+   * Fires on every `dragover` over a row while a row drag is in
+   * flight. Return a `BcRowDropAction` to tell the grid where the
+   * drop will land relative to the hovered row — `"before"`,
+   * `"after"`, `"into"`, or `"none"` to reject. The grid surfaces
+   * the live position via `data-bc-grid-row-drop="<position>"` on
+   * the hovered row so consumers can paint indicators in their
+   * theme (top/bottom border for before/after, row highlight for
+   * into).
+   *
+   * Returning `"none"` (or omitting the handler) prevents drop on
+   * this row. Defaults to `"none"` when only `onRowDrop` is wired
+   * without `onRowDragOver` — consumers must opt into the position
+   * UX by returning a non-none action.
+   *
+   * `event.sourceRowIds` carries every dragged row id (multi-row
+   * drag — the grid drags the full selection together if the drag
+   * origin was inside the selection). v0.6 §1 row-drag-drop-hooks
+   * (two-spike-confirmed: doc-mgmt #1 + production-estimating #5).
+   */
+  onRowDragOver?: BcRowDragOverHandler<TRow>
+  /**
+   * Fires on `drop` after `onRowDragOver` last returned a non-`"none"`
+   * action. Consumer reorders rows / re-parents the source rows /
+   * updates whatever consumer-owned state ranks the data; the grid
+   * does not mutate `data` on its own.
+   *
+   * `event.sourceRowIds` is the dragged set; `event.position` is
+   * the last position returned by `onRowDragOver` (so a tree drop
+   * onto a folder fires with `position: "into"`).
+   *
+   * v0.6 §1 row-drag-drop-hooks.
+   */
+  onRowDrop?: BcRowDropHandler<TRow>
+  /**
+   * Fires on `dragstart`, before any `dragover` events. Useful for
+   * snapshotting consumer state, custom drag images, or telemetry.
+   * The grid sets `dataTransfer.effectAllowed = "move"` and writes
+   * the source rowIds into `dataTransfer` automatically; consumers
+   * customising the drag preview can call `event.dataTransfer.setDragImage`
+   * here.
+   *
+   * v0.6 §1 row-drag-drop-hooks.
+   */
+  onRowDragStart?: (
+    row: TRow,
+    sourceRowIds: readonly RowId[],
+    event: ReactDragEvent<HTMLElement>,
+  ) => void
   onCellFocus?: (position: BcCellPosition) => void
   /**
    * Fires after the editing overlay commits a cell value. Client grids can
@@ -768,6 +908,13 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    */
   onCellEditCommit?: BcCellEditCommitHandler<TRow>
   onVisibleRowRangeChange?: (range: { startIndex: number; endIndex: number }) => void
+  /**
+   * Behaviour flags for range-selection affordances. Existing keyboard
+   * range selection remains available by default; set
+   * `rangeSelectionOptions={false}` or `{ fillHandle: false }` to hide
+   * the spreadsheet-style fill handle.
+   */
+  rangeSelectionOptions?: boolean | BcRangeSelectionOptions
   onBeforeCopy?: BcRangeBeforeCopyHook<TRow>
   onCopy?: BcRangeCopyHook
 
@@ -1127,6 +1274,34 @@ export interface BcServerGridProps<TRow>
    */
   initialRootChildCount?: number
 
+  /**
+   * View-change reset opt-out (worker1 audit P1 §1). When the
+   * resolved viewKey changes (filter / sort / search / groupBy /
+   * visibleColumns), `<BcServerGrid>` resets scroll-to-top by default
+   * so users see the new query result from row 0 — matches the
+   * NetSuite / Salesforce LWC datatable / Excel-table convention.
+   * Set to `true` to preserve scroll position across view changes.
+   */
+  preserveScrollOnViewChange?: boolean
+  /**
+   * View-change reset opt-out for selection (worker1 audit P1 §1).
+   * When the viewKey changes, `<BcServerGrid>` clears the row
+   * selection by default so the prior view's selected rowIds don't
+   * become "ghost selection" (rowIds that may not exist in the new
+   * query result). Set to `true` to preserve selection across view
+   * changes; consumers wanting per-view selection persistence should
+   * mirror the selection into their own state keyed by viewKey.
+   */
+  preserveSelectionOnViewChange?: boolean
+  /**
+   * View-change reset opt-out for active cell focus (worker1 audit P1
+   * §1). When the viewKey changes, `<BcServerGrid>` clears the active
+   * cell by default so the prior view's focused cell (whose row may
+   * not be in the new query result) doesn't strand. Set to `true` to
+   * preserve focus across view changes.
+   */
+  preserveFocusOnViewChange?: boolean
+
   apiRef?: RefObject<BcServerGridApi<TRow> | null>
 }
 
@@ -1333,7 +1508,7 @@ export interface BcCellEditCommitEvent<TRow, TValue = unknown> {
    * editors). Consumer telemetry can split scroll-out commits from
    * deliberate keyboard / pointer commits via this discriminator.
    */
-  source: "keyboard" | "pointer" | "api" | "paste" | "scroll-out"
+  source: "keyboard" | "pointer" | "api" | "paste" | "fill" | "scroll-out"
 }
 
 /**
@@ -1454,3 +1629,11 @@ export type {
 }
 
 export type { BcNormalisedRange, BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
+export type { BcRowDropAction } from "./rowDragDrop"
+export { BC_GRID_ROW_DRAG_MIME } from "./rowDragDrop"
+export type {
+  BcRowPatch,
+  BcRowPatchFailure,
+  BcRowPatchFailureCode,
+  BcRowPatchResult,
+} from "@bc-grid/core"

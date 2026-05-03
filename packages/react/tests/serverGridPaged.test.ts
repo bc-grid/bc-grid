@@ -18,6 +18,8 @@ import {
   resolveServerVisibleColumns,
   resolveTreeChildCount,
   resolveTreeRowCount,
+  resolveViewChangeReset,
+  shouldMergeTreeResult,
   shouldResetServerPagedPage,
 } from "../src/serverGrid"
 import type { BcReactGridColumn } from "../src/types"
@@ -1225,5 +1227,195 @@ describe("resolveMissingLoaderMessage (server-mode-switch RFC §6 stage 2 mount 
       hasLoadChildren: false,
     })
     expect(message).toContain("loadPage")
+  })
+})
+
+describe("resolveViewChangeReset (worker1 audit P1 §1)", () => {
+  // The view-change reset matrix: when the resolved viewKey changes,
+  // the grid resets scroll-to-top + selection + active cell focus by
+  // default unless the consumer opts out. When the viewKey did NOT
+  // change (e.g. a refresh fired with the same view), no resets fire.
+
+  test("viewKey unchanged → no resets regardless of opt-out flags", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: false })).toEqual({
+      resetScroll: false,
+      resetSelection: false,
+      resetFocus: false,
+    })
+    expect(
+      resolveViewChangeReset({
+        viewKeyChanged: false,
+        preserveScroll: true,
+        preserveSelection: true,
+        preserveFocus: true,
+      }),
+    ).toEqual({ resetScroll: false, resetSelection: false, resetFocus: false })
+    // Even if all preserve flags are false (the default), no viewKey
+    // change → no resets.
+    expect(
+      resolveViewChangeReset({
+        viewKeyChanged: false,
+        preserveScroll: false,
+        preserveSelection: false,
+        preserveFocus: false,
+      }),
+    ).toEqual({ resetScroll: false, resetSelection: false, resetFocus: false })
+  })
+
+  test("viewKey changed + no opt-outs → reset all three (NetSuite/Salesforce default)", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: true })).toEqual({
+      resetScroll: true,
+      resetSelection: true,
+      resetFocus: true,
+    })
+  })
+
+  test("preserveScroll opts out of scroll reset only", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: true, preserveScroll: true })).toEqual({
+      resetScroll: false,
+      resetSelection: true,
+      resetFocus: true,
+    })
+  })
+
+  test("preserveSelection opts out of selection reset only", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: true, preserveSelection: true })).toEqual({
+      resetScroll: true,
+      resetSelection: false,
+      resetFocus: true,
+    })
+  })
+
+  test("preserveFocus opts out of focus reset only", () => {
+    expect(resolveViewChangeReset({ viewKeyChanged: true, preserveFocus: true })).toEqual({
+      resetScroll: true,
+      resetSelection: true,
+      resetFocus: false,
+    })
+  })
+
+  test("all three preserve flags → no resets even when viewKey changed", () => {
+    expect(
+      resolveViewChangeReset({
+        viewKeyChanged: true,
+        preserveScroll: true,
+        preserveSelection: true,
+        preserveFocus: true,
+      }),
+    ).toEqual({ resetScroll: false, resetSelection: false, resetFocus: false })
+  })
+
+  test("undefined preserve flag is treated as falsy (reset fires) — matches default", () => {
+    // Consumers who don't pass the prop get the default reset
+    // behaviour. The helper does not distinguish undefined from false.
+    expect(
+      resolveViewChangeReset({
+        viewKeyChanged: true,
+        preserveScroll: undefined,
+        preserveSelection: undefined,
+        preserveFocus: undefined,
+      }),
+    ).toEqual({ resetScroll: true, resetSelection: true, resetFocus: true })
+  })
+
+  test("explicit false preserve flag is identical to undefined (defensive contract)", () => {
+    // Both `false` and `undefined` resolve to "do reset" — the absence
+    // of opt-out is the same as explicit non-opt-out.
+    const explicitFalse = resolveViewChangeReset({
+      viewKeyChanged: true,
+      preserveScroll: false,
+      preserveSelection: false,
+      preserveFocus: false,
+    })
+    const undefinedFlags = resolveViewChangeReset({ viewKeyChanged: true })
+    expect(explicitFalse).toEqual(undefinedFlags)
+  })
+})
+
+describe("shouldMergeTreeResult — stale-viewKey gate (worker1 audit P1 §10)", () => {
+  // The React layer's `loadTreeChildren` does NOT call `abortExcept`
+  // (paged does at `serverGrid.tsx:1163`). Tree fetches under one
+  // viewKey can outlive a filter change to a new viewKey, and without
+  // a gate at the merge site the stale children would land in the new
+  // snapshot. The fix at `serverGrid.tsx:1745-1755` discards the
+  // result when the resolved viewKey != the model's current viewKey.
+
+  test("returns true when result.viewKey matches the current viewKey", () => {
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: "v1",
+        fallbackViewKey: "v1",
+        currentViewKey: "v1",
+      }),
+    ).toBe(true)
+  })
+
+  test("returns true when the loader echoed the active viewKey via result.viewKey", () => {
+    // Server may echo a different viewKey than the request-time one
+    // (e.g. it normalised the query). The gate respects what the
+    // server returned over the request-time fallback.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: "v2",
+        fallbackViewKey: "v1",
+        currentViewKey: "v2",
+      }),
+    ).toBe(true)
+  })
+
+  test("returns false when the result's resolved viewKey is stale (model has moved on)", () => {
+    // The classic §10 case: fetch fired under v1, user changed filter
+    // to v2 before the fetch resolved. result.viewKey is undefined
+    // (server didn't echo) → fallback is v1 → current is v2 → DROP.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: undefined,
+        fallbackViewKey: "v1",
+        currentViewKey: "v2",
+      }),
+    ).toBe(false)
+  })
+
+  test("returns false when result.viewKey itself doesn't match (server-echoed viewKey is stale)", () => {
+    // The server explicitly echoed the original viewKey (v1) but the
+    // model has moved to v2 since. Drop.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: "v1",
+        fallbackViewKey: "v1",
+        currentViewKey: "v2",
+      }),
+    ).toBe(false)
+  })
+
+  test("falls back to fallbackViewKey when result.viewKey is undefined", () => {
+    // Loader didn't echo viewKey; fallback (the request-time viewKey)
+    // is what's compared against the current viewKey. Match → merge.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: undefined,
+        fallbackViewKey: "v1",
+        currentViewKey: "v1",
+      }),
+    ).toBe(true)
+  })
+
+  test("empty-string viewKeys participate in equality (edge case)", () => {
+    // Defensive: an empty viewKey is a legitimate (degenerate) value;
+    // the gate should compare it like any other string.
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: "",
+        fallbackViewKey: "v1",
+        currentViewKey: "",
+      }),
+    ).toBe(true)
+    expect(
+      shouldMergeTreeResult({
+        resultViewKey: undefined,
+        fallbackViewKey: "",
+        currentViewKey: "v2",
+      }),
+    ).toBe(false)
   })
 })

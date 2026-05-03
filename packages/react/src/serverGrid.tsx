@@ -253,6 +253,33 @@ export function isActiveServerPagedResponse(input: {
 }
 
 /**
+ * Pure decision helper for the tree-mode stale-viewKey gate (worker1
+ * audit P1 §10). `loadTreeChildren` does not call `abortExcept` (paged
+ * does); without this gate, a fetch in flight under viewKey K1 that
+ * resolves AFTER the user has changed filter to K2 would merge K1's
+ * children into the K2 snapshot, surfacing stale rows under nodes that
+ * may have re-collapsed or been filtered out.
+ *
+ * Returns `true` when the result's resolved viewKey (the explicit
+ * `result.viewKey` if the loader echoed it, otherwise the request-time
+ * `fallbackViewKey`) matches the model's current viewKey at settle
+ * time. The React-layer caller `return`s early when this returns
+ * `false`, leaving the model cache populated (handy for a later
+ * refetch after a re-expand under the new view) but skipping the
+ * snapshot merge.
+ *
+ * Exported for unit testing; the React `loadTreeChildren` inlined this
+ * pre-#391 / #422 / #428.
+ */
+export function shouldMergeTreeResult(input: {
+  resultViewKey: string | undefined
+  fallbackViewKey: string
+  currentViewKey: string
+}): boolean {
+  return (input.resultViewKey ?? input.fallbackViewKey) === input.currentViewKey
+}
+
+/**
  * Pure decision helper for `BcServerGridApi.scrollToServerCell`. Given
  * the current loaded-row check, the active rowModel + paged page, and
  * the consumer-supplied `pageIndex` opt, decides which path to take:
@@ -378,6 +405,40 @@ export function resolveActiveRowModelMode(input: {
 }
 
 /**
+ * Pure decision helper for view-change reset behaviour (worker1 audit
+ * P1 §1). When `<BcServerGrid>`'s resolved viewKey changes (filter /
+ * sort / search / groupBy / visibleColumns), the grid resets scroll /
+ * selection / focus by default — matches the NetSuite, Salesforce LWC
+ * datatable, and Excel-table convention so the user sees the new
+ * query result from row 0 with no ghost selection or stranded focus.
+ *
+ * Returns `{ resetScroll, resetSelection, resetFocus }` based on the
+ * viewKey-changed signal and the three opt-out props on
+ * `BcServerGridProps`. When the viewKey did NOT change (e.g. a refresh
+ * fired with the same view), no resets fire — the user's scroll
+ * position / selection / focus stay put.
+ */
+export function resolveViewChangeReset(input: {
+  viewKeyChanged: boolean
+  preserveScroll?: boolean | undefined
+  preserveSelection?: boolean | undefined
+  preserveFocus?: boolean | undefined
+}): {
+  resetScroll: boolean
+  resetSelection: boolean
+  resetFocus: boolean
+} {
+  if (!input.viewKeyChanged) {
+    return { resetScroll: false, resetSelection: false, resetFocus: false }
+  }
+  return {
+    resetScroll: !input.preserveScroll,
+    resetSelection: !input.preserveSelection,
+    resetFocus: !input.preserveFocus,
+  }
+}
+
+/**
  * Pure helper exported for unit testing. Resolves the per-tree-fetch
  * `childCount` from the consumer-supplied `BcServerTreeProps.childCount`,
  * defaulting to `DEFAULT_SERVER_BLOCK_SIZE` (100) and clamping to a
@@ -463,6 +524,37 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
     if (message != null) console.error(message)
     // Mount-only — only fire when the active mode itself changes.
   }, [activeMode])
+
+  // View-change reset (worker1 audit P1 §1). When the resolved viewKey
+  // changes (filter / sort / search / groupBy / visibleColumns), reset
+  // scroll-to-top + selection + active cell focus per the
+  // `preserveScrollOnViewChange` / `preserveSelectionOnViewChange` /
+  // `preserveFocusOnViewChange` opt-out props (all default `false` →
+  // reset by default, matches NetSuite / Salesforce LWC datatable /
+  // Excel-table convention). Skips the initial mount so the user's
+  // explicit initial selection survives first render.
+  const activeView =
+    activeMode === "paged" ? paged.view : activeMode === "infinite" ? infinite.view : tree.view
+  const previousViewKeyRef = useRef<string | null>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset triggers on viewKey change only
+  useEffect(() => {
+    const viewKey = JSON.stringify(activeView)
+    if (previousViewKeyRef.current === null) {
+      previousViewKeyRef.current = viewKey
+      return
+    }
+    if (previousViewKeyRef.current === viewKey) return
+    previousViewKeyRef.current = viewKey
+    const decision = resolveViewChangeReset({
+      viewKeyChanged: true,
+      preserveScroll: props.preserveScrollOnViewChange,
+      preserveSelection: props.preserveSelectionOnViewChange,
+      preserveFocus: props.preserveFocusOnViewChange,
+    })
+    if (decision.resetScroll) gridApiRef.current?.scrollToTop()
+    if (decision.resetSelection) gridApiRef.current?.clearSelection()
+    if (decision.resetFocus) gridApiRef.current?.clearActiveCell()
+  }, [activeView])
 
   // Mode-switch RFC §5: render the inner `<BcGrid>` with `loading=true`
   // for one frame between the abort-on-deactivate and the new mode's
@@ -638,6 +730,22 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
           })
         )
       },
+      applyRowPatches(patches) {
+        // Atomic bulk update — see BcGridApi.applyRowPatches docs.
+        // Routes through the inner BcGrid so each cell flows through
+        // the existing editing controller + onCellEditCommit →
+        // onServerRowMutation pipeline (per-cell pending overlays,
+        // batched server resolve). The whole point: server-row consumers
+        // get the same atomic-validate-then-apply semantics as
+        // BcGridApi.applyRowPatches without bypassing onServerRowMutation.
+        return (
+          gridApiRef.current?.applyRowPatches(patches) ??
+          Promise.resolve({
+            ok: false,
+            failures: [],
+          })
+        )
+      },
       clearRangeSelection() {
         gridApiRef.current?.clearRangeSelection()
       },
@@ -670,6 +778,15 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
       },
       setPrefetchAhead(value) {
         gridApiRef.current?.setPrefetchAhead(value)
+      },
+      clearSelection() {
+        gridApiRef.current?.clearSelection()
+      },
+      clearActiveCell() {
+        gridApiRef.current?.clearActiveCell()
+      },
+      scrollToTop() {
+        gridApiRef.current?.scrollToTop()
       },
       refresh() {
         gridApiRef.current?.refresh()
@@ -1752,8 +1869,19 @@ function useTreeServerState<TRow>(
           // result still settles in the model cache (handy for a
           // later refetch after a re-expand under the new view), but
           // we don't merge stale children into the active snapshot.
+          // `shouldMergeTreeResult` is the exported pure-helper form;
+          // the contract is unit-tested independently of this React
+          // path.
+          if (
+            !shouldMergeTreeResult({
+              resultViewKey: result.viewKey,
+              fallbackViewKey: viewKey,
+              currentViewKey: treeViewKeyRef.current,
+            })
+          ) {
+            return
+          }
           const resultViewKey = result.viewKey ?? viewKey
-          if (resultViewKey !== treeViewKeyRef.current) return
           setTree((prev) =>
             modelRef.current.mergeTreeResult({
               getRowId: props.rowId,

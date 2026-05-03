@@ -15,6 +15,7 @@ import type {
   BcPivotState,
   BcRange,
   BcRangeSelection,
+  BcRowPatchResult,
   BcSelection,
   ColumnId,
   RowId,
@@ -28,6 +29,7 @@ import {
   type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
   type RefObject,
   Suspense,
   type UIEvent,
@@ -41,6 +43,7 @@ import {
 } from "react"
 import { BcGridAggregationFooterRow, useAggregations } from "./aggregations"
 import { renderBodyCell, renderGroupRowCell } from "./bodyCells"
+import { BcGridBulkActions, resolveBulkActionSelectedRowIds } from "./bulkActions"
 import { computeAutosizeWidth, measureColumnWidths, upsertColumnStateEntry } from "./columnCommands"
 import {
   type ColumnVisibilityItem,
@@ -160,14 +163,26 @@ import {
   normaliseClipboardPayload,
   writeClipboardPayload,
 } from "./rangeClipboard"
+import { type RangeFillProjection, buildLiteralRangeFillTsv, projectRangeFill } from "./rangeFill"
 import {
   createRangeInteractionModel,
   shouldClearRangeSelectionForModelChange,
 } from "./rangeInteraction"
 import { applyKeyboardRangeExtension } from "./rangeNavigation"
 import { BcRangeOverlay } from "./rangeOverlay"
+import {
+  BC_GRID_ROW_DRAG_MIME,
+  type BcRowDropAction,
+  computeEdgeScrollDelta,
+  computeRowDropPosition,
+  parseRowDragPayload,
+  resolveDragSourceRowIds,
+  serializeRowDragPayload,
+} from "./rowDragDrop"
+import { buildRowPatchApplyPlan } from "./rowPatchPlan"
 import { matchesSearchText } from "./search"
 import {
+  clearSelection,
   headerCheckboxState,
   isRowSelected,
   selectOnly,
@@ -257,6 +272,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     rowIsDisabled,
     locale,
     toolbar,
+    bulkActions,
     footer,
     loading,
     loadingOverlay,
@@ -266,6 +282,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ariaLabelledBy,
     onRowClick,
     onRowDoubleClick,
+    onRowDragOver,
+    onRowDrop,
+    onRowDragStart,
     onCellFocus,
     onBeforeCopy,
     onCopy,
@@ -569,6 +588,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.defaultRangeSelection ?? emptyBcRangeSelection,
     props.onRangeSelectionChange,
   )
+  const [rangeFillPreview, setRangeFillPreview] = useState<RangeFillProjection | null>(null)
   const emptyExpansion = useMemo(() => new Set<RowId>(), [])
   const expansionControlled = hasProp(props, "expansion")
   const defaultExpansionProvided = hasProp(props, "defaultExpansion")
@@ -584,6 +604,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // click; consumed (and reset) by shift-click. Held in a ref so we don't
   // re-render the grid just to update the anchor.
   const selectionAnchorRef = useRef<RowId | null>(null)
+
+  // Row drag-and-drop state (v0.6 §1 row-drag-drop-hooks). The grid
+  // wires HTML5 native DnD on row elements when `onRowDragOver` or
+  // `onRowDrop` is supplied. `dragSourceRowIdsRef` holds the dragged
+  // set across dragover events (dataTransfer is restricted on
+  // dragover for security — only readable on drop). `dropTarget`
+  // drives the visual indicator via `data-bc-grid-row-drop` on the
+  // hovered row; nulled out on dragleave / drop / dragend.
+  const dragSourceRowIdsRef = useRef<readonly RowId[] | null>(null)
+  const [dropTarget, setDropTarget] = useState<{
+    rowId: RowId
+    position: BcRowDropAction
+  } | null>(null)
+  const rowDragEnabled = onRowDragOver != null || onRowDrop != null
+
   const [columnMenu, setColumnMenu] = useState<ColumnVisibilityMenuAnchor | null>(null)
   const showColumnMenu = props.showColumnMenu !== false
   const filterRowLocked = props.showFilterRow !== undefined || props.showFilters !== undefined
@@ -2049,6 +2084,143 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     ],
   )
 
+  const getRangeFillSourceValue = useCallback(
+    (position: BcCellPosition): unknown => {
+      if (editController.hasOverlayValue(position.rowId, position.columnId)) {
+        return editController.getOverlayValue(position.rowId, position.columnId)
+      }
+
+      const rowEntry = rowsById.get(position.rowId)
+      const columnIndex = columnIndexById.get(position.columnId)
+      const column = columnIndex == null ? undefined : resolvedColumns[columnIndex]
+      if (!rowEntry || !column) return ""
+      return getCellValue(rowEntry.row, column.source)
+    },
+    [columnIndexById, editController, resolvedColumns, rowsById],
+  )
+
+  const commitRangeFill = useCallback(
+    async (projection: RangeFillProjection): Promise<void> => {
+      if (editController.editState.mode !== "navigation") {
+        announceAssertive(
+          messages.pasteRejectedAnnounce({
+            error: "Finish the active cell edit before filling a range.",
+          }),
+        )
+        return
+      }
+
+      const tsv = buildLiteralRangeFillTsv({
+        projection,
+        columns: resolvedColumns,
+        rowIds: rangeRowIds,
+        getSourceValue: getRangeFillSourceValue,
+      })
+      const applyResult = await buildRangeTsvPasteApplyPlan({
+        range: projection.fillRange,
+        tsv,
+        columns: resolvedColumns,
+        rowEntries,
+        rowIds: rangeRowIds,
+        overflow: "clip",
+        allowEmptyCells: true,
+        skipReadOnlyTargets: true,
+        isRowReadOnly: isRowDisabled,
+      })
+
+      if (!applyResult.ok) {
+        const error = pasteFailureFromApplyFailure(applyResult.error)
+        announceAssertive(messages.pasteRejectedAnnounce({ error: error.message }))
+        return
+      }
+
+      editController.commitFromPasteApplyPlan(applyResult.plan, { source: "fill" })
+      const result = pasteSuccessFromApplyPlan(applyResult.plan)
+      announcePolite(messages.pasteCommittedAnnounce({ count: result.appliedCount }))
+    },
+    [
+      announceAssertive,
+      announcePolite,
+      editController,
+      getRangeFillSourceValue,
+      isRowDisabled,
+      messages,
+      rangeRowIds,
+      resolvedColumns,
+      rowEntries,
+    ],
+  )
+
+  const handleRangeFillPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const sourceRange =
+        rangeSelectionState.ranges.length === 1 ? rangeSelectionState.ranges[0] : undefined
+      if (!sourceRange) return
+      if (editController.editState.mode !== "navigation") return
+
+      event.preventDefault()
+      event.stopPropagation()
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+
+      const root = rootRef.current
+      let currentProjection: RangeFillProjection | null = null
+
+      const updateProjection = (clientX: number, clientY: number) => {
+        const target = cellPositionFromPoint(clientX, clientY, root)
+        const projection = target
+          ? projectRangeFill({
+              sourceRange,
+              target,
+              columns: resolvedColumns,
+              rowIds: rangeRowIds,
+            })
+          : null
+        currentProjection = projection
+        setRangeFillPreview(projection)
+      }
+
+      const cleanup = () => {
+        window.removeEventListener("pointermove", handlePointerMove)
+        window.removeEventListener("pointerup", handlePointerUp)
+        window.removeEventListener("pointercancel", handlePointerCancel)
+      }
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        updateProjection(moveEvent.clientX, moveEvent.clientY)
+      }
+      const handlePointerCancel = () => {
+        cleanup()
+        currentProjection = null
+        setRangeFillPreview(null)
+      }
+      const handlePointerUp = (upEvent: PointerEvent) => {
+        updateProjection(upEvent.clientX, upEvent.clientY)
+        cleanup()
+        const projection = currentProjection
+        setRangeFillPreview(null)
+        if (!projection) return
+
+        setRangeSelectionState({
+          ranges: [projection.targetRange],
+          anchor: projection.sourceRange.start,
+        })
+        rootRef.current?.focus({ preventScroll: true })
+        void commitRangeFill(projection).catch(() => undefined)
+      }
+
+      window.addEventListener("pointermove", handlePointerMove)
+      window.addEventListener("pointerup", handlePointerUp)
+      window.addEventListener("pointercancel", handlePointerCancel)
+    },
+    [
+      commitRangeFill,
+      editController.editState.mode,
+      rangeRowIds,
+      rangeSelectionState.ranges,
+      resolvedColumns,
+      setRangeSelectionState,
+    ],
+  )
+
   const api = useMemo<BcGridApi<TRow>>(() => {
     const nextApi: BcGridApi<TRow> = {
       scrollToRow(targetRowId, opts) {
@@ -2131,6 +2303,27 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         return copyRangeToClipboard(range, nextApi)
       },
       pasteTsv,
+      async applyRowPatches(patches): Promise<BcRowPatchResult<TRow>> {
+        // Atomic bulk update — see BcGridApi.applyRowPatches docs.
+        // Validate-all-then-apply lives in `buildRowPatchApplyPlan`;
+        // the editing controller's `commitFromRowPatchPlan` runs the
+        // batched overlay write + per-cell `onCellEditCommit` with
+        // `source: "api"`. Per `v06-bulk-row-patch-primitive`.
+        const applyResult = await buildRowPatchApplyPlan({
+          patches,
+          columns: resolvedColumns,
+          rowEntries,
+        })
+        if (!applyResult.ok) {
+          return { ok: false, failures: applyResult.failures }
+        }
+        editController.commitFromRowPatchPlan(applyResult.plan)
+        return {
+          ok: true,
+          applied: applyResult.plan.commits.length,
+          rowsAffected: applyResult.plan.rowsAffected,
+        }
+      },
       clearRangeSelection() {
         setRangeSelectionState(rangeClear(rangeSelectionState))
       },
@@ -2238,6 +2431,16 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         const clamped = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
         updateUserSettings((prev) => ({ ...prev, prefetchAhead: clamped }))
       },
+      clearSelection() {
+        setSelectionState(createEmptySelection())
+      },
+      clearActiveCell() {
+        setActiveCell(null)
+      },
+      scrollToTop() {
+        const scroller = scrollerRef.current
+        if (scroller) scroller.scrollTop = 0
+      },
       refresh() {
         requestRender()
       },
@@ -2260,6 +2463,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     rangeSelectionState,
     requestRender,
     resolvedColumns,
+    rowEntries,
     rowIndexById,
     rowsById,
     scrollToCell,
@@ -2268,7 +2472,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     setColumnState,
     setExpansionState,
     applyFilterState,
+    setActiveCell,
     setRangeSelectionState,
+    setSelectionState,
     setSortState,
     setVisibleUserSetting,
     updateUserSettings,
@@ -2276,6 +2482,32 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   ])
 
   useEffect(() => assignRef(apiRef, api), [apiRef, api])
+
+  const allKnownRowIds = useMemo(
+    () => data.map((row, index) => ({ rowId: rowId(row, index) })),
+    [data, rowId],
+  )
+  const selectedRowCount = computeSelectedRowCount(
+    selectionState,
+    data.length,
+    allRowEntries.length,
+  )
+  const bulkActionSelectedRowIds = useMemo(
+    () => resolveBulkActionSelectedRowIds(selectionState, allKnownRowIds, allRowEntries),
+    [allKnownRowIds, allRowEntries, selectionState],
+  )
+  const clearBulkSelection = useCallback(() => {
+    selectionAnchorRef.current = null
+    setSelectionState(clearSelection())
+  }, [setSelectionState])
+  const bulkActionsContext = useMemo(
+    () => ({
+      selectedRowIds: bulkActionSelectedRowIds,
+      selectedRowCount,
+      clearSelection: clearBulkSelection,
+    }),
+    [bulkActionSelectedRowIds, clearBulkSelection, selectedRowCount],
+  )
 
   // Status-bar render context per `chrome-rfc §Status bar`. The
   // `aggregations` segment consumes the same `useAggregations` output
@@ -2292,7 +2524,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       api,
       totalRowCount: data.length,
       filteredRowCount: allRowEntries.length,
-      selectedRowCount: computeSelectedRowCount(selectionState, data.length, allRowEntries.length),
+      selectedRowCount,
       aggregations: aggregationResults,
       activeFilters: activeFilterSummaryItems,
       clearColumnFilter: clearColumnFilterText,
@@ -2308,7 +2540,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       clearColumnFilterText,
       data.length,
       latestValidationError,
-      selectionState,
+      selectedRowCount,
     ],
   )
   const activeFilterSummaryVisible =
@@ -2990,6 +3222,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       data-bc-grid-fit={fit}
       data-bc-grid-height-mode={isAutoHeight ? "auto" : "fixed"}
     >
+      {bulkActions ? <BcGridBulkActions actions={bulkActions} ctx={bulkActionsContext} /> : null}
       {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
 
       <div className="bc-grid-main">
@@ -2998,6 +3231,26 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
             ref={scrollerRef}
             className="bc-grid-viewport"
             onScroll={handleScroll}
+            onDragOver={
+              rowDragEnabled
+                ? (event) => {
+                    // Edge-zone auto-scroll. When the pointer is within
+                    // ~48px of the viewport's top/bottom edge during a
+                    // row drag, nudge the scroll. The browser fires
+                    // dragOver continuously while the pointer is over
+                    // the viewport, so a single rAF-style apply per
+                    // event gives smooth scrolling without setInterval
+                    // (which would keep firing after dragend). v0.6 §1.
+                    if (!dragSourceRowIdsRef.current) return
+                    const rect = event.currentTarget.getBoundingClientRect()
+                    const delta = computeEdgeScrollDelta({
+                      clientY: event.clientY,
+                      viewportRect: { top: rect.top, bottom: rect.bottom },
+                    })
+                    if (delta !== 0) event.currentTarget.scrollTop += delta
+                  }
+                : undefined
+            }
             style={viewportStyle(bodyHeight, isAutoHeight, viewport.width)}
           >
             <div
@@ -3379,10 +3632,131 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     data-bc-grid-focused-row={focused || undefined}
                     data-bc-grid-row-kind="data"
                     data-bc-grid-expanded={expanded || undefined}
+                    data-bc-grid-row-drop={
+                      dropTarget?.rowId === entry.rowId && dropTarget.position !== "none"
+                        ? dropTarget.position
+                        : undefined
+                    }
+                    draggable={rowDragEnabled && !disabled ? true : undefined}
                     style={{
                       ...buildRowStyle(virtualRow.top, virtualRow.height, virtualWindow.totalWidth),
                       ...consumerRowStyle,
                     }}
+                    onDragStart={
+                      rowDragEnabled && !disabled
+                        ? (event) => {
+                            // Multi-row drag: if the drag origin is part of
+                            // the current selection, drag the whole selected
+                            // set together (matches macOS Finder + VS Code).
+                            // Otherwise drag just the origin row. Resolved
+                            // here so the same source-list is available to
+                            // dragover (where dataTransfer reads are
+                            // restricted) via dragSourceRowIdsRef.
+                            const sourceRowIds = resolveDragSourceRowIds({
+                              originRowId: entry.rowId,
+                              selection: selectionState,
+                              visibleRowIds: visibleSelectableRowIds,
+                            })
+                            dragSourceRowIdsRef.current = sourceRowIds
+                            event.dataTransfer.effectAllowed = "move"
+                            try {
+                              event.dataTransfer.setData(
+                                BC_GRID_ROW_DRAG_MIME,
+                                serializeRowDragPayload(sourceRowIds),
+                              )
+                              // Plain text fallback so consumer drop targets
+                              // outside the grid get a sensible payload too.
+                              event.dataTransfer.setData("text/plain", sourceRowIds.join(","))
+                            } catch {
+                              // dataTransfer.setData can throw in some test
+                              // harnesses (jsdom variants); the drag still
+                              // works via dragSourceRowIdsRef in-process.
+                            }
+                            onRowDragStart?.(entry.row, sourceRowIds, event)
+                          }
+                        : undefined
+                    }
+                    onDragOver={
+                      rowDragEnabled
+                        ? (event) => {
+                            const sourceRowIds = dragSourceRowIdsRef.current
+                            if (!sourceRowIds) return
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            const computed = computeRowDropPosition(event.clientY, rect)
+                            const consumerPosition = onRowDragOver
+                              ? onRowDragOver({
+                                  row: entry.row,
+                                  rowId: entry.rowId,
+                                  sourceRowIds,
+                                  event,
+                                })
+                              : computed
+                            // Always preventDefault on a non-none accept so
+                            // the browser fires the subsequent `drop` event;
+                            // without this the default "no drop" cursor
+                            // stays and `onDrop` never fires.
+                            if (consumerPosition !== "none") {
+                              event.preventDefault()
+                              event.dataTransfer.dropEffect = "move"
+                            }
+                            const finalPosition: BcRowDropAction =
+                              consumerPosition === undefined ? computed : consumerPosition
+                            if (
+                              !dropTarget ||
+                              dropTarget.rowId !== entry.rowId ||
+                              dropTarget.position !== finalPosition
+                            ) {
+                              setDropTarget({ rowId: entry.rowId, position: finalPosition })
+                            }
+                          }
+                        : undefined
+                    }
+                    onDragLeave={
+                      rowDragEnabled
+                        ? (event) => {
+                            // Only clear when the drag actually left the row
+                            // — leaving for a child element (cell, chip)
+                            // also fires dragleave but we want to keep the
+                            // indicator. relatedTarget tells us where the
+                            // pointer went next.
+                            const next = event.relatedTarget as Node | null
+                            if (next && event.currentTarget.contains(next)) return
+                            if (dropTarget?.rowId === entry.rowId) setDropTarget(null)
+                          }
+                        : undefined
+                    }
+                    onDrop={
+                      rowDragEnabled
+                        ? (event) => {
+                            event.preventDefault()
+                            const sourceRowIds =
+                              dragSourceRowIdsRef.current ??
+                              parseRowDragPayload(event.dataTransfer.getData(BC_GRID_ROW_DRAG_MIME))
+                            if (!sourceRowIds || sourceRowIds.length === 0) return
+                            const position =
+                              dropTarget?.rowId === entry.rowId ? dropTarget.position : "none"
+                            if (position !== "none") {
+                              onRowDrop?.({
+                                row: entry.row,
+                                rowId: entry.rowId,
+                                sourceRowIds,
+                                position,
+                                event,
+                              })
+                            }
+                            setDropTarget(null)
+                            dragSourceRowIdsRef.current = null
+                          }
+                        : undefined
+                    }
+                    onDragEnd={
+                      rowDragEnabled
+                        ? () => {
+                            setDropTarget(null)
+                            dragSourceRowIdsRef.current = null
+                          }
+                        : undefined
+                    }
                     onClick={(event) => {
                       // Selection logic. Shift+click → range from anchor; ctrl/
                       // cmd+click → toggle this row in current selection;
@@ -3586,7 +3960,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               })}
               <BcRangeOverlay
                 columns={resolvedColumns}
-                rangeSelection={rangeSelectionState}
+                fillHandleEnabled={
+                  rangeFillPreview == null &&
+                  editController.editState.mode === "navigation" &&
+                  isRangeFillHandleEnabled(props.rangeSelectionOptions)
+                }
+                onFillHandlePointerDown={handleRangeFillPointerDown}
+                rangeSelection={
+                  rangeFillPreview
+                    ? {
+                        ranges: [rangeFillPreview.targetRange],
+                        anchor: rangeFillPreview.sourceRange.start,
+                      }
+                    : rangeSelectionState
+                }
                 rowIds={rangeRowIds}
                 scrollLeft={scrollOffset.left}
                 totalWidth={virtualWindow.totalWidth}
@@ -3841,6 +4228,32 @@ function publicPasteSkippedCell(cell: BcGridPasteTsvSkippedCell): BcGridPasteTsv
 function isEditableKeyTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   return target.isContentEditable || editableKeyTargetTags.has(target.tagName)
+}
+
+function cellPositionFromPoint(
+  clientX: number,
+  clientY: number,
+  root: HTMLElement | null,
+): BcCellPosition | null {
+  if (typeof document === "undefined") return null
+  const target = document.elementFromPoint(clientX, clientY)
+  if (!(target instanceof Element)) return null
+  if (root && !root.contains(target)) return null
+
+  const cell = target.closest<HTMLElement>(".bc-grid-cell[data-column-id]")
+  const row = cell?.closest<HTMLElement>(".bc-grid-row[data-row-id]")
+  const rowId = row?.dataset.rowId
+  const columnId = cell?.dataset.columnId
+  if (!rowId || !columnId) return null
+  return { rowId: rowId as RowId, columnId: columnId as ColumnId }
+}
+
+function isRangeFillHandleEnabled(
+  options: BcGridProps<unknown>["rangeSelectionOptions"] | undefined,
+): boolean {
+  if (options === false) return false
+  if (typeof options === "object" && options.fillHandle === false) return false
+  return true
 }
 
 /**
