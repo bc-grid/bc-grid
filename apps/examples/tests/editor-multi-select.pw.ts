@@ -32,7 +32,7 @@ const TRIGGER_SELECTOR =
 async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   // Flags column is the rightmost — scroll fully right to ensure rendered.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = scroller.scrollWidth
   })
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
@@ -121,7 +121,7 @@ test("commit produces an array of typed values and the cell renderer reflects ev
   // the grid auto-scrolls. Re-scroll back to make row 0's flags cell
   // visible in the virtualizer's render window.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = scroller.scrollWidth
   })
 

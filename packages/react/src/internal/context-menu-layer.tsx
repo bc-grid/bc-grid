@@ -70,11 +70,16 @@ export function BcGridContextMenuLayer<TRow>({
     const root = rootRef.current
     if (!root) return
     const detachContextMenu = attachContextMenuEvents(root, applyContextMenuState)
-    const scroller = root.querySelector(".bc-grid-scroller")
-    scroller?.addEventListener("scroll", closeContextMenu)
+    // `.bc-grid-viewport` is the post-layout-pass single scroll
+    // container (was `.bc-grid-scroller`; hard-renamed in #415 per
+    // RFC §10 Q2 ratification — no alias). Keep the legacy selector
+    // as a fallback so consumers on the deprecated class through
+    // their own theming overrides keep working through v0.6.
+    const viewport = root.querySelector(".bc-grid-viewport, .bc-grid-scroller")
+    viewport?.addEventListener("scroll", closeContextMenu)
     return () => {
       detachContextMenu()
-      scroller?.removeEventListener("scroll", closeContextMenu)
+      viewport?.removeEventListener("scroll", closeContextMenu)
     }
   }, [applyContextMenuState, closeContextMenu, rootRef])
 

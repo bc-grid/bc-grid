@@ -21,7 +21,7 @@ async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   // first render — scroll the grid's body scroller all the way right so
   // the virtualizer renders cells in this column.
   await page.evaluate(() => {
-    const scroller = document.querySelector(".bc-grid-scroller") as HTMLElement | null
+    const scroller = document.querySelector(".bc-grid-viewport") as HTMLElement | null
     if (scroller) scroller.scrollLeft = scroller.scrollWidth
   })
   const cell = page

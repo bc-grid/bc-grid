@@ -31,7 +31,7 @@ test("AR customer date filter supports inclusive between ranges", async ({ page 
 
 async function revealLastInvoiceFilter(page: Page) {
   const grid = page.getByRole("grid", { name: "Accounts receivable customer ledger" })
-  await grid.locator(".bc-grid-scroller").evaluate((scroller) => {
+  await grid.locator(".bc-grid-viewport").evaluate((scroller) => {
     scroller.scrollLeft = 2200
     scroller.dispatchEvent(new Event("scroll", { bubbles: true }))
   })

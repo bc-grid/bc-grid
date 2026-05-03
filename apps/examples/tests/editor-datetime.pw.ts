@@ -20,7 +20,7 @@ async function focusBodyCell(page: Page, rowIndex: number, columnId: string) {
   // nextScheduledCall is the rightmost column — scroll the body all the
   // way right so the virtualizer renders cells in this column.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = scroller.scrollWidth
   })
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))

@@ -43,7 +43,7 @@ test("editor stays mounted when scrolling vertically far away from the active ro
   // Scroll the body scroller far down — past where row 2 would normally
   // render in the virtualized window.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollTop = scroller.scrollHeight
   })
   // Two RAF ticks let the virtualizer recompute the window.
@@ -65,7 +65,7 @@ test("editor stays mounted when scrolling horizontally far away from the active 
 
   // Scroll horizontally to the far right.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollLeft = scroller.scrollWidth
   })
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
@@ -89,7 +89,7 @@ test("editor unmounts on commit; retention handles release (no leaked rows)", as
   // bc-grid-row[data-row-id="<edited rowId>"] sticks around outside
   // the virtualized window.
   await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-scroller")
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
     if (scroller) scroller.scrollTop = scroller.scrollHeight
   })
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
