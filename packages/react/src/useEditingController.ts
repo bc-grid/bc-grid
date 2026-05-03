@@ -166,6 +166,7 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
         editor?: BcCellEditor<TRow>
         row?: TRow
         rowId?: RowId
+        column?: BcReactGridColumn<TRow>
       },
     ) => {
       dispatch({
@@ -179,9 +180,15 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       const prepare = opts?.editor?.prepare
       const prepareRow = opts?.row
       const prepareRowId = opts?.rowId
-      if (!prepare || prepareRow === undefined || prepareRowId === undefined) {
-        // No prepare hook (or caller didn't pass row context) → advance
-        // straight to Mounting.
+      const prepareColumn = opts?.column
+      if (
+        !prepare ||
+        prepareRow === undefined ||
+        prepareRowId === undefined ||
+        prepareColumn === undefined
+      ) {
+        // No prepare hook (or caller didn't pass row / column context)
+        // → advance straight to Mounting.
         dispatch({ type: "prepareResolved" })
         return
       }
@@ -190,7 +197,14 @@ export function useEditingController<TRow>(options: UseEditingControllerOptions<
       // already returned to Navigation; we suppress the late dispatch.
       const token = ++prepareTokenRef.current
       Promise.resolve()
-        .then(() => prepare({ row: prepareRow, rowId: prepareRowId, columnId: cell.columnId }))
+        .then(() =>
+          prepare({
+            row: prepareRow,
+            rowId: prepareRowId,
+            columnId: cell.columnId,
+            column: prepareColumn,
+          }),
+        )
         .then((prepareResult) => {
           if (token !== prepareTokenRef.current) return
           dispatch({ type: "prepareResolved", prepareResult })

@@ -1922,6 +1922,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           editor: editorForActivation as never,
           row: rowEntry.row,
           rowId: targetRowId,
+          column: column.source,
           ...(seedKey != null ? { seedKey } : {}),
         })
       },
@@ -2276,6 +2277,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           editor: editorForActivation as never,
           row: cellRow.row,
           rowId: cellRow.rowId,
+          column: cellColumn.source,
         }
         const activationIntent = getEditorActivationIntent({
           key: event.key,
@@ -2907,6 +2909,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                                 editor,
                                 row: entry.row,
                                 rowId: entry.rowId,
+                                column: column.source,
                               },
                             )
                           }
@@ -2941,6 +2944,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                               editor,
                               row: entry.row,
                               rowId: entry.rowId,
+                              column: column.source,
                             },
                           )
                         }

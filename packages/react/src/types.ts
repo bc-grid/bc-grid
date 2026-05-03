@@ -964,6 +964,17 @@ export interface BcCellEditorPrepareParams<TRow> {
   row: TRow
   rowId: RowId
   columnId: ColumnId
+  /**
+   * Resolved column metadata. Lets `prepare` callbacks branch on
+   * column-level configuration (e.g. read `column.options` for
+   * synchronous lookups, or invoke `column.fetchOptions` to preload
+   * the first page of an async lookup so the dropdown paints with
+   * options on first frame). Audit P1-W3-2.
+   *
+   * Pre-existing `prepare` consumers that didn't read `column` see
+   * no behaviour change — this is an additive surface widening.
+   */
+  column: BcReactGridColumn<TRow>
 }
 
 /**

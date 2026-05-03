@@ -674,9 +674,9 @@ const editingProtocol = [
   ],
   [
     "BcCellEditorPrepareParams",
-    "row, rowId, columnId.",
+    "row, rowId, columnId, column.",
     "implemented",
-    "Passed to editor prepare before mount.",
+    "Passed to editor prepare before mount. The `column` field carries the resolved column metadata (use `column.fetchOptions` to preload the first page for autocomplete-style editors). Audit P1-W3-2.",
   ],
   [
     "BcCellEditorProps",
