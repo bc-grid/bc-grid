@@ -56,6 +56,7 @@ import {
   compactVisibleAncestors,
   expandVisibleAncestors,
   flattenClientTree,
+  nextTreeOutlineKey,
   sortClientTreeChildren,
 } from "./clientTree"
 import { computeAutosizeWidth, measureColumnWidths, upsertColumnStateEntry } from "./columnCommands"
@@ -3509,6 +3510,64 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         }
       }
 
+      // Tree outline keyboard (worker1 v06 phase 3). When the active
+      // cell is on the outline column of a tree-mode data row, ArrowRight
+      // / ArrowLeft become tree navigation: expand / collapse / move to
+      // first child / move to parent. `nextTreeOutlineKey` is the pure
+      // dispatch; falls through to the default arrow-nav matrix when the
+      // outcome is `noop`. Per RFC §4 outline-column accessibility.
+      if (
+        treeModeActive &&
+        clientTreeIndex &&
+        cellTarget &&
+        cellRow &&
+        isDataRowEntry(cellRow) &&
+        cellColumn?.source.outline &&
+        (event.key === "ArrowRight" || event.key === "ArrowLeft")
+      ) {
+        const childIds = clientTreeIndex.childrenByParent.get(cellRow.rowId)
+        const hasChildren = (childIds?.length ?? 0) > 0
+        const expanded = expansionState.has(cellRow.rowId)
+        const parentRowId = clientTreeIndex.parentByChild.get(cellRow.rowId) ?? null
+        const outcome = nextTreeOutlineKey({
+          key: event.key,
+          hasChildren,
+          expanded,
+          hasParent: parentRowId !== null,
+        })
+        if (outcome.type === "expand") {
+          event.preventDefault()
+          const next = new Set(expansionState)
+          next.add(cellRow.rowId)
+          setExpansionState(next)
+          return
+        }
+        if (outcome.type === "collapse") {
+          event.preventDefault()
+          const next = new Set(expansionState)
+          next.delete(cellRow.rowId)
+          setExpansionState(next)
+          return
+        }
+        if (outcome.type === "moveToFirstChild" && childIds && childIds.length > 0) {
+          const firstChildId = childIds[0]
+          if (firstChildId !== undefined && rowIndexById.has(firstChildId)) {
+            event.preventDefault()
+            setActiveCell({ rowId: firstChildId, columnId: cellColumn.columnId })
+            return
+          }
+        }
+        if (outcome.type === "moveToParent" && parentRowId !== null) {
+          if (rowIndexById.has(parentRowId)) {
+            event.preventDefault()
+            setActiveCell({ rowId: parentRowId, columnId: cellColumn.columnId })
+            return
+          }
+        }
+        // outcome.type === "noop" or move target not visible — fall
+        // through to the default arrow-nav matrix below.
+      }
+
       if (
         editingEnabled &&
         cellTarget &&
@@ -3637,10 +3696,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [
       activeCell,
       api,
+      clientTreeIndex,
       columnIndexById,
       copyRangeToClipboard,
       editController,
       editingEnabled,
+      expansionState,
       focusGroupRow,
       focusCell,
       isRowDisabled,
@@ -3652,6 +3713,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       rowIndexById,
       rowsById,
       selectionState,
+      setActiveCell,
+      setExpansionState,
       setRangeSelectionState,
       setSelectionState,
       toggleGroupRow,
@@ -3661,6 +3724,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       actionsKeyboardCanEdit,
       actionsKeyboardCanDelete,
       actionsKeyboardConfirmDelete,
+      treeModeActive,
     ],
   )
 

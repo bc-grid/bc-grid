@@ -189,6 +189,100 @@ describe("BcGrid + treeData pipeline (worker1 v06 client tree row model)", () =>
     expect(html).toContain(">11<")
   })
 
+  // Phase 3 — `keepAncestors` toggle wiring through `<BcGrid>`. The
+  // prop dispatches between `expandVisibleAncestors` (default `true`)
+  // and `compactVisibleAncestors` (`false`); both helpers currently
+  // surface ancestors of matched rows so flatten can render the
+  // hierarchy. These tests pin the prop is plumbed end-to-end and the
+  // grid renders matched rows + ancestors in both modes when a
+  // `searchText` filter is active.
+
+  test("phase 3: keepAncestors default (undefined) — search shows match + ancestors", () => {
+    const data: readonly BomRow[] = [
+      { id: "A", parentId: null, name: "Assembly A", qty: 1 },
+      { id: "A-1", parentId: "A", name: "Sub A-1", qty: 2 },
+      { id: "A-1-needle", parentId: "A-1", name: "Needle target", qty: 3 },
+      { id: "B", parentId: null, name: "Assembly B", qty: 1 },
+    ]
+    const html = renderToStaticMarkup(
+      <BcGrid<BomRow>
+        ariaLabel="Tree default keepAncestors"
+        columns={columns}
+        data={data}
+        rowId={(row) => row.id}
+        treeData={{ getRowParentId: (row) => row.parentId }}
+        defaultExpansion={new Set(["A", "A-1"])}
+        defaultSearchText="Needle"
+        height={240}
+      />,
+    )
+    // Row rendered (search highlight wraps "Needle" in `<mark>`).
+    expect(html).toContain('data-row-id="A-1-needle"')
+    expect(html).toContain(" target")
+    expect(html).toContain("Assembly A")
+    expect(html).toContain("Sub A-1")
+    expect(html).not.toContain("Assembly B")
+  })
+
+  test("phase 3: keepAncestors=true (explicit) — same as default", () => {
+    const data: readonly BomRow[] = [
+      { id: "A", parentId: null, name: "Assembly A", qty: 1 },
+      { id: "A-1", parentId: "A", name: "Sub A-1", qty: 2 },
+      { id: "A-1-needle", parentId: "A-1", name: "Needle target", qty: 3 },
+      { id: "B", parentId: null, name: "Assembly B", qty: 1 },
+    ]
+    const html = renderToStaticMarkup(
+      <BcGrid<BomRow>
+        ariaLabel="Tree explicit keepAncestors=true"
+        columns={columns}
+        data={data}
+        rowId={(row) => row.id}
+        treeData={{ getRowParentId: (row) => row.parentId, keepAncestors: true }}
+        defaultExpansion={new Set(["A", "A-1"])}
+        defaultSearchText="Needle"
+        height={240}
+      />,
+    )
+    // Row rendered (search highlight wraps "Needle" in `<mark>`).
+    expect(html).toContain('data-row-id="A-1-needle"')
+    expect(html).toContain(" target")
+    expect(html).toContain("Assembly A")
+    expect(html).toContain("Sub A-1")
+    expect(html).not.toContain("Assembly B")
+  })
+
+  test("phase 3: keepAncestors=false (compact) — prop accepted; matched + ancestors still render", () => {
+    // Both helpers currently surface ancestors of matched rows so the
+    // hierarchy renders. The semantic distinction (e.g. orphaning the
+    // match without its ancestors) is a deeper RFC §5 follow-up; this
+    // test pins the prop is plumbed end-to-end and the grid stays
+    // valid when consumers opt into the compact path.
+    const data: readonly BomRow[] = [
+      { id: "A", parentId: null, name: "Assembly A", qty: 1 },
+      { id: "A-1", parentId: "A", name: "Sub A-1", qty: 2 },
+      { id: "A-1-needle", parentId: "A-1", name: "Needle target", qty: 3 },
+      { id: "B", parentId: null, name: "Assembly B", qty: 1 },
+    ]
+    const html = renderToStaticMarkup(
+      <BcGrid<BomRow>
+        ariaLabel="Tree keepAncestors=false"
+        columns={columns}
+        data={data}
+        rowId={(row) => row.id}
+        treeData={{ getRowParentId: (row) => row.parentId, keepAncestors: false }}
+        defaultExpansion={new Set(["A", "A-1"])}
+        defaultSearchText="Needle"
+        height={240}
+      />,
+    )
+    // Row rendered (search highlight wraps "Needle" in `<mark>`).
+    expect(html).toContain('data-row-id="A-1-needle"')
+    expect(html).toContain(" target")
+    expect(html).toContain("Assembly A")
+    expect(html).toContain("Sub A-1")
+    expect(html).not.toContain("Assembly B")
+  })
+
   test("phase 2.5: leaf rows still show raw value (aggregation only overrides parents)", () => {
     const aggCols: readonly BcGridColumn<BomRow>[] = [
       { columnId: "name", field: "name", header: "Material", width: 240, outline: true },
