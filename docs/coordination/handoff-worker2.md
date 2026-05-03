@@ -38,76 +38,72 @@ You implement code; the coordinator reviews and runs the slow gates.
 
 ## v0.6 train — your queue (in priority order)
 
-**0.5.0 GA shipped 2026-05-03.** v0.6 is the consumer-feedback absorption + spreadsheet flows + bulk operations major release. Target ship date: ~2026-05-10.
+**0.5.0 GA shipped 2026-05-03.** v0.6 absorbs consumer feedback + spreadsheet flows + bulk operations + state-persistence. Target ship date: ~2026-05-10. v0.6.0-alpha.1 cut imminent.
 
-Your v0.6 train has **5 queued tasks**, headlined by the **fill handle** (drag-to-fill on the active range — the spreadsheet feature that takes bc-grid from "data grid" to "spreadsheet"). Pick them up in order; if you finish ahead of schedule, top of the v0.6 deferred list waits.
+You crushed the previous queue — **all 5 v0.6 chrome+filter items + the fill-handle headline merged**: #432 scroll-shadow overlay, #436 fill-handle (HEADLINE), #439 bulk-action toolbar, #441 saved-view storage recipe, #446 pinned totals row, #429 ERP filter operators. Updated queue below adds five fresh items targeted at consumer ergonomics + the spreadsheet polish that v0.6 still owes.
 
-### Active now → `v05-bsncraft-pinned-scroll-shadow-overlay` (~half day)
+### Active now → `v06-fill-handle-series-detection` (~1 day)
 
-Bsncraft 2026-05-03 alpha.2 P0 #4 carry-over. Pseudo-element gradient at pinned boundary (`bc-grid-cell-pinned-{left,right}-edge::after/::before` at `right: -8px`, `packages/theming/src/styles.css:3587-3611`) paints over row hover bg, creating visual artifacts at the seam.
-
-**Implementation:**
-
-1. **Pick the stacking mechanism:** evaluate `mix-blend-mode: multiply` (composites the pseudo's gradient with the underlying row state — preserves hover/focused/selected colors with a darkened seam) vs `z-index: -1` on the pseudo (puts it behind the cell — works but may interact poorly with the row's own z-index stack). Recommend the `mix-blend-mode` path.
-
-2. **Verify forced-colors mode** doesn't regress — Windows High Contrast strips colors but the shadow position should still be sensible. The existing `apps/examples/tests/forced-colors-sticky.pw.ts` from #415 covers the pinned-edge area; confirm it still passes.
-
-3. **Test coverage:** Playwright spec at `apps/examples/tests/pinned-scroll-shadow-row-state.pw.ts` — open a master row's detail panel with a long horizontal scroll, hover a row containing a pinned cell, assert the row hover background bleeds through under the shadow gradient (no opaque seam).
-
-**Branch:** `agent/worker2/v05-bsncraft-pinned-scroll-shadow-overlay`. **Effort:** ~half day.
-
-### Next-after → `v06-fill-handle` (HEADLINE, ~1-2 days)
-
-**This is your v0.6 headline.** The range RFC at `docs/design/range-rfc.md` §6 documented the fill-handle contract; implementation never landed. This is the spreadsheet-feel feature that takes bc-grid from "data grid that does ranges" to "Excel-replacement-class data grid."
-
-**What it is:** small affordance on the bottom-right corner of the active range. User mouse-drags the handle to extend the range; on release, the source values fill into the destination (Excel-style — repeating-sequence detection optional for v0.6, just literal repeat is fine).
+Your fill-handle PR (#436) shipped literal-repeat semantics — the v0.6 RFC §6 deferred Excel-style series detection ("1, 2 → 3, 4, 5"; "Mon → Tue, Wed"; "Q1 → Q2, Q3, Q4") to a follow-up. Pull the follow-up forward into v0.6 since the fill handle is the spreadsheet headline and series detection is what makes it feel like Excel.
 
 **Implementation:**
 
-1. **`.bc-grid-fill-handle` element** — 8×8 px dot rendered at the active range's bottom-right corner (range-rfc §3 line 179). Visible only when `BcRangeProps.fillHandle !== false` (default true).
+1. **Numeric series detection** — when the source range's values parse as numbers and form an arithmetic progression (delta is constant), extrapolate. Single source cell `5` → fills `5, 5, 5, ...` (literal). Two source cells `5, 7` → fills `5, 7, 9, 11, ...` (arithmetic). Three+ cells with a consistent delta → arithmetic; inconsistent delta → fall back to literal-repeat.
 
-2. **Drag interaction state machine** — extends the existing range state machine in `packages/react/src/rangeInteraction.ts`. Mousedown on handle → drag-extend mode → on mousemove project the destination cells → on mouseup commit.
+2. **Date series detection** — single source date cell → +1 day per fill cell. Two-cell range → infer increment (day / week / month / quarter / year) from the delta and continue.
 
-3. **Fill semantics** — for v0.6 ship simple "repeat source values" (Excel's most-used path). Series detection (1, 2 → 3, 4, 5; Mon → Tue, Wed) is a v0.7 follow-up.
+3. **Weekday name detection** — single cell with `"Mon"` / `"Monday"` (locale-aware) → next weekday. Same for month names.
 
-4. **Integration with editing** — fill applies via the same `editController.commitFromPasteApplyPlan` path that paste uses. Reuses validation + cell-overlay + `onCellEditCommit`. **Crucial**: a fill that lands on a non-editable column / disabled row must skip silently per the existing paste behaviour.
+4. **Custom series via column hint** — `BcReactGridColumn.fillSeries?: "literal" | "linear" | "exponential" | "weekday" | "month" | (sourceCells, fillCells) => values[]` so consumers can override per-column.
 
-5. **Test coverage:** unit tests for the fill range geometry helpers + 1 Playwright spec under `apps/examples/tests/range-fill-handle.pw.ts` covering single-cell repeat, multi-cell horizontal repeat, multi-cell vertical repeat, fill-into-non-editable-skipped.
+5. **Test coverage:** unit tests for the detection algorithm covering all five cases + 1 Playwright spec extending `apps/examples/tests/range-fill-handle.pw.ts` with arithmetic + date + weekday cases.
 
-**Branch:** `agent/worker2/v06-fill-handle`. **Effort:** ~1-2 days. **Dependency:** none (range state machine + visual layer + clipboard already shipped).
+**Branch:** `agent/worker2/v06-fill-handle-series-detection`. **Effort:** ~1 day.
 
-### Then-after → `v06-bulk-action-toolbar-primitive` (~half day, doc-mgmt spike #2)
+### Next-after → `v06-erp-filter-operators-pass-2` (~half day)
 
-`<BcGridBulkActions>` slot or `bulkActions` prop on `BcGridProps` — a bar that surfaces above the grid when ≥1 row is selected. Doc-management spike (#367) finding #2: every CRUD-flavored grid wires its own custom bulk-actions bar with the same pattern (selection count + action buttons + dismiss).
+Your #429 shipped the high-leverage ERP operators (relative dates, fiscal periods, current-user/team). Pass 2 closes the remaining gaps: text `regex` op (with safe-pattern compile + dev-mode warning on slow patterns), text `fuzzy` op (Levenshtein ≤ 2 by default), number `between` shortcut for inclusive/exclusive bounds, more relative date tokens (`mtd` = month-to-date, `qtd` = quarter-to-date, `ytd` = year-to-date, `last-fiscal-week`).
+
+**Branch:** `agent/worker2/v06-erp-filter-operators-pass-2`. **Effort:** ~half day.
+
+### Then-after → `v06-grouping-virtualized-group-rows` (~1 day)
+
+Today group rows render outside the virtualizer's row index — they're injected as separate `RowEntry`s. With deep grouping (5 levels × 1k rows per leaf = 5k group rows + 1M leaf rows), the group-row count adds DOM weight. Virtualize them too: have the virtualizer treat group rows as first-class rows with their own height bucket; collapse/expand toggles update the bucket without re-flattening the entire row model.
+
+This is performance work for the heaviest grouping case bsncraft will hit. Bench-driven — add a smoke-perf case at `apps/benchmarks/tests/perf.perf.pw.ts` measuring group-row insert/expand latency at 5×1k scale.
+
+**Branch:** `agent/worker2/v06-grouping-virtualized-group-rows`. **Effort:** ~1 day.
+
+### After-that → `v06-bulk-action-toolbar-undo` (~half day)
+
+Followup to your #439 bulk-actions toolbar. Add an undo affordance — when a consumer-supplied bulk action commits, surface a 5-second toast with an "Undo" button. Composes with worker3's #437 `applyRowPatches` via the optional `inverse?: BcRowPatch[]` field on each patch (consumer pre-computes the inverse so undo is one-call).
 
 **Implementation:**
 
-1. **`BcGridProps.bulkActions?: ReactNode | (ctx: BcBulkActionsContext) => ReactNode`** — slot for consumer-rendered actions. The grid renders the bar surface (selection count + dismiss); consumer fills in the action buttons.
+1. **`BcGridProps.bulkActionUndoSlot?: ReactNode | (ctx: BcBulkActionUndoContext) => ReactNode`** — toast slot.
+2. **`BcBulkActionUndoContext`** carries `{ undoableAction, undo(), dismiss() }`.
+3. **Auto-dismiss** after 5s (configurable).
+4. **Recipe** at `docs/recipes/bulk-actions-undo.md`.
 
-2. **`BcBulkActionsContext`** carries `{ selectedRowIds, selectedRowCount, clearSelection() }`.
+**Branch:** `agent/worker2/v06-bulk-action-toolbar-undo`. **Effort:** ~half day.
 
-3. **Visibility:** auto-show when `selectedRowCount > 0`; auto-hide on `clearSelection()`. Slot above the toolbar (or wherever the grid puts the chip strip — pick consistent z-index).
+### Last → `v06-saved-view-server-sync` (~half day)
 
-4. **Recipe doc** at `docs/recipes/bulk-actions.md` showing AR Aging "Mark all selected as paid" + Documents "Move to folder" patterns.
+Your #423 saved-view DTO + #441 storage recipe ship the consumer-owned local persistence story. v0.6 follow-up: server-sync recipe + DTO additions for multi-user saved views (`scope: "team" | "global"` already exists in the DTO; the missing piece is a sync-conflict resolution recipe).
 
-**Branch:** `agent/worker2/v06-bulk-action-toolbar-primitive`. **Effort:** ~half day.
+**Implementation:**
 
-### After-that → `v06-saved-view-storage-recipe` (~half day)
+1. **Recipe** at `docs/recipes/saved-view-server-sync.md` showing fetch-based sync with conflict detection (server `updatedAt` newer than client → reload; same → push).
+2. **Optional helper:** `createServerSyncedSavedViewStore({ endpoint, gridId })` starter.
+3. **Document the conflict shape** in `docs/api.md` so consumers understand the edge cases (concurrent edit → last-write-wins by default; consumer can override via `mergeStrategy`).
 
-Consumer-side companion to your #423 saved-view DTO. Recipe doc + minimal storage helpers showing how to wire a `localStorage` / `IndexedDB` / server-backed implementation behind the `BcSavedView` shape.
+**Branch:** `agent/worker2/v06-saved-view-server-sync`. **Effort:** ~half day.
 
-1. **`docs/recipes/saved-view-persistence.md`** with three reference adapters (localStorage / IndexedDB / server fetch).
-2. **URL boundary** documented — `urlStatePersistence` carries the ad-hoc layout blob; saved views are stored separately keyed by `gridId`.
-3. **Optional**: tiny `createLocalStorageSavedViewStore({ gridId })` starter helper if it adds <250B gzip.
-
-**Branch:** `agent/worker2/v06-saved-view-storage-recipe`. **Effort:** ~half day.
-
-### Last → `v06-grouping-tristate-totals-row` (planning doc §7, ~half day)
-
-Pull §7 from `docs/coordination/v05-audit-followups/worker2-grouping-and-filters.md` — tri-state grouping totals row. Today aggregations land at the group row level; ERP screens often want "grand total" pinned to the bottom of the grid (status-bar segment exists but is text-only). Add an opt-in `pinnedTotals: "bottom" | "top" | "both"` prop that renders an aggregation row (or rows) outside the virtual list.
-
-**Branch:** `agent/worker2/v06-grouping-tristate-totals-row`. **Effort:** ~half day.
-
+### Previously active → `v06-fill-handle` (DONE — #436 merged bf10ea0, HEADLINE)
+### Previously active → `v05-bsncraft-pinned-scroll-shadow-overlay` (DONE — #432 merged e73e271)
+### Previously active → `v06-bulk-action-toolbar-primitive` (DONE — #439 merged e32f2fc)
+### Previously active → `v06-saved-view-storage-recipe` (DONE — #441 merged 3db3cd2)
+### Previously active → `v06-grouping-tristate-totals-row` (DONE — #446 merged 67b3c2f)
 ### Previously active → `v06-erp-filter-operators` (DONE — #429 merged fc804e2)
 
 Pull a consumer-side companion to your #423 saved-view DTO PR — a recipe doc + minimal storage helpers showing how to wire a `localStorage` / `IndexedDB` / server-backed implementation behind the `BcSavedView` shape. Composes naturally with the toolbar recipe at `docs/recipes/saved-views.md`. Bsncraft will need this when they wire saved views into their AR Customers grid.
