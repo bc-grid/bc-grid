@@ -8,13 +8,23 @@ export interface GroupedRowModel<TRow> {
   allGroupRowIds: readonly RowId[]
 }
 
-export interface BuildGroupedRowModelParams<TRow> {
+export interface GroupedRowTree<TRow> {
+  active: boolean
+  rows: readonly DataRowEntry<TRow>[]
+  groups: readonly GroupedRowTreeGroup<TRow>[]
+  allGroupRowIds: readonly RowId[]
+}
+
+export interface BuildGroupedRowTreeParams<TRow> {
   rows: readonly DataRowEntry<TRow>[]
   columns: readonly ResolvedColumn<TRow>[]
   groupBy: readonly ColumnId[]
-  expansionState: ReadonlySet<RowId>
   locale?: string | undefined
   visibleRowIds?: ReadonlySet<RowId> | undefined
+}
+
+export interface BuildGroupedRowModelParams<TRow> extends BuildGroupedRowTreeParams<TRow> {
+  expansionState: ReadonlySet<RowId>
 }
 
 interface GroupBucket<TRow> {
@@ -28,6 +38,20 @@ interface InternalGroupPathEntry {
   key: string
 }
 
+export interface GroupedRowTreeData<TRow> {
+  kind: "data"
+  entry: DataRowEntry<TRow>
+}
+
+export interface GroupedRowTreeGroup<TRow> {
+  kind: "group"
+  entry: GroupRowEntry
+  children: readonly GroupedRowTreeNode<TRow>[]
+  hasVisibleDescendants: boolean
+}
+
+export type GroupedRowTreeNode<TRow> = GroupedRowTreeData<TRow> | GroupedRowTreeGroup<TRow>
+
 export function buildGroupedRowModel<TRow>({
   rows,
   columns,
@@ -36,6 +60,25 @@ export function buildGroupedRowModel<TRow>({
   locale,
   visibleRowIds,
 }: BuildGroupedRowModelParams<TRow>): GroupedRowModel<TRow> {
+  return flattenGroupedRowTree(
+    buildGroupedRowTree({
+      rows,
+      columns,
+      groupBy,
+      locale,
+      visibleRowIds,
+    }),
+    expansionState,
+  )
+}
+
+export function buildGroupedRowTree<TRow>({
+  rows,
+  columns,
+  groupBy,
+  locale,
+  visibleRowIds,
+}: BuildGroupedRowTreeParams<TRow>): GroupedRowTree<TRow> {
   const columnsById = new Map(columns.map((column) => [column.columnId, column]))
   const groupColumns = groupBy.flatMap((columnId) => {
     const column = columnsById.get(columnId)
@@ -47,39 +90,36 @@ export function buildGroupedRowModel<TRow>({
     return {
       active: false,
       rows: visibleRows.map((entry, index) => ({ ...entry, index })),
+      groups: [],
       allGroupRowIds: [],
     }
   }
 
-  const output: RowEntry<TRow>[] = []
   const allGroupRowIds: RowId[] = []
 
-  const appendLevel = (
+  const buildLevel = (
     levelRows: readonly DataRowEntry<TRow>[],
     depth: number,
     path: readonly InternalGroupPathEntry[],
-    visible: boolean,
-  ): void => {
+  ): readonly GroupedRowTreeNode<TRow>[] => {
     const column = groupColumns[depth]
     if (!column) {
-      if (visible) {
-        for (const entry of filterVisibleRows(levelRows, visibleRowIds)) {
-          output.push({ ...entry, level: depth + 1 })
-        }
-      }
-      return
+      return filterVisibleRows(levelRows, visibleRowIds).map((entry) => ({
+        kind: "data",
+        entry: { ...entry, level: depth + 1 },
+      }))
     }
 
+    const nodes: GroupedRowTreeGroup<TRow>[] = []
     for (const bucket of groupRowsByColumn(levelRows, column, locale).values()) {
       const nextPath = [...path, bucket.pathEntry]
       const groupRowId = groupRowIdForPath(nextPath)
-      const expanded = expansionState.has(groupRowId)
       const visibleBucketRows = filterVisibleRows(bucket.rows, visibleRowIds)
       const hasVisibleDescendants = visibleBucketRows.length > 0
-      const renderGroup = visible && hasVisibleDescendants
       allGroupRowIds.push(groupRowId)
-      if (renderGroup) {
-        output.push({
+      nodes.push({
+        kind: "group",
+        entry: {
           kind: "group",
           rowId: groupRowId,
           index: -1,
@@ -87,20 +127,58 @@ export function buildGroupedRowModel<TRow>({
           label: `${columnHeaderText(column)}: ${bucket.pathEntry.formattedValue}`,
           childCount: bucket.rows.length,
           childRowIds: bucket.rows.map((entry) => entry.rowId),
-          expanded,
-        } satisfies GroupRowEntry)
-      }
+          expanded: false,
+        },
+        children: buildLevel(bucket.rows, depth + 1, nextPath),
+        hasVisibleDescendants,
+      })
+    }
+    return nodes
+  }
 
-      appendLevel(bucket.rows, depth + 1, nextPath, renderGroup && expanded)
+  const groups = buildLevel(rows, 0, []).filter(
+    (node): node is GroupedRowTreeGroup<TRow> => node.kind === "group",
+  )
+
+  return {
+    active: true,
+    rows: [],
+    groups,
+    allGroupRowIds,
+  }
+}
+
+export function flattenGroupedRowTree<TRow>(
+  tree: GroupedRowTree<TRow>,
+  expansionState: ReadonlySet<RowId>,
+): GroupedRowModel<TRow> {
+  if (!tree.active) {
+    return {
+      active: false,
+      rows: tree.rows.map((entry, index) => ({ ...entry, index })),
+      allGroupRowIds: [],
     }
   }
 
-  appendLevel(rows, 0, [], true)
+  const output: RowEntry<TRow>[] = []
+  const appendNode = (node: GroupedRowTreeNode<TRow>): void => {
+    if (node.kind === "data") {
+      output.push(node.entry)
+      return
+    }
+    if (!node.hasVisibleDescendants) return
+    const expanded = expansionState.has(node.entry.rowId)
+    output.push({ ...node.entry, expanded })
+    if (!expanded) return
+    for (const child of node.children) appendNode(child)
+  }
+
+  for (const group of tree.groups) appendNode(group)
 
   return {
     active: true,
     rows: output.map((entry, index) => ({ ...entry, index })),
-    allGroupRowIds,
+    allGroupRowIds: tree.allGroupRowIds,
   }
 }
 
