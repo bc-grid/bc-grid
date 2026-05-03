@@ -820,6 +820,21 @@ export interface BcGridProps<TRow> {
   layoutState?: BcGridLayoutState
   onLayoutStateChange?: (next: BcGridLayoutState, prev: BcGridLayoutState) => void
 }
+
+export interface BcSavedView<TRow = unknown> {
+  id: string
+  name: string
+  gridId: string
+  version: number
+  layout: BcGridLayoutState
+  scope: "user" | "team" | "global"
+  ownerId?: string
+  isDefault?: boolean
+  isFavorite?: boolean
+  createdAt?: string
+  updatedAt?: string
+  description?: string
+}
 ```
 
 Use `initialLayout` for a one-time restore at mount. Use `layoutState` when a
@@ -835,6 +850,24 @@ partial saved layout keep their current/default state, so consumers can restore
 a subset safely after adding or removing columns. Grouping is represented by the
 public `groupBy` state. Pivot layout is intentionally not included until a public
 pivot state contract lands.
+
+Named saved views should use `BcSavedView`. React exports three helpers for the
+consumer-owned toolbar and storage flow:
+
+- `createSavedView({ gridId, name, layout, scope?, ... })` creates a versioned
+  saved-view DTO, generates an id when omitted, defaults `scope` to `"user"`,
+  and stamps `createdAt` / `updatedAt`.
+- `migrateSavedViewLayout(view)` returns a current-version `BcSavedView` with a
+  normalized `layout.version`.
+- `applySavedViewLayout(api, view, applier?)` applies `columnState`, `sort`, and
+  `filter` through `BcGridApi`; optional `applier` callbacks cover controlled
+  layout-only fields such as `groupBy`, `searchText`, `pagination`, `density`,
+  and `sidebarPanel`.
+
+The full saved-view toolbar recipe is in `docs/recipes/saved-views.md`. URL
+state should carry the current layout blob only; consumers that need active
+saved-view identity can add their own `activeSavedViewId` URL parameter next to
+the grid payload.
 
 Compact example:
 
@@ -2383,7 +2416,13 @@ export { BcGrid, BcEditGrid, BcServerGrid, BcStatusBar }
 export { useBcGridApi, useAggregations, useServerRowUpdates }
 
 // Helpers
-export { resolveVisibleSegments }
+export {
+  BC_SAVED_VIEW_VERSION,
+  applySavedViewLayout,
+  createSavedView,
+  migrateSavedViewLayout,
+  resolveVisibleSegments,
+}
 
 // React-aware types plus @bc-grid/core re-exports for consumer convenience.
 // (Re-exports let consumers import every column / state / loader type from one place.)
@@ -2394,6 +2433,8 @@ export type {
   BcGridStateProps, BcPaginationState,
   BcGridApi, BcServerGridApi,
   BcCellRendererParams, BcGridMessages, BcClipboardPayload,
+  BcGridLayoutState, BcSavedView, BcSavedViewInput, BcSavedViewLayoutApplier,
+  BcSavedViewLayoutInput, BcSavedViewScope, CreateSavedViewOptions,
   BcAggregationFormatterParams, BcAggregationScope, UseAggregationsOptions,
   BcCellEditor, BcCellEditorProps, BcCellEditorPrepareParams, BcCellEditCommitEvent,
   BcServerEditMutationEvent, BcServerEditMutationHandler,
