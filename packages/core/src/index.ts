@@ -927,6 +927,46 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
    * v0.6 server-grid error boundary.
    */
   getLastError(): unknown | null
+
+  /**
+   * Returns aggregated cache + fetch statistics for the active
+   * row-model mode. Combines current snapshot fields (`blocksLoaded`,
+   * `loadedRowCount`, `viewKey`, `pendingMutationCount`) with
+   * lifetime counters (`blocksFetched`, `cacheHits`, `cacheMisses`,
+   * `cacheHitRate`, `dedupedRequests`, `evictedBlocks`,
+   * `blockFetchErrors`). Pure additive observability — consumers
+   * read this from a dev panel during integration tuning, or wire
+   * it into production telemetry. Worker1 v0.6 server-row cache
+   * stats.
+   */
+  getCacheStats(): BcServerCacheStats
+}
+
+export interface BcServerCacheStats {
+  /** Active row-model mode at the time of the snapshot. */
+  mode: ServerRowModelMode
+  /** Current view key (filter / sort / search / groupBy hash). */
+  viewKey: string
+  /** Number of blocks currently held in the cache (snapshot). */
+  blocksLoaded: number
+  /** Total rows currently held across cached blocks (snapshot). */
+  loadedRowCount: number
+  /** Lifetime count of `loadPage` / `loadBlock` / `loadChildren` invocations that hit the network. */
+  blocksFetched: number
+  /** Lifetime count of fetches that found the requested block already in cache. */
+  cacheHits: number
+  /** Lifetime count of fetches that missed the cache. */
+  cacheMisses: number
+  /** `cacheHits / (cacheHits + cacheMisses)`. `1` when no fetches yet. */
+  cacheHitRate: number
+  /** Lifetime count of requests coalesced onto an in-flight fetch. */
+  dedupedRequests: number
+  /** Lifetime count of blocks dropped from the cache by LRU eviction or invalidation. */
+  evictedBlocks: number
+  /** Lifetime count of loader rejections (excluding AbortError). */
+  blockFetchErrors: number
+  /** Number of optimistic-mutation entries currently awaiting settlement. */
+  pendingMutationCount: number
 }
 
 /**

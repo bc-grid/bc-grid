@@ -6,6 +6,7 @@ import type {
   BcSelection,
   BcServerBlockErrorParams,
   BcServerBlockRetryConfig,
+  BcServerCacheStats,
   BcServerGridApi,
   ColumnId,
   RowId,
@@ -24,7 +25,7 @@ import type {
   ServerViewState,
 } from "@bc-grid/core"
 import { emptyBcRangeSelection } from "@bc-grid/core"
-import { createServerRowModel } from "@bc-grid/server-row-model"
+import { type ServerRowModelMetricsSnapshot, createServerRowModel } from "@bc-grid/server-row-model"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createActionsColumn, shouldRenderActionsColumn } from "./actionsColumn"
 import { BcGrid, useBcGridApi } from "./grid"
@@ -105,6 +106,7 @@ interface PagedServerState<TRow> {
   whenIdle: () => Promise<void>
   error: unknown
   getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
+  getMetrics: () => ServerRowModelMetricsSnapshot
   gridShell: ServerPagedGridShell<TRow>
   handleColumnStateChange: (
     next: readonly BcColumnStateEntry[],
@@ -143,6 +145,7 @@ interface InfiniteServerState<TRow> {
   whenIdle: () => Promise<void>
   error: unknown
   getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
+  getMetrics: () => ServerRowModelMetricsSnapshot
   getModelState: () => ServerRowModelState<TRow>
   handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
@@ -172,6 +175,7 @@ interface TreeServerState<TRow> {
   columns: readonly BcReactGridColumn<TRow>[]
   error: unknown
   getDiagnostics: (selection?: BcSelection) => ServerRowModelDiagnostics
+  getMetrics: () => ServerRowModelMetricsSnapshot
   getModelState: () => ServerRowModelState<TRow>
   handleFilterChange: (next: BcGridFilter | null, prev: BcGridFilter | null) => void
   handleSortChange: (next: readonly BcGridSort[], prev: readonly BcGridSort[]) => void
@@ -1000,6 +1004,14 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
         if (mode === "tree") return tree.error ?? null
         return null
       },
+      getCacheStats(): BcServerCacheStats {
+        const activeState = mode === "infinite" ? infinite : mode === "tree" ? tree : paged
+        return composeServerCacheStats({
+          mode,
+          diagnostics: activeState.getDiagnostics(),
+          metrics: activeState.getMetrics(),
+        })
+      },
     }
   }, [
     gridApiRef,
@@ -1581,6 +1593,8 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
     [rowCount, view, viewKey],
   )
 
+  const getMetrics = useCallback(() => modelRef.current.getMetrics(), [])
+
   const whenIdle = useCallback(async () => {
     while (modelRef.current.hasInFlightRequests()) {
       await modelRef.current.awaitAllSettled()
@@ -1593,6 +1607,7 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
     whenIdle,
     error,
     getDiagnostics,
+    getMetrics,
     gridShell,
     handleColumnStateChange,
     handleGroupByChange,
@@ -1969,6 +1984,8 @@ function useInfiniteServerState<TRow>(
     [rowCount, view, viewKey],
   )
 
+  const getMetrics = useCallback(() => modelRef.current.getMetrics(), [])
+
   const whenIdle = useCallback(async () => {
     while (modelRef.current.hasInFlightRequests()) {
       await modelRef.current.awaitAllSettled()
@@ -1980,6 +1997,7 @@ function useInfiniteServerState<TRow>(
     whenIdle,
     error,
     getDiagnostics,
+    getMetrics,
     getModelState,
     handleFilterChange,
     handleSortChange,
@@ -2395,6 +2413,8 @@ function useTreeServerState<TRow>(
     [rows.length, view, viewKey],
   )
 
+  const getMetrics = useCallback(() => modelRef.current.getMetrics(), [])
+
   const whenIdle = useCallback(async () => {
     while (modelRef.current.hasInFlightRequests()) {
       await modelRef.current.awaitAllSettled()
@@ -2407,6 +2427,7 @@ function useTreeServerState<TRow>(
     columns,
     error,
     getDiagnostics,
+    getMetrics,
     getModelState,
     handleFilterChange,
     handleSortChange,
@@ -2593,6 +2614,34 @@ export function BcServerGridDefaultErrorOverlay({
       </button>
     </div>
   )
+}
+
+/**
+ * Pure shape mapper for `BcServerGridApi.getCacheStats()`. Combines a
+ * model-layer `getDiagnostics()` snapshot + `getMetrics()` lifetime
+ * counters into the consumer-facing `BcServerCacheStats` shape.
+ * Exported for unit testing. Worker1 v0.6 server-row cache stats.
+ */
+export function composeServerCacheStats(input: {
+  mode: ServerRowModelMode
+  diagnostics: ServerRowModelDiagnostics
+  metrics: ServerRowModelMetricsSnapshot
+}): BcServerCacheStats {
+  const { mode, diagnostics, metrics } = input
+  return {
+    mode,
+    viewKey: diagnostics.viewKey,
+    blocksLoaded: diagnostics.cache.blockCount,
+    loadedRowCount: diagnostics.cache.loadedRowCount,
+    blocksFetched: metrics.blockFetches,
+    cacheHits: metrics.cacheHits,
+    cacheMisses: metrics.cacheMisses,
+    cacheHitRate: metrics.cacheHitRate,
+    dedupedRequests: metrics.dedupedRequests,
+    evictedBlocks: metrics.evictedBlocks,
+    blockFetchErrors: metrics.blockFetchErrors,
+    pendingMutationCount: diagnostics.pendingMutationCount,
+  }
 }
 
 function findCachedServerRow<TRow>(
