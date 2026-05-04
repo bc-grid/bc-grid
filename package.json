@@ -10,7 +10,7 @@
     "bundle-size": "bun run --filter '@bc-grid/bundle-size' check",
     "build": "bun run build:packages && bun run --filter './apps/*' build",
     "build:packages": "bun run --filter '@bc-grid/core' build && bun run --filter '@bc-grid/animations' build && bun run --filter '@bc-grid/virtualizer' build && bun run --filter '@bc-grid/theming' build && bun run --filter '@bc-grid/aggregations' build && bun run --filter '@bc-grid/filters' build && bun run --filter '@bc-grid/server-row-model' build && bun run --filter '@bc-grid/export' build && bun run --filter '@bc-grid/react' build && bun run --filter '@bc-grid/editors' build && bun run --filter '@bc-grid/enterprise' build",
-    "test": "bun test packages tools tests",
+    "test": "bun test $(find packages tools tests -path packages/react/tests/dom -prune -o -type f \\( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.js' -o -name '*.test.jsx' \\) -print)",
     "test:react-dom": "bun test --preload ./packages/react/tests/dom/setup.ts ./packages/react/tests/dom",
     "test:e2e": "bunx playwright test --project=spike-chromium --project=examples-chromium",
     "test:e2e:full": "bunx playwright test",
