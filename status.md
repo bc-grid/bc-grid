@@ -2,7 +2,7 @@
 
 **Owner:** Claude coordinator (`~/work/bc-grid`).
 **Update cadence:** after every merge train, every release cut, and when scope decisions change.
-**Last updated:** 2026-05-04 by Claude coordinator after #455 / #496 / #498 / #499 land.
+**Last updated:** 2026-05-04 by Claude coordinator after #501 / #502 land — Radix foundation IN, API surface 86% locked, all worker3 paused-on-RFC slot PRs closed.
 
 This file is the single fast-track tracker toward v1.0. It is **not** the milestone roadmap (`docs/coordination/release-milestone-roadmap.md` is the binding gate doc). This file's job is to give the maintainer a one-look view of "what's left, what could be deferred, what we're choosing to keep."
 
@@ -163,13 +163,13 @@ Cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback o
 
 | PR | Owner | Status | Defer? |
 | --- | --- | --- | --- |
-| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ❌ not started | 🔒 must ship |
-| PR-A2 — happy-dom test infra | worker2 | ❌ not started | 🔒 must ship |
-| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ❌ not started | 🔒 must ship |
-| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ not started | 🔒 must ship |
-| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ❌ not started | 🔒 must ship |
-| PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ not started | 🔒 must ship |
-| PR-C1 — shadcn Combobox foundation (cmdk) | worker3 | ❌ blocked on PR-A1 | 🔒 must ship |
+| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 merged 2026-05-04 | 🔒 must ship |
+| PR-A2 — happy-dom test infra | worker2 | ❌ ready (PR-A1 unblocked) | 🔒 must ship |
+| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ❌ ready (PR-A1 unblocked) | 🔒 must ship |
+| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ blocked on PR-B1 | 🔒 must ship |
+| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ❌ blocked on PR-B1 | 🔒 must ship |
+| PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ blocked on PR-B1 | 🔒 must ship |
+| PR-C1 — shadcn Combobox foundation (cmdk) | worker3 | ❌ ready (PR-A1 unblocked) | 🔒 must ship |
 | PR-C2 — Migrate select / multi-select / autocomplete editors | worker3 | ❌ blocked on PR-C1 | 🔒 must ship |
 | PR-C3 — Wire deferred `triggerComponent` / `optionItemComponent` slots | worker3 | ❌ blocked on PR-C2 | 🔒 must ship |
 | PR-D — Sweep + design-doc update | coordinator | ❌ blocked on B+C | 🔒 must ship |
