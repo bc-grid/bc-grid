@@ -1,0 +1,220 @@
+diff --git a/packages/aggregations/package.json b/packages/aggregations/package.json
+--- a/packages/aggregations/package.json
++++ b/packages/aggregations/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/aggregations"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/aggregations"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/animations/package.json b/packages/animations/package.json
+--- a/packages/animations/package.json
++++ b/packages/animations/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/animations"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/animations"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/core/package.json b/packages/core/package.json
+--- a/packages/core/package.json
++++ b/packages/core/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/core"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/core"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/editors/package.json b/packages/editors/package.json
+--- a/packages/editors/package.json
++++ b/packages/editors/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/editors"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/editors"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/enterprise/package.json b/packages/enterprise/package.json
+--- a/packages/enterprise/package.json
++++ b/packages/enterprise/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/enterprise"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/enterprise"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/export/package.json b/packages/export/package.json
+--- a/packages/export/package.json
++++ b/packages/export/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/export"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/export"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/filters/package.json b/packages/filters/package.json
+--- a/packages/filters/package.json
++++ b/packages/filters/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/filters"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/filters"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/react/package.json b/packages/react/package.json
+--- a/packages/react/package.json
++++ b/packages/react/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/react"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/react"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/server-row-model/package.json b/packages/server-row-model/package.json
+--- a/packages/server-row-model/package.json
++++ b/packages/server-row-model/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/server-row-model"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/server-row-model"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/theming/package.json b/packages/theming/package.json
+--- a/packages/theming/package.json
++++ b/packages/theming/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/theming"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/theming"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
+diff --git a/packages/virtualizer/package.json b/packages/virtualizer/package.json
+--- a/packages/virtualizer/package.json
++++ b/packages/virtualizer/package.json
+@@ -7,13 +7,13 @@
+   "homepage": "https://github.com/bc-grid/bc-grid",
+   "repository": {
+     "type": "git",
+-    "url": "git+https://github.com/bc-grid/bc-grid.git",
+-    "directory": "packages/virtualizer"
++    "url": "<BSNCRAFT_GIT_URL>",
++    "directory": "packages/bc-grid/packages/virtualizer"
+   },
+   "bugs": {
+     "url": "https://github.com/bc-grid/bc-grid/issues"
+   },
+   "publishConfig": {
+-    "registry": "https://npm.pkg.github.com",
++    "registry": "<BC_GRID_PUBLISH_REGISTRY>",
+     "access": "restricted"
+   },
