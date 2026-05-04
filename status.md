@@ -2,7 +2,7 @@
 
 **Owner:** Claude coordinator (`~/work/bc-grid`).
 **Update cadence:** after every merge train, every release cut, and when scope decisions change.
-**Last updated:** 2026-05-04 by Claude coordinator after #503 / #504 / #505 land — Radix foundation re-sourced from `@bsn/ui` (#503), happy-dom test infra IN (#504), worker1 first API-surface slice IN (#505).
+**Last updated:** 2026-05-04 by worker2 after PR-B1 merged, #513 opened, and PR-B3 started.
 
 This file is the single fast-track tracker toward v1.0. It is **not** the milestone roadmap (`docs/coordination/release-milestone-roadmap.md` is the binding gate doc). This file's job is to give the maintainer a one-look view of "what's left, what could be deferred, what we're choosing to keep."
 
@@ -41,10 +41,10 @@ The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved
 | --- | --- | --- | --- |
 | PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 + resync #503 merged 2026-05-04 | 🔒 |
 | PR-A2 — happy-dom test infra | worker2 | ✅ #504 merged 2026-05-04 | 🔒 |
-| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | 🟡 #510 in review | 🔒 |
-| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ blocked on PR-B1 | 🔒 |
-| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ❌ blocked on PR-B1 | 🔒 |
-| PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ blocked on PR-B1 | 🔒 |
+| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ✅ #510 merged 2026-05-04 | 🔒 |
+| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ ready | 🔒 |
+| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ⏳ in flight on `agent/worker2/v07-radix-tooltip-popover` | 🔒 |
+| PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ ready | 🔒 |
 | PR-C1 — shadcn Combobox foundation (cmdk) | worker3 | ❌ ready (PR-A1 unblocked) | 🔒 |
 | PR-C2 — Migrate select / multi-select / autocomplete editors | worker3 | ❌ blocked on PR-C1 | 🔒 |
 | PR-C3 — Wire deferred `triggerComponent` / `optionItemComponent` slots | worker3 | ❌ blocked on PR-C2 | 🔒 |
