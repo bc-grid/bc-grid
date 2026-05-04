@@ -185,4 +185,47 @@ Estimated total: 1.5-2 days for a focused implementation session, plus ~30 min o
 
 ## 16. Decision log
 
-(empty — populated as each action item ships its PR.)
+Populated as each §15 action item ships.
+
+- **Item 1 — Cross-package symmetry** ✅ shipped in #505 (re-export `BcGridIdentity`, `BcAggregation`, `BcAggregationResultDTO` from `@bc-grid/react`).
+- **Item 2 — INTERNALIZE `serverRowEntryOverrides`** ✅ shipped in #507 (renamed to `__bcServerRowEntryOverrides`, type renamed to `__BcServerRowEntryOverride` with `@internal` JSDoc; removed from public manifest).
+- **Item 3 — RENAME `Use*BoundProps` → `Use*ServerProps`** ✅ shipped in #508 (4 new `Use*ServerProps` aliases per RFC #477 §3.1; old `Use*BoundProps` names kept as `@deprecated` aliases through v1.1; both in manifest during the deprecation window).
+- **Item 4 — `@bc-grid/server-row-model` mode shift** ✅ shipped in #505 (manifest entry flipped `planned` → `enforced`).
+- **Item 5 — DEPRECATE `data-bc-grid-cell-state`** ✅ shipped in #505 (JSDoc `@deprecated` tag added pointing at `data-bc-grid-edit-state`).
+- **Item 6 — Maintainer pass on OPEN QUESTIONs** → compiled punch list below; tracked in [#512](https://github.com/bc-grid/bc-grid/issues/512) (label `v1-api-question`). Maintainer leaves a one-line confirm / counter per question; once all 10 resolve the v1.0 freeze gate on this audit closes.
+
+### 16.1 OPEN QUESTION punch list (for maintainer review)
+
+Compiled from §4, §5, and §9 — 15 questions total. Each has a default / recommended verdict from the audit author; maintainer just needs a yes / no / counter-proposal per item before v1.0 freeze.
+
+**`@bc-grid/core` (§4)**
+
+1. **`ServerRowModelMode`** (`"paged" | "infinite" | "tree"`) — name aligned with `<BcServerGrid rowModel>` prop. **Recommendation: KEEP-AS-IS** as the canonical mode-name enum. Chrome that displays mode names should reuse this enum rather than redeclaring.
+2. **`ServerRowModelEvent`** — internal observability event-stream type. Used by consumers building dashboards but not by typical grid consumers. **Recommendation: KEEP-AS-IS** and document as "for observability tooling".
+
+**`@bc-grid/react` (§5)**
+
+3. **`BcCellEditor` vs `BcCellEditorProps`** — both shipped. Are they meant to be distinct types, or is one a typo / leftover? Need to confirm whether to LOCK both, deprecate one, or rename.
+4. **`BcServerEditMutationEvent` vs `BcServerEditMutationProps`** — same pattern, same question.
+5. **`BcServerEditPatchFactory`** — naming feels heavy. Alternatives: `BcServerEditMutationPatch` or `BcServerRowPatchFactory`. **Recommendation: rename to `BcServerRowPatchFactory`** (matches the `BcServerRowPatch` it produces); old name as `@deprecated` alias through v1.1 if any consumer references it.
+6. **`BcSidebarBuiltInPanel` / `BcSidebarCustomPanel` / `BcSidebarPanel`** — three types for the sidebar panel concept. Is the union (`BcSidebarPanel`) sufficient, or are the discriminated arms each meaningful as separate exports? **Recommendation: KEEP all three exported** (consumers writing custom panels need `BcSidebarCustomPanel`; consumers extending built-ins need `BcSidebarBuiltInPanel`).
+7. **`BcStatusBarCustomSegment` vs `BcStatusBarSegment`** — same question as the sidebar trio. **Recommendation: KEEP both exported** for the same reason.
+8. **`BcContextMenuBuiltinItem` vs `BcContextMenuCustomItem` vs `BcContextMenuItem`** — same trio pattern. **Recommendation: KEEP all three exported.**
+9. **`useBcGridApi` vs `useBcGridState`** — both hooks; `useBcGridApi` returns the apiRef ref-handle, `useBcGridState` returns controlled state. **Recommendation: KEEP both names** — they serve distinct concerns (imperative API vs reactive state) and renaming would churn every consumer.
+
+(Questions 6, 7, 8 each cover a 2-or-3-type cluster; counted as one question each since they ratify the same naming pattern. Question 3, 4 cover 2 types each; counted as one question each.)
+
+(Per the audit's "OPEN QUESTION (12)" count in §5, the 7 questions above unpack 12 individual type names — accurate when counting types, not question-count.)
+
+**`@bc-grid/aggregations` (§9)**
+
+10. **Plain-name aggregation functions (`avg`, `count`, `max`, `min`, `sum`)** — collide easily with consumer math libraries (lodash, etc.). Worth namespacing? **Recommendation: KEEP-AS-IS** — consumers can `import * as bcAgg from "@bc-grid/aggregations"` if they need namespacing.
+
+### 16.2 How the maintainer answers
+
+For each numbered question above, leave a 1-line decision in the GitHub issue tagged `v1-api-question`:
+
+- ✅ "Confirm recommendation" → no code change; the audit doc verdict becomes binding.
+- ↻ "Counter-proposal: <new name / new verdict>" → worker opens a follow-up PR to apply.
+
+After all questions resolve, the v1.0 freeze gate on this audit closes.
