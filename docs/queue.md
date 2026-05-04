@@ -165,7 +165,7 @@ Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both docume
 
 ## v0.7 follow-ups (queued, do not start until v0.6 ships)
 
-- `[in-flight: worker2]` **v07-radix-shadcn-deps-and-scaffolding** — PR-A1 from `docs/design/shadcn-radix-correction-rfc.md`: add current stable Radix runtime deps + copied shadcn primitive source under `packages/react/src/shadcn/`; establish the pre-replacement bundle baseline. Branch `agent/worker2/v07-radix-shadcn-deps-and-scaffolding`.
+- `[review: worker2 #501]` **v07-radix-shadcn-deps-and-scaffolding** — PR-A1 from `docs/design/shadcn-radix-correction-rfc.md`: add current stable Radix runtime deps + copied shadcn primitive source under `packages/react/src/shadcn/`; establish the pre-replacement bundle baseline. Branch `agent/worker2/v07-radix-shadcn-deps-and-scaffolding`.
 - `[deferred]` **v07-aggregation-footer-sticky-bottom** — once the v0.6 layout architecture pass lands the single-viewport architecture, the aggregation footer row at `grid.tsx:3177` becomes a natural `position: sticky; bottom: 0` row inside the viewport. Today the footer scrolls with body content; sticking it pins running totals to the viewport's bottom edge while body rows scroll under it. Composes with the v0.6 layout pass's sticky-top headers + sticky-left/right pinned cells without further coordination. Filed per the layout RFC §10 Q7 ratification (2026-05-03). Small follow-up; meaningful polish for ERP grids with running totals.
 
 ## Q1 — Foundation + Vertical Slice
