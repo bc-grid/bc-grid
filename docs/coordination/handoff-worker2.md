@@ -1,6 +1,61 @@
 # Worker2 Handoff (Codex — filters + aggregations + chrome consistency lane)
 
-**Last updated:** 2026-05-03 by Claude coordinator
+**Last updated:** 2026-05-04 by Claude coordinator
+
+## 🚨 P0 ARCHITECTURE CORRECTION 2026-05-04 — chrome lane: hand-rolled → Radix/shadcn
+
+**Read `docs/design/shadcn-radix-correction-rfc.md` first.** Maintainer audit found bc-grid drifted from the day-1 design — README + design.md said "shadcn/Radix from the ground up" but every chrome primitive was hand-rolled. You own the chrome lane of the correction (worker3 owns the editor lane in parallel; worker1 stays on server-grid). This is binding for v0.7.0 and supersedes everything else in your queue except #455 review duty.
+
+**Stop merging any new chrome surface from your own queue (toolbar slot extensions, tool-panel additions, context-menu items) until the correction lands.** Anything in flight that adds new code under `packages/react/src/internal/*` builds further into the wrong direction.
+
+### Block A — foundation (sequential, ~half day)
+
+#### Active now → `v07-radix-shadcn-deps-and-scaffolding` (PR-A1)
+
+Branch: `agent/worker2/v07-radix-shadcn-deps-and-scaffolding`. Per RFC §Block A PR-A1:
+
+- Add to `packages/react/package.json` `dependencies`: `@radix-ui/react-dropdown-menu`, `@radix-ui/react-context-menu`, `@radix-ui/react-tooltip`, `@radix-ui/react-popover`, `@radix-ui/react-checkbox`, `@radix-ui/react-tabs`, `@radix-ui/react-roving-focus`, `@radix-ui/react-dialog`, `lucide-react`. Pin minor versions to current stable. Update `bun.lock`.
+- Run `bunx shadcn@latest add dropdown-menu context-menu tooltip popover checkbox tabs dialog command` to copy primitive components. Land them under `packages/react/src/shadcn/` (NOT runtime dep — copied source per the design). Add `packages/react/src/shadcn/` to `.gitignore` exception so they're committed.
+- Update `tools/bundle-size/src/manifest.ts` baseline expectations (RFC §TL;DR — ~12-18 KiB add).
+- No consumer-visible change. PR body documents the deps + lists every shadcn primitive copied. No deletion in this PR — Blocks B+C delete in subsequent PRs.
+
+#### Next-after → `v07-test-infra-happy-dom` (PR-A2)
+
+Per RFC §Block A PR-A2:
+
+- Add `happy-dom` + `@testing-library/react` to `packages/react/devDependencies`.
+- Add `packages/react/tests/dom/setup.ts` registering happy-dom globals.
+- Add a separate `bun test --preload tests/dom/setup.ts packages/react/tests/dom/*` runner script (root `package.json`). Pure-helper tests stay where they are; only Radix-interactive tests move to `dom/`.
+- No migration of existing tests yet — that happens per-PR in Block B as each chrome surface migrates. PR-A2 just stands up the infrastructure.
+
+### Block B — chrome migration (sequential after Block A, 4 PRs)
+
+#### B1 → `v07-radix-context-menu` (PR-B1)
+
+Replace `packages/react/src/internal/context-menu.tsx` (532 LOC) + `menu-item.tsx` (175 LOC) + `chrome-context-menu.ts` (~200 LOC) + `disclosure-icon.tsx` + `context-menu-icons.tsx` with `@radix-ui/react-context-menu` (right-click) + `@radix-ui/react-dropdown-menu` (header column-options menu). Map the existing `BcContextMenuItem` types onto Radix `Item` / `CheckboxItem` / `Sub`. Submenu collision-flip falls out for free via Radix's Floating UI integration — delete the hand-rolled `useLayoutEffect` and `data-flip` attribute. Replace icons with `lucide-react`. Public API (`BcContextMenuItem`, `DEFAULT_CONTEXT_MENU_ITEMS`, `BcGridProps.contextMenuItems`) preserved verbatim. Move `contextMenu.markup.test.tsx` and `chromeContextMenu.test.ts` into `tests/dom/` with `@testing-library/react`. Add Playwright assertions for: right-click on data row, right-click on header, Shift+F10 keyboard, submenu collision-flip on narrow viewport, escape close, outside-click close, focus return.
+
+#### B2 → `v07-radix-tool-panels` (PR-B2)
+
+Replace tool-panel chrome (`columnVisibility.tsx`, `filterToolPanel.tsx`, `pivotToolPanel.tsx`) with Radix `Tabs` for the columns/filters/pivot toggle row. Each panel becomes `Tabs.Content`. Use Radix `Dialog` (configured as a `Sheet`) if the panels slide in. Internal column visibility list uses Radix `Checkbox` + `RovingFocusGroup` for keyboard nav. Public API for the columns/filters/pivot props preserved.
+
+#### B3 → `v07-radix-tooltip-popover` (PR-B3)
+
+Replace `tooltip.tsx` (291 LOC) with `@radix-ui/react-tooltip`. Replace header funnel filter popups (`filter.ts` popup variant) with `@radix-ui/react-popover`. Delete `popup-position.ts` (172 LOC), `popup-dismiss.ts`, `use-roving-focus.ts`. Anywhere that used these helpers, route through Radix.
+
+#### B4 → `v07-lucide-icon-sweep` (PR-B4)
+
+Replace `header-icons.tsx`, `pagination-icons.tsx`, `panel-icons.tsx` with `lucide-react`. Match icon names against shadcn's conventions where possible (e.g., `ChevronUp` / `ChevronDown` for sort, `Filter` for filter, `Pin` for pinned column). Delete the hand-rolled SVG components. Update any consumer-facing icon docs.
+
+### Constraints (binding per RFC §Migration constraints)
+
+1. **No public API change.** Every PR runs `bun run api-surface` — diff must be empty.
+2. **Playwright coverage added BEFORE deletion.** Each PR adds the assertion that proves Radix replacement works, then deletes the in-house code in the same PR.
+3. **Bundle baseline.** PR-A1 establishes the new baseline including Radix install. Each B-PR may grow only when the corresponding deletion lands in the same PR.
+4. **No new chrome features outside this RFC.** Toolbar slot extensions, tool-panel additions, context-menu items — all on hold until Block B+C complete.
+
+The full RFC is `docs/design/shadcn-radix-correction-rfc.md`. Read it before starting PR-A1.
+
+---
 
 ## ⚡ Fresh items added 2026-05-04 (post bsncraft-issues sweep)
 

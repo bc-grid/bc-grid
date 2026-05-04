@@ -1,6 +1,53 @@
 # Worker3 Handoff (Claude — editor + keyboard/a11y + lookup UX lane)
 
-**Last updated:** 2026-05-03 by Claude coordinator
+**Last updated:** 2026-05-04 by Claude coordinator
+
+## 🚨 P0 ARCHITECTURE CORRECTION 2026-05-04 — editor lane: hand-rolled → shadcn
+
+**Read `docs/design/shadcn-radix-correction-rfc.md` first.** Maintainer audit found bc-grid drifted from the day-1 design — README + design.md said "shadcn/Radix from the ground up" but every chrome primitive was hand-rolled. You own the editor lane of the correction (worker2 owns the chrome lane in parallel; worker1 stays on server-grid). This is binding for v0.7.0 and supersedes everything else in your queue except the in-flight a11y / keyboard polish that's already merged.
+
+**Stop merging any new editor primitive surface from your own queue (new combobox modes, new editor variants) until the correction lands.** Anything in flight that adds new code under `packages/editors/src/internal/*` builds further into the wrong direction.
+
+### Block C — editor migration (parallel with worker2's Block B, 3 PRs)
+
+**Block A (foundation) is owned by worker2** — wait for `agent/worker2/v07-radix-shadcn-deps-and-scaffolding` (PR-A1) to land on main before starting Block C. PR-A1 brings in `cmdk` and the shadcn `command.tsx` primitive that PR-C1 builds on.
+
+#### Active now (after Block A lands) → `v07-shadcn-combobox-foundation` (PR-C1)
+
+Branch: `agent/worker3/v07-shadcn-combobox-foundation`. Per RFC §Block C PR-C1:
+
+- Add `cmdk` to `packages/editors/package.json` `dependencies`. Update `bun.lock`.
+- Run `bunx shadcn@latest add command popover` and copy primitives into `packages/editors/src/shadcn/`. Or, if worker2's PR-A1 already copied `command.tsx` into `packages/react/src/shadcn/`, alias it via `@bc-grid/react/shadcn/command` — pick whichever keeps `@bc-grid/editors` from depending on `@bc-grid/react` runtime (it already devDeps it; OK either way — RFC PR body should call out the choice).
+- Add a thin internal wrapper `packages/editors/src/shadcn/Combobox.tsx` exposing the shape that today's `combobox.tsx` + `combobox-search.tsx` provide (search-mode and select-mode), backed by cmdk + Radix Popover.
+- No editor-visible change yet — just the new foundation. PR-C2 swaps the editors over.
+
+#### Next-after → `v07-radix-combobox-editors` (PR-C2)
+
+Per RFC §Block C PR-C2:
+
+- Migrate `selectEditor`, `multiSelectEditor`, `autocompleteEditor` internals to use the new shadcn `Combobox` foundation from PR-C1.
+- Delete `packages/editors/src/internal/combobox.tsx` and `combobox-search.tsx`. Public exports (`selectEditor`, `multiSelectEditor`, `autocompleteEditor`) preserved.
+- Add Playwright assertions: select-edit happy path, multi-select toggle, autocomplete typeahead with async options, prepareresult preload, Enter contract pinned in #427, focus return after commit.
+- Move existing combobox-related markup tests into `packages/react/tests/dom/` (per worker2's PR-A2 happy-dom infra).
+
+#### Then-after → `v07-shadcn-editor-render-prop-slots` (PR-C3)
+
+Per RFC §Block C PR-C3:
+
+- Wire the deferred `triggerComponent` + `optionItemComponent` slots from #489 (select-batch first slice). Now that the editors sit on a real shadcn Combobox, the slot wiring has a primitive underneath to slot into.
+- `createSelectEditor({ triggerComponent, optionItemComponent })`, `createMultiSelectEditor`, `createAutocompleteEditor` factory pattern matches #480 / #488 / #489.
+- Update `docs/recipes/shadcn-editors.md` — the "What's NOT covered (yet)" section now becomes "covered."
+
+### Constraints (binding per RFC §Migration constraints)
+
+1. **No public API change.** Every PR runs `bun run api-surface` — diff must be empty.
+2. **Playwright coverage added BEFORE deletion.** Each PR adds the assertion that proves the shadcn replacement works, then deletes the in-house code in the same PR.
+3. **Bundle baseline.** Worker2's PR-A1 establishes the post-install baseline. Each C-PR may grow only when the corresponding deletion lands in the same PR.
+4. **No new editor variants outside this RFC.** New editor types or new combobox modes wait until Block C completes.
+
+The full RFC is `docs/design/shadcn-radix-correction-rfc.md`. Read it before starting PR-C1.
+
+---
 
 ## ⚡ Fresh items added 2026-05-04 (post bsncraft-issues sweep)
 

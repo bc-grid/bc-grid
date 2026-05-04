@@ -2,6 +2,14 @@
 
 **Last updated:** 2026-05-04 by Claude coordinator
 
+## ⚙ ARCHITECTURE CORRECTION 2026-05-04 — your lane is UNCHANGED
+
+**Read `docs/design/shadcn-radix-correction-rfc.md` for context.** Maintainer audit found bc-grid drifted from the day-1 shadcn/Radix-first architecture; worker2 owns the chrome migration (PR-A1 → PR-B4) and worker3 owns the editor migration (PR-C1 → PR-C3). **Worker1 stays on the server-grid lane through the correction** — your work is independent of the chrome/editor primitive layer. Top priority remains #455 rebase below; once that lands, continue down your existing v0.6 server queue (server-tree-expansion-persistence, export-csv-server-page-stream).
+
+The one constraint: **do not add new code under `packages/react/src/internal/*`** during the correction window. If your server-grid work needs a new chrome primitive (e.g., a server-status badge that wants a popover), wait for worker2's PR-B3 to land first and route through Radix Popover.
+
+---
+
 ## 🚨 ONE PR LEFT 2026-05-04 — rebase #455 phase 3 on new main
 
 **Update 2026-05-04 PM:** ✅ #470 cache stats and ✅ #452 client tree phase 2.5 both rebased + merged into the alpha.3 train. Only **#455 client tree phase 3 production-readiness** remains DIRTY.
