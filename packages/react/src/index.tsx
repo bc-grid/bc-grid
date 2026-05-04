@@ -48,7 +48,6 @@ export {
 } from "./useServerGrid"
 export type {
   UseServerGridActions,
-  UseServerGridBoundProps,
   UseServerGridServerProps,
   UseServerGridInitial,
   UseServerGridOptions,
@@ -58,7 +57,6 @@ export type {
 export { useServerInfiniteGrid } from "./useServerInfiniteGrid"
 export type {
   UseServerInfiniteGridActions,
-  UseServerInfiniteGridBoundProps,
   UseServerInfiniteGridServerProps,
   UseServerInfiniteGridInitial,
   UseServerInfiniteGridOptions,
@@ -68,7 +66,6 @@ export type {
 export { useServerPagedGrid } from "./useServerPagedGrid"
 export type {
   UseServerPagedGridActions,
-  UseServerPagedGridBoundProps,
   UseServerPagedGridServerProps,
   UseServerPagedGridInitial,
   UseServerPagedGridOptions,
@@ -79,7 +76,6 @@ export { useServerRowUpdates } from "./useServerRowUpdates"
 export { useServerTreeGrid } from "./useServerTreeGrid"
 export type {
   UseServerTreeGridActions,
-  UseServerTreeGridBoundProps,
   UseServerTreeGridServerProps,
   UseServerTreeGridInitial,
   UseServerTreeGridOptions,
@@ -196,7 +192,7 @@ export type {
   BcServerEditMutationEvent,
   BcServerEditMutationHandler,
   BcServerEditMutationProps,
-  BcServerEditPatchFactory,
+  BcServerRowPatchFactory,
   BcSidebarBuiltInPanel,
   BcSidebarContext,
   BcSidebarCustomPanel,

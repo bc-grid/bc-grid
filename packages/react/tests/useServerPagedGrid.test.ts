@@ -147,10 +147,10 @@ describe("useServerPagedGrid dual-output surface (worker1 v06 IMPL)", () => {
   ) as string
 
   test("UseServerPagedGridResult has serverProps + bound + props (deprecated alias)", () => {
-    expect(source).toMatch(/serverProps: UseServerPagedGridBoundProps<TRow>/)
+    expect(source).toMatch(/serverProps: UseServerPagedGridServerProps<TRow>/)
     expect(source).toMatch(/bound: UseServerPagedGridBoundOutput<TRow>/)
     expect(source).toMatch(/@deprecated Renamed to `serverProps` in v0\.6\.0/)
-    expect(source).toMatch(/props: UseServerPagedGridBoundProps<TRow>/)
+    expect(source).toMatch(/props: UseServerPagedGridServerProps<TRow>/)
   })
 
   test("UseServerPagedGridBoundOutput shape matches BcGridProps subset (RFC §3.2)", () => {

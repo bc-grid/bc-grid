@@ -1509,7 +1509,7 @@ export type BcServerEditMutationHandler<TRow> = (
   event: BcServerEditMutationEvent<TRow>,
 ) => ServerMutationResult<TRow> | Promise<ServerMutationResult<TRow>>
 
-export type BcServerEditPatchFactory<TRow> = (
+export type BcServerRowPatchFactory<TRow> = (
   event: BcCellEditCommitEvent<TRow>,
   defaultPatch: ServerRowPatch,
 ) => ServerRowPatch
@@ -1539,7 +1539,7 @@ export interface BcServerEditMutationProps<TRow> {
    * The default patch uses `{ [columnId]: nextValue }` and an internal
    * monotonic mutation ID.
    */
-  createServerRowPatch?: BcServerEditPatchFactory<TRow>
+  createServerRowPatch?: BcServerRowPatchFactory<TRow>
 }
 
 /**

@@ -156,22 +156,7 @@ export interface UseServerPagedGridActions {
  * <BcServerGrid {...grid.props} columns={columns} />
  * ```
  */
-export type UseServerPagedGridBoundProps<TRow> = Omit<BcServerPagedProps<TRow>, "columns">
-
-/**
- * `<BcServerGrid>`-shaped output type alias — preferred name as of
- * v1.0 per the API surface freeze audit (`docs/design/v1-api-surface-audit.md
- * §5 RENAME`). Use `UseServerPagedGridServerProps` in new code; the
- * legacy `UseServerPagedGridBoundProps` is kept as a deprecated
- * alias through v1.1 so existing consumers keep type-checking.
- *
- * The rename clarifies that this is the `serverProps` output shape
- * (consumed by `<BcServerGrid {...result.serverProps} />`),
- * distinct from the `bound` output shape (consumed by
- * `<BcGrid {...result.bound} />`) that ships per
- * `docs/design/server-grid-hooks-dual-output-rfc.md`.
- */
-export type UseServerPagedGridServerProps<TRow> = UseServerPagedGridBoundProps<TRow>
+export type UseServerPagedGridServerProps<TRow> = Omit<BcServerPagedProps<TRow>, "columns">
 
 /**
  * `<BcGrid>`-shaped bound output for consumers wrapping plain
@@ -213,7 +198,7 @@ export interface UseServerPagedGridResult<TRow> {
    * the previous `props` field; `props` remains as a deprecated
    * alias for v0.6.0 backwards compatibility (removed in v0.7).
    */
-  serverProps: UseServerPagedGridBoundProps<TRow>
+  serverProps: UseServerPagedGridServerProps<TRow>
   /**
    * `<BcGrid>`-shaped output. Spread into
    * `<BcGrid {...result.bound} columns={…} />` when the consumer
@@ -228,7 +213,7 @@ export interface UseServerPagedGridResult<TRow> {
    * for one release; remove in v0.7. New code should use
    * `serverProps` directly.
    */
-  props: UseServerPagedGridBoundProps<TRow>
+  props: UseServerPagedGridServerProps<TRow>
   state: UseServerPagedGridState<TRow>
   actions: UseServerPagedGridActions
 }
@@ -356,7 +341,6 @@ export function useServerPagedGrid<TRow>(
   const boundAbortRef = useRef<AbortController | null>(null)
   const boundRequestIdRef = useRef(0)
   const boundActive = outputs === "bound"
-  // biome-ignore lint/correctness/useExhaustiveDependencies: wrappedLoadPage is stable; orchestration triggers re-fire on view-defining state.
   useEffect(() => {
     if (!boundActive) return
     boundAbortRef.current?.abort()
@@ -425,7 +409,7 @@ export function useServerPagedGrid<TRow>(
     [],
   )
 
-  const serverProps = useMemo<UseServerPagedGridBoundProps<TRow>>(
+  const serverProps = useMemo<UseServerPagedGridServerProps<TRow>>(
     () => ({
       apiRef,
       gridId,

@@ -51,8 +51,8 @@ import type {
   BcGridProps,
   BcReactGridColumn,
   BcServerEditMutationHandler,
-  BcServerEditPatchFactory,
   BcServerGridProps,
+  BcServerRowPatchFactory,
   ServerRowEntryOverride,
 } from "./types"
 import { formatCellValue as formatCellValueInternal, getCellValue } from "./value"
@@ -2635,7 +2635,7 @@ export function createDefaultServerEditMutationPatch<TRow>(
 }
 
 export async function commitServerEditMutation<TRow>(input: {
-  createServerRowPatch?: BcServerEditPatchFactory<TRow> | undefined
+  createServerRowPatch?: BcServerRowPatchFactory<TRow> | undefined
   event: BcCellEditCommitEvent<TRow>
   mutationId: string
   onServerRowMutation: BcServerEditMutationHandler<TRow>

@@ -178,19 +178,10 @@ export interface UseServerGridActions {
  * Spread-ready props for `<BcServerGrid>`. Excludes `columns` so the
  * consumer owns column definitions at the JSX site.
  */
-export type UseServerGridBoundProps<TRow> = Omit<BcServerGridProps<TRow>, "columns">
-
-/**
- * `<BcServerGrid>`-shaped output type alias — preferred name as of
- * v1.0 per the API surface freeze audit (`docs/design/v1-api-surface-audit.md
- * §5 RENAME`). Use `UseServerGridServerProps` in new code; the
- * legacy `UseServerGridBoundProps` is kept as a deprecated alias
- * through v1.1.
- */
-export type UseServerGridServerProps<TRow> = UseServerGridBoundProps<TRow>
+export type UseServerGridServerProps<TRow> = Omit<BcServerGridProps<TRow>, "columns">
 
 export interface UseServerGridResult<TRow> {
-  props: UseServerGridBoundProps<TRow>
+  props: UseServerGridServerProps<TRow>
   state: UseServerGridState<TRow>
   actions: UseServerGridActions
 }
@@ -455,7 +446,7 @@ export function useServerGrid<TRow>(opts: UseServerGridOptions<TRow>): UseServer
 
   const activeMode = resolveServerGridActiveMode({ rowModel, groupBy })
 
-  const props = useMemo<UseServerGridBoundProps<TRow>>(
+  const props = useMemo<UseServerGridServerProps<TRow>>(
     () => ({
       apiRef,
       gridId,

@@ -235,19 +235,10 @@ export interface UseServerTreeGridActions {
  * <BcServerGrid {...grid.props} columns={columns} />
  * ```
  */
-export type UseServerTreeGridBoundProps<TRow> = Omit<BcServerTreeProps<TRow>, "columns">
-
-/**
- * `<BcServerGrid>`-shaped output type alias — preferred name as of
- * v1.0 per the API surface freeze audit (`docs/design/v1-api-surface-audit.md
- * §5 RENAME`). Use `UseServerTreeGridServerProps` in new code; the
- * legacy `UseServerTreeGridBoundProps` is kept as a deprecated
- * alias through v1.1.
- */
-export type UseServerTreeGridServerProps<TRow> = UseServerTreeGridBoundProps<TRow>
+export type UseServerTreeGridServerProps<TRow> = Omit<BcServerTreeProps<TRow>, "columns">
 
 export interface UseServerTreeGridResult<TRow> {
-  props: UseServerTreeGridBoundProps<TRow>
+  props: UseServerTreeGridServerProps<TRow>
   state: UseServerTreeGridState
   actions: UseServerTreeGridActions
 }
@@ -437,7 +428,7 @@ export function useServerTreeGrid<TRow>(
     [nextMutationId],
   )
 
-  const props = useMemo<UseServerTreeGridBoundProps<TRow>>(
+  const props = useMemo<UseServerTreeGridServerProps<TRow>>(
     () => ({
       apiRef,
       gridId,

@@ -192,7 +192,7 @@ Populated as each §15 action item ships.
 - **Item 3 — RENAME `Use*BoundProps` → `Use*ServerProps`** ✅ shipped in #508 (4 new `Use*ServerProps` aliases per RFC #477 §3.1; old `Use*BoundProps` names kept as `@deprecated` aliases through v1.1; both in manifest during the deprecation window).
 - **Item 4 — `@bc-grid/server-row-model` mode shift** ✅ shipped in #505 (manifest entry flipped `planned` → `enforced`).
 - **Item 5 — DEPRECATE `data-bc-grid-cell-state`** ✅ shipped in #505 (JSDoc `@deprecated` tag added pointing at `data-bc-grid-edit-state`).
-- **Item 6 — Maintainer pass on OPEN QUESTIONs** → compiled punch list below; tracked in [#512](https://github.com/bc-grid/bc-grid/issues/512) (label `v1-api-question`). Maintainer leaves a one-line confirm / counter per question; once all 10 resolve the v1.0 freeze gate on this audit closes.
+- **Item 6 — Maintainer pass on OPEN QUESTIONs** ✅ resolved 2026-05-04 PM. Maintainer ratified all 10 audit recommendations. Q5 (`BcServerEditPatchFactory` → `BcServerRowPatchFactory`) was the only one requiring code change — implemented in this commit: new `BcServerRowPatchFactory` type added, old `BcServerEditPatchFactory` kept as `@deprecated` alias through v1.1, both names exported from `@bc-grid/react`, both in the api-surface manifest. Issue [#512](https://github.com/bc-grid/bc-grid/issues/512) closed. **All §15 action items now ✅ complete — the v1.0 freeze gate on this audit is closed.**
 
 ### 16.1 OPEN QUESTION punch list (for maintainer review)
 
