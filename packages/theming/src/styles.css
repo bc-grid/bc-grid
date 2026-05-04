@@ -2538,6 +2538,84 @@ select.bc-grid-editor-input {
   flex-direction: column;
 }
 
+.bc-grid-toolbar {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--bc-grid-border);
+  background: var(--bc-grid-bg);
+  color: var(--bc-grid-fg);
+  font-size: var(--bc-grid-font-size);
+  line-height: 1.2;
+  padding-block: 0.5rem;
+  padding-inline: var(--bc-grid-cell-padding-x);
+}
+
+.bc-grid-toolbar-input,
+.bc-grid-toolbar-select,
+.bc-grid-toolbar-button {
+  min-height: 1.875rem;
+  border: 1px solid var(--bc-grid-input-border);
+  border-radius: calc(var(--bc-grid-radius) - 2px);
+  background: var(--bc-grid-bg);
+  color: var(--bc-grid-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  outline: none;
+  transition: background-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), border-color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), color var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard), box-shadow var(--bc-grid-motion-duration-fast)
+    var(--bc-grid-motion-ease-standard);
+}
+
+.bc-grid-toolbar-input,
+.bc-grid-toolbar-select {
+  min-width: 10rem;
+  padding-block: 0;
+  padding-inline: 0.625rem;
+}
+
+.bc-grid-quick-filter-input {
+  max-width: 18rem;
+  flex: 1 1 14rem;
+}
+
+.bc-grid-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding-block: 0;
+  padding-inline: 0.625rem;
+}
+
+.bc-grid-toolbar-input:hover:not(:disabled),
+.bc-grid-toolbar-select:hover:not(:disabled),
+.bc-grid-toolbar-button:hover:not(:disabled) {
+  border-color: var(--bc-grid-fg);
+}
+
+.bc-grid-toolbar-button:hover:not(:disabled) {
+  background: var(--bc-grid-row-hover);
+}
+
+.bc-grid-toolbar-input:focus-visible,
+.bc-grid-toolbar-select:focus-visible,
+.bc-grid-toolbar-button:focus-visible {
+  border-color: var(--bc-grid-focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bc-grid-focus-ring) 22%, transparent);
+}
+
+.bc-grid-toolbar-input:disabled,
+.bc-grid-toolbar-select:disabled,
+.bc-grid-toolbar-button:disabled {
+  cursor: default;
+  opacity: 0.52;
+  pointer-events: none;
+}
+
 .bc-grid-bulk-actions {
   display: flex;
   min-height: 2.75rem;
@@ -4274,6 +4352,9 @@ table.bc-grid-detail-nested-grid {
 .bc-grid-pagination-button,
 .bc-grid-pagination-size select,
 .bc-grid-cell-checkbox,
+.bc-grid-toolbar-input,
+.bc-grid-toolbar-select,
+.bc-grid-toolbar-button,
 .bc-grid-bulk-actions-slot button,
 .bc-grid-bulk-actions-clear,
 .bc-grid-bulk-action-undo-button,
@@ -4324,6 +4405,9 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-detail-toggle,
   .bc-grid-pagination-button,
   .bc-grid-pagination-size select,
+  .bc-grid-toolbar-input,
+  .bc-grid-toolbar-select,
+  .bc-grid-toolbar-button,
   .bc-grid-bulk-actions-slot button,
   .bc-grid-bulk-actions-clear,
   .bc-grid-bulk-action-undo-button,
@@ -4461,6 +4545,7 @@ table.bc-grid-detail-nested-grid {
   .bc-grid-cell,
   .bc-grid-sidebar,
   .bc-grid-sidebar-panel,
+  .bc-grid-toolbar,
   .bc-grid-bulk-actions,
   .bc-grid-bulk-action-undo-toast,
   .bc-grid-detail-panel,
@@ -4541,6 +4626,29 @@ table.bc-grid-detail-nested-grid {
 
   .bc-grid-statusbar {
     border-top: 1px solid CanvasText;
+  }
+
+  .bc-grid-toolbar {
+    border-bottom: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .bc-grid-toolbar-input,
+  .bc-grid-toolbar-select,
+  .bc-grid-toolbar-button {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .bc-grid-toolbar-input:focus-visible,
+  .bc-grid-toolbar-select:focus-visible,
+  .bc-grid-toolbar-button:focus-visible,
+  .bc-grid-toolbar-button:hover:not(:disabled) {
+    background: Highlight;
+    color: HighlightText;
+    box-shadow: none;
   }
 
   .bc-grid-bulk-actions {

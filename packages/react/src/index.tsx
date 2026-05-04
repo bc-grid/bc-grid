@@ -156,6 +156,7 @@ export type {
   BcGridUrlStatePersistence,
   BcNormalisedRange,
   BcPaginationState,
+  BcQuickFilterOptions,
   BcRange,
   BcRangeBeforeCopyEvent,
   BcRangeBeforeCopyHook,

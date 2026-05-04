@@ -277,6 +277,7 @@ export const apiSurfaceManifest = [
       "BcGridUrlStatePersistence",
       "BcNormalisedRange",
       "BcPaginationState",
+      "BcQuickFilterOptions",
       "BcRange",
       "BcRangeBeforeCopyEvent",
       "BcRangeBeforeCopyHook",

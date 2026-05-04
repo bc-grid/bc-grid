@@ -1038,9 +1038,22 @@ When `searchText` is set on the grid, every visible row is matched against the s
 
 The matched substring is exposed to `cellRenderer` via `params.searchText` so the renderer can highlight matches. The default renderer (when `cellRenderer` is omitted) handles highlighting automatically.
 
-bc-grid does not render a default global search box. Host apps can either own
-the input and pass its value into the grid, or use `toolbar={(ctx) =>
-ctx.searchInput}` to compose the grid-owned input inside a custom toolbar:
+For a turnkey broad search input, pass `quickFilter`. It renders a compact
+toolbar input above the grid and drives the same `searchText` state after a
+short debounce:
+
+```tsx
+<BcGrid
+  data={rows}
+  columns={columns}
+  rowId={(row) => row.id}
+  quickFilter={{ placeholder: "Search customers", debounceMs: 200 }}
+/>
+```
+
+Host apps can also own the input and pass its value into the grid, or use
+`toolbar={(ctx) => ctx.searchInput}` / `ctx.quickFilterInput` to compose the
+grid-owned inputs inside a custom toolbar:
 
 ```tsx
 function CustomerGrid() {
@@ -1075,8 +1088,9 @@ function CustomerGrid() {
 Use `defaultSearchText` only for an uncontrolled initial query. For a host-owned
 search input, prefer controlling the query with `searchText` as shown above. Do
 not pass `searchText` and `defaultSearchText` to the same grid. Enable
-`searchHotkey` with `searchInputRef` when the grid should focus and select the
-host search input on Cmd/Ctrl+F.
+`searchHotkey` with `searchInputRef` when the grid should focus and select a
+host search input on Cmd/Ctrl+F; when `quickFilter` is enabled, the hotkey
+falls back to the built-in quick-filter input.
 
 ### 4.4 Filter shape (frozen at v0.1)
 
@@ -1193,6 +1207,9 @@ export interface BcFilterEditorProps<TValue = unknown> {
   // Grouping
   groupableColumns={[{ columnId: "region", header: "Region" }]}
   groupsExpandedByDefault={true}
+
+  // Quick filter / global search
+  quickFilter={{ placeholder: "Search customers", debounceMs: 200 }}
 
   // Show / hide inactive (read-only convention)
   showInactive={false} onShowInactiveChange={setShowInactive}
@@ -1489,6 +1506,11 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   // Host-owned global search chrome
   searchHotkey?: boolean
   searchInputRef?: React.RefObject<HTMLInputElement | null>
+  quickFilter?: {
+    enabled?: boolean
+    placeholder?: string
+    debounceMs?: number
+  }
 
   // Active filter convention
   /**

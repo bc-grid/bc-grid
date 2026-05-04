@@ -83,6 +83,7 @@ describe("BcGrid toolbar render prop", () => {
     expect(typeof captured?.setSearchText).toBe("function")
     expect(typeof captured?.setGroupBy).toBe("function")
     expect(typeof captured?.setDensity).toBe("function")
+    expect(captured?.quickFilterInput).toBeNull()
     expect(captured?.savedViewPicker).toBeNull()
   })
 
@@ -92,5 +93,41 @@ describe("BcGrid toolbar render prop", () => {
     })
 
     expect(html).not.toContain('class="bc-grid-toolbar"')
+  })
+
+  test("renders an opt-in quick filter as the default toolbar", () => {
+    const html = renderGrid({
+      defaultSearchText: "acme",
+      quickFilter: { placeholder: "Find customers" },
+    })
+
+    expect(html).toContain('class="bc-grid-toolbar"')
+    expect(html).toContain('data-bc-grid-quick-filter-input="true"')
+    expect(html).toContain('aria-label="Quick filter"')
+    expect(html).toContain('placeholder="Find customers"')
+    expect(html).toContain('value="acme"')
+  })
+
+  test("exposes quickFilterInput to render-prop toolbars when quickFilter is enabled", () => {
+    let captured: BcToolbarContext<Row> | null = null
+    const html = renderGrid({
+      quickFilter: { enabled: true },
+      toolbar: (ctx) => {
+        captured = ctx
+        return <>{ctx.quickFilterInput}</>
+      },
+    })
+
+    expect(html).toContain('data-bc-grid-quick-filter-input="true"')
+    expect(captured?.quickFilterInput).not.toBeNull()
+  })
+
+  test("does not render quick-filter toolbar chrome when quickFilter is disabled", () => {
+    const html = renderGrid({
+      quickFilter: { enabled: false },
+    })
+
+    expect(html).not.toContain('class="bc-grid-toolbar"')
+    expect(html).not.toContain("bc-grid-quick-filter-input")
   })
 })

@@ -10,7 +10,7 @@ function CustomersToolbar(ctx: BcToolbarContext<Customer>) {
   return (
     <div className="customers-toolbar">
       <div className="customers-toolbar-primary">
-        {ctx.searchInput}
+        {ctx.quickFilterInput}
         {ctx.groupByDropdown}
         {ctx.densityPicker}
         {ctx.clearFiltersButton}
@@ -37,15 +37,19 @@ export function CustomersGrid({ rows, columns }: CustomersGridProps) {
         { columnId: "region", header: "Region" },
         { columnId: "status", header: "Status" },
       ]}
+      quickFilter={{ placeholder: "Search customers" }}
       toolbar={(ctx) => <CustomersToolbar {...ctx} />}
     />
   )
 }
 ```
 
-`ctx.searchInput` drives the grid's `searchText` state. If the host already
-owns search state, keep passing `searchText` / `onSearchTextChange`; the same
-sub-slot will call the controlled callback.
+`ctx.quickFilterInput` appears when the grid's `quickFilter` prop is enabled
+and drives the grid's `searchText` state after the configured debounce.
+`ctx.searchInput` is the immediate, non-debounced search input for hosts that
+want to provide their own search affordance but still reuse grid-owned wiring.
+If the host already owns search state, keep passing `searchText` /
+`onSearchTextChange`; both sub-slots call the controlled callback.
 
 `ctx.savedViewPicker` is intentionally `null` today because saved views are
 consumer-owned. Place the app's saved-view picker next to the grid-owned slots
