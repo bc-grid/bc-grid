@@ -1,12 +1,12 @@
 # Worker2 Handoff (Codex — filters + aggregations + chrome consistency lane)
 
-**Last updated:** 2026-05-04 PM (post-#522 open) by worker2
+**Last updated:** 2026-05-04 PM (post-v0.6.0 GA cut, post-#529 audit merge) by Claude coordinator
 
-## 🛑 STATUS: BLOCK B IN REVIEW — NO UNCLAIMED WORKER2 TASKS
+## 🛑 STATUS: V0.6.0 GA SHIPPED — V0.7 + BSNCRAFT-PREP AUDIT BOTH DONE
 
-**Block A foundation ✅ + PR-B1 (#510) ✅ + PR-B3 (#518) ✅ are merged.** v0.6.0-alpha.3 published. PR-B2 (#521) and PR-B4 (#522) are open for review. There are no new worker2 chrome assignments in this handoff unless review fixes come back or the coordinator adds new work.
+**v0.6.0 GA published** at https://github.com/bc-grid/bc-grid/releases/tag/v0.6.0. Last release from this standalone repo. Your audit (#529) merged. Ready for the next pre-move task.
 
-If your handoff cache shows anything "Active now → PR-A1 / PR-B1 / PR-B3" — **`git pull origin main` and re-read this doc**. Verification: `git log origin/main --oneline | head -8` should show `release: v0.6.0-alpha.3` near the top, then your three already-merged PRs.
+If your handoff cache shows anything older — `git pull origin main` and re-read this doc.
 
 Already merged from your lane today:
 - ✅ #501 + #503 PR-A1 (Radix deps + 13 shadcn primitives from `@bsn/ui`)
@@ -14,6 +14,34 @@ Already merged from your lane today:
 - ✅ #510 PR-B1 (context-menu + header column-options → Radix; deleted `menu-item.tsx` + `context-menu-icons.tsx`; reduced `context-menu.tsx` 532→56 LOC)
 - ✅ #513 follow-up (relative imports inside shadcn primitives)
 - ✅ #518 PR-B3 (BcGridTooltip + filter popover → Radix; deleted `popup-position.ts` + `popup-dismiss.ts` + `use-roving-focus.ts`; net **-1,482 LOC**)
+- ✅ #521 PR-B2 (sidebar tool panels → Radix Tabs)
+- ✅ #522 PR-B4 (lucide-react icon sweep on header / pagination / panel / disclosure)
+- ✅ #529 bsncraft monorepo move — bc-grid-side prep audit (verdict: structurally ready; 3 metadata decisions queued for move time)
+
+### Active now → `v1-monorepo-move-package-metadata-patch`
+
+Per your own audit (#529): 3 package.json metadata fields need flipping when bc-grid lands at `~/work/bsncraft/packages/bc-grid/`. **Pre-stage the patch** as a draft so worker1's runbook can apply it mechanically at move time.
+
+Branch: `agent/worker2/v1-monorepo-move-package-metadata-patch`. Deliverables:
+
+1. **Create `docs/coordination/bsncraft-monorepo-move-metadata.patch`** — a git-applyable patch that updates, for all 11 publishable `packages/*/package.json` + the 4 `apps/*/package.json` files where applicable:
+   - `repository.url`: `git+https://github.com/bc-grid/bc-grid.git` → `git+https://github.com/<bsncraft-org>/bsncraft.git` (use placeholder `<BSNCRAFT_GIT_URL>` so the maintainer fills it in at apply time)
+   - `repository.directory`: `packages/<name>` → `packages/bc-grid/packages/<name>`
+   - `publishConfig.registry`: leave the placeholder note for maintainer decision (keep GitHub Packages / move to bsncraft registry / remove publishConfig entirely if going internal-only)
+2. **Add a sibling `docs/coordination/bsncraft-monorepo-move-metadata.md`** that documents:
+   - What each placeholder means + how to fill it
+   - The single `git apply` command worker1's runbook will invoke
+   - How to verify the patch applied cleanly (post-apply grep for the old URL/directory should return zero)
+
+This is **independent of worker1's runbook** but feeds directly into it. Land it whenever ready.
+
+### Next-after → review worker1's runbook PR when it lands
+
+Worker1 is writing `docs/coordination/bsncraft-monorepo-move-runbook.md` (the executable plan). When the PR opens, review it for completeness against your audit findings — specifically check that the runbook references the metadata patch you just wrote.
+
+### Hard rule: do not start the actual move
+
+Do NOT touch `~/work/bsncraft` or perform any `git subtree split`-style operations from your worktree. The actual move runs by maintainer or coordinator under explicit direction. Your job is to **prepare**, not execute.
 
 ---
 
