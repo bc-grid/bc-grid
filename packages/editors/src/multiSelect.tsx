@@ -2,6 +2,11 @@ import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useCallback, useState } from "react"
 import { type EditorOption, editorAccessibleName, resolveEditorOptions } from "./chrome"
 import { Combobox } from "./internal/combobox"
+import type {
+  ComboboxOptionSlotProps,
+  ComboboxSlotOptions,
+  ComboboxTriggerSlotProps,
+} from "./internal/comboboxSlots"
 
 interface MultiSelectPrepareResult {
   initialOptions: readonly EditorOption[]
@@ -48,26 +53,89 @@ type MultiSelectFetchOptions = (
  *     auto-select-on-key (which would surprise users in multi).
  *   - Commit produces `readonly TValue[]` — typed values, in option
  *     order. Bypasses `column.valueParser` like the v0.1 multi-select.
+ *
+ * Native rendering uses bc-grid's CSS-only Combobox shell. Consumers
+ * wanting shadcn-native styling pass `triggerComponent` /
+ * `optionItemComponent` to `createMultiSelectEditor({ ... })`. See
+ * `docs/recipes/shadcn-editors.md`. Per
+ * `v06-shadcn-native-editors-select-batch`.
  */
-export const multiSelectEditor: BcCellEditor<unknown, unknown> = {
-  Component: MultiSelectEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "multi-select",
-  popup: true,
-  // Same async-loaded options path as `selectEditor` (mirrors the
-  // autocomplete editor's prepare hook from #403). When the column
-  // has no `fetchOptions`, prepare resolves `undefined` and the
-  // Component falls through to the synchronous `column.options` path.
-  // Per `v06-prepareresult-preload-select-multi` (planning doc §3).
-  async prepare({ column }) {
-    const fetchOptions = (column as { fetchOptions?: MultiSelectFetchOptions }).fetchOptions
-    if (!fetchOptions) return undefined
-    const controller = new AbortController()
-    const initialOptions = await fetchOptions("", controller.signal)
-    return { initialOptions } satisfies MultiSelectPrepareResult
-  },
+
+/**
+ * Props handed to a custom `triggerComponent` for the multi-select
+ * editor. Re-exports the shared `ComboboxTriggerSlotProps` shape.
+ */
+export type MultiSelectEditorTriggerProps = ComboboxTriggerSlotProps
+
+/**
+ * Props handed to a custom `optionItemComponent` for the multi-select
+ * editor. Re-exports the shared `ComboboxOptionSlotProps` shape (the
+ * `isSelected` + `isMulti` props let consumers render checkmarks /
+ * different chrome per row).
+ */
+export type MultiSelectEditorOptionProps = ComboboxOptionSlotProps
+
+export type MultiSelectEditorOptions = ComboboxSlotOptions
+
+/**
+ * Factory for the multi-select editor. Returns a fresh `BcCellEditor`
+ * with the supplied options baked in. Default-export `multiSelectEditor`
+ * is `createMultiSelectEditor()` for the zero-config case.
+ *
+ * ```tsx
+ * import { Button } from "@/components/ui/button"
+ * import { CommandItem } from "@/components/ui/command"
+ * import { createMultiSelectEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnMultiSelectEditor = createMultiSelectEditor({
+ *   triggerComponent: ({ children, ...rest }) => <Button {...rest}>{children}</Button>,
+ *   optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+ * })
+ * ```
+ */
+export function createMultiSelectEditor(
+  options: MultiSelectEditorOptions = {},
+): BcCellEditor<unknown, unknown> {
+  const Component = createMultiSelectEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "multi-select",
+    popup: true,
+    // Same async-loaded options path as `selectEditor` (mirrors the
+    // autocomplete editor's prepare hook from #403). When the column
+    // has no `fetchOptions`, prepare resolves `undefined` and the
+    // Component falls through to the synchronous `column.options` path.
+    // Per `v06-prepareresult-preload-select-multi` (planning doc §3).
+    async prepare({ column }) {
+      const fetchOptions = (column as { fetchOptions?: MultiSelectFetchOptions }).fetchOptions
+      if (!fetchOptions) return undefined
+      const controller = new AbortController()
+      const initialOptions = await fetchOptions("", controller.signal)
+      return { initialOptions } satisfies MultiSelectPrepareResult
+    },
+  }
 }
 
-function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
+export const multiSelectEditor: BcCellEditor<unknown, unknown> = createMultiSelectEditor()
+
+function createMultiSelectEditorComponent(
+  options: MultiSelectEditorOptions,
+): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof MultiSelectEditorBody> {
+  const { triggerComponent, optionItemComponent } = options
+  return function MultiSelectEditor(props) {
+    return (
+      <MultiSelectEditorBody
+        {...props}
+        triggerComponent={triggerComponent}
+        optionItemComponent={optionItemComponent}
+      />
+    )
+  }
+}
+
+function MultiSelectEditorBody(
+  props: BcCellEditorProps<unknown, unknown> & MultiSelectEditorOptions,
+) {
   const {
     initialValue,
     error,
@@ -80,6 +148,8 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
     column,
     row,
     prepareResult,
+    triggerComponent,
+    optionItemComponent,
   } = props
   const optionsSource = (column as { options?: unknown }).options
   // `prepareResult.initialOptions` from the prepare hook above wins
@@ -115,6 +185,8 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
       focusRef={focusRef as { current: HTMLElement | null } | undefined}
       onSelect={handleSelect}
       kind="multi-select"
+      triggerComponent={triggerComponent}
+      optionItemComponent={optionItemComponent}
     />
   )
 }

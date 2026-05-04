@@ -13,6 +13,11 @@ import {
   editorStateAttrs,
   visuallyHiddenStyle,
 } from "../chrome"
+import type {
+  ComboboxOptionSlotProps,
+  ComboboxSlotOptions,
+  ComboboxTriggerSlotProps,
+} from "./comboboxSlots"
 
 /**
  * shadcn-native Combobox primitive used by the v0.5 lookup editor
@@ -121,6 +126,15 @@ interface ComboboxBaseProps {
    * primitive lives underneath.
    */
   kind?: string
+  /**
+   * Optional shadcn-native slot overrides for the trigger button + per-option
+   * row. Per `v06-shadcn-native-editors-select-batch` (extends the
+   * inputComponent / checkboxComponent pattern from #480 / #488 / #489).
+   * Editors composing this primitive surface the options via their
+   * `createXxxEditor({ triggerComponent, optionItemComponent })` factory.
+   */
+  triggerComponent?: ComboboxSlotOptions["triggerComponent"]
+  optionItemComponent?: ComboboxSlotOptions["optionItemComponent"]
 }
 
 interface ComboboxSingleProps extends ComboboxBaseProps {
@@ -180,6 +194,8 @@ export function Combobox(props: ComboboxProps): ReactNode {
     focusRef,
     renderCreateOption,
     kind = "combobox",
+    triggerComponent: TriggerComponent,
+    optionItemComponent: OptionItemComponent,
   } = props
   // `initialOptions` from the editor's `prepare` hook overrides the
   // static `options` prop when present — see ComboboxBaseProps JSDoc.
@@ -271,7 +287,7 @@ export function Combobox(props: ComboboxProps): ReactNode {
   // up to the editor portal wrapper, which owns commit/cancel —
   // we deliberately don't `event.preventDefault()` for those.
   const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    (event: React.KeyboardEvent<HTMLElement>) => {
       if (pending) return
       if (event.key === "ArrowDown") {
         event.preventDefault()
@@ -355,85 +371,131 @@ export function Combobox(props: ComboboxProps): ReactNode {
   const activeOption = activeIndex >= 0 ? options[activeIndex] : undefined
   const activeOptionId = activeOption ? `${listboxId}-opt-${activeIndex}` : undefined
 
+  // Trigger inner content (swatch / icon / label / chips / caret).
+  // Computed once and either spread into the framework's default
+  // `<button>` or handed to the consumer's `triggerComponent` as
+  // `children`. Per `v06-shadcn-native-editors-select-batch`.
+  const triggerChildren: ReactNode = (
+    <>
+      {summary.singleSwatch ? (
+        <span
+          className="bc-grid-editor-combobox-swatch"
+          data-bc-grid-editor-swatch="true"
+          style={{ background: summary.singleSwatch }}
+          aria-hidden="true"
+        />
+      ) : null}
+      {summary.singleIcon ? (
+        <span className="bc-grid-editor-combobox-icon" aria-hidden="true">
+          {summary.singleIcon}
+        </span>
+      ) : null}
+      {isMulti ? (
+        <span className="bc-grid-editor-combobox-chips" data-bc-grid-editor-combobox-chips="true">
+          {summary.chips.length === 0 ? (
+            <span className="bc-grid-editor-combobox-label bc-grid-editor-combobox-placeholder">
+              {summary.label}
+            </span>
+          ) : (
+            summary.chips.map((chip) => (
+              <span
+                key={chip.key}
+                className="bc-grid-editor-combobox-chip"
+                data-bc-grid-editor-combobox-chip="true"
+              >
+                {chip.swatch ? (
+                  <span
+                    className="bc-grid-editor-combobox-chip-swatch"
+                    data-bc-grid-editor-swatch="true"
+                    style={{ background: chip.swatch }}
+                    aria-hidden="true"
+                  />
+                ) : null}
+                <span>{chip.label}</span>
+              </span>
+            ))
+          )}
+        </span>
+      ) : (
+        <span className="bc-grid-editor-combobox-label">{summary.label}</span>
+      )}
+      <span className="bc-grid-editor-combobox-caret" aria-hidden="true">
+        ▾
+      </span>
+    </>
+  )
+
+  // Trigger props. The consumer's component receives ALL of these so
+  // the framework's commit / focus / ARIA paths reach the DOM input.
+  // The `data-bc-grid-editor-input` + `data-bc-grid-editor-kind`
+  // attrs are LOAD-BEARING — without them the framework's commit
+  // path can't locate the active editor.
+  const triggerProps: ComboboxTriggerSlotProps = {
+    ref: buttonRef,
+    tagName: "button",
+    className: "bc-grid-editor-input bc-grid-editor-combobox-trigger",
+    "data-bc-grid-editor-input": "true",
+    "data-bc-grid-editor-kind": kind,
+    "data-bc-grid-editor-option-count": options.length,
+    "data-bc-grid-editor-seeded":
+      typeof seedKey === "string" && [...seedKey].length === 1 ? "true" : undefined,
+    ...editorStateAttrs({ error, pending }),
+    "data-state": open ? "open" : "closed",
+    "aria-invalid": error ? true : undefined,
+    "aria-required": required ? true : undefined,
+    "aria-readonly": readOnly ? true : undefined,
+    "aria-disabled": disabled || pending ? true : undefined,
+    "aria-label": accessibleName,
+    "aria-describedby": error ? errorId : undefined,
+    "aria-haspopup": "listbox",
+    "aria-expanded": open,
+    "aria-multiselectable": isMulti ? true : undefined,
+    "aria-controls": open ? listboxId : undefined,
+    "aria-activedescendant": activeOptionId,
+    disabled: pending,
+    open,
+    onKeyDown: handleKeyDown,
+    onClick: () => setOpen((prev) => !prev),
+    children: triggerChildren,
+  }
+
   return (
     <div
       className="bc-grid-editor-combobox"
       data-bc-grid-editor-combobox="true"
       data-bc-grid-editor-multi={isMulti ? "true" : undefined}
     >
-      <button
-        ref={buttonRef}
-        type="button"
-        className="bc-grid-editor-input bc-grid-editor-combobox-trigger"
-        data-bc-grid-editor-input="true"
-        data-bc-grid-editor-kind={kind}
-        data-bc-grid-editor-option-count={options.length}
-        data-bc-grid-editor-seeded={
-          typeof seedKey === "string" && [...seedKey].length === 1 ? "true" : undefined
-        }
-        {...editorStateAttrs({ error, pending })}
-        data-state={open ? "open" : "closed"}
-        aria-invalid={error ? true : undefined}
-        aria-required={required ? true : undefined}
-        aria-readonly={readOnly ? true : undefined}
-        aria-disabled={disabled || pending ? true : undefined}
-        aria-label={accessibleName}
-        aria-describedby={error ? errorId : undefined}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-multiselectable={isMulti ? true : undefined}
-        aria-controls={open ? listboxId : undefined}
-        aria-activedescendant={activeOptionId}
-        disabled={pending}
-        onKeyDown={handleKeyDown}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        {summary.singleSwatch ? (
-          <span
-            className="bc-grid-editor-combobox-swatch"
-            data-bc-grid-editor-swatch="true"
-            style={{ background: summary.singleSwatch }}
-            aria-hidden="true"
-          />
-        ) : null}
-        {summary.singleIcon ? (
-          <span className="bc-grid-editor-combobox-icon" aria-hidden="true">
-            {summary.singleIcon}
-          </span>
-        ) : null}
-        {isMulti ? (
-          <span className="bc-grid-editor-combobox-chips" data-bc-grid-editor-combobox-chips="true">
-            {summary.chips.length === 0 ? (
-              <span className="bc-grid-editor-combobox-label bc-grid-editor-combobox-placeholder">
-                {summary.label}
-              </span>
-            ) : (
-              summary.chips.map((chip) => (
-                <span
-                  key={chip.key}
-                  className="bc-grid-editor-combobox-chip"
-                  data-bc-grid-editor-combobox-chip="true"
-                >
-                  {chip.swatch ? (
-                    <span
-                      className="bc-grid-editor-combobox-chip-swatch"
-                      data-bc-grid-editor-swatch="true"
-                      style={{ background: chip.swatch }}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                  <span>{chip.label}</span>
-                </span>
-              ))
-            )}
-          </span>
-        ) : (
-          <span className="bc-grid-editor-combobox-label">{summary.label}</span>
-        )}
-        <span className="bc-grid-editor-combobox-caret" aria-hidden="true">
-          ▾
-        </span>
-      </button>
+      {TriggerComponent ? (
+        <TriggerComponent {...triggerProps} />
+      ) : (
+        <button
+          ref={buttonRef}
+          type="button"
+          className={triggerProps.className}
+          data-bc-grid-editor-input="true"
+          data-bc-grid-editor-kind={kind}
+          data-bc-grid-editor-option-count={options.length}
+          data-bc-grid-editor-seeded={triggerProps["data-bc-grid-editor-seeded"]}
+          {...editorStateAttrs({ error, pending })}
+          data-state={triggerProps["data-state"]}
+          aria-invalid={triggerProps["aria-invalid"]}
+          aria-required={triggerProps["aria-required"]}
+          aria-readonly={triggerProps["aria-readonly"]}
+          aria-disabled={triggerProps["aria-disabled"]}
+          aria-label={accessibleName}
+          aria-describedby={triggerProps["aria-describedby"]}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-multiselectable={triggerProps["aria-multiselectable"]}
+          aria-controls={triggerProps["aria-controls"]}
+          aria-activedescendant={activeOptionId}
+          disabled={pending}
+          onKeyDown={handleKeyDown}
+          onClick={triggerProps.onClick}
+        >
+          {triggerChildren}
+        </button>
+      )}
 
       {open ? (
         <div
@@ -457,27 +519,13 @@ export function Combobox(props: ComboboxProps): ReactNode {
             const optionId = `${listboxId}-opt-${index}`
             const isActive = index === activeIndex
             const isSelected = selectedIndices.has(index)
-            return (
-              <div
-                key={editorOptionToString(option.value)}
-                id={optionId}
-                // biome-ignore lint/a11y/useSemanticElements: aria-activedescendant pattern; option focus stays on the trigger
-                role="option"
-                tabIndex={-1}
-                aria-selected={isSelected}
-                data-option-index={index}
-                data-active={isActive ? "true" : undefined}
-                data-selected={isSelected ? "true" : undefined}
-                className="bc-grid-editor-combobox-option"
-                onPointerDown={(event) => {
-                  // Pointer-down (not click) so we beat the portal's
-                  // pointerdown click-outside listener, which fires on
-                  // the same gesture.
-                  event.preventDefault()
-                  updateSelection(index)
-                }}
-                onMouseEnter={() => setActiveIndex(index)}
-              >
+            // Inner content (multi-mode check + swatch + icon + label).
+            // Computed once and either spread into the framework's
+            // default `<div role="option">` or handed to the
+            // consumer's `optionItemComponent` as `children`. Per
+            // `v06-shadcn-native-editors-select-batch`.
+            const optionChildren: ReactNode = (
+              <>
                 {isMulti ? (
                   <span
                     className="bc-grid-editor-combobox-option-check"
@@ -501,6 +549,54 @@ export function Combobox(props: ComboboxProps): ReactNode {
                   </span>
                 ) : null}
                 <span className="bc-grid-editor-combobox-option-label">{option.label}</span>
+              </>
+            )
+            const onPointerDown = (event: { preventDefault: () => void }) => {
+              // Pointer-down (not click) so we beat the portal's
+              // pointerdown click-outside listener, which fires on
+              // the same gesture.
+              event.preventDefault()
+              updateSelection(index)
+            }
+            const onMouseEnter = () => setActiveIndex(index)
+            const optionProps: ComboboxOptionSlotProps = {
+              id: optionId,
+              role: "option",
+              tabIndex: -1,
+              "aria-selected": isSelected,
+              "data-option-index": index,
+              "data-active": isActive ? "true" : undefined,
+              "data-selected": isSelected ? "true" : undefined,
+              className: "bc-grid-editor-combobox-option",
+              onPointerDown,
+              onMouseEnter,
+              children: optionChildren,
+              option,
+              isActive,
+              isSelected,
+              isMulti,
+            }
+            if (OptionItemComponent) {
+              return (
+                <OptionItemComponent key={editorOptionToString(option.value)} {...optionProps} />
+              )
+            }
+            return (
+              <div
+                key={editorOptionToString(option.value)}
+                id={optionId}
+                // biome-ignore lint/a11y/useSemanticElements: aria-activedescendant pattern; option focus stays on the trigger
+                role="option"
+                tabIndex={-1}
+                aria-selected={isSelected}
+                data-option-index={index}
+                data-active={isActive ? "true" : undefined}
+                data-selected={isSelected ? "true" : undefined}
+                className="bc-grid-editor-combobox-option"
+                onPointerDown={onPointerDown}
+                onMouseEnter={onMouseEnter}
+              >
+                {optionChildren}
               </div>
             )
           })}

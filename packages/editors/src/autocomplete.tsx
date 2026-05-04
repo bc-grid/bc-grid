@@ -2,6 +2,7 @@ import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useCallback } from "react"
 import { type EditorOption, editorAccessibleName } from "./chrome"
 import { SearchCombobox, type SearchComboboxFetchOptions } from "./internal/combobox-search"
+import type { ComboboxOptionSlotProps, ComboboxSlotOptions } from "./internal/comboboxSlots"
 
 interface AutocompletePrepareResult {
   initialOptions: readonly EditorOption[]
@@ -54,28 +55,85 @@ interface AutocompletePrepareResult {
  *   - Visible "Loading…" / "No matches" inline rows in the dropdown.
  *   - Optional `option.swatch` / `option.icon` rendered next to labels
  *     (matches the select / multi-select editors — uniform option shape).
+ *
+ * Native rendering uses bc-grid's CSS-only SearchCombobox shell.
+ * Consumers wanting shadcn-native styling on the option rows pass
+ * `optionItemComponent` to `createAutocompleteEditor({ ... })`. The
+ * `triggerComponent` slot is intentionally NOT exposed in this PR —
+ * the autocomplete trigger is an `<input>` (self-closing, no children),
+ * which doesn't fit the children-as-slot pattern used by select /
+ * multi-select. A follow-up PR will add an `inputComponent` slot for
+ * the autocomplete trigger mirroring the single-input cluster shape
+ * from #488. See `docs/recipes/shadcn-editors.md`. Per
+ * `v06-shadcn-native-editors-select-batch`.
  */
-export const autocompleteEditor: BcCellEditor<unknown, unknown> = {
-  Component: AutocompleteEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "autocomplete",
-  popup: true,
-  // First-page preload via `column.fetchOptions("", signal)` so the
-  // dropdown paints with options on first frame. The framework's
-  // prepare path is race-safe (a token guards a stale resolve), but
-  // it does not pass an AbortSignal — the controller token suppresses
-  // the late dispatch instead. v0.6 follow-up: thread an AbortSignal
-  // through `BcCellEditorPrepareParams` so superseded preloads can
-  // cancel their network request as well.
-  async prepare({ column }) {
-    const fetchOptions = (column as { fetchOptions?: SearchComboboxFetchOptions }).fetchOptions
-    if (!fetchOptions) return undefined
-    const controller = new AbortController()
-    const initialOptions = await fetchOptions("", controller.signal)
-    return { initialOptions } satisfies AutocompletePrepareResult
-  },
+/**
+ * Props handed to a custom `optionItemComponent` for the autocomplete
+ * editor. Re-exports the shared `ComboboxOptionSlotProps` shape — drops
+ * in any shadcn `<CommandItem>` (or similar) without modification. The
+ * autocomplete is single-mode only, so `isSelected` + `isMulti` will
+ * always be `false` in the props the consumer's component receives.
+ */
+export type AutocompleteEditorOptionProps = ComboboxOptionSlotProps
+
+export interface AutocompleteEditorOptions {
+  optionItemComponent?: ComboboxSlotOptions["optionItemComponent"]
 }
 
-function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
+/**
+ * Factory for the autocomplete editor. Returns a fresh `BcCellEditor`
+ * with the supplied options baked in. Default-export
+ * `autocompleteEditor` is `createAutocompleteEditor()` for the
+ * zero-config case.
+ *
+ * ```tsx
+ * import { CommandItem } from "@/components/ui/command"
+ * import { createAutocompleteEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnAutocompleteEditor = createAutocompleteEditor({
+ *   optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+ * })
+ * ```
+ */
+export function createAutocompleteEditor(
+  options: AutocompleteEditorOptions = {},
+): BcCellEditor<unknown, unknown> {
+  const Component = createAutocompleteEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "autocomplete",
+    popup: true,
+    // First-page preload via `column.fetchOptions("", signal)` so the
+    // dropdown paints with options on first frame. The framework's
+    // prepare path is race-safe (a token guards a stale resolve), but
+    // it does not pass an AbortSignal — the controller token suppresses
+    // the late dispatch instead. v0.6 follow-up: thread an AbortSignal
+    // through `BcCellEditorPrepareParams` so superseded preloads can
+    // cancel their network request as well.
+    async prepare({ column }) {
+      const fetchOptions = (column as { fetchOptions?: SearchComboboxFetchOptions }).fetchOptions
+      if (!fetchOptions) return undefined
+      const controller = new AbortController()
+      const initialOptions = await fetchOptions("", controller.signal)
+      return { initialOptions } satisfies AutocompletePrepareResult
+    },
+  }
+}
+
+export const autocompleteEditor: BcCellEditor<unknown, unknown> = createAutocompleteEditor()
+
+function createAutocompleteEditorComponent(
+  options: AutocompleteEditorOptions,
+): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof AutocompleteEditorBody> {
+  const { optionItemComponent } = options
+  return function AutocompleteEditor(props) {
+    return <AutocompleteEditorBody {...props} optionItemComponent={optionItemComponent} />
+  }
+}
+
+function AutocompleteEditorBody(
+  props: BcCellEditorProps<unknown, unknown> & AutocompleteEditorOptions,
+) {
   const {
     initialValue,
     error,
@@ -87,6 +145,7 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
     disabled,
     column,
     prepareResult,
+    optionItemComponent,
   } = props
   const fetchOptions = (column as { fetchOptions?: SearchComboboxFetchOptions }).fetchOptions
   const accessibleName = editorAccessibleName(column, "Autocomplete value")
@@ -118,6 +177,7 @@ function AutocompleteEditor(props: BcCellEditorProps<unknown, unknown>) {
       fetchOptions={fetchOptions}
       initialOptions={initialOptions}
       kind="autocomplete"
+      optionItemComponent={optionItemComponent}
     />
   )
 }

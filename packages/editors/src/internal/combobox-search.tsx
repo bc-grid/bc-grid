@@ -14,6 +14,7 @@ import {
   editorStateAttrs,
   visuallyHiddenStyle,
 } from "../chrome"
+import type { ComboboxOptionSlotProps, ComboboxSlotOptions } from "./comboboxSlots"
 
 /**
  * shadcn-native Combobox primitive in *search* / *autocomplete* mode
@@ -154,6 +155,19 @@ export interface SearchComboboxProps {
    * target for the autocomplete editor.
    */
   kind?: string
+  /**
+   * Optional shadcn-native slot override for the per-option row. Per
+   * `v06-shadcn-native-editors-select-batch` (extends the
+   * inputComponent / checkboxComponent pattern from #480 / #488 / #489).
+   *
+   * The trigger slot is intentionally NOT wired through SearchCombobox
+   * in this PR — the autocomplete trigger is an `<input>` (self-closing,
+   * no children), which doesn't fit the children-as-slot pattern that
+   * select / multi-select use. A follow-up PR will add an `inputComponent`
+   * slot (mirroring the single-input editor cluster shape from #488)
+   * for the autocomplete case.
+   */
+  optionItemComponent?: ComboboxSlotOptions["optionItemComponent"]
 }
 
 const bcGridComboboxValueKey = "__bcGridComboboxValue" as const
@@ -176,6 +190,7 @@ export function SearchCombobox({
   fetchOptions,
   initialOptions,
   kind = "autocomplete",
+  optionItemComponent: OptionItemComponent,
 }: SearchComboboxProps): ReactNode {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listboxRef = useRef<HTMLDivElement | null>(null)
@@ -392,24 +407,10 @@ export function SearchCombobox({
           {options.map((option, index) => {
             const optionId = `${listboxId}-opt-${index}`
             const isActive = index === activeIndex
-            return (
-              <div
-                key={editorOptionToString(option.value)}
-                id={optionId}
-                // biome-ignore lint/a11y/useSemanticElements: aria-activedescendant pattern; option focus stays on the input
-                role="option"
-                tabIndex={-1}
-                aria-selected={isActive}
-                data-option-index={index}
-                data-active={isActive ? "true" : undefined}
-                className="bc-grid-editor-combobox-option"
-                onPointerDown={(event) => {
-                  // pointer-down beats the portal's click-outside listener
-                  event.preventDefault()
-                  pickOption(option)
-                }}
-                onMouseEnter={() => setActiveIndex(index)}
-              >
+            // Inner content (swatch + icon + label). SearchCombobox is
+            // single-mode only, so no multi-mode check column.
+            const optionChildren: ReactNode = (
+              <>
                 {option.swatch ? (
                   <span
                     className="bc-grid-editor-combobox-option-swatch"
@@ -424,6 +425,51 @@ export function SearchCombobox({
                   </span>
                 ) : null}
                 <span className="bc-grid-editor-combobox-option-label">{option.label}</span>
+              </>
+            )
+            const onPointerDown = (event: { preventDefault: () => void }) => {
+              // pointer-down beats the portal's click-outside listener
+              event.preventDefault()
+              pickOption(option)
+            }
+            const onMouseEnter = () => setActiveIndex(index)
+            const optionProps: ComboboxOptionSlotProps = {
+              id: optionId,
+              role: "option",
+              tabIndex: -1,
+              "aria-selected": isActive,
+              "data-option-index": index,
+              "data-active": isActive ? "true" : undefined,
+              "data-selected": undefined,
+              className: "bc-grid-editor-combobox-option",
+              onPointerDown,
+              onMouseEnter,
+              children: optionChildren,
+              option,
+              isActive,
+              isSelected: false,
+              isMulti: false,
+            }
+            if (OptionItemComponent) {
+              return (
+                <OptionItemComponent key={editorOptionToString(option.value)} {...optionProps} />
+              )
+            }
+            return (
+              <div
+                key={editorOptionToString(option.value)}
+                id={optionId}
+                // biome-ignore lint/a11y/useSemanticElements: aria-activedescendant pattern; option focus stays on the input
+                role="option"
+                tabIndex={-1}
+                aria-selected={isActive}
+                data-option-index={index}
+                data-active={isActive ? "true" : undefined}
+                className="bc-grid-editor-combobox-option"
+                onPointerDown={onPointerDown}
+                onMouseEnter={onMouseEnter}
+              >
+                {optionChildren}
               </div>
             )
           })}

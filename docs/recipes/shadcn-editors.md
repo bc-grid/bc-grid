@@ -233,11 +233,143 @@ Same three contracts: forward `ref` to a real `<input type="checkbox">`, stamp t
 
 shadcn's `<Checkbox>` is a Radix primitive that renders a `<button>` shell + a hidden native `<input>`. The framework's commit path follows the `ref` and the data attribute discriminator, so as long as the `ref` reaches the inner `<input>` (Radix's `Checkbox.Root` does so via `forwardRef`), commits work. If your design system's checkbox doesn't expose the inner `<input>`, wrap it with a custom forwarding shim that maintains the contract.
 
+## `createSelectEditor` / `createMultiSelectEditor` — `triggerComponent` + `optionItemComponent` slots
+
+The combobox-driven editors (select, multi-select) use a different render-prop shape because they wrap a richer primitive: a `<button>` trigger that toggles a `<div role="listbox">` containing per-option `<div role="option">` rows. Two slots:
+
+- **`triggerComponent`** — overrides the trigger `<button>` shell. Receives the framework's prop bag (handlers, ARIA, refs, data attrs) plus the framework's default inner content (swatch / icon / label / chips / caret) as `children`. Spread props + render `{children}` for the simplest shadcn `<Button>` drop-in.
+- **`optionItemComponent`** — overrides the per-option row shell. Receives the framework's prop bag plus the framework's default inner content (multi-mode check + swatch + icon + label) as `children`. Spread + render `{children}` for shadcn `<CommandItem>` drop-in.
+
+```tsx
+import { Button } from "@/components/ui/button"
+import { CommandItem } from "@/components/ui/command"
+import {
+  createMultiSelectEditor,
+  createSelectEditor,
+} from "@bc-grid/editors"
+import type { BcReactGridColumn } from "@bc-grid/react"
+
+export const shadcnSelectEditor = createSelectEditor({
+  triggerComponent: ({ children, ...rest }) => <Button {...rest}>{children}</Button>,
+  optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+})
+
+export const shadcnMultiSelectEditor = createMultiSelectEditor({
+  triggerComponent: ({ children, ...rest }) => <Button {...rest}>{children}</Button>,
+  optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+})
+
+const cols: BcReactGridColumn<TaskRow, unknown>[] = [
+  { field: "status", header: "Status", cellEditor: shadcnSelectEditor, options: STATUSES },
+  { field: "tags", header: "Tags", cellEditor: shadcnMultiSelectEditor, options: TAGS },
+]
+```
+
+### `ComboboxTriggerSlotProps` shape
+
+```ts
+interface ComboboxTriggerSlotProps {
+  ref: Ref<HTMLElement>
+  tagName: "button" | "input"   // discriminator: button for select/multi, input reserved for autocomplete follow-up
+  className: string
+  // ARIA
+  "aria-invalid"?: true
+  "aria-required"?: true
+  "aria-readonly"?: true
+  "aria-disabled"?: true
+  "aria-label"?: string
+  "aria-describedby"?: string
+  "aria-haspopup": "listbox"
+  "aria-expanded": boolean
+  "aria-multiselectable"?: true   // only set for multi-select
+  "aria-controls"?: string
+  "aria-activedescendant"?: string
+  // Data attrs (load-bearing — framework's commit path locates input via these)
+  "data-bc-grid-editor-input": "true"
+  "data-bc-grid-editor-kind": string
+  "data-bc-grid-editor-option-count": number
+  "data-bc-grid-editor-seeded"?: "true"
+  "data-state": "open" | "closed"
+  // State + handlers
+  disabled?: boolean
+  open: boolean                   // consumers may render a chevron / caret based on this
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void
+  onClick?: () => void
+  // Default inner content (swatch + icon + label / chips + caret)
+  children: ReactNode
+}
+```
+
+### `ComboboxOptionSlotProps` shape
+
+```ts
+interface ComboboxOptionSlotProps {
+  id: string
+  role: "option"
+  tabIndex: -1
+  "aria-selected": boolean
+  "data-option-index": number     // load-bearing: framework's scroll-into-view loop targets via this
+  "data-active"?: "true"
+  "data-selected"?: "true"
+  className: string
+  onPointerDown: (event: PointerEvent<HTMLElement>) => void
+  onMouseEnter: () => void
+  // Default inner content (multi-mode check + swatch + icon + label)
+  children: ReactNode
+  // Structured data — for fully-custom render
+  option: EditorOption
+  isActive: boolean
+  isSelected: boolean
+  isMulti: boolean
+}
+```
+
+Same three contracts as the input slots: forward `ref` to a real button (trigger) / div (option row), spread the load-bearing data attrs, honor `disabled`. The framework reads typed values from the trigger button via the `__bcGridComboboxValue` property attached on render — that follows the `ref`, so as long as your component forwards it, commits work.
+
+The two slots are **independent**: pass `triggerComponent` only to swap the button chrome while keeping the framework's default options; pass `optionItemComponent` only to restyle option rows while keeping the framework's default `<button>` trigger; pass both for full visual control.
+
+## `createAutocompleteEditor` — `optionItemComponent` slot only
+
+The autocomplete trigger is an `<input>` (free-text typing), not a `<button>`. The children-as-slot pattern doesn't fit a self-closing input element, so the trigger slot for autocomplete is intentionally **not** part of this PR. A follow-up will add an `inputComponent` slot for the autocomplete trigger mirroring the single-input cluster shape from `createTextEditor` / etc.
+
+```tsx
+import { CommandItem } from "@/components/ui/command"
+import { createAutocompleteEditor } from "@bc-grid/editors"
+
+export const shadcnAutocompleteEditor = createAutocompleteEditor({
+  optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+})
+```
+
+The option props match `ComboboxOptionSlotProps` exactly, with `isMulti=false` + `isSelected=false` always (autocomplete is single-mode and doesn't track selection state across renders — the input value IS the selected value).
+
+## Per-editor notes (combobox cluster)
+
+### `createSelectEditor`
+
+- Single-mode Combobox: trigger renders the picked option's swatch + icon + label.
+- Auto-commits on Enter / pick (per the framework's `editor-select` contract).
+- Trigger slot's `children` includes the swatch + icon + label + chevron caret. Consumers can either spread + render `{children}` for the framework's default chrome, or use the structured data props to render fully custom (the `<Combobox>` primitive handles ARIA + keyboard either way).
+
+### `createMultiSelectEditor`
+
+- Multi-mode Combobox: trigger renders chips for each selected option.
+- Toggles on pick; commits on Tab / Enter / Escape (per `#427` Enter semantics — Enter does NOT toggle in multi mode; Space toggles).
+- Trigger slot's `children` includes the chip strip + chevron caret.
+- Option slot's `children` adds a multi-mode check column (✓ when selected) before the swatch / icon / label.
+
+### `createAutocompleteEditor`
+
+- Single-mode SearchCombobox with async `column.fetchOptions(query, signal)` (debounced 200ms, AbortController race-handling).
+- Trigger is an `<input>` — slot deferred (see above).
+- Option slot's `children` is swatch + icon + label (no check column — autocomplete is always single-mode).
+
 ## What's NOT covered (yet)
 
-- **`selectEditor`, `multiSelectEditor`, `autocompleteEditor`** — these wrap richer primitives (Combobox, multi-Combobox, search-Combobox) shared via internal `Combobox` / `SearchCombobox` modules. The select-batch follow-up adds `triggerComponent` + `optionItemComponent` slots — that needs the internal primitives to expose the slot points (~1k LOC of careful refactoring + Playwright validation), so it lands in a dedicated PR after the numeric + checkbox slots have soaked. Until then, consumers wanting shadcn-native styling for select / multi-select / autocomplete build a custom `cellEditor` from scratch (per `docs/recipes/custom-editors.md`).
+- **`createAutocompleteEditor` trigger slot** — needs an `inputComponent` slot mirroring the single-input cluster shape; deferred to a follow-up so this PR's risk stays bounded (the autocomplete input has subtle keystroke / loading-state plumbing that needs Playwright validation).
+- **Combobox listbox virtualization** — for >500 options, the framework renders all rows in the dropdown. Consumers wanting virtualization should wait for `v07-editor-perf-large-option-lists` (queued) which adds a `@bc-grid/virtualizer`-backed flat list.
 
-The v0.6 single-input cluster (text + number + date + datetime + time) establishes the `inputComponent` pattern uniformly. `checkboxEditor` rides on that same shape via `checkboxComponent`. Combobox-driven editors follow once their slot wiring lands with Playwright coverage.
+The v0.6 select-batch closes the slot pattern across every built-in editor except autocomplete's trigger. Combobox-driven editors now ride on the same drop-in shadcn `<Button>` / `<CommandItem>` pattern as the single-input + checkbox clusters.
 
 ## When NOT to use
 

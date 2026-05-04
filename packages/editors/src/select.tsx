@@ -2,6 +2,11 @@ import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useCallback, useState } from "react"
 import { type EditorOption, editorAccessibleName, resolveEditorOptions } from "./chrome"
 import { Combobox } from "./internal/combobox"
+import type {
+  ComboboxOptionSlotProps,
+  ComboboxSlotOptions,
+  ComboboxTriggerSlotProps,
+} from "./internal/comboboxSlots"
 
 interface SelectPrepareResult {
   initialOptions: readonly EditorOption[]
@@ -40,33 +45,96 @@ type SelectFetchOptions = (query: string, signal: AbortSignal) => Promise<readon
  *   - Commit produces the selected option's `value` (typed `TValue`),
  *     bypassing `column.valueParser` like the v0.1 select.
  *
+ * Native rendering uses bc-grid's CSS-only Combobox shell. Consumers
+ * wanting shadcn-native styling pass `triggerComponent` /
+ * `optionItemComponent` to `createSelectEditor({ ... })` — the factory
+ * keeps the lifecycle (focus, ref, ARIA, keyboard, listbox state) and
+ * delegates SHELL rendering to the consumer's primitive. See
+ * `docs/recipes/shadcn-editors.md`. Per
+ * `v06-shadcn-native-editors-select-batch`.
+ *
  * Fallback if a column needs the old native `<select>` (mobile picker
  * affordance, very long option lists where browser virtualization
  * matters): pass `column.cellEditor: nativeSelectEditor` (not exported
  * yet — file an issue if you need it).
  */
-export const selectEditor: BcCellEditor<unknown, unknown> = {
-  Component: SelectEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "select",
-  popup: true,
-  // First-page preload via `column.fetchOptions("", signal)` so the
-  // dropdown paints with async-loaded options on first frame instead
-  // of the consumer having to choose between the autocomplete editor
-  // (free-text + popup) and rolling a custom `cellEditor`. Mirrors
-  // the autocomplete editor's prepare hook (#403). When the column
-  // has no `fetchOptions`, the prepare resolves `undefined` and the
-  // Component falls through to the synchronous `column.options` path.
-  // Per `v06-prepareresult-preload-select-multi` (planning doc §3).
-  async prepare({ column }) {
-    const fetchOptions = (column as { fetchOptions?: SelectFetchOptions }).fetchOptions
-    if (!fetchOptions) return undefined
-    const controller = new AbortController()
-    const initialOptions = await fetchOptions("", controller.signal)
-    return { initialOptions } satisfies SelectPrepareResult
-  },
+/**
+ * Props handed to a custom `triggerComponent` for the select editor.
+ * Re-exports the shared `ComboboxTriggerSlotProps` shape — drops in
+ * any forwardRef-capable shadcn `<Button>` (or similar) without
+ * modification.
+ */
+export type SelectEditorTriggerProps = ComboboxTriggerSlotProps
+
+/**
+ * Props handed to a custom `optionItemComponent` for the select editor.
+ * Re-exports the shared `ComboboxOptionSlotProps` shape — drops in any
+ * shadcn `<CommandItem>` (or similar) without modification.
+ */
+export type SelectEditorOptionProps = ComboboxOptionSlotProps
+
+export type SelectEditorOptions = ComboboxSlotOptions
+
+/**
+ * Factory for the select editor. Returns a fresh `BcCellEditor` with
+ * the supplied options baked in. Default-export `selectEditor` is
+ * `createSelectEditor()` for the zero-config case.
+ *
+ * ```tsx
+ * import { Button } from "@/components/ui/button"
+ * import { CommandItem } from "@/components/ui/command"
+ * import { createSelectEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnSelectEditor = createSelectEditor({
+ *   triggerComponent: ({ children, ...rest }) => <Button {...rest}>{children}</Button>,
+ *   optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+ * })
+ * ```
+ */
+export function createSelectEditor(
+  options: SelectEditorOptions = {},
+): BcCellEditor<unknown, unknown> {
+  const Component = createSelectEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "select",
+    popup: true,
+    // First-page preload via `column.fetchOptions("", signal)` so the
+    // dropdown paints with async-loaded options on first frame instead
+    // of the consumer having to choose between the autocomplete editor
+    // (free-text + popup) and rolling a custom `cellEditor`. Mirrors
+    // the autocomplete editor's prepare hook (#403). When the column
+    // has no `fetchOptions`, the prepare resolves `undefined` and the
+    // Component falls through to the synchronous `column.options` path.
+    // Per `v06-prepareresult-preload-select-multi` (planning doc §3).
+    async prepare({ column }) {
+      const fetchOptions = (column as { fetchOptions?: SelectFetchOptions }).fetchOptions
+      if (!fetchOptions) return undefined
+      const controller = new AbortController()
+      const initialOptions = await fetchOptions("", controller.signal)
+      return { initialOptions } satisfies SelectPrepareResult
+    },
+  }
 }
 
-function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
+export const selectEditor: BcCellEditor<unknown, unknown> = createSelectEditor()
+
+function createSelectEditorComponent(
+  options: SelectEditorOptions,
+): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof SelectEditorBody> {
+  const { triggerComponent, optionItemComponent } = options
+  return function SelectEditor(props) {
+    return (
+      <SelectEditorBody
+        {...props}
+        triggerComponent={triggerComponent}
+        optionItemComponent={optionItemComponent}
+      />
+    )
+  }
+}
+
+function SelectEditorBody(props: BcCellEditorProps<unknown, unknown> & SelectEditorOptions) {
   const {
     initialValue,
     error,
@@ -79,6 +147,8 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
     column,
     row,
     prepareResult,
+    triggerComponent,
+    optionItemComponent,
   } = props
   const optionsSource = (column as { options?: unknown }).options
   // `prepareResult.initialOptions` from the prepare hook above wins
@@ -112,6 +182,8 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
       focusRef={focusRef as { current: HTMLElement | null } | undefined}
       onSelect={handleSelect}
       kind="select"
+      triggerComponent={triggerComponent}
+      optionItemComponent={optionItemComponent}
     />
   )
 }
