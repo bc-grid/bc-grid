@@ -60,13 +60,10 @@ The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved
 | API surface 13 OPEN QUESTION items | maintainer | ❌ ready | 🔒 | needs a maintainer pass; resolutions go in audit doc §16 |
 | Browser compat matrix doc | worker1 | ❌ queued | 🔒 | `v1-browser-compat-matrix-doc` — single matrix table per `release-milestone-roadmap.md` v0.10 |
 | Examples app — productivity flows without hidden URL flags | worker1 | ❌ queued | 🔒 | `v1-examples-app-cleanup` — landing card + flag pre-applied links per hero spike |
-| WCAG 2.1 AA deep-pass — manual NVDA / JAWS / VoiceOver | unassigned | ❌ | 🔒 | `Definition of Done — 1.0` requirement; ERP shipping non-negotiable |
 | bsncraft consumer migration (≥ -100 LOC wrapper) | bsncraft team | ⏳ | 🔒 | customers grid migration in flight; original 0.5 milestone gate |
 | Public API formally locked + v1.0 version bump | coordinator | ❌ | 🔒 | runs after API freeze audit lands |
 | All P0/P1 closed in `bsncraft-issues.md` | all | ⏳ | 🔒 | tracked separately |
-| Pricing / licence model decision | maintainer | ❌ | 🔒 | architectural decision, not engineering |
-| Public registry publish decision (npmjs.com vs GitHub Packages) | maintainer | ❌ | 🔒 | currently GitHub Packages; launch lever |
-| Maintainer explicit sign-off | maintainer | ❌ | 🔒 | non-negotiable per `release-milestone-roadmap.md` |
+| Maintainer explicit sign-off | maintainer | ❌ | 🔒 | the actual GA cut decision |
 
 ### Deferred to post-1.0 (v1.1+ backlog) — maintainer ratified 2026-05-04
 
@@ -87,6 +84,9 @@ These items are explicitly OUT of scope for v1.0. Re-open the discussion in v1.1
 | 🚪 **Charts integration depth** | `design.md §2 Non-goals` — "Chart libraries are better at this; out-of-scope until post-1.0." | Stated as post-1.0 from day 1 |
 | 🚪 **Right-to-left languages** | `design.md §2 Non-goals` — "Q4 minimum." | Stated as post-1.0 from day 1 |
 | 🚪 **Bug-for-bug AG Grid parity** | `design.md §1 Mission` — "continuous post-1.0 backlog; not a v1.0 gate." | Stated as continuous post-1.0 |
+| 🚪 **WCAG manual NVDA / JAWS / VoiceOver pass** | Code-pass audit (#490) shows 9/9 editors PASS. Manual screenreader audit becomes load-bearing only when shipping to regulated industries (healthcare, finance, gov), facing public ADA / Section 508 scrutiny, or producing a VPAT for an external customer. None applies to a single-consumer ERP. axe-core + the code-pass coverage is sufficient for v1.0. | bsncraft customer raises a screenreader complaint, OR external commercial release |
+| 🚪 **Pricing / licence model decision** | Not engineering; future-launch business decision. Packages publish as `UNLICENSED` to GitHub Packages today; that works for bsncraft (the only consumer). bc-grid moves into the bsncraft monorepo soon, removing the standalone-product packaging question entirely. | Decision to commercialize bc-grid as a standalone product to external customers |
+| 🚪 **Public registry publish decision (npmjs.com vs GitHub Packages)** | GitHub Packages works for bsncraft. npmjs.com is a launch lever for a public release that isn't currently planned. | Decision to publish externally |
 
 ---
 
