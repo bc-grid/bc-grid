@@ -29,7 +29,7 @@ This file is the single fast-track tracker toward v1.0. It is **not** the milest
 
 ## Shipped feature audit — collapsed
 
-The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved at the bottom of this file in HTML comments. Categories: foundation (v0.1 → v0.2), read-only grid (v0.2), editing (v0.4), server row model (v0.5), spreadsheet flows (v0.6), state persistence (v0.6), tree row model (v0.6), chrome (v0.5/v0.6), filters (v0.4-v0.6). Roughly 70-75% of v1.0 surface area is shipped; everything below is what's left.
+The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved at the bottom of this file in HTML comments. Categories: foundation (v0.1 → v0.2), **read-only grid (v0.2) — sort / resize / pin / scroll / filters / search / group-by / column reorder+visibility / master-detail / column groups / client + manual pagination**, editing (v0.4), server row model (v0.5), spreadsheet flows (v0.6), state persistence (v0.6), tree row model (v0.6), chrome (v0.5/v0.6), filters (v0.4-v0.6). Roughly 70-75% of v1.0 surface area is shipped; everything below is what's left.
 
 ---
 
@@ -77,7 +77,6 @@ These items are explicitly OUT of scope for v1.0. Re-open the discussion in v1.1
 | 🚪 **Pivot drag-UI completeness** | Engine + panel render existing pivot state. Drag-to-pivot rearrange UI is partial. bsncraft hasn't asked for it. | First consumer ask, or 1.1 sprint planning |
 | 🚪 **XLSX export (ExcelJS peer-dep)** | bsncraft uses CSV → Excel-open path. Recipe is sufficient until a consumer needs native `.xlsx`. | First `bsn-issues.md` ask |
 | 🚪 **PDF export (jsPDF peer-dep)** | bsncraft has its own report-print pipeline. Not requested. | First consumer ask |
-| 🚪 **Client-side pagination UI** | Server-paged exists. Client pagination is a ~30-LOC consumer recipe with the existing range / scroll APIs. | Recipe + ship as v1.1 helper |
 | 🚪 **AG Grid migration guide (Community + Enterprise)** | Sketch is fine for v1.0. Polished guide needs 2+ test users to validate; that's v1.1 work. | After v1.0 launch + first 2 community migrations |
 | 🚪 **Mobile / touch fallback** | `design.md §2 Non-goals` explicitly says "Mobile-first interactions deferred — desktop-first; touch fallback at 1.0+." | Stated as 1.0+ from day 1 |
 | 🚪 **`apps/docs` public deploy** | Builds locally. Until traffic justifies the host, README + GitHub Packages registry covers the audience. | When external consumer count > maintainer's bandwidth for direct support |
@@ -141,6 +140,7 @@ These items are explicitly OUT of scope for v1.0. Re-open the discussion in v1.1
 | Column reorder / visibility / state-persistence | ✅ | |
 | Master-detail rows | ✅ | |
 | Column groups (multi-row headers) | ✅ | |
+| Client-side pagination UI | ✅ | `BcGridPagination` + `pagination?: boolean` + `pageSizeOptions` + `paginationMode: "client" \| "manual"` + `paginationTotalRows` + `onPaginationChange` + saved-view persistence (`packages/react/src/pagination.tsx`, 211 LOC; 421-LOC test suite at `pagination.test.tsx`; demo: `apps/examples/?pagination=1`) |
 
 ### Editing (v0.4) — ✅ COMPLETE
 
