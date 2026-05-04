@@ -27,6 +27,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
+        "@bc-grid/react": "workspace:*",
         "@bc-grid/server-row-model": "workspace:*",
         "@bc-grid/virtualizer": "workspace:*",
       },

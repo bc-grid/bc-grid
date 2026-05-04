@@ -17,6 +17,7 @@
  */
 
 import type { ServerBlockResult, ServerViewState } from "@bc-grid/core"
+import { buildClientTree, flattenClientTree } from "@bc-grid/react"
 import { createServerRowModel } from "@bc-grid/server-row-model"
 import { DOMRenderer, type RenderCellParams, Virtualizer } from "@bc-grid/virtualizer"
 
@@ -100,6 +101,25 @@ interface GroupRowsPerfMetric extends PerfMetric {
   visibleRowCount: number
 }
 
+// Worker1 v06 phase 3 — client-tree perf harness. Builds a synthetic
+// `branching ^ depth` tree (≈ 5k rows by default) and times
+// `buildClientTree` + `flattenClientTree` + a representative
+// expand-toggle re-flatten. No DOM mount — measures only the pure
+// helpers' steady-state cost so consumers can size large trees safely.
+interface ClientTreeBuildInput {
+  branching?: number
+  depth?: number
+}
+
+interface ClientTreeBuildMetric extends PerfMetric {
+  branching: number
+  depth: number
+  buildMs: number
+  flattenMs: number
+  toggleMs: number
+  visibleRowCount: number
+}
+
 interface PerfRow {
   id: number
   customer: string
@@ -119,6 +139,7 @@ declare global {
       serverRowModelBlocks(input?: ServerRowModelPerfInput): Promise<ServerRowModelPerfMetric>
       serverRowModelPrefetchSweep(input: PrefetchSweepPerfInput): Promise<PrefetchSweepPerfMetric>
       groupRowsExpand(input?: GroupRowsPerfInput): Promise<GroupRowsPerfMetric>
+      clientTreeBuild(input?: ClientTreeBuildInput): Promise<ClientTreeBuildMetric>
       rawRowCount: number
     }
     __fps__: number[]
@@ -514,6 +535,7 @@ window.__bcGridPerf = {
   serverRowModelBlocks,
   serverRowModelPrefetchSweep,
   groupRowsExpand,
+  clientTreeBuild,
 }
 
 interface GroupRowsPerfTree {
@@ -852,6 +874,58 @@ async function serverRowModelPrefetchSweep(
     prefetchAhead,
     rowCount,
     scrollSteps,
+  }
+}
+
+interface ClientTreeRow {
+  id: string
+  parentId: string | null
+}
+
+async function clientTreeBuild(input: ClientTreeBuildInput = {}): Promise<ClientTreeBuildMetric> {
+  const branching = input.branching ?? 4
+  const depth = input.depth ?? 6
+  const rows: ClientTreeRow[] = []
+  function gen(parentId: string | null, level: number, prefix: string): void {
+    if (level > depth) return
+    for (let i = 0; i < branching; i++) {
+      const id = level === 0 ? `r${i}` : `${prefix}-${i}`
+      rows.push({ id, parentId })
+      gen(id, level + 1, id)
+    }
+  }
+  gen(null, 0, "")
+  const getRowParentId = (row: ClientTreeRow) => row.parentId
+  const rowId = (row: ClientTreeRow) => row.id
+
+  const buildStart = performance.now()
+  const index = buildClientTree(rows, getRowParentId, rowId)
+  const buildMs = performance.now() - buildStart
+
+  const expandedAll = new Set<string>(rows.map((row) => row.id))
+  const flattenStart = performance.now()
+  const flat = flattenClientTree({ index, expansionState: expandedAll })
+  const flattenMs = performance.now() - flattenStart
+
+  // Toggle simulation: collapse one root + re-flatten. Pins the
+  // expand/collapse interaction cost (the second-most-common
+  // interaction after initial mount).
+  const expandedMinusOne = new Set(expandedAll)
+  const firstRootId = index.rootIds[0]
+  if (firstRootId !== undefined) expandedMinusOne.delete(firstRootId)
+  const toggleStart = performance.now()
+  flattenClientTree({ index, expansionState: expandedMinusOne })
+  const toggleMs = performance.now() - toggleStart
+
+  return {
+    branching,
+    depth,
+    buildMs,
+    flattenMs,
+    toggleMs,
+    visibleRowCount: flat.length,
+    durationMs: buildMs + flattenMs + toggleMs,
+    rowCount: rows.length,
   }
 }
 

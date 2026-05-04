@@ -332,3 +332,46 @@ export function collectLeafDescendants<TRow>(
   visit(parentRowId)
   return out
 }
+
+/**
+ * Pure outline-key dispatch (worker1 v06 phase 3). Maps an arrow key
+ * pressed on the outline column of a tree row to the next action.
+ * Lives outside `<BcGrid>` so the matrix is unit-testable without a
+ * DOM. Mirrors `nextKeyboardNav`'s pure-helper pattern.
+ *
+ * Per RFC §4 outline column accessibility:
+ *   - ArrowRight + has children + collapsed → expand
+ *   - ArrowRight + has children + expanded  → moveToFirstChild
+ *   - ArrowLeft  + has children + expanded  → collapse
+ *   - ArrowLeft  + (no children OR collapsed) + has parent → moveToParent
+ *   - Otherwise (root collapsed leaf, no-op key, etc.) → noop
+ *
+ * Returning `noop` lets the caller fall through to the default
+ * `nextKeyboardNav` arrow behaviour (move to next/previous column).
+ */
+export type TreeOutlineKeyOutcome =
+  | { type: "expand" }
+  | { type: "collapse" }
+  | { type: "moveToFirstChild" }
+  | { type: "moveToParent" }
+  | { type: "noop" }
+
+export function nextTreeOutlineKey(input: {
+  key: string
+  hasChildren: boolean
+  expanded: boolean
+  hasParent: boolean
+}): TreeOutlineKeyOutcome {
+  const { key, hasChildren, expanded, hasParent } = input
+  if (key === "ArrowRight") {
+    if (hasChildren && !expanded) return { type: "expand" }
+    if (hasChildren && expanded) return { type: "moveToFirstChild" }
+    return { type: "noop" }
+  }
+  if (key === "ArrowLeft") {
+    if (hasChildren && expanded) return { type: "collapse" }
+    if (hasParent) return { type: "moveToParent" }
+    return { type: "noop" }
+  }
+  return { type: "noop" }
+}

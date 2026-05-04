@@ -5,6 +5,7 @@ import {
   compactVisibleAncestors,
   expandVisibleAncestors,
   flattenClientTree,
+  nextTreeOutlineKey,
   sortClientTreeChildren,
 } from "../src/clientTree"
 
@@ -91,6 +92,61 @@ describe("buildClientTree (worker1 v06-client-tree-rowmodel)", () => {
       // one end of the cycle deterministically). Both rows must end up
       // in the index without infinite-looping.
       expect(index.byId.size).toBe(2)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0]).toContain("cycle detected")
+    } finally {
+      console.error = originalError
+    }
+  })
+
+  test("cycle detection (A → B → C → A) — 3-row cycle still terminates", () => {
+    // Phase 3 follow-up — pin the contract beyond the 2-row case.
+    // All three rows must land in the index; the build must not
+    // infinite-loop walking the ancestor chain.
+    const originalError = console.error
+    const errors: string[] = []
+    console.error = (msg: unknown) => {
+      errors.push(String(msg))
+    }
+    try {
+      const data: Row[] = [
+        { id: "a", name: "A", parentId: "c" },
+        { id: "b", name: "B", parentId: "a" },
+        { id: "c", name: "C", parentId: "b" },
+      ]
+      const index = buildClientTree(data, getParent, rowId)
+      expect(index.byId.size).toBe(3)
+      // At least one row demoted to root; we don't pin which one (the
+      // algorithm walks `parentClaim` order and breaks the first
+      // back-edge it sees), but the result must be acyclic.
+      expect(index.rootIds.length).toBeGreaterThan(0)
+      expect(errors.length).toBeGreaterThan(0)
+      expect(errors[0]).toContain("cycle detected")
+      // Sanity: every parent reference resolves to a real row.
+      for (const [child, parent] of index.parentByChild) {
+        expect(index.byId.has(child)).toBe(true)
+        if (parent != null) expect(index.byId.has(parent)).toBe(true)
+      }
+    } finally {
+      console.error = originalError
+    }
+  })
+
+  test("cycle detection (A → A self-loop) demotes A to root", () => {
+    // Phase 3 follow-up — self-loop is the degenerate cycle. The
+    // ancestor walk seeds `visited` with A; the first hop revisits A
+    // immediately so A must be demoted to a root with the cycle log.
+    const originalError = console.error
+    const errors: string[] = []
+    console.error = (msg: unknown) => {
+      errors.push(String(msg))
+    }
+    try {
+      const data: Row[] = [{ id: "a", name: "A", parentId: "a" }]
+      const index = buildClientTree(data, getParent, rowId)
+      expect(index.byId.size).toBe(1)
+      expect(index.rootIds).toEqual(["a"])
+      expect(index.parentByChild.get("a")).toBeNull()
       expect(errors.length).toBeGreaterThan(0)
       expect(errors[0]).toContain("cycle detected")
     } finally {
@@ -403,5 +459,87 @@ describe("collectLeafDescendants (worker1 v06 phase 2.5 aggregations input)", ()
     const index = buildClientTree(buildAggTree(), getParent, rowId)
     const ghost = collectLeafDescendants(index, "missing")
     expect(ghost).toEqual([])
+  })
+})
+
+describe("nextTreeOutlineKey (worker1 v06 phase 3)", () => {
+  test("ArrowRight on collapsed parent → expand", () => {
+    const outcome = nextTreeOutlineKey({
+      key: "ArrowRight",
+      hasChildren: true,
+      expanded: false,
+      hasParent: false,
+    })
+    expect(outcome).toEqual({ type: "expand" })
+  })
+
+  test("ArrowRight on expanded parent → moveToFirstChild", () => {
+    const outcome = nextTreeOutlineKey({
+      key: "ArrowRight",
+      hasChildren: true,
+      expanded: true,
+      hasParent: false,
+    })
+    expect(outcome).toEqual({ type: "moveToFirstChild" })
+  })
+
+  test("ArrowRight on leaf → noop (caller falls back to default arrow nav)", () => {
+    const outcome = nextTreeOutlineKey({
+      key: "ArrowRight",
+      hasChildren: false,
+      expanded: false,
+      hasParent: true,
+    })
+    expect(outcome).toEqual({ type: "noop" })
+  })
+
+  test("ArrowLeft on expanded parent → collapse", () => {
+    const outcome = nextTreeOutlineKey({
+      key: "ArrowLeft",
+      hasChildren: true,
+      expanded: true,
+      hasParent: false,
+    })
+    expect(outcome).toEqual({ type: "collapse" })
+  })
+
+  test("ArrowLeft on collapsed parent with parent → moveToParent (skips collapse)", () => {
+    const outcome = nextTreeOutlineKey({
+      key: "ArrowLeft",
+      hasChildren: true,
+      expanded: false,
+      hasParent: true,
+    })
+    expect(outcome).toEqual({ type: "moveToParent" })
+  })
+
+  test("ArrowLeft on leaf with parent → moveToParent", () => {
+    const outcome = nextTreeOutlineKey({
+      key: "ArrowLeft",
+      hasChildren: false,
+      expanded: false,
+      hasParent: true,
+    })
+    expect(outcome).toEqual({ type: "moveToParent" })
+  })
+
+  test("ArrowLeft on collapsed root → noop (no parent to move to)", () => {
+    const outcome = nextTreeOutlineKey({
+      key: "ArrowLeft",
+      hasChildren: true,
+      expanded: false,
+      hasParent: false,
+    })
+    expect(outcome).toEqual({ type: "noop" })
+  })
+
+  test("non-arrow key → noop", () => {
+    const outcome = nextTreeOutlineKey({
+      key: "Enter",
+      hasChildren: true,
+      expanded: false,
+      hasParent: false,
+    })
+    expect(outcome).toEqual({ type: "noop" })
   })
 })

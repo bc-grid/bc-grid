@@ -377,6 +377,74 @@ test(`server row model prefetch-budget sweep stays under ${PREFETCH_SWEEP_BAR_MS
   }
 })
 
+// Worker1 v06 phase 3 — client-tree pure-helper perf. Builds a
+// synthetic balanced tree (4 children × 6 levels ≈ 5460 rows) and
+// measures `buildClientTree` + `flattenClientTree` + an
+// expand-toggle re-flatten. Pins the steady-state cost of the
+// helpers consumers see when they enable `treeData` on a
+// large-but-not-huge dataset. Loose bars — coordinator tightens
+// after the first run on the bench machine.
+const CLIENT_TREE_BUILD_BAR_MS = 200
+const CLIENT_TREE_FLATTEN_BAR_MS = 200
+const CLIENT_TREE_TOGGLE_BAR_MS = 50
+
+interface ClientTreeBuildInput {
+  branching?: number
+  depth?: number
+}
+
+interface ClientTreeBuildMetric {
+  branching: number
+  depth: number
+  buildMs: number
+  flattenMs: number
+  toggleMs: number
+  visibleRowCount: number
+  durationMs: number
+  rowCount: number
+}
+
+declare global {
+  interface Window {
+    __bcGridPerf: Window["__bcGridPerf"] & {
+      clientTreeBuild(input?: ClientTreeBuildInput): Promise<ClientTreeBuildMetric>
+    }
+  }
+}
+
+test(`client tree pure helpers build + flatten 5k rows under ${CLIENT_TREE_BUILD_BAR_MS}ms / ${CLIENT_TREE_FLATTEN_BAR_MS}ms / ${CLIENT_TREE_TOGGLE_BAR_MS}ms`, async ({
+  page,
+}) => {
+  await page.goto("/?rawData=1&mount=false&rows=10&cols=2")
+  // The harness builds its own synthetic rows; we only need the
+  // page mounted so `__bcGridPerf` is populated.
+  await page.waitForFunction(() => typeof window.__bcGridPerf?.clientTreeBuild === "function")
+
+  const metric = await page.evaluate(() =>
+    window.__bcGridPerf.clientTreeBuild({ branching: 4, depth: 6 }),
+  )
+
+  console.log(
+    [
+      `perf client-tree rows=${metric.rowCount}`,
+      `branching=${metric.branching}`,
+      `depth=${metric.depth}`,
+      `build=${metric.buildMs.toFixed(2)}ms`,
+      `flatten=${metric.flattenMs.toFixed(2)}ms`,
+      `toggle=${metric.toggleMs.toFixed(2)}ms`,
+      `visible=${metric.visibleRowCount}`,
+      `bars=build:${CLIENT_TREE_BUILD_BAR_MS}/flatten:${CLIENT_TREE_FLATTEN_BAR_MS}/toggle:${CLIENT_TREE_TOGGLE_BAR_MS}`,
+    ].join(" "),
+  )
+
+  // 4 children × 6 depth levels = 4 + 16 + 64 + 256 + 1024 + 4096 = 5460 rows.
+  expect(metric.rowCount).toBe(5460)
+  expect(metric.visibleRowCount).toBe(5460)
+  expect(metric.buildMs).toBeLessThan(CLIENT_TREE_BUILD_BAR_MS)
+  expect(metric.flattenMs).toBeLessThan(CLIENT_TREE_FLATTEN_BAR_MS)
+  expect(metric.toggleMs).toBeLessThan(CLIENT_TREE_TOGGLE_BAR_MS)
+})
+
 async function measureHeapBytes(page: Page): Promise<number> {
   const client = await page.context().newCDPSession(page)
   try {
