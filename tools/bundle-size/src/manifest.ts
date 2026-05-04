@@ -32,7 +32,12 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/core",
       bundlePath: "packages/core/dist/index.js",
-      baselineGzipBytes: 2284,
+      // Bumped 2026-05-04 for v0.6.0-alpha.2 cut from 2.23 KiB → 0.35 KiB.
+      // Net shrink: tree-shaking improved when alpha.2 work train moved
+      // server-grid types out of core's runtime exports into pure type
+      // exports (server-block error params + retry config types only;
+      // helper resolveBlockRetryDecision lives in @bc-grid/react).
+      baselineGzipBytes: 357,
     },
     {
       packageName: "@bc-grid/virtualizer",
@@ -47,24 +52,21 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
-      // Bumped 2026-05-04 for v0.6.0-alpha.1 cut from 91.53 KiB →
-      // 103.68 KiB. Accepted feature work since 0.5.0 GA: 3 v0.6
-      // headlines (client tree row model phases 1+2 #447/#449,
-      // fill handle #436, bulk row patch primitive #437); state-
-      // persistence story (scroll-state controlled prop #450, server-
-      // grid actions column #453); spreadsheet flows (fill-handle
-      // series detection #456, editor cell undo/redo #454, row drag-
-      // drop hooks #440); supporting work (bulk-action toolbar #439,
-      // pinned totals row #446, saved-view storage recipe #441,
-      // editor tab wraparound #448, BcSelection narrowing #442,
-      // prepareresult preload select+multi #435); server-perf
-      // hardening (prefetch budget #428, stale-flood test #433,
-      // stale-viewKey gate #434, view-change reset policy #444,
-      // optimistic rollback vs invalidate #445); bsncraft 0.5.0 GA
-      // P0 patches (pinned-right + header overlap #443, in-cell
-      // editor unmount on server grid #451). 150 KiB hard cap
-      // unchanged; ~46 KiB headroom for the rest of v0.6 + v0.7.
-      baselineGzipBytes: 106168,
+      // Bumped 2026-05-04 for v0.6.0-alpha.2 cut from 103.68 KiB →
+      // 109.52 KiB. Accepted alpha.2 work train (post-alpha.1):
+      // pinned-lane Option B P0 fix (#479), submenu collision-flip
+      // (#469), server-tree group-row override (#465), tree-mode
+      // Option B regression guard (#481), createTextEditor +
+      // inputComponent slot (#480), numeric inputComponent batch —
+      // number/date/datetime/time (#488), checkboxComponent slot
+      // (#489), useServerPagedGrid dual-output `bound` (#484),
+      // server display column order (#487), actions-keyboard
+      // shortcuts Shift+E / Shift+Delete (#464), toolbar render-
+      // prop context with sub-slots (#492), server-block error
+      // affordance + autoRetryBlocks (#491), v07 editor a11y
+      // audit doc (#490). 150 KiB hard cap unchanged; ~40 KiB
+      // headroom for the rest of v0.6 + v0.7.
+      baselineGzipBytes: 112144,
     },
   ],
 }

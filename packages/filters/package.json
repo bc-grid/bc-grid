@@ -1,6 +1,6 @@
 {
   "name": "@bc-grid/filters",
-  "version": "0.6.0-alpha.1",
+  "version": "0.6.0-alpha.2",
   "description": "Filter primitives for bc-grid (planned; v0.1 ships placeholder)",
   "license": "UNLICENSED",
   "author": "John Cottrell <john@cot.dev>",

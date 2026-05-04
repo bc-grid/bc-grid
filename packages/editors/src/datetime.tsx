@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { type ComponentType, useLayoutEffect, useRef } from "react"
-import { editorInputClassName, editorStateAttrs } from "./chrome"
+import { type ComponentType, useId, useLayoutEffect, useRef } from "react"
+import {
+  editorAccessibleName,
+  editorInputClassName,
+  editorStateAttrs,
+  visuallyHiddenStyle,
+} from "./chrome"
 import type { EditorInputSlotProps } from "./internal/editorInputSlot"
 
 /**
@@ -116,9 +121,13 @@ function DatetimeEditorBody(
     required,
     readOnly,
     disabled,
+    column,
     InputComponent,
   } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
+  // Stable id per-editor-instance for aria-describedby → hidden error
+  // span. Per `docs/design/v1-editor-a11y-audit.md` §Date/datetime/time gap.
+  const errorId = useId()
 
   // Hand the input back to the framework via `focusRef`. Runs in
   // useLayoutEffect so the assignment lands BEFORE the framework's
@@ -148,6 +157,7 @@ function DatetimeEditorBody(
   void seedKey
 
   const seeded = normalizeDatetimeValue(initialValue)
+  const accessibleName = editorAccessibleName(column, "Datetime value")
 
   // Custom inputComponent path: spreading `{...inputProps}` is
   // load-bearing — the framework's commit path locates the active
@@ -160,6 +170,8 @@ function DatetimeEditorBody(
     defaultValue: seeded,
     disabled: pending,
     "aria-invalid": error ? true : undefined,
+    "aria-label": accessibleName || undefined,
+    "aria-describedby": error ? errorId : undefined,
     "aria-required": required ? true : undefined,
     "aria-readonly": readOnly ? true : undefined,
     "aria-disabled": disabled || pending ? true : undefined,
@@ -167,7 +179,16 @@ function DatetimeEditorBody(
     "data-bc-grid-editor-kind": "datetime",
     ...editorStateAttrs({ error, pending }),
   }
-  return InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />
+  return (
+    <>
+      {InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />}
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
+  )
 }
 
 /**
