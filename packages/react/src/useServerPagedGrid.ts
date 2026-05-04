@@ -159,6 +159,21 @@ export interface UseServerPagedGridActions {
 export type UseServerPagedGridBoundProps<TRow> = Omit<BcServerPagedProps<TRow>, "columns">
 
 /**
+ * `<BcServerGrid>`-shaped output type alias — preferred name as of
+ * v1.0 per the API surface freeze audit (`docs/design/v1-api-surface-audit.md
+ * §5 RENAME`). Use `UseServerPagedGridServerProps` in new code; the
+ * legacy `UseServerPagedGridBoundProps` is kept as a deprecated
+ * alias through v1.1 so existing consumers keep type-checking.
+ *
+ * The rename clarifies that this is the `serverProps` output shape
+ * (consumed by `<BcServerGrid {...result.serverProps} />`),
+ * distinct from the `bound` output shape (consumed by
+ * `<BcGrid {...result.bound} />`) that ships per
+ * `docs/design/server-grid-hooks-dual-output-rfc.md`.
+ */
+export type UseServerPagedGridServerProps<TRow> = UseServerPagedGridBoundProps<TRow>
+
+/**
  * `<BcGrid>`-shaped bound output for consumers wrapping plain
  * `<BcGrid>` (not `<BcServerGrid>`). Per
  * `docs/design/server-grid-hooks-dual-output-rfc.md §3.2`. The hook
