@@ -1428,6 +1428,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     return groupedRowModel.rows.map((entry, idx) => {
       const override = overrides.get(entry.rowId)
       if (!override) return entry
+      if (override.kind === "data") {
+        return entry.kind === "data" ? { ...entry, level: override.level } : entry
+      }
       return {
         kind: "group" as const,
         rowId: entry.rowId,
@@ -1440,6 +1443,13 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       } satisfies GroupRowEntry
     })
   }, [groupedRowModel.rows, props.__bcServerRowEntryOverrides])
+  // Server-tree mode is signalled by the presence of any
+  // `__bcServerRowEntryOverrides` entries — only `<BcServerGrid
+  // rowModel="tree">` populates that internal map. Detected here so
+  // the root role + body-row aria-level conditional below picks up
+  // server-tree alongside grid-side `groupBy` and client-tree mode.
+  // Closes the v1 screenreader audit §5 GAP.
+  const serverTreeActive = (props.__bcServerRowEntryOverrides?.size ?? 0) > 0
   // Skeleton placeholder rows (worker1 v06 server skeleton rows). When
   // the consumer's expectedRowCount exceeds the loaded entries AND
   // skeletons are not opted out, append synthetic SkeletonRowEntry
@@ -4003,7 +4013,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       data-bc-grid-grouped={groupingActive || undefined}
       data-scrolled-left={isScrolledLeft || undefined}
       data-scrolled-right={isScrolledRight || undefined}
-      role={groupingActive || treeModeActive ? "treegrid" : "grid"}
+      role={groupingActive || treeModeActive || serverTreeActive ? "treegrid" : "grid"}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-rowcount={
@@ -4486,7 +4496,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     )}
                     role="row"
                     aria-rowindex={virtualRow.index + bodyAriaRowOffset}
-                    aria-level={groupingActive || treeModeActive ? entry.level : undefined}
+                    aria-level={
+                      groupingActive || treeModeActive || serverTreeActive ? entry.level : undefined
+                    }
                     aria-selected={selected || undefined}
                     aria-disabled={disabled || undefined}
                     data-row-id={entry.rowId}

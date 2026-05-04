@@ -39,11 +39,20 @@ describe("server-tree group-row overrides (bsncraft v0.6.0-alpha.1 P1)", () => {
   test("BcServerGrid builds the __bcServerRowEntryOverrides map from flatNodes", () => {
     expect(serverGridSource).toContain("const __bcServerRowEntryOverrides = useMemo")
     expect(serverGridSource).toMatch(/for \(const node of flatNodes\)/)
-    expect(serverGridSource).toMatch(/if \(node\.kind !== "group"\) continue/)
+    expect(serverGridSource).toMatch(/if \(node\.kind === "group"\)/)
     expect(serverGridSource).toMatch(/level: node\.level/)
     expect(serverGridSource).toMatch(/childCount.*node\.childCount/)
     expect(serverGridSource).toMatch(/childRowIds: node\.childIds/)
     expect(serverGridSource).toMatch(/expanded: expansionState\.has\(node\.rowId\)/)
+  })
+
+  test("BcServerGrid populates a leaf-row data override carrying the level (v1 screenreader audit §5)", () => {
+    // Pre-fix, leaf rows were skipped (`if (node.kind !== "group") continue`)
+    // so the override map only carried group rows. Server-tree leaf rows
+    // therefore lacked `aria-level` in the rendered DOM. Now both branches
+    // populate the map: groups via the existing GroupRowEntry shape, leaves
+    // via a `kind: "data"` discriminator carrying just the level.
+    expect(serverGridSource).toMatch(/kind: "data", level: node\.level/)
   })
 
   test("label is derived from the latest groupKey in groupPath", () => {
@@ -60,8 +69,10 @@ describe("server-tree group-row overrides (bsncraft v0.6.0-alpha.1 P1)", () => {
   })
 
   test("BcServerGrid passes __bcServerRowEntryOverrides to <BcGrid> in tree mode only", () => {
+    // Tolerates whitespace between tokens — the spread now spans multiple
+    // lines for readability after the chrome migration's biome reformat.
     expect(serverGridSource).toMatch(
-      /activeMode === "tree"\s*\?\s*\{\s*__bcServerRowEntryOverrides: tree\.__bcServerRowEntryOverrides\s*\}\s*:\s*\{\}/,
+      /activeMode === "tree"\s*\?\s*\{\s*__bcServerRowEntryOverrides:\s*tree\.__bcServerRowEntryOverrides\s*\}\s*:\s*\{\}/,
     )
   })
 
@@ -95,13 +106,21 @@ describe("server-tree group-row overrides (bsncraft v0.6.0-alpha.1 P1)", () => {
     expect(typesSource).toMatch(/@internal Not part of the consumer-facing API/)
   })
 
-  test("ServerRowEntryOverride type matches the GroupRowEntry shape (excluding index)", () => {
-    expect(typesSource).toMatch(/export interface ServerRowEntryOverride/)
+  test("ServerRowEntryOverride type is a discriminated union of group + data variants", () => {
+    // Group variant matches the GroupRowEntry shape (excluding index — that's
+    // synthesised from the post-process map index in BcGrid).
+    expect(typesSource).toMatch(
+      /export type ServerRowEntryOverride\s*=\s*\|?\s*ServerRowEntryGroupOverride/,
+    )
+    expect(typesSource).toMatch(/export interface ServerRowEntryGroupOverride/)
     expect(typesSource).toMatch(/kind: "group"/)
     expect(typesSource).toMatch(/level: number/)
     expect(typesSource).toMatch(/label: string/)
     expect(typesSource).toMatch(/childCount: number/)
     expect(typesSource).toMatch(/childRowIds: readonly RowId\[\]/)
     expect(typesSource).toMatch(/expanded: boolean/)
+    // Data variant carries just the level for screenreader aria-level.
+    expect(typesSource).toMatch(/export interface ServerRowEntryDataOverride/)
+    expect(typesSource).toMatch(/kind: "data"/)
   })
 })
