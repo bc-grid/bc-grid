@@ -10,13 +10,47 @@ The one constraint: **do not add new code under `packages/react/src/internal/*`*
 
 ---
 
-## 🚨 ONE PR LEFT 2026-05-04 — rebase #455 phase 3 on new main
+## 🎯 SERVER-GRID LANE DRAINED 2026-05-04 PM — pivoting to v1.0 prep
 
-**Update 2026-05-04 PM:** ✅ #470 cache stats and ✅ #452 client tree phase 2.5 both rebased + merged into the alpha.3 train. Only **#455 client tree phase 3 production-readiness** remains DIRTY.
+**Update 2026-05-04 PM:** all your v0.6 server-grid PRs merged: ✅ #470 cache stats, ✅ #452 client tree phase 2.5, ✅ #455 client tree phase 3, ✅ #496 tree expansion persistence, ✅ #498 server-grid CSV export, ✅ #499 cursor-pagination IMPL deferral, ✅ #491 block error affordance, ✅ #487 server display column order, ✅ #484 dual-output paged hook, ✅ #502 v1.0 API surface freeze audit. Server-grid v0.6 train is done.
 
-The phase 3 PR was stacked on phase 2.5 (#452); now that #452 has merged to main, four of your own files conflict on the rebase: `packages/react/src/clientTree.ts`, `packages/react/src/grid.tsx`, `packages/react/tests/clientTree.test.ts`, `packages/react/tests/clientTreeIntegration.test.tsx`, plus `docs/queue.md`. Coordinator-side resolution is risky because it's hard to tell which side has the canonical phase 3 changes vs the stale phase 2.5 starting point — please rebase from `~/work/bcg-worker1` on the new main and force-push. Once it goes UNSTABLE/CLEAN it lands in alpha.3.
+You are now on the **v1.0 prep lane**. Worker2 + worker3 own the v0.7 architecture correction; you do NOT pick up any v0.7-* tasks. Your queue below is v1.0-freeze prep + bug fixes.
 
-Do not start `v07-*` tasks until #455 lands. Coordinator will run perf + Playwright on it post-merge.
+### Active now → `v07-api-surface-action-items` (~half day to ~1 day)
+
+Per `docs/design/v1-api-surface-audit.md` §15, your audit flagged **30 follow-through action items** before v1.0 freeze. Land them as one or more PRs, in implementation-priority order:
+
+1. **Cross-package symmetry fix (~30 min)** — re-export `BcGridIdentity`, `BcAggregation`, `BcAggregationResultDTO` from `@bc-grid/react`. Pure additive, zero risk.
+2. **INTERNALIZE — `serverRowEntryOverrides` + `ServerRowEntryOverride`** — bsncraft v0.6.0-alpha.1 P1 escape hatch was an internal-only fix; remove from `tools/api-surface/src/manifest.ts` runtime+declaration exports for `@bc-grid/react`. Public API diff in PR body should explicitly state "INTERNALIZE per audit §X."
+4. **RENAMEs (~half day)** — the four `Use*BoundProps` types per RFC #477 §3.1. The `Bound` suffix is now ambiguous after the dual-output IMPL added a `bound` field. Pick names per the audit doc's recommendation. Keep the old names as `@deprecated` aliases for one release; api-surface manifest tracks both during the deprecation window.
+5. **DEPRECATEs (~half day)** — 8 items: `Use*Result.props` aliases per RFC #477 (already redundant after dual-output `bound`/`serverProps`); legacy `data-bc-grid-cell-state` DOM attribute (replaced by canonical `data-bc-grid-edit-state` in v0.5; one-release migration window expired).
+6. **OPEN QUESTION resolution (~unknown)** — 13 type-pair / naming questions need a maintainer pass. List them as a numbered punch list in `docs/design/v1-api-surface-audit.md §16` (decision log) and post each one as a comment on the audit PR for the maintainer to resolve before v1.0 freeze.
+
+Each fix can be its own PR or batched — your call. Run `bun run api-surface` after each — the manifest must stay coherent.
+
+### Next-after → `v1-browser-compat-matrix-doc` (~half day, **v1.0 prep**)
+
+Branch: `agent/worker1/v1-browser-compat-matrix-doc`. Per `release-milestone-roadmap.md` v0.10 + `status.md` 🔒 must-ship list:
+
+- Add `docs/design/v1-browser-compat-matrix.md`. For each of Chromium / Firefox / WebKit / Edge: list playwright project name (already in `playwright.config.ts`), the version targeted, the surface coverage (smoke + e2e + smoke-perf), and any known per-browser gaps from the codebase (search `// firefox:`, `// safari:`, `// webkit:`, `// chromium:` comments + open issues).
+- Cross-reference `docs/design.md §3.1 Browser support` (Chromium / Firefox / Safari current and current-1, no IE11 / no legacy Edge). Doc should make it clear which browsers PASS the test gate today and which are aspirational.
+- Output: a single matrix table the maintainer can scan in 30 seconds before signing off on v1.0.
+
+### Then-after → `v1-examples-app-cleanup` (~half day, **v1.0 prep**)
+
+Per `status.md` 🔒 must-ship: the four hero spike grids (colour-selection / document-management / production-estimating / sales-estimating) work but rely on URL flags (`?edit=1`, `?filterPopup=1`, etc.) that aren't discoverable.
+
+- Add a featured "Productivity demo" landing card on `apps/examples/` that links to each hero with the URL flags pre-applied + a one-line description.
+- Audit each `?flag=1` use site in `apps/examples/src/App.tsx` — pin the flags, default behaviour ON for the hero flows, OR add UI toggles (e.g., a settings panel that the demo links pre-set).
+- The goal: a maintainer or new consumer can demo every v1.0 feature without knowing any hidden URL flag.
+
+### Then-after → reach out to coordinator for next pickup
+
+After the three above land, ping the coordinator for the next batch. Likely candidates: pivot UI completeness audit, or backfilling Playwright assertions on v0.6 features that didn't get e2e coverage yet (per the worker rule — workers don't run Playwright; coordinator will run it on PRs that add new e2e specs).
+
+### Hard rule: worker1 stays OFF the chrome lane
+
+Worker2 owns every PR under `packages/react/src/internal/*` and the chrome surface. Do not touch those during the v0.7 correction window even for a "drive-by" fix.
 
 ---
 
