@@ -45,6 +45,10 @@ jobs:
         run: bun run test
         continue-on-error: false
 
+      - name: React DOM tests
+        run: bun run test:react-dom
+        continue-on-error: false
+
   e2e:
     name: e2e (Playwright)
     runs-on: ubuntu-latest
