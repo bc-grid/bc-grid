@@ -10,9 +10,9 @@
 
 ### Block C — editor migration (parallel with worker2's Block B, 3 PRs)
 
-**Block A (foundation) is owned by worker2** — wait for `agent/worker2/v07-radix-shadcn-deps-and-scaffolding` (PR-A1) to land on main before starting Block C. PR-A1 brings in `cmdk` and the shadcn `command.tsx` primitive that PR-C1 builds on.
+**Block A is ✅ COMPLETE** as of 2026-05-04 PM — PR-A1 (#501), PR-A1 resync (#503), PR-A2 (#504) all merged. `cmdk@1.1.1` + `@radix-ui/react-popover@1.1.15` are installed in `@bc-grid/react`; the `command.tsx` and `popover.tsx` primitives live at `packages/react/src/shadcn/command.tsx` + `popover.tsx`, sourced from `~/work/bsncraft/packages/ui/src/components/`. **You are unblocked — start PR-C1 now.**
 
-#### Active now (after Block A lands) → `v07-shadcn-combobox-foundation` (PR-C1)
+#### Active now → `v07-shadcn-combobox-foundation` (PR-C1)
 
 Branch: `agent/worker3/v07-shadcn-combobox-foundation`. Per RFC §Block C PR-C1:
 

@@ -10,43 +10,78 @@
 
 ### Block A — foundation (sequential, ~half day)
 
-#### Active now → `v07-radix-shadcn-deps-and-scaffolding` (PR-A1)
+### Block A — foundation ✅ COMPLETE 2026-05-04 PM
 
-Branch: `agent/worker2/v07-radix-shadcn-deps-and-scaffolding`. Per RFC §Block A PR-A1:
+- ✅ PR-A1 (#501) — Radix runtime deps + initial scaffold
+- ✅ PR-A1 resync (#503) — primitives re-sourced from `~/work/bsncraft/packages/ui/src/components/`, deps pinned to `@bsn/ui` versions
+- ✅ PR-A2 (#504) — happy-dom + `@testing-library/react` test infra at `packages/react/tests/dom/`
 
-**Critical sourcing rule:** the shadcn primitives we copy MUST come from `~/work/bsncraft/packages/ui/src/components/` — NOT from `bunx shadcn@latest add`. Reason: bc-grid is moving into the bsncraft monorepo as `bsncraft/packages/bc-grid/`. After the merge, every `packages/react/src/shadcn/foo.tsx` gets deleted and imports swap to `@bsn/ui/components/foo`. Sourcing from `@bsn/ui` today makes the merge mechanical.
+Block B is now unblocked and is **your active lane** below.
 
-- Add to `packages/react/package.json` `dependencies` at the **exact pinned versions** in the RFC TL;DR: `@radix-ui/react-dropdown-menu@^2.1.16`, `@radix-ui/react-context-menu@^2.2.16`, `@radix-ui/react-tooltip@^1.2.8`, `@radix-ui/react-popover@^1.1.15`, `@radix-ui/react-checkbox@^1.3.3`, `@radix-ui/react-tabs@^1.1.13`, `@radix-ui/react-dialog@^1.1.15`, `@radix-ui/react-label@^2.1.8`, `@radix-ui/react-select@^2.2.6`, `@radix-ui/react-separator@^1.1.8`, `@radix-ui/react-scroll-area@^1.2.10`, `@radix-ui/react-slot@^1.2.4`, `class-variance-authority@^0.7.1`, `lucide-react@^1.8.0`. Update `bun.lock`.
-- **Copy** (don't regenerate) these `.tsx` files from `~/work/bsncraft/packages/ui/src/components/` into `packages/react/src/shadcn/`: `dropdown-menu.tsx`, `context-menu.tsx`, `tooltip.tsx`, `popover.tsx`, `checkbox.tsx`, `tabs.tsx`, `dialog.tsx`, `sheet.tsx`, `select.tsx`, `separator.tsx`, `scroll-area.tsx`, `label.tsx`. If the source imports `cn` from `@bsn/ui/lib/utils`, copy that utility too OR redirect imports to bc-grid's existing helpers — match source behavior, not source import paths.
-- Update `tools/bundle-size/src/manifest.ts` baseline expectations (RFC §TL;DR — ~12-18 KiB add).
-- No consumer-visible change. PR body lists every primitive copied + the source path it came from + the version pin. No deletion in this PR — Blocks B+C delete in subsequent PRs.
+### Block B — chrome migration (sequential, 4 PRs)
 
-#### Next-after → `v07-test-infra-happy-dom` (PR-A2)
+#### Active now → `v07-radix-context-menu` (PR-B1)
 
-Per RFC §Block A PR-A2:
+Branch: `agent/worker2/v07-radix-context-menu`. Per RFC §Block B PR-B1.
 
-- Add `happy-dom` + `@testing-library/react` to `packages/react/devDependencies`.
-- Add `packages/react/tests/dom/setup.ts` registering happy-dom globals.
-- Add a separate `bun test --preload tests/dom/setup.ts packages/react/tests/dom/*` runner script (root `package.json`). Pure-helper tests stay where they are; only Radix-interactive tests move to `dom/`.
-- No migration of existing tests yet — that happens per-PR in Block B as each chrome surface migrates. PR-A2 just stands up the infrastructure.
+**Replaces** `packages/react/src/internal/context-menu.tsx` (532 LOC) + `menu-item.tsx` (175 LOC) + `chrome-context-menu.ts` (~200 LOC) + `disclosure-icon.tsx` + `context-menu-icons.tsx` with `@radix-ui/react-context-menu` (right-click) and `@radix-ui/react-dropdown-menu` (header column-options menu). Both Radix primitives are already installed via PR-A1 + #503; the corresponding source files live at `packages/react/src/shadcn/context-menu.tsx` + `dropdown-menu.tsx`.
 
-### Block B — chrome migration (sequential after Block A, 4 PRs)
+**Migration pattern:**
 
-#### B1 → `v07-radix-context-menu` (PR-B1)
+1. Map existing `BcContextMenuItem` types onto Radix items:
+   - `BcContextMenuBuiltinItem` → `<ContextMenu.Item>` / `<DropdownMenu.Item>`
+   - `BcContextMenuToggleItem` → `<ContextMenu.CheckboxItem>` / `<DropdownMenu.CheckboxItem>` (use `checked` prop, fire `onCheckedChange`)
+   - `BcContextMenuSubmenuItem` → `<ContextMenu.Sub>` + `<ContextMenu.SubTrigger>` + `<ContextMenu.SubContent>` — Radix handles submenu collision-flip via Floating UI, so delete the hand-rolled `useLayoutEffect` + `data-flip` attribute and the "submenu flips to LEFT" Playwright case in `apps/examples/tests/context-menu.pw.ts`
+   - `BcContextMenuCustomItem` → `<ContextMenu.Item>` with the consumer's `render` output as children
+   - `BcContextMenuSeparator` → `<ContextMenu.Separator>`
+2. Right-click activation: wrap the grid viewport in `<ContextMenu.Root>` + `<ContextMenu.Trigger asChild>`. Replace the existing `internal/context-menu-layer.tsx` event handler.
+3. Keyboard activation (Shift+F10): Radix ContextMenu listens natively when wrapped in the trigger.
+4. Header column-options menu: replace the in-house menu trigger with `<DropdownMenu>` from `packages/react/src/shadcn/dropdown-menu.tsx`. The trigger button stays; only the surface changes.
+5. Replace icons with `lucide-react` imports: `Check`, `ChevronRight`, `Filter`, `Pin`, `Eye`, `EyeOff`, `Maximize2`, etc. Match the icon set the existing `context-menu-icons.tsx` rendered.
 
-Replace `packages/react/src/internal/context-menu.tsx` (532 LOC) + `menu-item.tsx` (175 LOC) + `chrome-context-menu.ts` (~200 LOC) + `disclosure-icon.tsx` + `context-menu-icons.tsx` with `@radix-ui/react-context-menu` (right-click) + `@radix-ui/react-dropdown-menu` (header column-options menu). Map the existing `BcContextMenuItem` types onto Radix `Item` / `CheckboxItem` / `Sub`. Submenu collision-flip falls out for free via Radix's Floating UI integration — delete the hand-rolled `useLayoutEffect` and `data-flip` attribute. Replace icons with `lucide-react`. Public API (`BcContextMenuItem`, `DEFAULT_CONTEXT_MENU_ITEMS`, `BcGridProps.contextMenuItems`) preserved verbatim. Move `contextMenu.markup.test.tsx` and `chromeContextMenu.test.ts` into `tests/dom/` with `@testing-library/react`. Add Playwright assertions for: right-click on data row, right-click on header, Shift+F10 keyboard, submenu collision-flip on narrow viewport, escape close, outside-click close, focus return.
+**Deletions in this PR:**
 
-#### B2 → `v07-radix-tool-panels` (PR-B2)
+- `packages/react/src/internal/context-menu.tsx` (532 LOC)
+- `packages/react/src/internal/menu-item.tsx` (175 LOC)
+- `packages/react/src/internal/chrome-context-menu.ts` (~200 LOC)
+- `packages/react/src/internal/disclosure-icon.tsx` (~30 LOC)
+- `packages/react/src/internal/context-menu-icons.tsx` (~120 LOC)
+- `packages/react/src/internal/context-menu-layer.tsx` (~100 LOC)
+- `popup-position.ts` / `popup-dismiss.ts` / `use-roving-focus.ts` — only delete here if NOTHING else still imports them. Otherwise, leave for PR-B3 to clean up after tooltip/popover migrate.
 
-Replace tool-panel chrome (`columnVisibility.tsx`, `filterToolPanel.tsx`, `pivotToolPanel.tsx`) with Radix `Tabs` for the columns/filters/pivot toggle row. Each panel becomes `Tabs.Content`. Use Radix `Dialog` (configured as a `Sheet`) if the panels slide in. Internal column visibility list uses Radix `Checkbox` + `RovingFocusGroup` for keyboard nav. Public API for the columns/filters/pivot props preserved.
+**Tests to migrate** (move to `packages/react/tests/dom/` with `@testing-library/react`):
 
-#### B3 → `v07-radix-tooltip-popover` (PR-B3)
+- `packages/react/tests/contextMenu.markup.test.tsx`
+- `packages/react/tests/contextMenu.test.ts` (interactive cases only; pure helpers stay)
+- `packages/react/tests/chromeContextMenu.test.ts`
+- `packages/react/tests/defaultContextMenuWiringEditor.test.ts`
 
-Replace `tooltip.tsx` (291 LOC) with `@radix-ui/react-tooltip`. Replace header funnel filter popups (`filter.ts` popup variant) with `@radix-ui/react-popover`. Delete `popup-position.ts` (172 LOC), `popup-dismiss.ts`, `use-roving-focus.ts`. Anywhere that used these helpers, route through Radix.
+**Playwright assertions to add BEFORE deleting in-house code:**
 
-#### B4 → `v07-lucide-icon-sweep` (PR-B4)
+- Right-click on data row opens menu with `Copy` / `Copy Row` / `Copy with Headers` / `Clear Selection` / `Clear Range`
+- Right-click on header opens column-options dropdown
+- Shift+F10 keyboard activation
+- Submenu opens on hover
+- Submenu auto-flips when right edge would overflow viewport (Radix Floating UI — should JUST WORK; replaces the existing manual collision-flip case)
+- Escape closes
+- Outside-click closes
+- Focus returns to trigger element on close
 
-Replace `header-icons.tsx`, `pagination-icons.tsx`, `panel-icons.tsx` with `lucide-react`. Match icon names against shadcn's conventions where possible (e.g., `ChevronUp` / `ChevronDown` for sort, `Filter` for filter, `Pin` for pinned column). Delete the hand-rolled SVG components. Update any consumer-facing icon docs.
+**Public API:** preserved verbatim. `bun run api-surface` diff must be empty.
+
+**Bundle:** add `lucide-react` icons used. Remove the deleted in-house code. RFC TL;DR estimates ~5 KiB savings in this slice; update `tools/bundle-size/src/manifest.ts` to capture the delta.
+
+#### Next-after → `v07-radix-tool-panels` (PR-B2)
+
+Replace tool-panel chrome (`columnVisibility.tsx`, `filterToolPanel.tsx`, `pivotToolPanel.tsx`) with Radix `Tabs` for the columns/filters/pivot toggle row. Each panel becomes `<Tabs.Content>`. Use Radix `Dialog` (configured as a `<Sheet>` via the existing `packages/react/src/shadcn/sheet.tsx`) if the panels slide in. Internal column visibility list uses Radix `Checkbox` from `shadcn/checkbox.tsx` + Radix RovingFocusGroup for keyboard nav. Public API for the columns/filters/pivot props preserved verbatim.
+
+#### Then-after → `v07-radix-tooltip-popover` (PR-B3)
+
+Replace `packages/react/src/tooltip.tsx` (291 LOC) with `@radix-ui/react-tooltip` via `packages/react/src/shadcn/tooltip.tsx`. Replace header funnel filter popups (`packages/react/src/filter.ts` popup variant) with `@radix-ui/react-popover` via `packages/react/src/shadcn/popover.tsx`. Delete `popup-position.ts` (172 LOC), `popup-dismiss.ts`, `use-roving-focus.ts` (or whichever of these PR-B1 didn't already delete). Anywhere else that used these helpers, route through Radix.
+
+#### Last → `v07-lucide-icon-sweep` (PR-B4)
+
+Replace `packages/react/src/internal/header-icons.tsx`, `pagination-icons.tsx`, `panel-icons.tsx` with `lucide-react` imports. Match icon names against shadcn's conventions where possible (`ChevronUp` / `ChevronDown` for sort, `Filter` for filter, `Pin` for pinned column, etc.). Delete the hand-rolled SVG components. Update any consumer-facing icon docs.
 
 ### Constraints (binding per RFC §Migration constraints)
 

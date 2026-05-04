@@ -16,17 +16,24 @@ The one constraint: **do not add new code under `packages/react/src/internal/*`*
 
 You are now on the **v1.0 prep lane**. Worker2 + worker3 own the v0.7 architecture correction; you do NOT pick up any v0.7-* tasks. Your queue below is v1.0-freeze prep + bug fixes.
 
-### Active now → `v07-api-surface-action-items` (~half day to ~1 day)
+### ✅ Slice 1 (#505) merged 2026-05-04 PM
 
-Per `docs/design/v1-api-surface-audit.md` §15, your audit flagged **30 follow-through action items** before v1.0 freeze. Land them as one or more PRs, in implementation-priority order:
+Cross-package symmetry (3 re-exports) + `@bc-grid/server-row-model` planned → enforced + `data-bc-grid-cell-state` deprecation comment update. 3 of 30 audit action items closed.
 
-1. **Cross-package symmetry fix (~30 min)** — re-export `BcGridIdentity`, `BcAggregation`, `BcAggregationResultDTO` from `@bc-grid/react`. Pure additive, zero risk.
-2. **INTERNALIZE — `serverRowEntryOverrides` + `ServerRowEntryOverride`** — bsncraft v0.6.0-alpha.1 P1 escape hatch was an internal-only fix; remove from `tools/api-surface/src/manifest.ts` runtime+declaration exports for `@bc-grid/react`. Public API diff in PR body should explicitly state "INTERNALIZE per audit §X."
-4. **RENAMEs (~half day)** — the four `Use*BoundProps` types per RFC #477 §3.1. The `Bound` suffix is now ambiguous after the dual-output IMPL added a `bound` field. Pick names per the audit doc's recommendation. Keep the old names as `@deprecated` aliases for one release; api-surface manifest tracks both during the deprecation window.
-5. **DEPRECATEs (~half day)** — 8 items: `Use*Result.props` aliases per RFC #477 (already redundant after dual-output `bound`/`serverProps`); legacy `data-bc-grid-cell-state` DOM attribute (replaced by canonical `data-bc-grid-edit-state` in v0.5; one-release migration window expired).
-6. **OPEN QUESTION resolution (~unknown)** — 13 type-pair / naming questions need a maintainer pass. List them as a numbered punch list in `docs/design/v1-api-surface-audit.md §16` (decision log) and post each one as a comment on the audit PR for the maintainer to resolve before v1.0 freeze.
+### Active now → `v07-api-surface-action-items-slice-2` (RENAMEs + INTERNALIZE)
+
+Per `docs/design/v1-api-surface-audit.md` §15, **27 audit action items remain** before v1.0 freeze. Pick a slice:
+
+1. **INTERNALIZE — `serverRowEntryOverrides` + `ServerRowEntryOverride`** — bsncraft v0.6.0-alpha.1 P1 escape hatch was an internal-only fix; remove from `tools/api-surface/src/manifest.ts` runtime + declaration exports for `@bc-grid/react`. PR body should explicitly cite "INTERNALIZE per audit §X."
+2. **RENAMEs** — the four `Use*BoundProps` types per RFC #477 §3.1. The `Bound` suffix is now ambiguous after the dual-output IMPL added a `bound` field. Pick names per the audit doc's recommendation. Keep the old names as `@deprecated` aliases for one release; api-surface manifest tracks both during the deprecation window.
+3. **DEPRECATEs (7 remaining)** — `Use*Result.props` aliases per RFC #477 (already redundant after dual-output `bound`/`serverProps`); the rest of the 8 items in audit §15. (1 of 8 done in #505 — the `data-bc-grid-cell-state` comment.)
+4. **OPEN QUESTION compilation** — 13 type-pair / naming questions need a maintainer pass. List them as a numbered punch list in `docs/design/v1-api-surface-audit.md §16` (decision log) and post each as a comment on a fresh GitHub issue tagged `v1-api-question` for the maintainer to resolve before v1.0 freeze.
 
 Each fix can be its own PR or batched — your call. Run `bun run api-surface` after each — the manifest must stay coherent.
+
+### Concurrent → ratify the alpha.3 candidate train (low priority)
+
+The Claude coordinator ran the alpha.3 candidate train through type-check + lint + 2112 unit tests + build + api-surface + bundle-size + tarball-smoke + release-preflight + smoke-perf 3/3 + Playwright (post-#487-#492 train). bsncraft soak feedback on alpha.2 is the gate for cutting alpha.3 vs rolling to GA. You don't need to act here unless the maintainer asks.
 
 ### Next-after → `v1-browser-compat-matrix-doc` (~half day, **v1.0 prep**)
 
