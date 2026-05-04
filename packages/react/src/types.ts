@@ -1645,6 +1645,22 @@ export interface BcServerGridProps<TRow>
    * preserve focus across view changes.
    */
   preserveFocusOnViewChange?: boolean
+  /**
+   * Tree-mode opt-in: preserve expansion state across view changes
+   * (worker1 v0.6 server tree expansion persistence). When `true`,
+   * the expansion set is NOT cleared on viewKey change (filter / sort
+   * / search / groupBy / visibleColumns); after the new view's roots
+   * resolve, the orchestration auto-re-fetches children for any
+   * previously-expanded rowId still present in the new root set.
+   * Default `false` matches today's behaviour: the uncontrolled
+   * expansion set is cleared on viewKey change so the visible state
+   * matches the user's "filter changed; tree starts fresh" mental
+   * model. Composes with `preserveScrollOnViewChange` /
+   * `preserveSelectionOnViewChange` / `preserveFocusOnViewChange`
+   * (#444 view-change-reset-policy family). Only applies when
+   * `rowModel === "tree"`.
+   */
+  preserveExpansionOnViewChange?: boolean
 
   /**
    * Render slot for the most-recent failed-load error (worker1 v0.6
