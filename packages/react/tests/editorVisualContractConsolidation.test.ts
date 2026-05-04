@@ -214,8 +214,9 @@ describe("editors/chrome — editorStateAttrs helper produces the dual-attribute
       "datetime.tsx",
       "time.tsx",
       "checkbox.tsx",
-      "internal/combobox.tsx",
-      "internal/combobox-search.tsx",
+      // v0.7 PR-C2: in-house combobox.tsx + combobox-search.tsx replaced
+      // with the shadcn-backed primitive at shadcn/Combobox.tsx.
+      "shadcn/Combobox.tsx",
     ]) {
       const source = read(file)
       expect(source).toMatch(/editorStateAttrs\(/)

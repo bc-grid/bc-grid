@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { findOptionIndexByValue, selectedIndicesFromValues } from "../src/internal/combobox"
+import { findOptionIndexByValue, selectedIndicesFromValues } from "../src/shadcn/Combobox"
+
+/**
+ * Pure-helper + source-shape regression guards for the shadcn
+ * Combobox primitive (v0.7 PR-C2 — `packages/editors/src/shadcn/Combobox.tsx`).
+ *
+ * Replaces the legacy guard in `internal/combobox.tsx` (deleted in
+ * PR-C2). Behavioural correctness is covered by Playwright at
+ * `apps/examples/tests/editor-{select,multi-select,autocomplete}.pw.ts`.
+ */
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -37,17 +46,10 @@ describe("selectedIndicesFromValues (multi-select resolver)", () => {
   })
 
   test("preserves caller order, not option order", () => {
-    // Multi-select trigger renders chips in option order downstream;
-    // the resolver is order-preserving so consumers can drive the
-    // initial selection from a server-sent array without reshuffling.
     expect(selectedIndicesFromValues(STATUS_OPTIONS, ["closed", "open"])).toEqual([2, 0])
   })
 
-  test("silently drops values not in the options list (matches v0.1 behaviour)", () => {
-    // The v0.1 native `<select multiple>` shell silently dropped
-    // missing values. The Combobox primitive preserves that contract
-    // so the upgrade is non-breaking for consumer rows that carry
-    // legacy / migrated values.
+  test("silently drops values not in the options list", () => {
     expect(selectedIndicesFromValues(STATUS_OPTIONS, ["open", "removed-value", "closed"])).toEqual([
       0, 2,
     ])
@@ -62,93 +64,84 @@ describe("selectedIndicesFromValues (multi-select resolver)", () => {
   })
 })
 
-describe("multi-mode Enter contract — keyboard intercept (planning doc §5)", () => {
+describe("multi-mode Enter contract — keyboard intercept (#427 preserved post-PR-C2)", () => {
   // The repo's test runner is bun:test with no DOM, so the keyboard
   // intercept's behaviour is pinned via a source-shape regression
-  // guard. Behavioural correctness is covered by the e2e at
-  // `apps/examples/tests/editor-multi-select.pw.ts` (which uses
-  // Enter to commit a chip set, not the Tab workaround the v0.5
-  // alpha left in place).
+  // guard. Behavioural correctness is covered by Playwright.
   //
-  // The bug shape (audit P1-W3-5b, surfaced fixing #372): the
-  // Combobox keyboard intercept ran `updateSelection(activeIndex)`
-  // on Enter regardless of mode. In multi mode `updateSelection`
-  // toggles selection, so pressing Enter to commit the chip set
-  // toggled OFF the most-recently-active option *before* the
-  // editor portal wrapper saw the same Enter and ran commit. Silent
-  // data loss for the headline gesture in chip-input UX. The fix
-  // landed in #390 (v0.5 editor bundle 1); this regression guard
-  // pins the contract so a refactor doesn't re-introduce the bug.
+  // The bug shape (#427): cmdk's default Enter dispatches an
+  // item-select event, which in multi-mode would toggle the active
+  // option — re-introducing the silent-data-loss pattern that #390
+  // fixed in the legacy combobox. The PR-C2 fix is on `<Command>`'s
+  // `onKeyDown` prop: `if (event.key === "Enter" && isMulti) event.preventDefault()`.
+  // cmdk runs consumer's onKeyDown BEFORE its own switch, so
+  // preventDefault skips cmdk's Enter handler. The Enter still bubbles
+  // to the editor portal's commit handler.
   const here = fileURLToPath(new URL(".", import.meta.url))
-  const source = readFileSync(`${here}../src/internal/combobox.tsx`, "utf8")
+  const source = readFileSync(`${here}../src/shadcn/Combobox.tsx`, "utf8")
 
-  test("Enter handler gates updateSelection on !isMulti", () => {
-    // Pin the gating expression so a refactor that drops `!isMulti`
-    // (re-introducing the multi-mode toggle-on-Enter bug) trips
-    // here loudly.
+  test("Command's onKeyDown override gates Enter on isMulti", () => {
+    // Pin the gating expression so a refactor that drops the
+    // `&& isMulti` (re-introducing toggle-on-Enter for multi-mode)
+    // trips here loudly.
+    expect(source).toMatch(/event\.key\s*===\s*"Enter"\s*&&\s*isMulti/)
+  })
+
+  test("Enter override calls preventDefault to skip cmdk's item-select", () => {
+    // cmdk's switch is gated on `!event.defaultPrevented`. Pin the
+    // preventDefault call so a refactor doesn't replace it with a
+    // softer mechanism that fails to skip cmdk's handler.
     expect(source).toMatch(
-      /if\s*\(event\.key\s*===\s*"Enter"\)[\s\S]*?if\s*\(!isMulti\s*&&\s*open\s*&&\s*activeIndex\s*>=\s*0\)/,
+      /if\s*\(event\.key\s*===\s*"Enter"\s*&&\s*isMulti\)\s*\{[\s\S]*?event\.preventDefault\(\)/,
     )
   })
 
-  test("Enter handler returns early without preventDefault so the editor portal sees the same event", () => {
-    // The whole point: in multi mode Enter must BUBBLE to the editor
-    // portal wrapper so the wrapper commits the current chip set.
-    // Calling event.preventDefault() would short-circuit the bubble
-    // and break commit. Pin the absence so a refactor doesn't add
-    // it "for symmetry" with the other key handlers.
-    const enterRegion =
-      source.match(/if\s*\(event\.key\s*===\s*"Enter"\)\s*\{[\s\S]*?return\s*\n\s*\}/)?.[0] ?? ""
-    expect(enterRegion.length).toBeGreaterThan(0)
-    expect(enterRegion).not.toMatch(/preventDefault/)
+  test("rationale comment cites #427 + the commit-on-Enter contract", () => {
+    expect(source).toMatch(/#427/)
+    expect(source).toMatch(/commit/i)
+  })
+})
+
+describe("popover-stamped value contract (PR-C2 design decision Q1)", () => {
+  // The shadcn Combobox stamps `data-bcgrid-combobox-value` (JSON-
+  // encoded) on the popover content as the user picks options. The
+  // editor's `getValue?` hook climbs from the focused CommandInput up
+  // to `[data-bcgrid-combobox-root]` and reads this attribute.
+  // Pin both the producer (Combobox stamps it) and the helper
+  // (`readComboboxValueFromFocusEl` reads it via `closest()`) so a
+  // refactor can't silently drop the contract.
+  const here = fileURLToPath(new URL(".", import.meta.url))
+  const source = readFileSync(`${here}../src/shadcn/Combobox.tsx`, "utf8")
+
+  test("PopoverContent carries data-bcgrid-combobox-root + data-bcgrid-combobox-value", () => {
+    expect(source).toMatch(/data-bcgrid-combobox-root="true"/)
+    expect(source).toMatch(/data-bcgrid-combobox-value=\{typedValueJson\}/)
   })
 
-  test("Space remains the toggle gesture (every mode, including multi)", () => {
-    // Pin the Space handler's `updateSelection(activeIndex)` so a
-    // refactor that mistakenly drops it (because Enter no longer
-    // toggles in multi) catches loudly. Space is the toggle gesture
-    // by design — chip-input UX needs both navigate (Arrow) and
-    // toggle (Space) gestures while keeping Enter for commit.
-    expect(source).toMatch(
-      /if\s*\(event\.key\s*===\s*"\s"\)\s*\{[\s\S]*?event\.preventDefault\(\)[\s\S]*?updateSelection\(activeIndex\)/,
-    )
+  test("readComboboxValueFromFocusEl walks .closest('[data-bcgrid-combobox-root]')", () => {
+    expect(source).toMatch(/focusEl\.closest<HTMLElement>\("\[data-bcgrid-combobox-root\]"\)/)
   })
 
-  test("the rationale comment cites the audit + the silent-data-loss reason", () => {
-    // Pin the explanatory comment so a doc sweep doesn't strip the
-    // load-bearing context. The comment is what tells the next
-    // worker WHY the gating exists; without it a future refactor
-    // is liable to "simplify" by removing the !isMulti guard.
-    expect(source).toMatch(/audit P1-W3-5b/)
-    expect(source).toMatch(/Toggling on Enter undoes the most-recently/i)
+  test("typedValueJson is JSON.stringify of the typed selection", () => {
+    expect(source).toMatch(/JSON\.stringify\(values\)/)
+    expect(source).toMatch(/JSON\.stringify\(options\[idx\]\?\.value\)/)
   })
 })
 
 describe("initialOptions wiring (v06-prepareresult-preload-select-multi)", () => {
-  // The Combobox primitive accepts `initialOptions` so editors that
-  // resolve options via `prepare()` (selectEditor, multiSelectEditor)
-  // can pass the prepare-resolved list and have it override the
-  // static `options` prop. Mirrors the SearchCombobox pattern. Pin
-  // the precedence shape here so a refactor doesn't accidentally
-  // invert the fallthrough or drop `initialOptions` altogether,
-  // which would silently regress the async-loaded-options path.
+  // Combobox accepts `initialOptions` so editors that resolve options
+  // via `prepare()` (selectEditor, multiSelectEditor) can pass the
+  // prepare-resolved list. The fallthrough must prefer initialOptions
+  // over the static options prop.
   const here = fileURLToPath(new URL(".", import.meta.url))
-  const source = readFileSync(`${here}../src/internal/combobox.tsx`, "utf8")
+  const source = readFileSync(`${here}../src/shadcn/Combobox.tsx`, "utf8")
 
   test("ComboboxBaseProps declares initialOptions alongside options", () => {
-    // Pin the prop shape — both `options` and `initialOptions` must
-    // be part of the public contract so editor consumers can target
-    // either path.
     expect(source).toMatch(/options:\s*readonly\s+EditorOption\[\]/)
     expect(source).toMatch(/initialOptions\?:\s*readonly\s+EditorOption\[\]\s*\|\s*undefined/)
   })
 
   test("Combobox prefers initialOptions over the options prop", () => {
-    // The whole point: when an editor's `prepare()` resolves async
-    // options, the resulting list must win over any static `options`
-    // prop the consumer also wired. The fallthrough order is
-    // load-bearing — flipping it would silently regress the
-    // first-page-preload UX.
     expect(source).toMatch(/const\s+options\s*=\s*initialOptions\s*\?\?\s*optionsProp/)
   })
 })
