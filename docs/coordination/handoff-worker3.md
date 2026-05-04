@@ -1,6 +1,20 @@
 # Worker3 Handoff (Claude — editor + keyboard/a11y + lookup UX lane)
 
-**Last updated:** 2026-05-04 by Claude coordinator
+**Last updated:** 2026-05-04 PM (post-#506 merge) by Claude coordinator
+
+## 🛑 IF YOU REPORTED "no assignments" — READ THIS
+
+**You are not blocked.** PR-A1 (#501), PR-A1 resync (#503), and PR-A2 (#504) all **merged hours ago**. If your handoff still reads "wait for PR-A1" — **`git pull origin main` and re-read this doc.** Block A is complete. Your active task is PR-C1, defined immediately below.
+
+Specifically:
+
+- ✅ `cmdk@1.1.1` + `@radix-ui/react-popover@1.1.15` are installed in `packages/react/package.json` (and via the workspace dep chain are accessible from `@bc-grid/editors` already).
+- ✅ `packages/react/src/shadcn/command.tsx` + `popover.tsx` exist on `main`, sourced from `~/work/bsncraft/packages/ui/src/components/`.
+- ✅ `packages/react/tests/dom/setup.ts` is in place via PR-A2 if you need DOM tests.
+
+**Verification command:** `git fetch origin && git log origin/main --oneline | head -10` should show #506 (test inventory you just shipped) at top, then docs commits, then `feat(react): add Radix shadcn scaffold (#501)`. If you don't see #501 on `main`, you're on a stale branch — pull.
+
+---
 
 ## 🚨 P0 ARCHITECTURE CORRECTION 2026-05-04 — editor lane: hand-rolled → shadcn
 
