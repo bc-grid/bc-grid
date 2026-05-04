@@ -4712,3 +4712,75 @@ table.bc-grid-detail-nested-grid {
   color: var(--bc-grid-fg);
   font-variant-numeric: tabular-nums;
 }
+
+/*
+ * Worker1 v06 server skeleton rows. Renders a placeholder bar for
+ * positions beyond `data.length` when the consumer (or the
+ * `<BcServerGrid rowModel="infinite">` wiring) sets `expectedRowCount`.
+ * The bar sits inside the row container with appropriate padding so
+ * it visually aligns with the surrounding loaded rows. Two visual
+ * variants:
+ *
+ *   - `lines` (default): static muted block. Cheap to render, no
+ *     animation budget. Right for short loads where shimmer would
+ *     flash before the real data arrives.
+ *   - `shimmer`: animated linear-gradient sweep. Right for longer
+ *     loads where the user benefits from a "still working" cue.
+ *
+ * `aria-busy="true"` on the row container surfaces the placeholder
+ * status to AT; the inner bar is `aria-hidden="true"` since it
+ * carries no semantic content beyond the busy signal already on the
+ * parent.
+ */
+.bc-grid-row-skeleton {
+  pointer-events: none;
+  background: var(--bc-grid-bg);
+}
+
+.bc-grid-skeleton-bar {
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: var(--bc-grid-cell-padding-x, 12px);
+  right: var(--bc-grid-cell-padding-x, 12px);
+  height: 12px;
+  border-radius: 4px;
+  transform: translateY(-50%);
+  background: color-mix(in srgb, var(--bc-grid-fg) 12%, transparent);
+}
+
+.bc-grid-skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bc-grid-fg) 8%, transparent) 0%,
+    color-mix(in srgb, var(--bc-grid-fg) 18%, transparent) 50%,
+    color-mix(in srgb, var(--bc-grid-fg) 8%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: bc-grid-skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes bc-grid-skeleton-sweep {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bc-grid-skeleton-shimmer {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .bc-grid-skeleton-bar {
+    background: GrayText;
+  }
+  .bc-grid-skeleton-shimmer {
+    animation: none;
+    background: GrayText;
+  }
+}

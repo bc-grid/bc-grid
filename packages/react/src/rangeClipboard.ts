@@ -1,6 +1,6 @@
 import type { BcRange, BcValidationResult, ColumnId, RowId } from "@bc-grid/core"
 import type { RowEntry } from "./gridInternals"
-import { type ResolvedColumn, isDataRowEntry } from "./gridInternals"
+import { type ResolvedColumn, isDataRowEntry, isGroupRowEntry } from "./gridInternals"
 import type { BcClipboardPayload, BcReactGridColumn } from "./types"
 import { formatCellValue, getCellValue } from "./value"
 
@@ -724,7 +724,8 @@ function formatClipboardCell<TRow>(
   firstSelectedColumn: boolean,
 ): string {
   if (!entry || !column) return ""
-  if (!isDataRowEntry(entry)) return firstSelectedColumn ? entry.label : ""
+  if (isGroupRowEntry(entry)) return firstSelectedColumn ? entry.label : ""
+  if (!isDataRowEntry(entry)) return ""
   const value = getCellValue(entry.row, column.source)
   return formatCellValue(value, entry.row, column.source, locale)
 }

@@ -96,6 +96,7 @@ import {
   type GroupRowEntry,
   type ResolvedColumn,
   type RowEntry,
+  type SkeletonRowEntry,
   applyScroll,
   assertNoMixedControlledProps,
   assignRef,
@@ -115,6 +116,8 @@ import {
   headerBandStyle,
   headerRowStyle,
   isDataRowEntry,
+  isGroupRowEntry,
+  isSkeletonRowEntry,
   mergeLayoutColumnState,
   overlayStyle,
   pinnedEdgeFor,
@@ -294,6 +297,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     loading,
     loadingOverlay,
     errorOverlay,
+    expectedRowCount,
+    serverLoadingSkeleton,
     renderDetailPanel,
     detailPanelHeight,
     ariaLabel,
@@ -1296,7 +1301,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // mapping flatNodes → flat data array. The overrides Map carries
   // the metadata back here, keyed by rowId, so the render loop sees
   // GroupRowEntry shape for those rows. Bsncraft v0.6.0-alpha.1 P1.
-  const rowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
+  const rowEntriesBase = useMemo<readonly RowEntry<TRow>[]>(() => {
     const overrides = props.serverRowEntryOverrides
     if (!overrides || overrides.size === 0) return groupedRowModel.rows
     return groupedRowModel.rows.map((entry, idx) => {
@@ -1314,6 +1319,31 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       } satisfies GroupRowEntry
     })
   }, [groupedRowModel.rows, props.serverRowEntryOverrides])
+  // Skeleton placeholder rows (worker1 v06 server skeleton rows). When
+  // the consumer's expectedRowCount exceeds the loaded entries AND
+  // skeletons are not opted out, append synthetic SkeletonRowEntry
+  // items up to the expected count so positions beyond the loaded
+  // data render placeholder chrome instead of empty space.
+  // `<BcServerGrid rowModel="infinite">` feeds this from the
+  // server-reported totalRows; consumers driving plain <BcGrid> can
+  // also pass it directly.
+  const rowEntries = useMemo<readonly RowEntry<TRow>[]>(() => {
+    if (
+      typeof expectedRowCount !== "number" ||
+      expectedRowCount <= rowEntriesBase.length ||
+      serverLoadingSkeleton === false
+    )
+      return rowEntriesBase
+    const extended: RowEntry<TRow>[] = rowEntriesBase.slice()
+    for (let i = rowEntriesBase.length; i < expectedRowCount; i++) {
+      extended.push({
+        kind: "skeleton",
+        rowId: `__bc-grid-skeleton-${i}`,
+        index: i,
+      } satisfies SkeletonRowEntry)
+    }
+    return extended
+  }, [rowEntriesBase, expectedRowCount, serverLoadingSkeleton])
   const groupingActive = groupedRowModel.active
   const visibleDataRowEntries = useMemo(() => rowEntries.filter(isDataRowEntry), [rowEntries])
   const rangeRowIds = useMemo(() => rowEntries.map((entry) => entry.rowId), [rowEntries])
@@ -3103,7 +3133,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       const cellRow = cellTarget ? rowEntries[currentRow] : null
       const cellColumn = cellTarget ? resolvedColumns[currentCol] : null
 
-      if (cellRow && !isDataRowEntry(cellRow)) {
+      if (cellRow && isGroupRowEntry(cellRow)) {
         const shouldToggle =
           event.key === "Enter" ||
           event.key === " " ||
@@ -3932,6 +3962,44 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
               {virtualWindow.rows.map((virtualRow) => {
                 const entry = rowEntries[virtualRow.index]
                 if (!entry) return null
+                if (isSkeletonRowEntry(entry)) {
+                  // Worker1 v06 server skeleton rows. Skeleton positions
+                  // beyond `data.length` (driven by `expectedRowCount`)
+                  // render placeholder chrome so scrolling past
+                  // not-yet-loaded rows feels continuous instead of
+                  // empty. Visual variant per `serverLoadingSkeleton`
+                  // ("lines" default; "shimmer" for animated; `false`
+                  // is opted out earlier in the rowEntries pipeline).
+                  const skeletonVariant = serverLoadingSkeleton === "shimmer" ? "shimmer" : "lines"
+                  return (
+                    <div
+                      key={entry.rowId}
+                      className="bc-grid-row bc-grid-row-skeleton"
+                      role="row"
+                      aria-rowindex={virtualRow.index + bodyAriaRowOffset}
+                      aria-busy="true"
+                      data-row-id={entry.rowId}
+                      data-row-index={virtualRow.index}
+                      data-bc-grid-row-kind="skeleton"
+                      data-bc-grid-skeleton-variant={skeletonVariant}
+                      style={buildRowStyle(
+                        virtualRow.top,
+                        virtualRow.height,
+                        virtualWindow.totalWidth,
+                      )}
+                    >
+                      <span
+                        className={classNames(
+                          "bc-grid-skeleton-bar",
+                          skeletonVariant === "shimmer"
+                            ? "bc-grid-skeleton-shimmer"
+                            : "bc-grid-skeleton-lines",
+                        )}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  )
+                }
                 if (!isDataRowEntry(entry)) {
                   const groupSelectableRowIds = entry.childRowIds.filter((rowId) =>
                     selectableLeafRowIds.has(rowId),
