@@ -977,7 +977,28 @@ export interface ServerViewState {
   filter?: ServerFilter
   search?: string
   groupBy: ServerGroup[]
+  /**
+   * Set of columns visible in the current view. Source-order
+   * (matches `BcReactGridColumn[]` declaration order); does NOT
+   * reflect user-driven drag-reorder. Hosts that need reorder
+   * semantics for export / persistence / server-side rendering
+   * should read `displayColumnOrder` instead. The two are kept
+   * separate because the SET (which columns are shown) and the
+   * SEQUENCE (in what order) are independently meaningful — a
+   * server query can render only the visible set without caring
+   * about display order; an export-to-Excel must respect display
+   * order. Worker1 v0.6 server display column order.
+   */
   visibleColumns: ColumnId[]
+  /**
+   * Display order for visible columns — reflects user-driven
+   * drag-reorder via `BcColumnStateEntry.position`. Same set of
+   * columnIds as `visibleColumns` but ordered by user preference
+   * instead of source declaration. Optional; omitted when no
+   * column has a non-default `position` (display order matches
+   * source order). Worker1 v0.6 server display column order.
+   */
+  displayColumnOrder?: ColumnId[]
   locale?: string
   timeZone?: string
 }
