@@ -1,4 +1,6 @@
-# bsncraft consumer issues — open as of `@bc-grid/react@0.6.0-alpha.1`
+# bsncraft consumer issues — open as of `@bc-grid/react@0.6.0-alpha.2`
+
+> **alpha.2 published 2026-05-04** at https://github.com/bc-grid/bc-grid/releases/tag/v0.6.0-alpha.2 — bsncraft can `bun update @bc-grid/*@0.6.0-alpha.2` to pull the alpha.2 work train. Shipped this cut: pinned-lane Option B count-agnostic 3-track template (closes alpha.1 P0), submenu collision-flip (visible-on-right-edge fix), server-tree group rows render correctly, in-cell editor unmount fix on `<BcServerGrid>` (cleanupRowRef), shadcn-native render-prop cluster (`createTextEditor` + numeric batch + `createCheckboxEditor`), `BcServerGridProps.onBlockError` + `autoRetryBlocks`, server display column order in paged loader, `useServerPagedGrid` dual-output `bound`, actions-column keyboard shortcuts (Shift+E / Shift+Delete), toolbar render-prop context with composable sub-slots. **Soak validation requested:** install + smoke any flow that hits editor activation, the new toolbar shape, and the pinned-lane fix on multi-column-pinned views.
 
 Tracking document for issues bsncraft has flagged. Update status on each new bc-grid release.
 
