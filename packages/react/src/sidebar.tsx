@@ -12,6 +12,7 @@ import { BcColumnsToolPanel } from "./columnToolPanel"
 import { BcFiltersToolPanel } from "./filterToolPanel"
 import { domToken } from "./gridInternals"
 import { BcPivotToolPanel } from "./pivotToolPanel"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./shadcn/tabs"
 import type { BcSidebarBuiltInPanel, BcSidebarContext, BcSidebarPanel } from "./types"
 
 export const DEFAULT_SIDEBAR_WIDTH = 280
@@ -109,62 +110,70 @@ export function BcGridSidebar<TRow>({
       style={{ "--bc-grid-sidebar-width": `${sidebarWidth}px` } as CSSProperties}
       onKeyDown={handleSidebarKeyDown}
     >
-      <div
-        className="bc-grid-sidebar-rail"
-        role="tablist"
-        aria-label="Sidebar tools"
-        aria-orientation="vertical"
+      <Tabs
+        activationMode="manual"
+        className="bc-grid-sidebar-tabs"
+        orientation="vertical"
+        value={activePanel?.id ?? ""}
       >
-        {panels.map((panel, index) => {
+        <TabsList
+          aria-label="Sidebar tools"
+          aria-orientation="vertical"
+          className="bc-grid-sidebar-rail"
+          unstyled
+        >
+          {panels.map((panel) => {
+            const panelIds = ids.get(panel.id)
+            const Icon = panel.Icon
+            return (
+              <TabsTrigger
+                key={panel.id}
+                ref={(node) => setTabRef(panel.id, node)}
+                className="bc-grid-sidebar-tab"
+                id={panelIds?.tab}
+                aria-label={panel.label}
+                title={panel.label}
+                unstyled
+                value={panel.id}
+                onClick={(event) => {
+                  event.preventDefault()
+                  activatePanel(panel.id, false)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") {
+                    return
+                  }
+                  event.preventDefault()
+                  activatePanel(panel.id, true)
+                }}
+              >
+                <span className="bc-grid-sidebar-tab-icon" aria-hidden="true">
+                  <Icon className="bc-grid-sidebar-icon" />
+                </span>
+              </TabsTrigger>
+            )
+          })}
+        </TabsList>
+
+        {panels.map((panel) => {
           const panelIds = ids.get(panel.id)
           const selected = panel.id === activePanel?.id
-          const Icon = panel.Icon
           return (
-            <button
+            <TabsContent
               key={panel.id}
-              ref={(node) => setTabRef(panel.id, node)}
-              type="button"
-              className="bc-grid-sidebar-tab"
-              id={panelIds?.tab}
-              role="tab"
-              aria-label={panel.label}
-              aria-controls={panelIds?.panel}
-              aria-selected={selected}
-              data-state={selected ? "open" : "closed"}
-              title={panel.label}
-              tabIndex={0}
-              onClick={() => activatePanel(panel.id, false)}
-              onKeyDown={(event) =>
-                handleTabKeyDown({
-                  event,
-                  panels,
-                  currentIndex: index,
-                  activePanelId,
-                  activatePanel,
-                  focusPanelTab,
-                })
-              }
+              ref={selected ? panelRef : undefined}
+              aria-labelledby={panelIds?.tab}
+              className="bc-grid-sidebar-panel"
+              id={panelIds?.panel}
+              tabIndex={-1}
+              unstyled
+              value={panel.id}
             >
-              <span className="bc-grid-sidebar-tab-icon" aria-hidden="true">
-                <Icon className="bc-grid-sidebar-icon" />
-              </span>
-            </button>
+              {selected ? panel.render(context) : null}
+            </TabsContent>
           )
         })}
-      </div>
-
-      {activePanel ? (
-        <div
-          ref={panelRef}
-          className="bc-grid-sidebar-panel"
-          id={ids.get(activePanel.id)?.panel}
-          role="tabpanel"
-          aria-labelledby={ids.get(activePanel.id)?.tab}
-          tabIndex={-1}
-        >
-          {activePanel.render(context)}
-        </div>
-      ) : null}
+      </Tabs>
     </aside>
   )
 }
@@ -266,46 +275,6 @@ const builtInSidebarPanels: Record<BcSidebarBuiltInPanel, BuiltInPanelConfig> = 
     label: "Pivot",
     Icon: PivotIcon,
   },
-}
-
-function handleTabKeyDown<TRow>({
-  event,
-  panels,
-  currentIndex,
-  activePanelId,
-  activatePanel,
-  focusPanelTab,
-}: {
-  event: KeyboardEvent<HTMLButtonElement>
-  panels: readonly ResolvedSidebarPanel<TRow>[]
-  currentIndex: number
-  activePanelId: string | null
-  activatePanel: (panelId: string, focusPanel: boolean) => void
-  focusPanelTab: (panelId: string) => void
-}): void {
-  if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
-    event.preventDefault()
-    const panelId = panels[currentIndex]?.id ?? activePanelId
-    if (panelId) activatePanel(panelId, true)
-    return
-  }
-
-  const nextIndex = nextSidebarTabIndex(event.key, currentIndex, panels.length)
-  if (nextIndex == null) return
-  event.preventDefault()
-  const nextPanel = panels[nextIndex]
-  if (nextPanel) focusPanelTab(nextPanel.id)
-}
-
-function nextSidebarTabIndex(key: string, currentIndex: number, panelCount: number): number | null {
-  if (panelCount === 0) return null
-  if (key === "ArrowDown" || key === "ArrowRight") return (currentIndex + 1) % panelCount
-  if (key === "ArrowUp" || key === "ArrowLeft") {
-    return (currentIndex - 1 + panelCount) % panelCount
-  }
-  if (key === "Home") return 0
-  if (key === "End") return panelCount - 1
-  return null
 }
 
 function requestFocusFrame(callback: () => void): void {
