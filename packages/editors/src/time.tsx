@@ -1,6 +1,7 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useLayoutEffect, useRef } from "react"
+import { type ComponentType, useLayoutEffect, useRef } from "react"
 import { editorInputClassName, editorStateAttrs } from "./chrome"
+import type { EditorInputSlotProps } from "./internal/editorInputSlot"
 
 /**
  * Time editor — `kind: "time"`. Default for time-of-day columns per
@@ -17,17 +18,83 @@ import { editorInputClassName, editorStateAttrs } from "./chrome"
  *   - Commit produces a string in `HH:mm` form; consumers may add a
  *     `valueParser` if they need a different shape (e.g., a Date).
  *
- * No library dep — native input. Browser variance: Safari renders a
- * spinner, Chrome a popover, Firefox a clock-style picker. All emit
- * the same `HH:mm` value via `input.value`.
+ * Native `<input>` styled via theme CSS variables — no library dep.
+ * Browser variance: Safari renders a spinner, Chrome a popover, Firefox
+ * a clock-style picker. All emit the same `HH:mm` value via
+ * `input.value`. Consumers wanting shadcn-native styling pass an
+ * `inputComponent` to `createTimeEditor({ inputComponent })`. See
+ * `docs/recipes/shadcn-editors.md`. Per `v06-shadcn-native-editors-numeric-batch`.
  */
-export const timeEditor: BcCellEditor<unknown, unknown> = {
-  Component: TimeEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "time",
+/**
+ * Props handed to a custom `inputComponent` for the time editor.
+ * Re-exports the shared `EditorInputSlotProps` shape (v0.6 §1
+ * `v06-shadcn-native-editors-numeric-batch`) — drops in any
+ * forwardRef-capable shadcn-style component without modification.
+ */
+export type TimeEditorInputProps = EditorInputSlotProps
+
+export interface TimeEditorOptions {
+  /**
+   * Override the built-in `<input type="time">` with a custom
+   * component. The component receives every prop the built-in input
+   * would have applied — ref forwarding + defaultValue + ARIA +
+   * edit-state data attributes. Lifecycle (focus, value reading at
+   * commit) stays on the editor; the consumer just owns the visual
+   * primitive.
+   *
+   * Defaults to a native `<input type="time">` styled via theme CSS
+   * variables. Per `v06-shadcn-native-editors-numeric-batch`.
+   */
+  inputComponent?: ComponentType<TimeEditorInputProps>
 }
 
-function TimeEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled } = props
+/**
+ * Factory for the time editor. Returns a fresh `BcCellEditor` with
+ * the supplied options baked in. Default-export `timeEditor` is
+ * `createTimeEditor()` for the zero-config case.
+ *
+ * ```tsx
+ * import { Input } from "@/components/ui/input"
+ * import { createTimeEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnTimeEditor = createTimeEditor({ inputComponent: Input })
+ * ```
+ */
+export function createTimeEditor(options: TimeEditorOptions = {}): BcCellEditor<unknown, unknown> {
+  const Component = createTimeEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "time",
+  }
+}
+
+export const timeEditor: BcCellEditor<unknown, unknown> = createTimeEditor()
+
+function createTimeEditorComponent(
+  options: TimeEditorOptions,
+): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof TimeEditorBody> {
+  const InputComponent = options.inputComponent
+  return function TimeEditor(props) {
+    return <TimeEditorBody {...props} InputComponent={InputComponent} />
+  }
+}
+
+function TimeEditorBody(
+  props: BcCellEditorProps<unknown, unknown> & {
+    InputComponent: ComponentType<TimeEditorInputProps> | undefined
+  },
+) {
+  const {
+    initialValue,
+    error,
+    focusRef,
+    seedKey,
+    pending,
+    required,
+    readOnly,
+    disabled,
+    InputComponent,
+  } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   // Hand the input back to the framework via `focusRef`. Runs in
@@ -64,22 +131,25 @@ function TimeEditor(props: BcCellEditorProps<unknown, unknown>) {
 
   const seeded = normalizeTimeValue(initialValue)
 
-  return (
-    <input
-      ref={inputRef}
-      className={editorInputClassName}
-      type="time"
-      defaultValue={seeded}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      aria-required={required ? true : undefined}
-      aria-readonly={readOnly ? true : undefined}
-      aria-disabled={disabled || pending ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="time"
-      {...editorStateAttrs({ error, pending })}
-    />
-  )
+  // Custom inputComponent path: spreading `{...inputProps}` is
+  // load-bearing — the framework's commit path locates the active
+  // input via `data-bc-grid-editor-input`. shadcn's `<Input>`
+  // satisfies the contract by construction.
+  const inputProps: TimeEditorInputProps = {
+    ref: inputRef,
+    className: editorInputClassName,
+    type: "time",
+    defaultValue: seeded,
+    disabled: pending,
+    "aria-invalid": error ? true : undefined,
+    "aria-required": required ? true : undefined,
+    "aria-readonly": readOnly ? true : undefined,
+    "aria-disabled": disabled || pending ? true : undefined,
+    "data-bc-grid-editor-input": "true",
+    "data-bc-grid-editor-kind": "time",
+    ...editorStateAttrs({ error, pending }),
+  }
+  return InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />
 }
 
 /**

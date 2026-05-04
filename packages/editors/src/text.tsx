@@ -1,13 +1,7 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import {
-  type ComponentType,
-  type InputHTMLAttributes,
-  type Ref,
-  useId,
-  useLayoutEffect,
-  useRef,
-} from "react"
+import { type ComponentType, useId, useLayoutEffect, useRef } from "react"
 import { editorInputClassName, editorStateAttrs, visuallyHiddenStyle } from "./chrome"
+import type { EditorInputSlotProps } from "./internal/editorInputSlot"
 
 /**
  * Text editor — `kind: "text"`. The default for string-typed columns
@@ -35,35 +29,16 @@ import { editorInputClassName, editorStateAttrs, visuallyHiddenStyle } from "./c
  */
 
 /**
- * Props the framework hands to a custom `inputComponent` — mirrors
- * the native `<input>` props the built-in editor wires (ref +
- * defaultValue + ARIA + edit-state attributes). Custom components
- * MUST forward `ref` to a real input element so the framework's
- * commit / focus / select-all paths reach the DOM input. shadcn's
- * `<Input>` already forwards refs via `React.forwardRef`, so it
- * drops in directly. Per `v06-shadcn-native-editors`.
+ * Props the framework hands to a custom `inputComponent` for the
+ * text editor. Re-exports the shared `EditorInputSlotProps` shape
+ * (v0.6 §1 `v06-shadcn-native-editors-numeric-batch` extends this
+ * pattern across number/date/datetime/time editors). Custom
+ * components MUST forward `ref` to a real input element so the
+ * framework's commit / focus / select-all paths reach the DOM input.
+ * shadcn's `<Input>` already forwards refs via `React.forwardRef`,
+ * so it drops in directly. Per `v06-shadcn-native-editors`.
  */
-export interface TextEditorInputProps
-  extends Pick<
-    InputHTMLAttributes<HTMLInputElement>,
-    | "className"
-    | "type"
-    | "defaultValue"
-    | "disabled"
-    | "aria-invalid"
-    | "aria-label"
-    | "aria-describedby"
-    | "aria-required"
-    | "aria-readonly"
-    | "aria-disabled"
-  > {
-  ref: Ref<HTMLInputElement>
-  // Data attributes the framework's commit path reads to locate the
-  // active input. Custom inputComponents MUST stamp these on their
-  // root input element or commit-on-blur breaks.
-  "data-bc-grid-editor-input": "true"
-  "data-bc-grid-editor-kind": string
-}
+export type TextEditorInputProps = EditorInputSlotProps
 
 export interface TextEditorOptions {
   /**

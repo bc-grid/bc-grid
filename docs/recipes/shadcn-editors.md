@@ -2,50 +2,74 @@
 
 `@bc-grid/editors` ships built-in editors with native `<input>` rendering for zero-config use. Consumers wanting shadcn-native (or any other design-system) styling pass an `inputComponent` to the editor's factory function — bc-grid keeps the lifecycle (focus, ref, seed, ARIA, edit-state attributes), and the consumer owns the visual primitive.
 
-v0.6 §1 first-pass ships the slot on `textEditor` (most-used, simplest contract). Number / date / select editors follow the same pattern in subsequent PRs (tracked in the v0.6 deferred queue).
+v0.6 ships the slot on the **single-input editor cluster**: `textEditor` (PR #480), then `numberEditor`, `dateEditor`, `datetimeEditor`, `timeEditor` (extends the pattern in the numeric-batch PR). All five share the same prop shape so a single shadcn `<Input>` drops in across the cluster. Multi-primitive editors (`selectEditor`, `multiSelectEditor`, `autocompleteEditor`, `checkboxEditor`) follow in a separate PR — those need richer `triggerComponent` / `optionItemComponent` slots than the single-input shape can express.
 
 ## Public surface
 
 ```ts
-// New in v0.6:
 import {
   createTextEditor,
   type TextEditorInputProps,
   type TextEditorOptions,
+  createNumberEditor,
+  type NumberEditorInputProps,
+  type NumberEditorOptions,
+  createDateEditor,
+  type DateEditorInputProps,
+  type DateEditorOptions,
+  createDatetimeEditor,
+  type DatetimeEditorInputProps,
+  type DatetimeEditorOptions,
+  createTimeEditor,
+  type TimeEditorInputProps,
+  type TimeEditorOptions,
 } from "@bc-grid/editors"
 
-interface TextEditorOptions {
-  inputComponent?: ComponentType<TextEditorInputProps>
+interface XxxEditorOptions {
+  inputComponent?: ComponentType<XxxEditorInputProps>
 }
 ```
 
-`textEditor` (the default export) is `createTextEditor()` for the zero-config case. Consumers wanting shadcn-native styling call the factory directly:
+Every default-export (`textEditor`, `numberEditor`, etc.) is `createXxxEditor()` — zero-config consumers keep using the named export. Consumers wanting shadcn-native styling call the factory:
 
 ```tsx
 import { Input } from "@/components/ui/input"
-import { createTextEditor } from "@bc-grid/editors"
+import {
+  createTextEditor,
+  createNumberEditor,
+  createDateEditor,
+  createDatetimeEditor,
+  createTimeEditor,
+} from "@bc-grid/editors"
 import type { BcReactGridColumn } from "@bc-grid/react"
 
 export const shadcnTextEditor = createTextEditor({ inputComponent: Input })
+export const shadcnNumberEditor = createNumberEditor({ inputComponent: Input })
+export const shadcnDateEditor = createDateEditor({ inputComponent: Input })
+export const shadcnDatetimeEditor = createDatetimeEditor({ inputComponent: Input })
+export const shadcnTimeEditor = createTimeEditor({ inputComponent: Input })
 
-const col: BcReactGridColumn<CustomerRow, string> = {
-  field: "name",
-  header: "Name",
-  cellEditor: shadcnTextEditor,
-}
+const cols: BcReactGridColumn<CustomerRow, unknown>[] = [
+  { field: "name", header: "Name", cellEditor: shadcnTextEditor },
+  { field: "balance", header: "Balance", cellEditor: shadcnNumberEditor },
+  { field: "due", header: "Due", cellEditor: shadcnDateEditor },
+  { field: "scheduledAt", header: "Scheduled", cellEditor: shadcnDatetimeEditor },
+  { field: "openAt", header: "Opens", cellEditor: shadcnTimeEditor },
+]
 ```
 
 ## Contract for `inputComponent`
 
-The component receives `TextEditorInputProps`:
+All five editor input shapes share the same `EditorInputSlotProps` base — a single shadcn `<Input>` works across the cluster. Per-editor props differ only in the `type` value (`"text"`, `"date"`, `"datetime-local"`, `"time"`) and which lifecycle props are wired (number / date wire `onPaste` for paste-detection; datetime / time skip it).
 
 ```ts
-interface TextEditorInputProps {
+interface EditorInputSlotProps {
   ref: Ref<HTMLInputElement>
   className?: string
-  type: string                 // "text" — pass through to <input>
-  defaultValue: string         // seed (printable activation char or current cell value)
+  type: string                 // "text" | "date" | "datetime-local" | "time"
+  defaultValue: string         // seed (printable activation char or current cell value, normalised)
   disabled: boolean            // true while pending validation / commit
+  inputMode?: InputMode        // "decimal" on number; unset elsewhere
   "aria-invalid"?: true
   "aria-label"?: string
   "aria-describedby"?: string
@@ -54,6 +78,7 @@ interface TextEditorInputProps {
   "aria-disabled"?: true
   "data-bc-grid-editor-input": "true"   // load-bearing: framework's commit path locates input via this
   "data-bc-grid-editor-kind": string    // load-bearing: editor-kind discriminator for theme + tests
+  onPaste?: (event: ClipboardEvent<HTMLInputElement>) => void  // wired on number + date for format detection
 }
 ```
 
@@ -65,42 +90,68 @@ Three contracts your `inputComponent` MUST honor:
 
 Don't override `defaultValue` or do any controlled-state shenanigans — bc-grid treats the input as uncontrolled and reads the live DOM value at commit. A controlled value with consumer-managed onChange would diverge from what the framework commits.
 
+For numeric and date editors, **don't strip `onPaste`**. The factory wires it for format detection (`"$1,234.56"` → `1234.56` for number; `"5/4/2026"` → `"2026-05-04"` for date). Spreading `{...props}` onto `<input>` keeps it intact.
+
 ## Pattern: shadcn `<Input>` drop-in
 
-Vanilla shadcn `<Input>` works without a wrapper:
+Vanilla shadcn `<Input>` works without a wrapper for **all five editors**:
 
 ```tsx
 import { Input } from "@/components/ui/input"
-import { createTextEditor } from "@bc-grid/editors"
+import {
+  createTextEditor,
+  createNumberEditor,
+  createDateEditor,
+  createDatetimeEditor,
+  createTimeEditor,
+} from "@bc-grid/editors"
 
 export const shadcnTextEditor = createTextEditor({ inputComponent: Input })
+export const shadcnNumberEditor = createNumberEditor({ inputComponent: Input })
+export const shadcnDateEditor = createDateEditor({ inputComponent: Input })
+export const shadcnDatetimeEditor = createDatetimeEditor({ inputComponent: Input })
+export const shadcnTimeEditor = createTimeEditor({ inputComponent: Input })
 ```
 
-shadcn's `<Input>` is `React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(...)` — same contract as native `<input>`. The forwarded ref reaches the actual `<input>`, the className gets shadcn's tokens, and bc-grid's data attributes spread through.
+shadcn's `<Input>` is `React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(...)` — the same contract as native `<input>`. The forwarded ref reaches the actual `<input>`, the className gets shadcn's tokens, and bc-grid's data attributes (plus `type` discriminator and `onPaste`) spread through.
+
+The browser owns native picker chrome on `type="date"`, `type="datetime-local"`, and `type="time"` — shadcn's `<Input>` only swaps the visual frame; the calendar / clock popovers continue to come from the platform.
 
 ## Pattern: custom wrapper for design-system theming
 
-If your design system needs a wrapper layer (e.g. an icon prefix), forward the ref to the inner input and spread the rest of the props:
+If your design system needs a wrapper layer (e.g. an icon prefix), forward the ref to the inner input and spread the rest of the props. The same wrapper works across the cluster — the `EditorInputSlotProps` shape is shared:
 
 ```tsx
-import { forwardRef } from "react"
-import type { TextEditorInputProps } from "@bc-grid/editors"
+import { type ComponentType, forwardRef } from "react"
+import type {
+  DateEditorInputProps,
+  NumberEditorInputProps,
+  TextEditorInputProps,
+} from "@bc-grid/editors"
 
-const DesignSystemEditorInput = forwardRef<HTMLInputElement, Omit<TextEditorInputProps, "ref">>(
-  ({ className, ...rest }, ref) => (
-    <div className="ds-editor-shell">
-      <SearchIcon className="ds-editor-icon" />
-      <input ref={ref} className={cn("ds-editor-input", className)} {...rest} />
-    </div>
-  ),
-)
+const DesignSystemEditorInput = forwardRef<
+  HTMLInputElement,
+  Omit<TextEditorInputProps, "ref">
+>(({ className, ...rest }, ref) => (
+  <div className="ds-editor-shell">
+    <SearchIcon className="ds-editor-icon" />
+    <input ref={ref} className={cn("ds-editor-input", className)} {...rest} />
+  </div>
+))
 
-export const myShadcnEditor = createTextEditor({
+// One wrapper, three editors:
+export const myShadcnText = createTextEditor({
   inputComponent: DesignSystemEditorInput as ComponentType<TextEditorInputProps>,
+})
+export const myShadcnNumber = createNumberEditor({
+  inputComponent: DesignSystemEditorInput as ComponentType<NumberEditorInputProps>,
+})
+export const myShadcnDate = createDateEditor({
+  inputComponent: DesignSystemEditorInput as ComponentType<DateEditorInputProps>,
 })
 ```
 
-The cast on `inputComponent` matches the factory's expected shape (`ComponentType<TextEditorInputProps>` accepts forwardRef components — TypeScript's structural matching covers it, but an explicit cast keeps the call site readable).
+The cast on `inputComponent` matches the factory's expected shape. Each `XxxEditorInputProps` is a re-export of the same `EditorInputSlotProps` base, so the cast is a no-op at runtime; TypeScript just needs the explicit nudge across the per-editor type aliases.
 
 ## Pattern: per-grid editor configuration
 
@@ -109,17 +160,45 @@ The factory returns a fresh `BcCellEditor` per call, so consumers can configure 
 ```tsx
 const arTextEditor = createTextEditor({ inputComponent: ArInput })
 const apTextEditor = createTextEditor({ inputComponent: ApInput })
+
+const arNumberEditor = createNumberEditor({ inputComponent: ArInput })
+const apNumberEditor = createNumberEditor({ inputComponent: ApInput })
 ```
+
+## Per-editor notes
+
+### `createNumberEditor`
+
+- `type="text"` + `inputMode="decimal"` so the numeric keyboard surfaces on touch devices.
+- Wires `onPaste` for currency / accounting normalisation (`"$1,234.56"`, `"(1,234.56)"`, locale-aware via `parseLocaleNumber`).
+- Commit produces a string; consumers wire `column.valueParser` if they need a `number`.
+
+### `createDateEditor`
+
+- `type="date"` — browser owns the calendar popover (still works inside shadcn's `<Input>`; the popover is OS chrome, not React).
+- Wires `onPaste` for ISO normalisation (`"5/4/2026"` → `"2026-05-04"`, RFC2822, Date instances).
+- Commit produces ISO `YYYY-MM-DD`.
+
+### `createDatetimeEditor`
+
+- `type="datetime-local"` — combined date + time picker (no timezone, wall-clock).
+- No `onPaste` slot wired by default; if you need it, build a custom editor.
+- Commit produces ISO `YYYY-MM-DDTHH:mm` (no seconds, no timezone — matches the input's spec).
+
+### `createTimeEditor`
+
+- `type="time"` — browser provides the time picker (24h or 12h depending on locale + OS settings).
+- No `onPaste` slot wired by default.
+- Commit produces `HH:mm`.
 
 ## What's NOT covered (yet)
 
-- **`numberEditor`, `dateEditor`, `selectEditor`** — same pattern is planned but not yet shipped (v0.6 deferred / v0.7 split). Until then, consumers wanting shadcn-native styling for those editors build their own custom `cellEditor` from scratch (per `docs/recipes/custom-editors.md`).
-- **`autocompleteEditor`, `multiSelectEditor`, `checkboxEditor`** — these wrap richer primitives (Combobox, multi-Combobox, checkbox); the render-prop pattern doesn't cleanly map. Custom editor route is the recommendation.
+- **`selectEditor`, `multiSelectEditor`, `autocompleteEditor`, `checkboxEditor`** — these wrap richer primitives (popover trigger + option list, native `<select>`, Combobox, checkbox). The single-input render-prop pattern doesn't cleanly map; they get their own `triggerComponent` / `optionItemComponent` / `checkboxComponent` slots in the next sub-task (`v06-shadcn-native-editors-select-batch`).
 
-The v0.6 first-pass establishes the `inputComponent` pattern on `textEditor`. The other editors follow once the pattern proves out + bsncraft's actual shadcn-styling needs surface in real usage.
+The v0.6 single-input cluster establishes the `inputComponent` pattern uniformly. The select-batch follows the same factory shape (`createSelectEditor({ triggerComponent, optionItemComponent })`), so consumer wiring stays consistent across editor kinds.
 
 ## When NOT to use
 
-- **Native rendering is fine.** If the default `<input>` styled by `@bc-grid/theming` matches your app, skip the factory and use `textEditor` directly. The factory call adds minor overhead (a fresh editor object per call) and unlocks an API surface your app doesn't need.
+- **Native rendering is fine.** If the default `<input>` styled by `@bc-grid/theming` matches your app, skip the factory and use the named export directly (`textEditor`, `numberEditor`, etc.). The factory call adds minor overhead (a fresh editor object per call) and unlocks an API surface your app doesn't need.
 - **Consumer's `<Input>` doesn't forward ref.** The framework's commit path needs the DOM input. If your design system's input is a black box that doesn't expose its inner `<input>`, you can't use it as an `inputComponent` — wrap it with a custom forwarding shim or build a fully custom editor.
-- **Heavy widget needs (typeahead, masked input, etc.).** The render-prop slot is for VISUAL replacement only; the lifecycle stays on bc-grid. If you need different behaviour (e.g. masked input that intercepts keystrokes), build a custom editor from scratch — see `docs/recipes/custom-editors.md`.
+- **Heavy widget needs (typeahead, masked input, etc.).** The render-prop slot is for VISUAL replacement only; the lifecycle stays on bc-grid. If you need different behaviour (e.g. masked input that intercepts keystrokes for currency), build a custom editor from scratch — see `docs/recipes/custom-editors.md`.
