@@ -49,6 +49,7 @@ export {
 export type {
   UseServerGridActions,
   UseServerGridBoundProps,
+  UseServerGridServerProps,
   UseServerGridInitial,
   UseServerGridOptions,
   UseServerGridResult,
@@ -58,6 +59,7 @@ export { useServerInfiniteGrid } from "./useServerInfiniteGrid"
 export type {
   UseServerInfiniteGridActions,
   UseServerInfiniteGridBoundProps,
+  UseServerInfiniteGridServerProps,
   UseServerInfiniteGridInitial,
   UseServerInfiniteGridOptions,
   UseServerInfiniteGridResult,
@@ -67,6 +69,7 @@ export { useServerPagedGrid } from "./useServerPagedGrid"
 export type {
   UseServerPagedGridActions,
   UseServerPagedGridBoundProps,
+  UseServerPagedGridServerProps,
   UseServerPagedGridInitial,
   UseServerPagedGridOptions,
   UseServerPagedGridResult,
@@ -77,6 +80,7 @@ export { useServerTreeGrid } from "./useServerTreeGrid"
 export type {
   UseServerTreeGridActions,
   UseServerTreeGridBoundProps,
+  UseServerTreeGridServerProps,
   UseServerTreeGridInitial,
   UseServerTreeGridOptions,
   UseServerTreeGridResult,

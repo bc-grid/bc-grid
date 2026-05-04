@@ -137,6 +137,15 @@ export interface UseServerInfiniteGridActions {
  */
 export type UseServerInfiniteGridBoundProps<TRow> = Omit<BcServerInfiniteProps<TRow>, "columns">
 
+/**
+ * `<BcServerGrid>`-shaped output type alias — preferred name as of
+ * v1.0 per the API surface freeze audit (`docs/design/v1-api-surface-audit.md
+ * §5 RENAME`). Use `UseServerInfiniteGridServerProps` in new code;
+ * the legacy `UseServerInfiniteGridBoundProps` is kept as a
+ * deprecated alias through v1.1.
+ */
+export type UseServerInfiniteGridServerProps<TRow> = UseServerInfiniteGridBoundProps<TRow>
+
 export interface UseServerInfiniteGridResult<TRow> {
   props: UseServerInfiniteGridBoundProps<TRow>
   state: UseServerInfiniteGridState

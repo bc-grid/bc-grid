@@ -180,6 +180,15 @@ export interface UseServerGridActions {
  */
 export type UseServerGridBoundProps<TRow> = Omit<BcServerGridProps<TRow>, "columns">
 
+/**
+ * `<BcServerGrid>`-shaped output type alias — preferred name as of
+ * v1.0 per the API surface freeze audit (`docs/design/v1-api-surface-audit.md
+ * §5 RENAME`). Use `UseServerGridServerProps` in new code; the
+ * legacy `UseServerGridBoundProps` is kept as a deprecated alias
+ * through v1.1.
+ */
+export type UseServerGridServerProps<TRow> = UseServerGridBoundProps<TRow>
+
 export interface UseServerGridResult<TRow> {
   props: UseServerGridBoundProps<TRow>
   state: UseServerGridState<TRow>
