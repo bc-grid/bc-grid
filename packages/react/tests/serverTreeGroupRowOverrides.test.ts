@@ -17,12 +17,15 @@ import { fileURLToPath } from "node:url"
  * `kind: "data"`) and group rows rendered as flat data rows with
  * empty cells.
  *
- * Fix: `<BcServerGrid>` now ALSO builds `serverRowEntryOverrides`
- * (a `Map<RowId, ServerRowEntryOverride>`) from `flatNodes` and
- * passes it to `<BcGrid>` for tree mode. `<BcGrid>` consults the
- * map after `flattenGroupedRowTree` and synthesizes
- * `GroupRowEntry` shape for every override entry, so the render
- * loop's group-row branch fires correctly.
+ * Fix: `<BcServerGrid>` now ALSO builds
+ * `__bcServerRowEntryOverrides` (a `Map<RowId,
+ * ServerRowEntryOverride>`) from `flatNodes` and passes it to
+ * `<BcGrid>` for tree mode. `<BcGrid>` consults the map after
+ * `flattenGroupedRowTree` and synthesizes `GroupRowEntry` shape for
+ * every override entry, so the render loop's group-row branch fires
+ * correctly. Renamed from `serverRowEntryOverrides` to the `__bc`
+ * prefix per v1.0 freeze audit (`docs/design/v1-api-surface-audit.md
+ * §5 INTERNALIZE`) so the escape hatch de-emphasises in autocomplete.
  *
  * Pure source-shape regression suite — bun:test has no DOM.
  */
@@ -33,8 +36,8 @@ const gridSource = readFileSync(`${here}../src/grid.tsx`, "utf8")
 const typesSource = readFileSync(`${here}../src/types.ts`, "utf8")
 
 describe("server-tree group-row overrides (bsncraft v0.6.0-alpha.1 P1)", () => {
-  test("BcServerGrid builds the serverRowEntryOverrides map from flatNodes", () => {
-    expect(serverGridSource).toContain("const serverRowEntryOverrides = useMemo")
+  test("BcServerGrid builds the __bcServerRowEntryOverrides map from flatNodes", () => {
+    expect(serverGridSource).toContain("const __bcServerRowEntryOverrides = useMemo")
     expect(serverGridSource).toMatch(/for \(const node of flatNodes\)/)
     expect(serverGridSource).toMatch(/if \(node\.kind !== "group"\) continue/)
     expect(serverGridSource).toMatch(/level: node\.level/)
@@ -56,15 +59,15 @@ describe("server-tree group-row overrides (bsncraft v0.6.0-alpha.1 P1)", () => {
     )
   })
 
-  test("BcServerGrid passes serverRowEntryOverrides to <BcGrid> in tree mode only", () => {
+  test("BcServerGrid passes __bcServerRowEntryOverrides to <BcGrid> in tree mode only", () => {
     expect(serverGridSource).toMatch(
-      /activeMode === "tree" \? \{ serverRowEntryOverrides: tree\.serverRowEntryOverrides \} : \{\}/,
+      /activeMode === "tree" \? \{ __bcServerRowEntryOverrides: tree\.__bcServerRowEntryOverrides \} : \{\}/,
     )
   })
 
-  test("TreeServerState type carries the serverRowEntryOverrides field", () => {
+  test("TreeServerState type carries the __bcServerRowEntryOverrides field", () => {
     expect(serverGridSource).toMatch(
-      /serverRowEntryOverrides: ReadonlyMap<RowId, ServerRowEntryOverride>/,
+      /__bcServerRowEntryOverrides: ReadonlyMap<RowId, ServerRowEntryOverride>/,
     )
   })
 
@@ -75,7 +78,7 @@ describe("server-tree group-row overrides (bsncraft v0.6.0-alpha.1 P1)", () => {
     // is the bsncraft case; client mode + overrides would be
     // unusual but the synthesis is still correct).
     expect(gridSource).toMatch(/const rowEntriesBase = useMemo<readonly RowEntry<TRow>\[\]>/)
-    expect(gridSource).toMatch(/const overrides = props\.serverRowEntryOverrides/)
+    expect(gridSource).toMatch(/const overrides = props\.__bcServerRowEntryOverrides/)
     expect(gridSource).toMatch(
       /if \(!overrides \|\| overrides\.size === 0\) return groupedRowModel\.rows/,
     )
@@ -83,10 +86,13 @@ describe("server-tree group-row overrides (bsncraft v0.6.0-alpha.1 P1)", () => {
     expect(gridSource).toMatch(/satisfies GroupRowEntry/)
   })
 
-  test("BcGridProps surfaces serverRowEntryOverrides as an internal escape hatch", () => {
+  test("BcGridProps surfaces __bcServerRowEntryOverrides as an internal escape hatch (v1.0 INTERNALIZE)", () => {
     expect(typesSource).toContain(
-      "serverRowEntryOverrides?: ReadonlyMap<RowId, ServerRowEntryOverride>",
+      "__bcServerRowEntryOverrides?: ReadonlyMap<RowId, ServerRowEntryOverride>",
     )
+    // Pin the @internal JSDoc tag so consumer-doc generators
+    // (typedoc, etc.) hide the field from the public surface.
+    expect(typesSource).toMatch(/@internal Not part of the consumer-facing API/)
   })
 
   test("ServerRowEntryOverride type matches the GroupRowEntry shape (excluding index)", () => {
