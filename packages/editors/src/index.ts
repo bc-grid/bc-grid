@@ -1,4 +1,5 @@
 export {
+  type AutocompleteEditorInputProps,
   type AutocompleteEditorOptionProps,
   type AutocompleteEditorOptions,
   autocompleteEditor,

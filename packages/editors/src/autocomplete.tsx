@@ -1,8 +1,12 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useCallback } from "react"
+import { type ComponentType, useCallback } from "react"
 import { type EditorOption, editorAccessibleName } from "./chrome"
 import { SearchCombobox, type SearchComboboxFetchOptions } from "./internal/combobox-search"
-import type { ComboboxOptionSlotProps, ComboboxSlotOptions } from "./internal/comboboxSlots"
+import type {
+  ComboboxOptionSlotProps,
+  ComboboxSlotOptions,
+  SearchComboboxInputSlotProps,
+} from "./internal/comboboxSlots"
 
 interface AutocompletePrepareResult {
   initialOptions: readonly EditorOption[]
@@ -57,15 +61,16 @@ interface AutocompletePrepareResult {
  *     (matches the select / multi-select editors — uniform option shape).
  *
  * Native rendering uses bc-grid's CSS-only SearchCombobox shell.
- * Consumers wanting shadcn-native styling on the option rows pass
- * `optionItemComponent` to `createAutocompleteEditor({ ... })`. The
- * `triggerComponent` slot is intentionally NOT exposed in this PR —
- * the autocomplete trigger is an `<input>` (self-closing, no children),
- * which doesn't fit the children-as-slot pattern used by select /
- * multi-select. A follow-up PR will add an `inputComponent` slot for
- * the autocomplete trigger mirroring the single-input cluster shape
- * from #488. See `docs/recipes/shadcn-editors.md`. Per
- * `v06-shadcn-native-editors-select-batch`.
+ * Consumers wanting shadcn-native styling pass `inputComponent` for
+ * the search-input trigger and / or `optionItemComponent` for the
+ * dropdown rows to `createAutocompleteEditor({ ... })`. The
+ * `inputComponent` mirrors the single-input cluster shape from #488
+ * (text / number / date / datetime / time editors) — drops in shadcn's
+ * `<Input>` directly. The `optionItemComponent` mirrors the select /
+ * multi-select option-row shape from #497. See
+ * `docs/recipes/shadcn-editors.md`. Per
+ * `v06-shadcn-native-editors-autocomplete-input-slot` (closes
+ * `v06-shadcn-native-editors-select-batch` follow-up).
  */
 /**
  * Props handed to a custom `optionItemComponent` for the autocomplete
@@ -76,8 +81,18 @@ interface AutocompletePrepareResult {
  */
 export type AutocompleteEditorOptionProps = ComboboxOptionSlotProps
 
+/**
+ * Props handed to a custom `inputComponent` for the autocomplete
+ * editor's search-input trigger. Re-exports the shared
+ * `SearchComboboxInputSlotProps` shape — drops in any
+ * forwardRef-capable shadcn `<Input>` (or similar) without
+ * modification. Per `v06-shadcn-native-editors-autocomplete-input-slot`.
+ */
+export type AutocompleteEditorInputProps = SearchComboboxInputSlotProps
+
 export interface AutocompleteEditorOptions {
   optionItemComponent?: ComboboxSlotOptions["optionItemComponent"]
+  inputComponent?: ComponentType<SearchComboboxInputSlotProps> | undefined
 }
 
 /**
@@ -87,10 +102,12 @@ export interface AutocompleteEditorOptions {
  * zero-config case.
  *
  * ```tsx
+ * import { Input } from "@/components/ui/input"
  * import { CommandItem } from "@/components/ui/command"
  * import { createAutocompleteEditor } from "@bc-grid/editors"
  *
  * export const shadcnAutocompleteEditor = createAutocompleteEditor({
+ *   inputComponent: Input,
  *   optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
  * })
  * ```
@@ -125,9 +142,15 @@ export const autocompleteEditor: BcCellEditor<unknown, unknown> = createAutocomp
 function createAutocompleteEditorComponent(
   options: AutocompleteEditorOptions,
 ): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof AutocompleteEditorBody> {
-  const { optionItemComponent } = options
+  const { optionItemComponent, inputComponent } = options
   return function AutocompleteEditor(props) {
-    return <AutocompleteEditorBody {...props} optionItemComponent={optionItemComponent} />
+    return (
+      <AutocompleteEditorBody
+        {...props}
+        optionItemComponent={optionItemComponent}
+        inputComponent={inputComponent}
+      />
+    )
   }
 }
 
@@ -146,6 +169,7 @@ function AutocompleteEditorBody(
     column,
     prepareResult,
     optionItemComponent,
+    inputComponent,
   } = props
   const fetchOptions = (column as { fetchOptions?: SearchComboboxFetchOptions }).fetchOptions
   const accessibleName = editorAccessibleName(column, "Autocomplete value")
@@ -178,6 +202,7 @@ function AutocompleteEditorBody(
       initialOptions={initialOptions}
       kind="autocomplete"
       optionItemComponent={optionItemComponent}
+      inputComponent={inputComponent}
     />
   )
 }

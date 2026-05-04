@@ -328,20 +328,66 @@ Same three contracts as the input slots: forward `ref` to a real button (trigger
 
 The two slots are **independent**: pass `triggerComponent` only to swap the button chrome while keeping the framework's default options; pass `optionItemComponent` only to restyle option rows while keeping the framework's default `<button>` trigger; pass both for full visual control.
 
-## `createAutocompleteEditor` — `optionItemComponent` slot only
+## `createAutocompleteEditor` — `inputComponent` + `optionItemComponent` slots
 
-The autocomplete trigger is an `<input>` (free-text typing), not a `<button>`. The children-as-slot pattern doesn't fit a self-closing input element, so the trigger slot for autocomplete is intentionally **not** part of this PR. A follow-up will add an `inputComponent` slot for the autocomplete trigger mirroring the single-input cluster shape from `createTextEditor` / etc.
+Autocomplete uses two slots that match the existing patterns: the `inputComponent` slot mirrors the single-input cluster's shape (text / number / date / etc. from `createTextEditor`), and the `optionItemComponent` slot mirrors the select / multi-select option-row shape. A vanilla shadcn `<Input>` + `<CommandItem>` drop-in:
 
 ```tsx
+import { Input } from "@/components/ui/input"
 import { CommandItem } from "@/components/ui/command"
 import { createAutocompleteEditor } from "@bc-grid/editors"
 
 export const shadcnAutocompleteEditor = createAutocompleteEditor({
+  inputComponent: Input,
   optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
 })
 ```
 
 The option props match `ComboboxOptionSlotProps` exactly, with `isMulti=false` + `isSelected=false` always (autocomplete is single-mode and doesn't track selection state across renders — the input value IS the selected value).
+
+### `AutocompleteEditorInputProps` shape (extends single-input cluster)
+
+```ts
+interface AutocompleteEditorInputProps {
+  ref: Ref<HTMLInputElement>
+  className: string
+  type: "text"
+  defaultValue: string
+  disabled: boolean
+  autoComplete: "off"
+  spellCheck: false
+  // Combobox role + ARIA — extends the single-input cluster's shape
+  role: "combobox"
+  "aria-haspopup": "listbox"
+  "aria-expanded": boolean
+  "aria-controls"?: string
+  "aria-activedescendant"?: string
+  "aria-busy"?: true                // true while column.fetchOptions is in flight
+  "aria-invalid"?: true
+  "aria-label"?: string
+  "aria-describedby"?: string       // points at error span + status region
+  "aria-required"?: true
+  "aria-readonly"?: true
+  "aria-disabled"?: true
+  // Load-bearing data attrs (framework's commit path locates input via these)
+  "data-bc-grid-editor-input": "true"
+  "data-bc-grid-editor-kind": string
+  "data-bc-grid-editor-option-count": number
+  "data-bc-grid-editor-seeded"?: "true"
+  "data-state": "open" | "closed"
+  "data-bc-grid-editor-loading"?: "true"
+  // Open / loading state — for consumers rendering a chevron / spinner
+  open: boolean
+  loading: boolean
+  // Handlers — spread onto the input for keystroke / fetch / navigation parity
+  onInput: (event: FormEvent<HTMLInputElement>) => void   // drives debounced column.fetchOptions
+  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
+}
+```
+
+Same three contracts as the other input slots (forward `ref`, spread the data attrs, honor `disabled`). **Don't strip `onInput`** — it's the load-bearing handler that drives the debounced `column.fetchOptions(query, signal)` cycle. Spreading `{...props}` onto `<input>` keeps it intact. shadcn's `<Input>` does this by construction.
+
+The `open` + `loading` props are exposed as a convenience for consumers rendering a chevron caret + spinner alongside the input — the framework's CSS chrome handles the default rendering, but a custom design system may want both visible without recomputing the state from `aria-expanded` + `aria-busy`.
 
 ## Per-editor notes (combobox cluster)
 
@@ -361,15 +407,14 @@ The option props match `ComboboxOptionSlotProps` exactly, with `isMulti=false` +
 ### `createAutocompleteEditor`
 
 - Single-mode SearchCombobox with async `column.fetchOptions(query, signal)` (debounced 200ms, AbortController race-handling).
-- Trigger is an `<input>` — slot deferred (see above).
+- Trigger is an `<input>` (free-text typing) — uses the single-input cluster slot shape via `inputComponent`. Drop in shadcn's `<Input>` directly.
 - Option slot's `children` is swatch + icon + label (no check column — autocomplete is always single-mode).
 
 ## What's NOT covered (yet)
 
-- **`createAutocompleteEditor` trigger slot** — needs an `inputComponent` slot mirroring the single-input cluster shape; deferred to a follow-up so this PR's risk stays bounded (the autocomplete input has subtle keystroke / loading-state plumbing that needs Playwright validation).
 - **Combobox listbox virtualization** — for >500 options, the framework renders all rows in the dropdown. Consumers wanting virtualization should wait for `v07-editor-perf-large-option-lists` (queued) which adds a `@bc-grid/virtualizer`-backed flat list.
 
-The v0.6 select-batch closes the slot pattern across every built-in editor except autocomplete's trigger. Combobox-driven editors now ride on the same drop-in shadcn `<Button>` / `<CommandItem>` pattern as the single-input + checkbox clusters.
+The v0.6 select-batch + autocomplete-input-slot closes the slot pattern across **every built-in editor**. Every editor (text / number / date / datetime / time / checkbox / select / multi-select / autocomplete) now rides on the same drop-in shadcn primitive pattern.
 
 ## When NOT to use
 

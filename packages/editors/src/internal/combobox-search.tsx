@@ -1,4 +1,5 @@
 import {
+  type ComponentType,
   type FormEvent,
   type ReactNode,
   useCallback,
@@ -14,7 +15,11 @@ import {
   editorStateAttrs,
   visuallyHiddenStyle,
 } from "../chrome"
-import type { ComboboxOptionSlotProps, ComboboxSlotOptions } from "./comboboxSlots"
+import type {
+  ComboboxOptionSlotProps,
+  ComboboxSlotOptions,
+  SearchComboboxInputSlotProps,
+} from "./comboboxSlots"
 
 /**
  * shadcn-native Combobox primitive in *search* / *autocomplete* mode
@@ -159,15 +164,16 @@ export interface SearchComboboxProps {
    * Optional shadcn-native slot override for the per-option row. Per
    * `v06-shadcn-native-editors-select-batch` (extends the
    * inputComponent / checkboxComponent pattern from #480 / #488 / #489).
-   *
-   * The trigger slot is intentionally NOT wired through SearchCombobox
-   * in this PR — the autocomplete trigger is an `<input>` (self-closing,
-   * no children), which doesn't fit the children-as-slot pattern that
-   * select / multi-select use. A follow-up PR will add an `inputComponent`
-   * slot (mirroring the single-input editor cluster shape from #488)
-   * for the autocomplete case.
    */
   optionItemComponent?: ComboboxSlotOptions["optionItemComponent"]
+  /**
+   * Optional shadcn-native slot override for the search-input trigger
+   * (the autocomplete `<input>`). Mirrors the single-input cluster
+   * `EditorInputSlotProps` shape from #488 — drops in any
+   * forwardRef-capable shadcn `<Input>` without modification. Per
+   * `v06-shadcn-native-editors-autocomplete-input-slot`.
+   */
+  inputComponent?: ComponentType<SearchComboboxInputSlotProps> | undefined
 }
 
 const bcGridComboboxValueKey = "__bcGridComboboxValue" as const
@@ -191,6 +197,7 @@ export function SearchCombobox({
   initialOptions,
   kind = "autocomplete",
   optionItemComponent: OptionItemComponent,
+  inputComponent: InputComponent,
 }: SearchComboboxProps): ReactNode {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listboxRef = useRef<HTMLDivElement | null>(null)
@@ -352,38 +359,48 @@ export function SearchCombobox({
   const showEmpty = open && !loading && options.length === 0
   const seeded2 = typeof seedKey === "string" && [...seedKey].length === 1
 
+  // Spread-onto-input contract for the optional `inputComponent` slot.
+  // The framework's commit path locates the active input via
+  // `data-bc-grid-editor-input` so spreading `{...inputProps}` onto
+  // the consumer's component is load-bearing — shadcn's `<Input>`
+  // satisfies this by construction. Per
+  // `v06-shadcn-native-editors-autocomplete-input-slot`.
+  const inputProps: SearchComboboxInputSlotProps = {
+    ref: inputRef,
+    className: "bc-grid-editor-input bc-grid-editor-combobox-trigger",
+    type: "text",
+    defaultValue: seeded,
+    disabled: pending,
+    autoComplete: "off",
+    spellCheck: false,
+    role: "combobox",
+    "aria-invalid": error ? true : undefined,
+    "aria-required": required ? true : undefined,
+    "aria-readonly": readOnly ? true : undefined,
+    "aria-disabled": disabled || pending ? true : undefined,
+    "aria-label": accessibleName,
+    "aria-describedby": error ? `${errorId} ${statusId}` : statusId,
+    "aria-haspopup": "listbox",
+    "aria-expanded": open,
+    "aria-controls": open ? listboxId : undefined,
+    "aria-activedescendant": activeOptionId,
+    "aria-busy": pending || loading ? true : undefined,
+    "data-bc-grid-editor-input": "true",
+    "data-bc-grid-editor-kind": kind,
+    "data-bc-grid-editor-option-count": options.length,
+    ...editorStateAttrs({ error, pending }),
+    "data-state": open ? "open" : "closed",
+    "data-bc-grid-editor-loading": loading ? "true" : undefined,
+    "data-bc-grid-editor-seeded": seeded2 ? "true" : undefined,
+    open,
+    loading,
+    onInput: handleInput,
+    onKeyDown: handleKeyDown,
+  }
+
   return (
     <div className="bc-grid-editor-combobox bc-grid-editor-combobox-search">
-      <input
-        ref={inputRef}
-        className="bc-grid-editor-input bc-grid-editor-combobox-trigger"
-        type="text"
-        defaultValue={seeded}
-        disabled={pending}
-        autoComplete="off"
-        spellCheck={false}
-        role="combobox"
-        aria-invalid={error ? true : undefined}
-        aria-required={required ? true : undefined}
-        aria-readonly={readOnly ? true : undefined}
-        aria-disabled={disabled || pending ? true : undefined}
-        aria-label={accessibleName}
-        aria-describedby={error ? `${errorId} ${statusId}` : statusId}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? listboxId : undefined}
-        aria-activedescendant={activeOptionId}
-        aria-busy={pending || loading ? true : undefined}
-        data-bc-grid-editor-input="true"
-        data-bc-grid-editor-kind={kind}
-        data-bc-grid-editor-option-count={options.length}
-        {...editorStateAttrs({ error, pending })}
-        data-state={open ? "open" : "closed"}
-        data-bc-grid-editor-loading={loading ? "true" : undefined}
-        data-bc-grid-editor-seeded={seeded2 ? "true" : undefined}
-        onInput={handleInput}
-        onKeyDown={handleKeyDown}
-      />
+      {InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />}
 
       {open ? (
         <div

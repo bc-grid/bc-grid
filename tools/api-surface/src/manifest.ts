@@ -686,6 +686,7 @@ export const apiSurfaceManifest = [
     ],
     declarationExports: [
       "autocompleteEditor",
+      "AutocompleteEditorInputProps",
       "AutocompleteEditorOptionProps",
       "AutocompleteEditorOptions",
       "checkboxEditor",
@@ -725,7 +726,7 @@ export const apiSurfaceManifest = [
       "TimeEditorOptions",
       "timeEditor",
     ],
-    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select + editor-multi-select + editor-autocomplete; v0.4 adds editor-checkbox; v0.6 adds createTextEditor + TextEditorInputProps + TextEditorOptions for the inputComponent render-prop slot, extends the pattern across number/date/datetime/time via createXxxEditor + XxxEditorInputProps + XxxEditorOptions, ships createCheckboxEditor + CheckboxEditorInputProps + CheckboxEditorOptions for checkboxComponent, then ships createSelectEditor / createMultiSelectEditor / createAutocompleteEditor with triggerComponent + optionItemComponent slots (closes select-batch; autocomplete inputComponent for the trigger ships in a follow-up).",
+    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select + editor-multi-select + editor-autocomplete; v0.4 adds editor-checkbox; v0.6 adds createTextEditor + TextEditorInputProps + TextEditorOptions for the inputComponent render-prop slot, extends the pattern across number/date/datetime/time via createXxxEditor + XxxEditorInputProps + XxxEditorOptions, ships createCheckboxEditor + CheckboxEditorInputProps + CheckboxEditorOptions for checkboxComponent, ships createSelectEditor / createMultiSelectEditor / createAutocompleteEditor with triggerComponent + optionItemComponent slots, then closes the autocomplete trigger gap with AutocompleteEditorInputProps for the search-input slot.",
   },
   {
     packageName: "@bc-grid/enterprise",

@@ -1,4 +1,12 @@
-import type { ComponentType, KeyboardEvent, PointerEvent, ReactNode, Ref } from "react"
+import type {
+  ComponentType,
+  FormEvent,
+  InputHTMLAttributes,
+  KeyboardEvent,
+  PointerEvent,
+  ReactNode,
+  Ref,
+} from "react"
 import type { EditorOption } from "../chrome"
 
 /**
@@ -118,6 +126,62 @@ export interface ComboboxOptionSlotProps {
   isActive: boolean
   isSelected: boolean
   isMulti: boolean
+}
+
+/**
+ * Props handed to a custom `inputComponent` for the autocomplete
+ * editor's free-text trigger. Mirrors the single-input cluster
+ * `EditorInputSlotProps` shape (text / number / date / datetime /
+ * time editors from #488), extended with autocomplete-specific
+ * combobox ARIA + the `onInput` handler that drives the debounced
+ * `column.fetchOptions(query, signal)` cycle.
+ *
+ * Per `v06-shadcn-native-editors-autocomplete-input-slot` follow-up
+ * to `v06-shadcn-native-editors-select-batch`. The button-style
+ * trigger slot for select / multi-select uses `ComboboxTriggerSlotProps`
+ * above (children-as-slot); this one mirrors the input slot shape so
+ * a single shadcn `<Input>` works on autocomplete the same way it
+ * works on the single-input cluster.
+ */
+export interface SearchComboboxInputSlotProps
+  extends Pick<
+    InputHTMLAttributes<HTMLInputElement>,
+    | "className"
+    | "type"
+    | "defaultValue"
+    | "disabled"
+    | "autoComplete"
+    | "spellCheck"
+    | "aria-invalid"
+    | "aria-label"
+    | "aria-describedby"
+    | "aria-required"
+    | "aria-readonly"
+    | "aria-disabled"
+  > {
+  /** Forwarded ref. MUST point at a real `<input>` element. */
+  ref: Ref<HTMLInputElement>
+  /** Combobox role. */
+  role: "combobox"
+  /** Combobox ARIA — same shape as the button-trigger slot. */
+  "aria-haspopup": "listbox"
+  "aria-expanded": boolean
+  "aria-controls"?: string | undefined
+  "aria-activedescendant"?: string | undefined
+  "aria-busy"?: true | undefined
+  /** Load-bearing data attrs. The framework's commit path locates the input via these. MUST spread. */
+  "data-bc-grid-editor-input": "true"
+  "data-bc-grid-editor-kind": string
+  "data-bc-grid-editor-option-count": number
+  "data-bc-grid-editor-seeded"?: "true" | undefined
+  "data-state": "open" | "closed"
+  "data-bc-grid-editor-loading"?: "true" | undefined
+  /** Open / loading state — for consumers that render a chevron / spinner alongside the input. */
+  open: boolean
+  loading: boolean
+  /** Handlers — spread onto the input for keystroke / fetch / navigation parity. */
+  onInput: (event: FormEvent<HTMLInputElement>) => void
+  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
 }
 
 /**
