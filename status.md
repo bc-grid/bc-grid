@@ -35,22 +35,24 @@ The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved
 
 ## Outstanding for v1.0
 
-### v0.7 — Architecture correction (RFC ratified 2026-05-04)
+### v0.7 — Architecture correction ✅ COMPLETE 2026-05-04 PM
 
-| PR | Owner | Status | Defer? |
-| --- | --- | --- | --- |
-| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 + resync #503 merged 2026-05-04 | 🔒 |
-| PR-A2 — happy-dom test infra | worker2 | ✅ #504 merged 2026-05-04 | 🔒 |
-| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ✅ #510 merged 2026-05-04 | 🔒 |
-| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | 🟡 #521 in review | 🔒 |
-| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ✅ #518 merged 2026-05-04 | 🔒 |
-| PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ ready | 🔒 |
-| PR-C1 — shadcn Combobox foundation (cmdk) | worker3 | ❌ ready (PR-A1 unblocked) | 🔒 |
-| PR-C2 — Migrate select / multi-select / autocomplete editors | worker3 | ❌ blocked on PR-C1 | 🔒 |
-| PR-C3 — Wire deferred `triggerComponent` / `optionItemComponent` slots | worker3 | ❌ blocked on PR-C2 | 🔒 |
-| PR-D — Sweep + design-doc update | coordinator | ❌ blocked on B+C | 🔒 |
+| PR | Owner | Status |
+| --- | --- | --- |
+| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 + resync #503 |
+| PR-A2 — happy-dom test infra | worker2 | ✅ #504 |
+| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ✅ #510 |
+| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ✅ #521 |
+| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ✅ #518 |
+| PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ✅ #522 |
+| PR-C1 — shadcn Combobox foundation (cmdk) | worker3 | ✅ #520 |
+| PR-C2 — Migrate select / multi-select / autocomplete editors | worker3 | ✅ #527 |
+| PR-C3 — Wire deferred `triggerComponent` / `optionItemComponent` slots | worker3 | ✅ #528 (rebased + merged as 92c1de4) |
+| PR-D — Sweep + design-doc update | coordinator | 🟡 in flight |
 
-**Coordinator note:** the architecture correction is non-negotiable per maintainer instruction. Public API preserved verbatim; consumer churn limited to internal CSS class names + DOM structure. Sequencing: PR-A1 unblocked both PR-A2 (worker2) and PR-C1 (worker3); after PR-A1 lands, Block B and Block C run in parallel.
+**Outcome:** every hand-rolled chrome and editor primitive replaced by Radix + shadcn + cmdk + lucide-react. `packages/react/src/internal/*` and `packages/editors/src/internal/*` now contain only legitimate non-chrome modules (chrome wiring, lucide icon wrappers, server-grid orchestration helpers). Public API preserved verbatim — `bun run api-surface` diff empty across all 9 PRs.
+
+**v0.6.0 final cut next:** PR-D doc sweep, then graduate v0.6.0-alpha.3 → v0.6.0 GA. Then bsncraft monorepo move starts.
 
 ### v1.0 prep work (running in parallel with v0.7)
 

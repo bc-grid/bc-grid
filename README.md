@@ -14,7 +14,7 @@ Most React data grids are either capable but visually disconnected from modern d
 - **Animations**: Sort transitions, group expand/collapse, row insert/remove, cell flash — all 60fps, all coherent.
 - **Excel-feel editing**: Full keyboard model, range selection, copy/paste-from-Excel, fill handle.
 - **Server-side row model**: Infinite scroll with block caching, lazy tree children, server-side sort/filter/group.
-- **Native shadcn theming**: Built on shadcn/Radix primitives from the ground up. No CSS-variable retrofit.
+- **Native shadcn theming**: Built on shadcn/Radix primitives. Context menu, dropdown menu, tooltip, popover, tabs, dialog, checkbox, command (cmdk), and icons (lucide-react) all use the same `@radix-ui/*` primitives bsncraft's `@bsn/ui` package uses. Source files in `packages/react/src/shadcn/` and `packages/editors/src/shadcn/` are copied verbatim from `~/work/bsncraft/packages/ui/src/components/`.
 - **Clean public API**: 10 years of API hindsight at our disposal.
 
 ## Non-goals (initial release)
