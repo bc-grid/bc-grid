@@ -135,7 +135,7 @@ Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both docume
 - `[review: worker2 #476]` **v06-column-resize-clears-flex** — bsncraft P1 #11: user-driven resize of a flex column commits fixed `width` and clears flex via `flex: null`, so the next layout pass does not re-apply the column definition's flex weight. Branch `agent/worker2/v06-column-resize-clears-flex`.
 - `[review: worker2 #492]` **v06-toolbar-render-prop** — widen `BcGridProps.toolbar` to accept a render-prop context with composable toolbar sub-slots for search, grouping, saved views, density, clear-filters, selected-row count, and the grid api. Branch `agent/worker2/v06-toolbar-render-prop`.
 - `[ready: worker2]` **v06-quick-filter-input** — add an opt-in quick-filter toolbar input that drives the existing `searchText` global search channel and is exposed through the toolbar render-prop context. Branch `agent/worker2/v06-quick-filter-input`.
-- `[ready: worker3]` **v06-bulk-row-patch-primitive** — `BcGridApi.applyRowPatches(patches[])` atomic bulk update with validate-all-then-apply semantics. The primitive every "fill down" / "shift dates" / "set status to Approved" toolbar wants. **Two-spike-confirmed** (doc-mgmt #6, production-estimating #4). ~1 day.
+- `[done: worker3 #437]` **v06-bulk-row-patch-primitive** — `BcGridApi.applyRowPatches(patches[])` atomic bulk update with validate-all-then-apply semantics. The primitive every "fill down" / "shift dates" / "set status to Approved" toolbar wants. **Two-spike-confirmed** (doc-mgmt #6, production-estimating #4).
 - `[review: worker1 #468]` **v06-server-grid-error-boundary** — first-class error surface for `<BcServerGrid>` per coordinator handoff (worker1 v0.6 train, "Then-after"). New `BcServerGridApi.getLastError(): unknown | null` + new `BcServerGridProps.renderServerError?: ({ error, retry }) => ReactNode` slot + new `BcGridProps.errorOverlay?: ReactNode` slot. Default fallback (when `renderServerError` unset): minimal `BcServerGridDefaultErrorOverlay` with "Failed to load. / Retry" using `--bc-grid-edit-state-error-*` tokens. Retry calls `refreshServerRows({ purge: true })` for the active mode. New error overlay branch in `<BcGrid>` renders inside `bc-grid-overlay role="alert"` when `loading=false` AND `errorOverlay` is set; precedence: loading > errorOverlay > no-rows fallback. 14 new unit tests (`gridOverlay.test.tsx` +3 for the new branch; `serverGridErrorBoundary.test.tsx` +9 for the helper + default fallback rendering). Recipe at `docs/recipes/server-grid-error-handling.md`. Branch `agent/worker1/v06-server-grid-error-boundary`.
 
 ### v0.6 supporting work (in worker queues)
@@ -147,10 +147,10 @@ Items marked **two-spike-confirmed** carry strong v0.6 P0 signal — both docume
 - `[done: worker1 #438]` **v06-client-tree-rowmodel-rfc** (worker1, doc-only) — RFC drafted at `docs/design/client-tree-rowmodel-rfc.md` covering the v0.6 headline client tree row model. Merged 16869e3.
 - `[ready: worker1]` **v06-client-tree-rowmodel** — client-side `treeData` + `getRowParentId` + outline column variant per the ratified RFC above. Two-spike-confirmed. ~1-2 days.
 - `[review: worker2 #436]` **v06-fill-handle** — drag-to-fill handle on the active range (range-rfc §6). Branch `agent/worker2/v06-fill-handle`.
-- `[ready: worker3]` **v06-prepareresult-preload-select-multi** — async-loaded options on select + multi-select via `column.fetchOptions`. ~half day.
-- `[ready: worker3]` **v06-row-drag-drop-hooks** — `onRowDragOver` / `onRowDrop` callbacks. **Two-spike-confirmed**. ~1 day.
-- `[ready: worker3]` **v06-bcselection-narrowing** — `isExplicitSelection` / `isAllSelection` / `isFilteredSelection` type guards + `forEachSelectedRowId` iterator. **Two-spike-confirmed**. ~half day.
-- `[ready: worker3]` **v06-editor-tab-wraparound-polish** — `editorTabWraparound: "none" | "row-wrap" | "selection-wrap"` prop. ~half day.
+- `[done: worker3 #435]` **v06-prepareresult-preload-select-multi** — async-loaded options on select + multi-select via `column.fetchOptions`.
+- `[done: worker3 #440]` **v06-row-drag-drop-hooks** — `onRowDragOver` / `onRowDrop` callbacks. **Two-spike-confirmed**.
+- `[done: worker3 #442]` **v06-bcselection-narrowing** — `isExplicitSelection` / `isAllSelection` / `isFilteredSelection` type guards + `forEachSelectedRowId` iterator. **Two-spike-confirmed**.
+- `[done: worker3 #448]` **v06-editor-tab-wraparound-polish** — `editorTabWraparound: "none" | "row-wrap" | "selection-wrap"` prop.
 
 ### v0.6 deferred (post-1.0 candidates)
 
