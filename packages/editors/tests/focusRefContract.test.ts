@@ -42,25 +42,17 @@ describe("editor focusRef contract", () => {
     })
   }
 
-  test("internal Combobox primitive (used by select + multiSelect) assigns focusRef inside useLayoutEffect", async () => {
-    // The v0.5 select + multiSelect editors delegate their focus
-    // handoff to the shared Combobox primitive. Pin the contract
-    // there so the click-outside / Tab path that reads
-    // `__bcGridComboboxValue` off the trigger button continues to see
-    // a non-null `focusRef.current`.
-    const source = await readEditorSource("src/internal/combobox.tsx")
-    assertFocusRefUsesLayoutEffect(source, "internal/combobox.tsx")
-  })
-
-  test("internal SearchCombobox primitive (used by autocomplete) assigns focusRef inside useLayoutEffect", async () => {
-    // v0.5 autocomplete migrated from <input list>+<datalist> to the
-    // SearchCombobox primitive. Same race-fix contract: focusRef must
-    // be assigned in useLayoutEffect so the framework's mount-focus
-    // call (also useLayoutEffect, parent) sees the input element when
-    // it reads. Without this, click-outside commit reads
-    // `readEditorInputValue(null)` and silently commits `undefined`.
-    const source = await readEditorSource("src/internal/combobox-search.tsx")
-    assertFocusRefUsesLayoutEffect(source, "internal/combobox-search.tsx")
+  test("shadcn Combobox + SearchCombobox primitive assigns focusRef inside useLayoutEffect (v0.7 PR-C2)", async () => {
+    // The v0.7 PR-C2 migration replaced internal/combobox.tsx +
+    // internal/combobox-search.tsx with the shadcn-backed
+    // shadcn/Combobox.tsx (cmdk + Radix Popover). Both Combobox (button
+    // trigger, used by select + multi-select) and SearchCombobox (input
+    // trigger, used by autocomplete) live in this single file. Pin the
+    // race-fix contract for both — focusRef must be assigned in
+    // useLayoutEffect so the framework's mount-focus call (also
+    // useLayoutEffect, parent) sees the focus target on first paint.
+    const source = await readEditorSource("src/shadcn/Combobox.tsx")
+    assertFocusRefUsesLayoutEffect(source, "shadcn/Combobox.tsx")
   })
 })
 

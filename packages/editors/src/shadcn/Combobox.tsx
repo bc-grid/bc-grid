@@ -2,9 +2,9 @@
 
 import {
   type FormEvent,
+  type KeyboardEvent,
   type ReactNode,
   useCallback,
-  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -16,80 +16,57 @@ import {
   editorStateAttrs,
   visuallyHiddenStyle,
 } from "../chrome"
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "./command"
+import { Checkbox } from "./checkbox"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "./command"
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./popover"
 
 /**
- * shadcn Combobox foundation backed by `cmdk` + Radix Popover. Per
- * `docs/design/shadcn-radix-correction-rfc.md` §Block C PR-C1.
+ * shadcn Combobox primitive backed by `cmdk` + Radix Popover. Per
+ * `docs/coordination/v07-pr-c2-design-decisions.md` (PR-C2 design
+ * decisions ratified by Claude coordinator).
  *
- * **Status: foundation only.** PR-C1 ships this wrapper. PR-C2 swaps
- * the in-house `selectEditor`, `multiSelectEditor`, `autocompleteEditor`
- * over to this primitive and deletes
- * `packages/editors/src/internal/combobox.tsx` +
- * `combobox-search.tsx`. PR-C3 wires the deferred
- * `triggerComponent` / `optionItemComponent` slots from #489 on top
- * of this primitive.
- *
- * The exported API matches the legacy `internal/combobox.tsx` +
- * `internal/combobox-search.tsx` surface so PR-C2's swap is a
- * mechanical import-path change at each editor's call site.
- *
- * Modes (mirrors legacy):
+ * Modes:
  *   - `<Combobox mode="single">` — single-value combobox. Used by
- *     `selectEditor`. Auto-selects on Enter / pick.
+ *     `selectEditor`. cmdk's default Enter selects + commits.
  *   - `<Combobox mode="multi">` — multi-value combobox. Used by
- *     `multiSelectEditor`. Toggles on Space / click; commits on
- *     Tab / Enter / Escape (per `#427` Enter contract — Enter does
- *     NOT toggle in multi mode; Space toggles).
- *   - `<SearchCombobox>` — async-search combobox with text input
- *     trigger. Used by `autocompleteEditor`. Debounced
+ *     `multiSelectEditor`. Each CommandItem has an inline `<Checkbox>`;
+ *     Tab cycles to checkbox + Space toggles via Radix Checkbox native
+ *     handler. cmdk's Enter is preventDefault'd so #427's commit-on-Enter
+ *     contract holds (multi-mode Enter NEVER toggles).
+ *   - `<SearchCombobox>` — async-search combobox where the trigger is
+ *     the CommandInput itself. Used by `autocompleteEditor`. Debounced
  *     `column.fetchOptions(query, signal)` with race-handling.
  *
- * Load-bearing DOM contract (preserved from legacy so the framework's
- * commit path keeps working):
- *   - `data-bc-grid-editor-input="true"` on the trigger element —
- *     framework's `readEditorInputValue` locates it via this attribute.
+ * Focus model (per Q1 ratified decision):
+ *   - `focusRef` points at the `<CommandInput>` inside the popover
+ *     content so cmdk's keyboard handler runs natively (type-ahead,
+ *     ArrowUp/Down on aria-activedescendant).
+ *   - The framework's `editor.getValue?(focusRef.current)` hook climbs
+ *     from the CommandInput up to the popover root and reads
+ *     `data-bcgrid-combobox-value` (a JSON-encoded data attribute the
+ *     wrapper updates on every selection change).
+ *
+ * Load-bearing DOM contract:
+ *   - `data-bc-grid-editor-input="true"` on the trigger button (single +
+ *     multi modes) or on the CommandInput (search mode) — framework's
+ *     `findActiveEditorInput` locates the editor via this attribute.
  *   - `data-bc-grid-editor-kind={kind}` on the trigger — editor-kind
  *     discriminator for theme + tests.
  *   - `data-bc-grid-editor-portal="true"` on the popover content —
  *     framework's portal-aware click-outside handler ignores clicks
- *     landing inside this subtree (so option clicks don't dismiss the
- *     editor).
- *   - Typed value stashed on the trigger via `__bcGridComboboxValue`
- *     so click-outside / Tab commit reads the latest typed value
- *     without going through `column.valueParser`.
+ *     here (so option clicks don't dismiss the editor).
+ *   - `data-bcgrid-combobox-value={JSON}` on the popover content —
+ *     `editor.getValue?` reads this to commit the typed selection.
+ *   - `data-bcgrid-combobox-root="true"` on the popover content —
+ *     stable ancestor selector for `getValue?`'s `.closest()` walk.
  */
-
-const bcGridComboboxValueKey = "__bcGridComboboxValue" as const
-
-type BcGridComboboxButton = HTMLButtonElement & {
-  [bcGridComboboxValueKey]?: unknown
-}
-
-type BcGridComboboxInput = HTMLInputElement & {
-  [bcGridComboboxValueKey]?: unknown
-}
-
-/**
- * Public hook for stashing the typed value on the trigger element so
- * `readEditorInputValue` can pluck it on click-outside / Tab.
- *
- * Mirrors the legacy `internal/combobox.tsx` export verbatim — PR-C2
- * will swap consumers' import path from `../internal/combobox` to
- * `../shadcn/Combobox` without touching the call sites.
- */
-export function attachComboboxTypedValue(button: HTMLButtonElement | null, value: unknown): void {
-  if (!button) return
-  ;(button as BcGridComboboxButton)[bcGridComboboxValueKey] = value
-}
-
-export function readComboboxTypedValue(element: HTMLElement | null): unknown {
-  if (!element) return undefined
-  if (element.tagName === "BUTTON") return (element as BcGridComboboxButton)[bcGridComboboxValueKey]
-  if (element.tagName === "INPUT") return (element as BcGridComboboxInput)[bcGridComboboxValueKey]
-  return undefined
-}
 
 interface ComboboxBaseProps {
   options: readonly EditorOption[]
@@ -121,10 +98,25 @@ interface ComboboxMultiProps extends ComboboxBaseProps {
 export type ComboboxProps = ComboboxSingleProps | ComboboxMultiProps
 
 /**
- * Button-trigger Combobox (single + multi modes). Drop-in replacement
- * for the legacy `internal/combobox.tsx::Combobox`. Internals built on
- * `cmdk` (listbox + keyboard nav + type-ahead) + Radix Popover (portal +
- * positioning + dismiss).
+ * Helper for combobox editors' `getValue?` hook. Climbs from the
+ * focused `<CommandInput>` up to the popover root and parses the
+ * JSON-encoded value stamped there.
+ */
+export function readComboboxValueFromFocusEl(focusEl: HTMLElement | null): unknown {
+  if (!focusEl) return undefined
+  const root = focusEl.closest<HTMLElement>("[data-bcgrid-combobox-root]")
+  if (!root) return undefined
+  const raw = root.getAttribute("data-bcgrid-combobox-value")
+  if (raw == null) return undefined
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+/**
+ * Button-trigger Combobox (single + multi modes).
  */
 export function Combobox(props: ComboboxProps): ReactNode {
   const {
@@ -144,7 +136,7 @@ export function Combobox(props: ComboboxProps): ReactNode {
   const options = initialOptions ?? optionsProp
   const isMulti = props.mode === "multi"
 
-  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const errorId = useId()
 
   const initialIndices = isMulti
@@ -158,46 +150,35 @@ export function Combobox(props: ComboboxProps): ReactNode {
   })
   const [open, setOpen] = useState(true)
 
-  // Hand the trigger to the framework via focusRef in useLayoutEffect
-  // so the framework's mount-focus call sees the assignment first.
-  // Same race fix as text/number editors. Per `editing-rfc §a11y for
-  // edit mode` ("real focus shifts to focusRef.current").
+  // cmdk active value — drives aria-activedescendant + which item shows
+  // as cmdk-selected. Initialise to the seedKey-matched option, falling
+  // back to the first selected option, falling back to the first option.
+  const [cmdkValue, setCmdkValue] = useState<string | undefined>(() => {
+    const seedIdx = findOptionIndexBySeed(options, seedKey)
+    if (seedIdx >= 0) return editorOptionToString(options[seedIdx]?.value)
+    const first = firstSelectedIndex(
+      isMulti ? new Set(initialIndices as readonly number[]) : new Set(),
+    )
+    if (!isMulti && (initialIndices as number) >= 0) {
+      return editorOptionToString(options[initialIndices as number]?.value)
+    }
+    if (first >= 0) return editorOptionToString(options[first]?.value)
+    return options[0] ? editorOptionToString(options[0].value) : undefined
+  })
+
+  // Hand the CommandInput to the framework via focusRef so the editor
+  // portal's mount-focus call lands on the input — cmdk's keyboard
+  // handler runs natively from there. useLayoutEffect race fix matches
+  // text/number editors (children commit phase before the framework's
+  // parent useLayoutEffect runs `focusRef.current?.focus()`).
   useLayoutEffect(() => {
-    if (focusRef && buttonRef.current) {
-      focusRef.current = buttonRef.current
+    if (focusRef && inputRef.current) {
+      focusRef.current = inputRef.current
     }
     return () => {
       if (focusRef) focusRef.current = null
     }
   }, [focusRef])
-
-  // Stash the typed value on the trigger so `readEditorInputValue`
-  // returns it on click-outside / Tab without going through valueParser.
-  useLayoutEffect(() => {
-    const button = buttonRef.current
-    if (!button) return
-    if (isMulti) {
-      const values: unknown[] = []
-      options.forEach((option, idx) => {
-        if (selectedIndices.has(idx)) values.push(option.value)
-      })
-      ;(button as BcGridComboboxButton)[bcGridComboboxValueKey] = values
-    } else {
-      const idx = firstSelectedIndex(selectedIndices)
-      ;(button as BcGridComboboxButton)[bcGridComboboxValueKey] =
-        idx >= 0 ? options[idx]?.value : undefined
-    }
-  }, [isMulti, options, selectedIndices])
-
-  // Seed-key prefix selection (single mode auto-selects, multi just
-  // navigates — matches legacy + #427 Enter contract). cmdk handles
-  // the type-ahead for in-listbox typing; this handles the printable
-  // activation seed from grid-keydown.
-  useEffect(() => {
-    if (seedKey == null || !isMulti) return
-    // Multi-mode: seedKey navigates (cmdk's internal type-ahead picks
-    // it up via the value prop on the listbox). Don't auto-toggle.
-  }, [seedKey, isMulti])
 
   const updateSelection = useCallback(
     (index: number) => {
@@ -224,8 +205,36 @@ export function Combobox(props: ComboboxProps): ReactNode {
     [isMulti, options, props],
   )
 
+  // Compute the typed value for `data-bcgrid-combobox-value` so the
+  // editor's `getValue?` hook can read it during commit.
+  const typedValueJson = (() => {
+    if (isMulti) {
+      const values: unknown[] = []
+      options.forEach((option, idx) => {
+        if (selectedIndices.has(idx)) values.push(option.value)
+      })
+      return JSON.stringify(values)
+    }
+    const idx = firstSelectedIndex(selectedIndices)
+    return idx >= 0 ? JSON.stringify(options[idx]?.value) : JSON.stringify(undefined)
+  })()
+
   const summary = describeSelectedSummary(options, selectedIndices, isMulti)
   const seeded = typeof seedKey === "string" && [...seedKey].length === 1
+
+  // Multi-mode Enter contract per #427 + Q2 ratified decision: cmdk's
+  // default Enter dispatches an item-select event (toggles in our
+  // multi-mode onSelect). preventDefault() here skips cmdk's switch so
+  // the Enter still bubbles up to the editor portal's keydown handler
+  // → commit. Single-mode keeps cmdk's default (Enter selects + commits).
+  const handleCommandKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" && isMulti) {
+      event.preventDefault()
+      // Don't return — let cmdk's switch be skipped (defaultPrevented
+      // gate), and let React continue bubbling to the editor portal's
+      // handleKeyDown, which decodes Enter as commit intent.
+    }
+  }
 
   return (
     <div
@@ -235,7 +244,6 @@ export function Combobox(props: ComboboxProps): ReactNode {
     >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
-          ref={buttonRef}
           type="button"
           className="bc-grid-editor-input bc-grid-editor-combobox-trigger"
           data-bc-grid-editor-input="true"
@@ -305,15 +313,25 @@ export function Combobox(props: ComboboxProps): ReactNode {
         <PopoverContent
           className="bc-grid-editor-combobox-listbox"
           data-bc-grid-editor-portal="true"
+          data-bcgrid-combobox-root="true"
+          data-bcgrid-combobox-value={typedValueJson}
           align="start"
           sideOffset={4}
-          // Don't auto-focus the popover content — focus stays on the
-          // trigger via `aria-activedescendant`. cmdk handles per-option
-          // activation; the popover is just the surface.
-          onOpenAutoFocus={(e) => e.preventDefault()}
-          onCloseAutoFocus={(e) => e.preventDefault()}
+          // Don't auto-focus the popover content's first focusable —
+          // we route focus to the CommandInput via focusRef + Radix's
+          // own onOpenAutoFocus.
         >
-          <Command shouldFilter={false}>
+          <Command
+            shouldFilter={true}
+            {...(cmdkValue !== undefined ? { value: cmdkValue } : {})}
+            onValueChange={setCmdkValue}
+            onKeyDown={handleCommandKeyDown}
+          >
+            <CommandInput
+              ref={inputRef}
+              placeholder={accessibleName ? `Search ${accessibleName.toLowerCase()}` : "Search…"}
+              autoFocus
+            />
             <CommandList>
               <CommandEmpty>No options</CommandEmpty>
               <CommandGroup>
@@ -324,18 +342,17 @@ export function Combobox(props: ComboboxProps): ReactNode {
                       key={editorOptionToString(option.value)}
                       value={editorOptionToString(option.value)}
                       data-option-index={index}
-                      data-selected={isSelected ? "true" : undefined}
+                      data-bcgrid-selected={isSelected ? "true" : undefined}
                       className="bc-grid-editor-combobox-option"
                       onSelect={() => updateSelection(index)}
                     >
                       {isMulti ? (
-                        <span
-                          className="bc-grid-editor-combobox-option-check"
-                          data-checked={isSelected ? "true" : undefined}
+                        <Checkbox
+                          checked={isSelected}
+                          tabIndex={-1}
                           aria-hidden="true"
-                        >
-                          {isSelected ? "✓" : ""}
-                        </span>
+                          className="mr-2"
+                        />
                       ) : null}
                       {option.swatch ? (
                         <span
@@ -391,10 +408,7 @@ export interface SearchComboboxRequestController {
 /**
  * Race-safe fetch wrapper used by `SearchCombobox`. Each `request`
  * cancels the prior in-flight controller before issuing a new one;
- * the `abort` method releases on unmount. Pure (no React) so the
- * supersedure semantics can be unit-tested without a DOM. Mirrors the
- * legacy `internal/combobox-search.ts` helper verbatim — PR-C2 will
- * swap import paths.
+ * the `abort` method releases on unmount.
  */
 export function createSearchComboboxRequestController({
   fetchOptions,
@@ -427,8 +441,7 @@ export function createSearchComboboxRequestController({
           if (!controller.signal.aborted) setOptions(result)
         } catch {
           // Aborted or fetch errored: leave existing suggestions in
-          // place so the cell stays editable. Free-text passthrough
-          // still works — the consumer's `valueParser` decides.
+          // place so the cell stays editable.
         } finally {
           if (activeController === controller && !controller.signal.aborted) {
             activeController = null
@@ -460,14 +473,10 @@ export interface SearchComboboxProps {
 }
 
 /**
- * Async-search Combobox with `<input>` trigger. Drop-in replacement for
- * the legacy `internal/combobox-search.tsx::SearchCombobox`. Built on
- * `cmdk` + Radix Popover.
- *
- * Free-text passthrough: the committed value is whatever's in the
- * input at commit time (string). Picking an option replaces the input
- * with the option's label, so the commit value is the option label.
- * Consumers wire `column.valueParser` to convert label → typed value.
+ * Async-search Combobox where the trigger IS the CommandInput. The
+ * input is anchored via Radix Popover so the dropdown stays anchored
+ * to the input position. Free-text passthrough — the committed value
+ * is whatever's in the input at commit time.
  */
 export function SearchCombobox({
   initialValue,
@@ -526,8 +535,7 @@ export function SearchCombobox({
     [fetchOptions],
   )
 
-  // Hand the input back to the framework via focusRef (useLayoutEffect
-  // race fix — same as text/number editors).
+  // Hand the input back to the framework via focusRef.
   useLayoutEffect(() => {
     if (focusRef && inputRef.current) {
       focusRef.current = inputRef.current
@@ -537,17 +545,8 @@ export function SearchCombobox({
     }
   }, [focusRef])
 
-  // Stash the *current input value* on the input element so
-  // `readEditorInputValue` returns `input.value` on click-outside / Tab.
-  useLayoutEffect(() => {
-    const input = inputRef.current
-    if (!input) return
-    ;(input as BcGridComboboxInput)[bcGridComboboxValueKey] = input.value
-  }, [])
-
   // First-paint fetch. Skipped when `initialOptions` came from
-  // `prepareResult` so the prepare-then-mount preload pattern doesn't
-  // double-fetch on activation.
+  // `prepareResult`.
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — later fetches go through onInput
   useLayoutEffect(() => {
     inputRef.current?.focus({ preventScroll: true })
@@ -564,7 +563,6 @@ export function SearchCombobox({
 
   const handleInput = (event: FormEvent<HTMLInputElement>) => {
     const value = event.currentTarget.value
-    ;(event.currentTarget as BcGridComboboxInput)[bcGridComboboxValueKey] = value
     queryFor(value, true)
     if (!open) setOpen(true)
   }
@@ -574,7 +572,6 @@ export function SearchCombobox({
       const input = inputRef.current
       if (input) {
         input.value = option.label
-        ;(input as BcGridComboboxInput)[bcGridComboboxValueKey] = option.label
       }
       onSelect(option)
     },
@@ -587,7 +584,7 @@ export function SearchCombobox({
   return (
     <div className="bc-grid-editor-combobox bc-grid-editor-combobox-search">
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverAnchor>
+        <PopoverAnchor asChild>
           <input
             ref={inputRef}
             className="bc-grid-editor-input bc-grid-editor-combobox-trigger"
@@ -678,11 +675,7 @@ export function SearchCombobox({
   )
 }
 
-// ---------- Pure helpers (mirrored from legacy internal/combobox.tsx) ----------
-//
-// PR-C2 will move these to a shared helper module before deleting the
-// legacy combobox.tsx. For PR-C1 they're duplicated here so the
-// foundation is self-contained.
+// ---------- Pure helpers ----------
 
 export function findOptionIndexByValue(options: readonly EditorOption[], target: unknown): number {
   if (target == null) return -1
@@ -701,6 +694,19 @@ export function selectedIndicesFromValues(
     if (idx >= 0) indices.push(idx)
   }
   return indices
+}
+
+function findOptionIndexBySeed(
+  options: readonly EditorOption[],
+  seedKey: string | undefined,
+): number {
+  if (typeof seedKey !== "string" || [...seedKey].length !== 1 || seedKey < " ") return -1
+  const query = seedKey.toLocaleLowerCase()
+  return options.findIndex((option) => {
+    const label = option.label.toLocaleLowerCase()
+    const value = editorOptionToString(option.value).toLocaleLowerCase()
+    return label.startsWith(query) || value.startsWith(query)
+  })
 }
 
 function toReadonlyArray(value: unknown): readonly unknown[] {

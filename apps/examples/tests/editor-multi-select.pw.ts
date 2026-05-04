@@ -81,11 +81,15 @@ test("editor pre-selects every value present in the row's flags array", async ({
   // Row 3 has `flags: ["high-volume", "tax-exempt"]` (mod 6 === 3).
   await focusBodyCell(page, 3, MULTI_SELECT_COLUMN)
   await page.keyboard.press("F2")
-  // Selected options carry `data-selected="true"`. The Combobox doesn't
-  // expose typed values via DOM attributes, so we assert the labels.
-  // FLAG_OPTIONS labels: "high-volume" → "High Volume", "tax-exempt" → "Tax Exempt".
+  // v0.7 PR-C2: shadcn Combobox uses cmdk's `data-selected` for the
+  // currently-active item (keyboard-highlighted), distinct from
+  // multi-select's "committed selection" state. Multi-mode commit
+  // state lives on `data-bcgrid-selected="true"` (set by Combobox.tsx
+  // on each CommandItem with isSelected=true).
   const selectedLabels = (
-    await page.locator('[role="listbox"] [role="option"][data-selected="true"]').allTextContents()
+    await page
+      .locator('[role="listbox"] [role="option"][data-bcgrid-selected="true"]')
+      .allTextContents()
   ).map((s) => s.replace(/^✓\s*/, "").trim())
   expect(selectedLabels.sort()).toEqual(["High Volume", "Tax Exempt"].sort())
 })
@@ -197,4 +201,68 @@ test.skip("multiSelectEditor preloads options from column.fetchOptions on first 
   await expect(trigger).toHaveAttribute("data-bc-grid-editor-option-count", /[1-9]\d*/)
   const options = page.locator('[role="listbox"] [role="option"]')
   await expect(options.first()).toBeVisible()
+})
+
+/**
+ * v0.7 PR-C2 — closes the #506 gating bar for multi-mode pre-deletion
+ * coverage. New assertions added with the shadcn migration:
+ *
+ * 1. Multi-mode Enter does NOT toggle the active option (#427 contract
+ *    preserved across the cmdk migration).
+ * 2. Multi-mode Space toggles via the inline shadcn Checkbox (Q3 design
+ *    decision restored keyboard-only multi-toggle a11y).
+ *
+ * Worker3 wrote these specs without local Playwright validation per
+ * the worker rule. Coordinator runs them at merge.
+ */
+
+test("multi-mode Enter does NOT toggle the active option (#427 preserved post-shadcn)", async ({
+  page,
+}) => {
+  await page.goto(URL)
+  // Row 3 has flags: ["high-volume", "tax-exempt"] pre-selected.
+  await focusBodyCell(page, 3, MULTI_SELECT_COLUMN)
+  await page.keyboard.press("F2")
+  // Capture the pre-selected count, navigate via ArrowDown to a
+  // currently-selected option, then press Enter. Per #427, Enter
+  // must NOT toggle — it commits the chip set verbatim.
+  const initialCount = await page
+    .locator('[role="listbox"] [role="option"][data-bcgrid-selected="true"]')
+    .count()
+  expect(initialCount).toBe(2)
+  // ArrowDown to highlight an option (cmdk active-descendant pattern).
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("Enter")
+  // Editor unmounts on commit; assert the cell still shows the
+  // original two-flag chip lane (no toggle happened).
+  await expect(page.locator(TRIGGER_SELECTOR)).toHaveCount(0)
+  await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(".bc-grid .bc-grid-viewport")
+    if (scroller) scroller.scrollLeft = scroller.scrollWidth
+  })
+  const cell = page
+    .locator(
+      `.bc-grid-row[data-row-index="3"] .bc-grid-cell[data-column-id="${MULTI_SELECT_COLUMN}"]`,
+    )
+    .first()
+  await expect(cell).toContainText("High Volume")
+  await expect(cell).toContainText("Tax Exempt")
+})
+
+test("multi-mode Space toggles via the inline shadcn Checkbox (Q3 a11y)", async ({ page }) => {
+  await page.goto(URL)
+  // Row 0: empty flags. Tab to a checkbox + Space toggles. Per the
+  // PR-C2 Q3 ratified design, each multi-mode CommandItem renders an
+  // inline shadcn Checkbox so keyboard-only users can toggle via
+  // Tab → Space (the legacy Space-on-active-option gesture is
+  // restored, just shifted to a Tab-reachable element).
+  await focusBodyCell(page, 0, MULTI_SELECT_COLUMN)
+  await page.keyboard.press("F2")
+  // Tab cycles: CommandInput → first checkbox.
+  await page.keyboard.press("Tab")
+  // Space toggles the focused checkbox (Radix Checkbox native handler).
+  await page.keyboard.press(" ")
+  // Verify the first option is now committed-selected.
+  const firstOption = page.locator('[role="listbox"] [role="option"]').first()
+  await expect(firstOption).toHaveAttribute("data-bcgrid-selected", "true")
 })
