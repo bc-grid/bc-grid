@@ -929,6 +929,49 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
   getLastError(): unknown | null
 }
 
+/**
+ * Per-block error event surfaced to consumers when a `loadBlock`
+ * rejection occurs. Fired by `<BcServerGrid rowModel="infinite">` and
+ * `useServerInfiniteGrid` for every loadBlock catch (after AbortError
+ * filtering). Consumers wire toasts, telemetry, or sentry alerts via
+ * `BcServerInfiniteProps.onBlockError`. Worker1 v0.6 server block
+ * error affordance (planning doc §3).
+ */
+export interface BcServerBlockErrorParams {
+  /** Cache key for the failed block (`view::blockStart::blockSize`). */
+  blockKey: ServerBlockKey
+  /** Row offset where this block starts. */
+  blockStart: number
+  /** Block size used in the request. */
+  blockSize: number
+  /** The rejected error from the consumer's `loadBlock`. */
+  error: unknown
+  /** 1-indexed attempt number. `1` is the initial fetch; `2`+ are auto-retries. */
+  attempt: number
+  /** When `true`, the orchestration is about to schedule another retry. When `false`, this is the final attempt — surface a permanent error to the user. */
+  willRetry: boolean
+  /** Backoff delay (ms) before the next retry. `0` when `willRetry === false`. */
+  retryDelayMs: number
+}
+
+/**
+ * Auto-retry configuration for failed `loadBlock` requests. When set
+ * (default `{ maxAttempts: 3, backoffMs: [1000, 2000, 4000] }`), the
+ * orchestration retries failed blocks up to `maxAttempts` total
+ * (counting the initial fetch). `false` disables auto-retry — every
+ * rejection fires `onBlockError` with `willRetry: false` immediately.
+ *
+ * `backoffMs` indexes into the array per attempt (0-based). When the
+ * array runs out, the last value is reused. Worker1 v0.6 server
+ * block error affordance (planning doc §3).
+ */
+export type BcServerBlockRetryConfig =
+  | {
+      maxAttempts: number
+      backoffMs: readonly number[]
+    }
+  | false
+
 export type ServerRowModelMode = "paged" | "infinite" | "tree"
 
 export interface ServerSort {

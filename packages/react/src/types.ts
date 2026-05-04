@@ -31,6 +31,8 @@ import type {
   BcRowPatchResult,
   BcRowState,
   BcSelection,
+  BcServerBlockErrorParams,
+  BcServerBlockRetryConfig,
   BcServerGridApi,
   BcValidationResult,
   ColumnId,
@@ -1541,6 +1543,28 @@ export interface BcServerGridProps<TRow>
    * `onVisibleRowRangeChange`. Default 1; `0` disables prefetch.
    */
   prefetchAhead?: number
+  /**
+   * Per-block error callback (worker1 v0.6 server block error
+   * affordance). Fired when `loadBlock` rejects (after AbortError
+   * filtering). Consumers wire this for toasts, telemetry, or
+   * sentry alerts. `params.willRetry` indicates whether the
+   * orchestration is about to schedule another retry — `false`
+   * means the user sees a permanent error.
+   *
+   * Document-management on flaky VPN currently swallows whole
+   * pages of rows (planning doc §3); this callback unblocks
+   * consumer-side recovery UI without forcing a polling pattern.
+   */
+  onBlockError?: (params: BcServerBlockErrorParams) => void
+  /**
+   * Auto-retry config for failed `loadBlock` requests. Default
+   * `{ maxAttempts: 3, backoffMs: [1000, 2000, 4000] }` — 1 initial
+   * fetch + 2 retries with 1s/2s/4s backoff. Pass `false` to
+   * disable auto-retry entirely (every rejection fires
+   * `onBlockError` with `willRetry: false`). Worker1 v0.6 server
+   * block error affordance.
+   */
+  autoRetryBlocks?: BcServerBlockRetryConfig
 
   /** Required when the active mode is `"tree"`. */
   loadChildren?: LoadServerTreeChildren<TRow>
