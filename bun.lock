@@ -61,25 +61,25 @@
     },
     "packages/aggregations": {
       "name": "@bc-grid/aggregations",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/animations": {
       "name": "@bc-grid/animations",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/core": {
       "name": "@bc-grid/core",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
     },
     "packages/editors": {
       "name": "@bc-grid/editors",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -102,7 +102,7 @@
     },
     "packages/enterprise": {
       "name": "@bc-grid/enterprise",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
         "@bc-grid/react": "workspace:*",
@@ -113,7 +113,7 @@
     },
     "packages/export": {
       "name": "@bc-grid/export",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
@@ -128,14 +128,14 @@
     },
     "packages/filters": {
       "name": "@bc-grid/filters",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/react": {
       "name": "@bc-grid/react",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/aggregations": "workspace:*",
         "@bc-grid/animations": "workspace:*",
@@ -178,21 +178,21 @@
     },
     "packages/server-row-model": {
       "name": "@bc-grid/server-row-model",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/theming": {
       "name": "@bc-grid/theming",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
     },
     "packages/virtualizer": {
       "name": "@bc-grid/virtualizer",
-      "version": "0.6.0-alpha.3",
+      "version": "0.6.0",
       "dependencies": {
         "@bc-grid/core": "workspace:*",
       },
@@ -1652,8 +1652,6 @@
     "astro/package-manager-detector": ["package-manager-detector@1.6.0", "", {}, "sha512-61A5ThoTiDG/C8s8UMZwSorAGwMJ0ERVGj2OjoW5pAalsNOg15+iQiPzrLJ4jhZ1HJzmC2PIHT2oEiH3R5fzNA=="],
 
     "astro/tinyexec": ["tinyexec@1.1.2", "", {}, "sha512-dAqSqE/RabpBKI8+h26GfLq6Vb3JVXs30XYQjdMjaj/c2tS8IYYMbIzP599KtRj7c57/wYApb3QjgRgXmrCukA=="],
-
-    "cmdk/@radix-ui/react-primitive": ["@radix-ui/react-primitive@2.1.4", "", { "dependencies": { "@radix-ui/react-slot": "1.2.4" }, "peerDependencies": { "@types/react": "*", "@types/react-dom": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-9hQc4+GNVtJAIEPEqlYqW5RiYdrr8ea5XQ0ZOnD6fgru+83kqT15mq2OCcbe8KnjRZl5vF3ks69AKz3kh1jrhg=="],
 
     "csso/css-tree": ["css-tree@2.2.1", "", { "dependencies": { "mdn-data": "2.0.28", "source-map-js": "^1.0.1" } }, "sha512-OA0mILzGc1kCOCSJerOeqDxDQ4HOh+G8NbOJFOTgOCzpw7fCBubk0fEyxp8AgOL/jvLgYA/uV0cMbe43ElF1JA=="],
 
