@@ -1,6 +1,7 @@
 import type {
   BcGridFilter,
   BcGridSort,
+  BcPaginationState,
   BcScrollOptions,
   BcServerGridApi,
   ColumnId,
@@ -10,8 +11,9 @@ import type {
   ServerPagedQuery,
   ServerPagedResult,
   ServerRowPatch,
+  ServerViewState,
 } from "@bc-grid/core"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   buildOptimisticEditPatch as buildOptimisticEditPatchInternal,
   createServerLoadAbortError,
@@ -73,6 +75,28 @@ export interface UseServerPagedGridOptions<TRow> {
    * never sees a typed character lag the input.
    */
   debounceMs?: number
+  /**
+   * Selects which output the hook populates. Per
+   * `docs/design/server-grid-hooks-dual-output-rfc.md §3.1`.
+   *
+   *   - `"server"` (default): existing behaviour. The hook returns
+   *     `serverProps` (also aliased as `props` for backwards compat)
+   *     and DOES NOT orchestrate the loader internally — the consumer
+   *     mounts `<BcServerGrid {...result.serverProps}>` and that
+   *     component owns the orchestration. `result.bound.data` is
+   *     empty.
+   *   - `"bound"`: the hook orchestrates the loader internally so
+   *     `result.bound.data` is populated. The consumer mounts
+   *     `<BcGrid {...result.bound}>` directly (bsncraft case — the
+   *     consumer wraps `<BcGrid>` in their own chrome and never
+   *     mounts `<BcServerGrid>`). DO NOT also mount
+   *     `<BcServerGrid {...result.serverProps}>` — both would dispatch
+   *     the loader, doubling network traffic.
+   *
+   * v0.6 ships paged dual-output. Marker-prop dedup (RFC §5) +
+   * infinite/tree dual-output land in v0.6.x follow-ups.
+   */
+  outputs?: "server" | "bound"
 }
 
 export interface UseServerPagedGridState<TRow> {
@@ -134,7 +158,61 @@ export interface UseServerPagedGridActions {
  */
 export type UseServerPagedGridBoundProps<TRow> = Omit<BcServerPagedProps<TRow>, "columns">
 
+/**
+ * `<BcGrid>`-shaped bound output for consumers wrapping plain
+ * `<BcGrid>` (not `<BcServerGrid>`). Per
+ * `docs/design/server-grid-hooks-dual-output-rfc.md §3.2`. The hook
+ * orchestrates the loader internally so `data` is populated without
+ * the consumer mounting `<BcServerGrid>`.
+ *
+ * **Don't mount `<BcServerGrid {...result.serverProps}>` AND use
+ * `result.bound` simultaneously** — both would dispatch the loader,
+ * doubling network traffic. Pick ONE output per hook instance:
+ *
+ *   - `bound` — for plain `<BcGrid>` consumers (bsncraft case).
+ *   - `serverProps` (alias `props`) — for `<BcServerGrid>` consumers.
+ *
+ * v0.6 ships forward-only paged dual-output. Marker-prop dedup
+ * (RFC §5) + infinite/tree dual-output land in v0.6.x follow-ups.
+ */
+export interface UseServerPagedGridBoundOutput<TRow> {
+  rowId: (row: TRow) => RowId
+  data: readonly TRow[]
+  loading: boolean
+  errorOverlay: ReactNode | undefined
+  rowProcessingMode: "manual"
+  sort: readonly BcGridSort[]
+  onSortChange: (next: readonly BcGridSort[]) => void
+  filter: BcGridFilter | null
+  onFilterChange: (next: BcGridFilter | null) => void
+  searchText: string
+  onSearchTextChange: (next: string) => void
+  pagination: BcPaginationState
+  onPaginationChange: (next: BcPaginationState) => void
+}
+
 export interface UseServerPagedGridResult<TRow> {
+  /**
+   * `<BcServerGrid>`-shaped output. Spread into
+   * `<BcServerGrid {...result.serverProps} columns={…} />`. Mirrors
+   * the previous `props` field; `props` remains as a deprecated
+   * alias for v0.6.0 backwards compatibility (removed in v0.7).
+   */
+  serverProps: UseServerPagedGridBoundProps<TRow>
+  /**
+   * `<BcGrid>`-shaped output. Spread into
+   * `<BcGrid {...result.bound} columns={…} />` when the consumer
+   * wraps `<BcGrid>` directly (bsncraft case). The hook orchestrates
+   * the loader internally; do NOT mount `<BcServerGrid>` with
+   * `serverProps` while also using `bound` — both would fire the
+   * loader, doubling network traffic.
+   */
+  bound: UseServerPagedGridBoundOutput<TRow>
+  /**
+   * @deprecated Renamed to `serverProps` in v0.6.0. The alias stays
+   * for one release; remove in v0.7. New code should use
+   * `serverProps` directly.
+   */
   props: UseServerPagedGridBoundProps<TRow>
   state: UseServerPagedGridState<TRow>
   actions: UseServerPagedGridActions
@@ -174,7 +252,14 @@ const DEFAULT_DEBOUNCE_MS = 200
 export function useServerPagedGrid<TRow>(
   opts: UseServerPagedGridOptions<TRow>,
 ): UseServerPagedGridResult<TRow> {
-  const { gridId, loadPage, rowId, initial, debounceMs = DEFAULT_DEBOUNCE_MS } = opts
+  const {
+    gridId,
+    loadPage,
+    rowId,
+    initial,
+    debounceMs = DEFAULT_DEBOUNCE_MS,
+    outputs = "server",
+  } = opts
 
   const apiRef = useRef<BcServerGridApi<TRow> | null>(null)
   const [sort, setSort] = useState<readonly BcGridSort[]>(() => initial?.sort ?? [])
@@ -244,6 +329,52 @@ export function useServerPagedGrid<TRow>(
     setPage((prev) => (prev === 0 ? prev : 0))
   }, [debouncedSort, debouncedFilter, debouncedSearchText])
 
+  // Bound-output orchestration loop (worker1 v06 dual-output IMPL,
+  // RFC §3-§5). When `outputs === "bound"`, the hook fires the
+  // wrapped loader directly on every view-defining change so
+  // `bound.data` is populated for consumers wrapping `<BcGrid>`
+  // (not `<BcServerGrid>`). Cancels the previous in-flight request
+  // via AbortController on each re-fire so stale results never
+  // overwrite the latest `lastResult`. When `outputs === "server"`
+  // (default), this effect is a no-op — orchestration stays inside
+  // `<BcServerGrid>` per the existing contract.
+  const boundAbortRef = useRef<AbortController | null>(null)
+  const boundRequestIdRef = useRef(0)
+  const boundActive = outputs === "bound"
+  // biome-ignore lint/correctness/useExhaustiveDependencies: wrappedLoadPage is stable; orchestration triggers re-fire on view-defining state.
+  useEffect(() => {
+    if (!boundActive) return
+    boundAbortRef.current?.abort()
+    const controller = new AbortController()
+    boundAbortRef.current = controller
+    boundRequestIdRef.current += 1
+    const requestId = `bound-${boundRequestIdRef.current}`
+    const view: ServerViewState = {
+      sort: debouncedSort.map((s) => ({ columnId: s.columnId, direction: s.direction })),
+      ...(debouncedFilter !== null ? { filter: debouncedFilter } : {}),
+      search: debouncedSearchText,
+      groupBy: [],
+      visibleColumns: [],
+    }
+    const query: ServerPagedQuery = {
+      mode: "paged",
+      pageIndex: page,
+      pageSize,
+      view,
+      requestId,
+    }
+    void wrappedLoadPage(query, { signal: controller.signal }).catch(() => undefined)
+    return () => controller.abort()
+  }, [
+    boundActive,
+    debouncedSort,
+    debouncedFilter,
+    debouncedSearchText,
+    page,
+    pageSize,
+    wrappedLoadPage,
+  ])
+
   const handlePaginationChange = useCallback((next: { page: number; pageSize: number }) => {
     setPage(next.page)
     setPageSize(next.pageSize)
@@ -279,7 +410,7 @@ export function useServerPagedGrid<TRow>(
     [],
   )
 
-  const props = useMemo<UseServerPagedGridBoundProps<TRow>>(
+  const serverProps = useMemo<UseServerPagedGridBoundProps<TRow>>(
     () => ({
       apiRef,
       gridId,
@@ -309,6 +440,45 @@ export function useServerPagedGrid<TRow>(
     ],
   )
 
+  // `<BcGrid>`-shaped bound output (worker1 v06 dual-output IMPL).
+  // Populated whether `outputs === "bound"` or `"server"` (the
+  // shape is harmless when not consumed); only the orchestration
+  // loop above is gated on `boundActive`. `data` reads from
+  // `lastResult.rows` which the wrapped loader updates whether it
+  // was called from `<BcServerGrid>` (server mode) or the internal
+  // orchestration loop (bound mode). `errorOverlay` is set only
+  // when an error is present so the consumer's own
+  // `BcGridProps.errorOverlay` slot is forwarded automatically.
+  const bound = useMemo<UseServerPagedGridBoundOutput<TRow>>(
+    () => ({
+      rowId,
+      data: lastResult?.rows ?? [],
+      loading,
+      errorOverlay: error != null ? defaultBoundErrorMessage(error) : undefined,
+      rowProcessingMode: "manual" as const,
+      sort: debouncedSort,
+      onSortChange: (next) => setSort(next),
+      filter: debouncedFilter,
+      onFilterChange: (next) => setFilter(next),
+      searchText: debouncedSearchText,
+      onSearchTextChange: (next) => setSearchText(next),
+      pagination: { page, pageSize },
+      onPaginationChange: handlePaginationChange,
+    }),
+    [
+      rowId,
+      lastResult,
+      loading,
+      error,
+      debouncedSort,
+      debouncedFilter,
+      debouncedSearchText,
+      page,
+      pageSize,
+      handlePaginationChange,
+    ],
+  )
+
   const state = useMemo<UseServerPagedGridState<TRow>>(
     () => ({ sort, filter, searchText, page, pageSize, loading, error, lastResult }),
     [sort, filter, searchText, page, pageSize, loading, error, lastResult],
@@ -319,7 +489,28 @@ export function useServerPagedGrid<TRow>(
     [reload, applyOptimisticEdit, scrollToCell],
   )
 
-  return { props, state, actions }
+  return { serverProps, bound, props: serverProps, state, actions }
+}
+
+/**
+ * Minimal default error message for the `bound.errorOverlay` slot
+ * when the consumer hasn't overridden it. Mirrors the
+ * `serverErrorMessage` helper served by `<BcServerGrid>` (#468) but
+ * avoids coupling the hook to the server-grid component. Consumers
+ * who want richer chrome should ignore `bound.errorOverlay` and
+ * render their own `errorOverlay` adjacent to the bound spread:
+ *
+ * ```tsx
+ * <BcGrid {...grid.bound} errorOverlay={grid.state.error
+ *   ? <MyRichErrorOverlay error={grid.state.error} retry={grid.actions.reload} />
+ *   : undefined} />
+ * ```
+ *
+ * Exported for unit testing.
+ */
+export function defaultBoundErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return `Failed to load. ${error.message}`
+  return "Failed to load."
 }
 
 /**
