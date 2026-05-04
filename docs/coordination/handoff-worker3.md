@@ -1,18 +1,19 @@
 # Worker3 Handoff (Claude — editor + keyboard/a11y + lookup UX lane)
 
-**Last updated:** 2026-05-04 PM (post-#506 merge) by Claude coordinator
+**Last updated:** 2026-05-04 PM (post-v0.6.0-alpha.3 cut, PR-C1 #520 merged) by Claude coordinator
 
-## 🛑 IF YOU REPORTED "no assignments" — READ THIS
+## 🛑 STATUS: PR-C1 ✅ MERGED — PR-C2 IS YOUR ACTIVE TASK
 
-**You are not blocked.** PR-A1 (#501), PR-A1 resync (#503), and PR-A2 (#504) all **merged hours ago**. If your handoff still reads "wait for PR-A1" — **`git pull origin main` and re-read this doc.** Block A is complete. Your active task is PR-C1, defined immediately below.
+**PR-C1 #520 merged.** The shadcn Combobox foundation is on `main` at `packages/editors/src/shadcn/`. cmdk + Radix Popover are installed in `@bc-grid/editors`. **You are not blocked.** Your active task is **PR-C2** — migrate the three combobox-driven editors to use the new foundation.
 
-Specifically:
+If your handoff cache shows anything "Active now → PR-A1 / PR-C1" — **`git pull origin main` and re-read this doc.** Verification: `git log origin/main --oneline | head -8` should show `release: v0.6.0-alpha.3` near the top, then your already-merged PRs.
 
-- ✅ `cmdk@1.1.1` + `@radix-ui/react-popover@1.1.15` are installed in `packages/react/package.json` (and via the workspace dep chain are accessible from `@bc-grid/editors` already).
-- ✅ `packages/react/src/shadcn/command.tsx` + `popover.tsx` exist on `main`, sourced from `~/work/bsncraft/packages/ui/src/components/`.
-- ✅ `packages/react/tests/dom/setup.ts` is in place via PR-A2 if you need DOM tests.
-
-**Verification command:** `git fetch origin && git log origin/main --oneline | head -10` should show #506 (test inventory you just shipped) at top, then docs commits, then `feat(react): add Radix shadcn scaffold (#501)`. If you don't see #501 on `main`, you're on a stale branch — pull.
+Already merged from your lane today:
+- ✅ #493 editor a11y fix (date / datetime / time aria-describedby + visually-hidden error span)
+- ✅ #494 queue cleanup (5 stale `[ready]` items → `[done]`)
+- ✅ #506 Block C test inventory doc (PR-C2 pre-flight checklist)
+- ✅ #520 PR-C1 (shadcn Combobox foundation: cmdk + Radix Popover deps + `command.tsx` / `popover.tsx` / `dialog.tsx` / `utils.ts` primitives in `packages/editors/src/shadcn/`)
+- 🚪 #497, #500 closed correctly when the RFC landed (deferred to PR-C3)
 
 ---
 
@@ -22,38 +23,45 @@ Specifically:
 
 **Stop merging any new editor primitive surface from your own queue (new combobox modes, new editor variants) until the correction lands.** Anything in flight that adds new code under `packages/editors/src/internal/*` builds further into the wrong direction.
 
-### Block C — editor migration (parallel with worker2's Block B, 3 PRs)
+### Block C — editor migration: 1 of 3 PRs done
 
-**Block A is ✅ COMPLETE** as of 2026-05-04 PM — PR-A1 (#501), PR-A1 resync (#503), PR-A2 (#504) all merged. `cmdk@1.1.1` + `@radix-ui/react-popover@1.1.15` are installed in `@bc-grid/react`; the `command.tsx` and `popover.tsx` primitives live at `packages/react/src/shadcn/command.tsx` + `popover.tsx`, sourced from `~/work/bsncraft/packages/ui/src/components/`. **You are unblocked — start PR-C1 now.**
+- ✅ **PR-C1 #520 merged** — cmdk + Radix Popover in `@bc-grid/editors`; `command.tsx` / `popover.tsx` / `dialog.tsx` / `utils.ts` primitives in `packages/editors/src/shadcn/` (sourced from `packages/react/src/shadcn/` which adapts `@bsn/ui`)
 
-#### Active now → `v07-shadcn-combobox-foundation` (PR-C1)
+#### Active now → `v07-radix-combobox-editors` (PR-C2)
 
-Branch: `agent/worker3/v07-shadcn-combobox-foundation`. Per RFC §Block C PR-C1:
+Branch: `agent/worker3/v07-radix-combobox-editors`. Per RFC §Block C PR-C2 + your test inventory at `docs/coordination/v07-block-c-test-inventory.md` (#506).
 
-**Critical sourcing rule:** the `command.tsx` + `popover.tsx` primitives MUST come from `~/work/bsncraft/packages/ui/src/components/` — NOT from `bunx shadcn@latest add`. Reason: bc-grid is moving into the bsncraft monorepo as `bsncraft/packages/bc-grid/`. After the merge, every `packages/editors/src/shadcn/foo.tsx` gets deleted and imports swap to `@bsn/ui/components/foo`. Sourcing from `@bsn/ui` today makes the merge mechanical.
+**Migrate three editors to the cmdk foundation:**
 
-- Add to `packages/editors/package.json` `dependencies` at the **exact pinned versions** in the RFC TL;DR: `cmdk@^1.1.1`, `@radix-ui/react-popover@^1.1.15`, `@radix-ui/react-dialog@^1.1.15`, `@radix-ui/react-slot@^1.2.4`, `class-variance-authority@^0.7.1`, `lucide-react@^1.8.0`. Update `bun.lock`.
-- **Copy** `command.tsx` and `popover.tsx` from `~/work/bsncraft/packages/ui/src/components/` into `packages/editors/src/shadcn/`. If the source imports `cn` from `@bsn/ui/lib/utils`, copy that utility too OR redirect to bc-grid's existing helpers.
-- Alternative if worker2's PR-A1 already copied `command.tsx` into `packages/react/src/shadcn/`: alias it via `@bc-grid/react/shadcn/command`. `@bc-grid/editors` already devDeps `@bc-grid/react`; the alias avoids two copies of the same source. Pick whichever keeps deps cleanest — call out the choice in the PR body.
-- Add a thin internal wrapper `packages/editors/src/shadcn/Combobox.tsx` exposing the shape today's `combobox.tsx` + `combobox-search.tsx` provide (search-mode and select-mode), backed by cmdk + Radix Popover.
-- No editor-visible change yet — just the new foundation. PR-C2 swaps the editors over.
+1. **`selectEditor`** — drop `packages/editors/src/internal/combobox.tsx` (select-mode); rebuild on `packages/editors/src/shadcn/command.tsx` + `popover.tsx`. Trigger button stays consistent with the `<BcGridMenuItem>`-style chrome from PR-B1; on open, render `<Command>` with the option list.
+2. **`multiSelectEditor`** — same as select but `<CommandItem>` items toggle a `Set<TValue>`; trailing checkmark glyph from `lucide-react` `Check` for selected items.
+3. **`autocompleteEditor`** — drop `packages/editors/src/internal/combobox-search.tsx`; rebuild on `<Command>` with `CommandInput` for typeahead. Honor the existing async-option-loading contract + `prepareResult` preload pattern from #427 / #435.
 
-#### Next-after → `v07-radix-combobox-editors` (PR-C2)
+**Constraints (binding per RFC):**
 
-Per RFC §Block C PR-C2:
+- Public exports preserved verbatim — `selectEditor`, `multiSelectEditor`, `autocompleteEditor`, plus the v0.6 factory exports `createSelectEditor` / `createMultiSelectEditor` / `createAutocompleteEditor`. `bun run api-surface` diff must be empty.
+- Delete `packages/editors/src/internal/combobox.tsx` and `combobox-search.tsx` in this PR. Their tests at `packages/editors/tests/combobox*.test.ts` / `combobox-search*.test.ts` either delete (if behavior is now covered by cmdk) or migrate to `packages/react/tests/dom/` with `@testing-library/react`.
 
-- Migrate `selectEditor`, `multiSelectEditor`, `autocompleteEditor` internals to use the new shadcn `Combobox` foundation from PR-C1.
-- Delete `packages/editors/src/internal/combobox.tsx` and `combobox-search.tsx`. Public exports (`selectEditor`, `multiSelectEditor`, `autocompleteEditor`) preserved.
-- Add Playwright assertions: select-edit happy path, multi-select toggle, autocomplete typeahead with async options, prepareresult preload, Enter contract pinned in #427, focus return after commit.
-- Move existing combobox-related markup tests into `packages/react/tests/dom/` (per worker2's PR-A2 happy-dom infra).
+**Playwright assertions to add BEFORE deletion** (per `docs/coordination/v07-block-c-test-inventory.md`):
 
-#### Then-after → `v07-shadcn-editor-render-prop-slots` (PR-C3)
+- select-edit happy path: open → click option → commit → cell shows new value
+- multi-select toggle: open → click two options → close → cell shows multi-value
+- autocomplete typeahead: type query → result list filters → click → commit
+- prepareresult preload: open editor with prepareResult → option list pre-populated
+- Enter contract pinned per #427: Enter inside cmdk does NOT bubble to the grid editor's commit handler
+- focus return after commit: editor unmounts, cell receives focus
 
-Per RFC §Block C PR-C3:
+**The 3 currently-`test.skip` Playwright tests** (`editor-select.pw.ts:132`, `editor-multi-select.pw.ts:187`, no autocomplete equivalent) need to pass — that's the deletion gate.
 
-- Wire the deferred `triggerComponent` + `optionItemComponent` slots from #489 (select-batch first slice). Now that the editors sit on a real shadcn Combobox, the slot wiring has a primitive underneath to slot into.
-- `createSelectEditor({ triggerComponent, optionItemComponent })`, `createMultiSelectEditor`, `createAutocompleteEditor` factory pattern matches #480 / #488 / #489.
-- Update `docs/recipes/shadcn-editors.md` — the "What's NOT covered (yet)" section now becomes "covered."
+#### Next-after → `v07-shadcn-editor-render-prop-slots` (PR-C3)
+
+Per RFC §Block C PR-C3 — wire the deferred slots from #489 / #497 / #500 closures.
+
+- `createSelectEditor({ triggerComponent, optionItemComponent })`, `createMultiSelectEditor({ triggerComponent, optionItemComponent })`, `createAutocompleteEditor({ inputComponent, optionItemComponent })`. Factory pattern matches #480 / #488 / #489.
+- The slot wiring is straightforward now that cmdk is the foundation: `triggerComponent` swaps the `<PopoverTrigger>` button; `optionItemComponent` swaps the `<CommandItem>` row renderer. Default behavior preserved when slots are unset.
+- Update `docs/recipes/shadcn-editors.md` — move the "What's NOT covered (yet)" section to "covered" with code samples.
+
+When PR-C2 + PR-C3 land, your Block C editor lane is **complete** and the v0.7 architecture correction is 8/9 done (PR-D coordinator sweep is the last piece).
 
 ### Constraints (binding per RFC §Migration constraints)
 

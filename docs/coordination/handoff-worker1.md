@@ -10,26 +10,31 @@ The one constraint: **do not add new code under `packages/react/src/internal/*`*
 
 ---
 
-## 🎯 SERVER-GRID LANE DRAINED 2026-05-04 PM — pivoting to v1.0 prep
+## 🎯 V1.0-PREP LANE — most of your queue shipped today
 
-**Update 2026-05-04 PM:** all your v0.6 server-grid PRs merged: ✅ #470 cache stats, ✅ #452 client tree phase 2.5, ✅ #455 client tree phase 3, ✅ #496 tree expansion persistence, ✅ #498 server-grid CSV export, ✅ #499 cursor-pagination IMPL deferral, ✅ #491 block error affordance, ✅ #487 server display column order, ✅ #484 dual-output paged hook, ✅ #502 v1.0 API surface freeze audit. Server-grid v0.6 train is done.
+**Last refresh: 2026-05-04 post-v0.6.0-alpha.3 cut.** Your lane is essentially drained. Recap of what's merged from your work:
 
-You are now on the **v1.0 prep lane**. Worker2 + worker3 own the v0.7 architecture correction; you do NOT pick up any v0.7-* tasks. Your queue below is v1.0-freeze prep + bug fixes.
+- ✅ Server-grid v0.6 train: #470, #452, #455, #496, #498, #499, #491, #487, #484, #502 (all done)
+- ✅ API surface freeze audit (#502) + all 6 §15 action items closed across slices 1-4: #505, #507, #508, #514
+- ✅ Browser compat matrix doc (#509)
+- ✅ Examples app cleanup (#511)
+- ✅ Screenreader code-pass audit (#516) + treegrid ARIA fixes (#517 client-tree + #519 server-tree — closes both audit GAPs)
 
-### ✅ Slice 1 (#505) merged 2026-05-04 PM
+`docs/design/v1-api-surface-audit.md §15` action items are 6/6 complete. The only remaining audit gate is the maintainer's pass on issue #512 (10 OPEN QUESTIONs — that's not on you).
 
-Cross-package symmetry (3 re-exports) + `@bc-grid/server-row-model` planned → enforced + `data-bc-grid-cell-state` deprecation comment update. 3 of 30 audit action items closed.
+### Active now → pick from the v1.0-prep grab bag
 
-### Active now → `v07-api-surface-action-items-slice-2` (RENAMEs + INTERNALIZE)
+If you still have cycles, pick one of:
 
-Per `docs/design/v1-api-surface-audit.md` §15, **27 audit action items remain** before v1.0 freeze. Pick a slice:
+1. **`v1-bsncraft-issues-triage`** — re-walk `docs/coordination/bsncraft-issues.md` open items. Most are deferred but a quick triage might surface 1-2 paper-cuts that can land before v1.0. ~half day.
+2. **`v1-bundle-size-audit`** — single doc summarising per-package bundle contributions, the LRU eviction tuning impact, and where the next ~30 KiB headroom comes from. Useful for v1.0 release notes. ~half day.
+3. **`v1-perf-baseline-doc`** — read smoke + nightly perf measurements + write a single doc capturing the v1.0 baseline numbers (cold mount, sort, scroll FPS, edit-cell paint when Track 1 lands). Companion to the browser compat matrix. ~half day.
+4. **Help worker3 with PR-C2 if they get stuck** — you're not on the editor lane per the RFC, but you've shipped the most architecture-style PRs today. PR-C2 migrates `selectEditor` / `multiSelectEditor` / `autocompleteEditor` to the cmdk foundation #520 just landed. If worker3 reports blocked, you can step in.
+5. **Ratify open API-surface questions in issue #512 from the engineering side** — for any of the 10 questions where the engineering answer is unambiguous (no architectural choice involved), post your verdict as an issue comment so the maintainer's pass is faster.
 
-1. **INTERNALIZE — `serverRowEntryOverrides` + `ServerRowEntryOverride`** — bsncraft v0.6.0-alpha.1 P1 escape hatch was an internal-only fix; remove from `tools/api-surface/src/manifest.ts` runtime + declaration exports for `@bc-grid/react`. PR body should explicitly cite "INTERNALIZE per audit §X."
-2. **RENAMEs** — the four `Use*BoundProps` types per RFC #477 §3.1. The `Bound` suffix is now ambiguous after the dual-output IMPL added a `bound` field. Pick names per the audit doc's recommendation. Keep the old names as `@deprecated` aliases for one release; api-surface manifest tracks both during the deprecation window.
-3. **DEPRECATEs (7 remaining)** — `Use*Result.props` aliases per RFC #477 (already redundant after dual-output `bound`/`serverProps`); the rest of the 8 items in audit §15. (1 of 8 done in #505 — the `data-bc-grid-cell-state` comment.)
-4. **OPEN QUESTION compilation** — 13 type-pair / naming questions need a maintainer pass. List them as a numbered punch list in `docs/design/v1-api-surface-audit.md §16` (decision log) and post each as a comment on a fresh GitHub issue tagged `v1-api-question` for the maintainer to resolve before v1.0 freeze.
+### Hard rule: worker1 stays OFF the chrome lane
 
-Each fix can be its own PR or batched — your call. Run `bun run api-surface` after each — the manifest must stay coherent.
+Worker2 owns every PR under `packages/react/src/internal/*` and the chrome surface. Do not touch those during the v0.7 correction window even for a "drive-by" fix.
 
 ### Concurrent → ratify the alpha.3 candidate train (low priority)
 
