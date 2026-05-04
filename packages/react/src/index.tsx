@@ -97,7 +97,9 @@ export type {
 
 export type {
   BcActionsColumnProps,
+  BcAggregation,
   BcAggregationFormatterParams,
+  BcAggregationResultDTO,
   BcAggregationScope,
   BcBulkActionUndoContext,
   BcBulkActionUndoableAction,
@@ -141,6 +143,7 @@ export type {
   BcGridColumn,
   BcGridDensity,
   BcGridFilter,
+  BcGridIdentity,
   BcGridLayoutState,
   BcGridMessages,
   BcGridPasteTsvCommit,
