@@ -111,12 +111,53 @@ const arTextEditor = createTextEditor({ inputComponent: ArInput })
 const apTextEditor = createTextEditor({ inputComponent: ApInput })
 ```
 
+## `createCheckboxEditor` — `checkboxComponent` slot
+
+The boolean editor uses the same render-prop pattern, but with a `checkboxComponent` option (the prop name reflects the primitive being swapped — a `<input type="checkbox">` rather than a text input).
+
+```tsx
+import { Checkbox } from "@/components/ui/checkbox"
+import { createCheckboxEditor } from "@bc-grid/editors"
+import type { BcReactGridColumn } from "@bc-grid/react"
+
+export const shadcnCheckboxEditor = createCheckboxEditor({ checkboxComponent: Checkbox })
+
+const col: BcReactGridColumn<TaskRow, boolean> = {
+  field: "completed",
+  header: "Done",
+  cellEditor: shadcnCheckboxEditor,
+}
+```
+
+The component receives `CheckboxEditorInputProps`:
+
+```ts
+interface CheckboxEditorInputProps {
+  ref: Ref<HTMLInputElement>
+  className?: string
+  type: "checkbox"             // pass-through
+  defaultChecked: boolean      // seed (resolved from cell value)
+  disabled: boolean            // true while pending validation / commit
+  "aria-invalid"?: true
+  "aria-label"?: string
+  "aria-describedby"?: string
+  "aria-required"?: true
+  "aria-readonly"?: true
+  "aria-disabled"?: true
+  "data-bc-grid-editor-input": "true"
+  "data-bc-grid-editor-kind": "checkbox"
+}
+```
+
+Same three contracts: forward `ref` to a real `<input type="checkbox">`, stamp the data attributes, honor `disabled`. The framework reads `inputRef.current.checked` at commit time, so an uncontrolled checkbox is fine — the live DOM `.checked` property is the source of truth.
+
+shadcn's `<Checkbox>` is a Radix primitive that renders a `<button>` shell + a hidden native `<input>`. The framework's commit path follows the `ref` and the data attribute discriminator, so as long as the `ref` reaches the inner `<input>` (Radix's `Checkbox.Root` does so via `forwardRef`), commits work. If your design system's checkbox doesn't expose the inner `<input>`, wrap it with a custom forwarding shim that maintains the contract.
+
 ## What's NOT covered (yet)
 
-- **`numberEditor`, `dateEditor`, `selectEditor`** — same pattern is planned but not yet shipped (v0.6 deferred / v0.7 split). Until then, consumers wanting shadcn-native styling for those editors build their own custom `cellEditor` from scratch (per `docs/recipes/custom-editors.md`).
-- **`autocompleteEditor`, `multiSelectEditor`, `checkboxEditor`** — these wrap richer primitives (Combobox, multi-Combobox, checkbox); the render-prop pattern doesn't cleanly map. Custom editor route is the recommendation.
+- **`selectEditor`, `multiSelectEditor`, `autocompleteEditor`** — these wrap richer primitives (Combobox, multi-Combobox, search-Combobox) shared via internal `Combobox` / `SearchCombobox` modules. The select-batch follow-up adds `triggerComponent` + `optionItemComponent` slots — that needs the internal primitives to expose the slot points (~1k LOC of careful refactoring + Playwright validation), so it lands in a dedicated PR after the numeric + checkbox slots have soaked. Until then, consumers wanting shadcn-native styling for select / multi-select / autocomplete build a custom `cellEditor` from scratch (per `docs/recipes/custom-editors.md`).
 
-The v0.6 first-pass establishes the `inputComponent` pattern on `textEditor`. The other editors follow once the pattern proves out + bsncraft's actual shadcn-styling needs surface in real usage.
+The v0.6 single-input cluster (text + number + date + datetime + time) establishes the `inputComponent` pattern uniformly. `checkboxEditor` rides on that same shape via `checkboxComponent`. Combobox-driven editors follow once their slot wiring lands with Playwright coverage.
 
 ## When NOT to use
 

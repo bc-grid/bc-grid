@@ -660,6 +660,7 @@ export const apiSurfaceManifest = [
     runtimeExports: [
       "autocompleteEditor",
       "checkboxEditor",
+      "createCheckboxEditor",
       "createTextEditor",
       "dateEditor",
       "datetimeEditor",
@@ -673,6 +674,9 @@ export const apiSurfaceManifest = [
     declarationExports: [
       "autocompleteEditor",
       "checkboxEditor",
+      "CheckboxEditorInputProps",
+      "CheckboxEditorOptions",
+      "createCheckboxEditor",
       "createTextEditor",
       "dateEditor",
       "datetimeEditor",
@@ -685,7 +689,7 @@ export const apiSurfaceManifest = [
       "textEditor",
       "timeEditor",
     ],
-    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select + editor-multi-select + editor-autocomplete; v0.4 adds editor-checkbox; v0.6 adds createTextEditor + TextEditorInputProps + TextEditorOptions for the inputComponent render-prop slot.",
+    note: "v0.1: ships editor-text + editor-number + editor-date + editor-time + editor-datetime + editor-select + editor-multi-select + editor-autocomplete; v0.4 adds editor-checkbox; v0.6 adds createTextEditor + TextEditorInputProps + TextEditorOptions for the inputComponent render-prop slot, then createCheckboxEditor + CheckboxEditorInputProps + CheckboxEditorOptions for checkboxComponent (select-batch first slice; combobox-driven select/multi/autocomplete slots ship in a follow-up PR).",
   },
   {
     packageName: "@bc-grid/enterprise",
