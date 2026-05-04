@@ -23,128 +23,85 @@ Tracking document for issues bsncraft has flagged. Update status on each new bc-
 
 ## P0 — Visible regressions and blocked production features
 
-### ❌ 1. Pinned-right column renders on left
+### ✅ 1. Pinned-right column renders on left — shipped in 0.6.0-alpha.2 via #479
 
-**Bsncraft repro:** `apps/web/components/edit-grid.tsx` adds `__bc_actions` column with `pinned: "right"`. Renders on the LEFT of the row (overlapping `__bc_detail`).
+**Fix:** pinned-lane Option B count-agnostic 3-track template (RFC ratified by all 3 workers). The `--bc-grid-columns` track count was the root cause; the new template makes pinned-right grid-column placement consumer-column-count agnostic. Bsncraft can now apply `pinned: "right"` to consumer-supplied columns without overlap.
 
-**Source notes:**
-- `theming/dist/styles.css` has a comment block citing the bsncraft P0 and a stated fix: `.bc-grid-pinned-lane-right { grid-column: -2 / -1; }`. Fix shipped 0.6.0-alpha.1 but does not reach consumer-defined columns.
-- `react/dist/index.js`: `virtualWindow.cols.filter((col) => col.pinned === "right")` is the gate. Auto-injected `__bc_actions` from `BcEditGrid` works; consumer-supplied `pinned: "right"` doesn't.
-
-**Likely cause:** `pinned` value being lost between consumer column → `resolvedColumns` → `virtualWindow.cols`, OR `--bc-grid-columns` track count insufficient for `grid-column: -2 / -1`.
-
-**Diagnostic:** at the right-lane render branch, log `virtualWindow.cols.map(c => ({ id: c.id, pinned: c.pinned }))` while bsncraft has `pinned: "right"` on a column. If the consumer column shows `pinned: undefined` here, the value is being stripped during column resolution.
+**Verify:** install `@bc-grid/*@0.6.0-alpha.2` (or later) and confirm consumer-supplied `pinned: "right"` columns render on the right edge.
 
 ---
 
-### ❌ 2. Tree-mode group rows render as data rows
+### ✅ 2. Tree-mode group rows render as data rows — shipped in 0.6.0-alpha.2 via #465
 
-**Bsncraft repro:** `<BcServerGrid rowModel="tree">` with `loadChildren` returning `kind: "group"` rows. Group rows render with empty cells in body columns; only the group value shows in one column. No count, no full-width group header. Should route through `renderGroupRowCell` for ag-grid-style group rendering.
+**Fix:** `<BcServerGrid rowModel="tree">` now builds an `__bcServerRowEntryOverrides` map (`Map<RowId, ServerRowEntryOverride>`) from `flatNodes` alongside the data rows and passes it to `<BcGrid>`. The override carries `kind`, `level`, `label` (from `groupKey`), `childCount`, `childRowIds`, `expanded` per row. `<BcGrid>` consults the map after `flattenGroupedRowTree` and synthesises `GroupRowEntry` shape for every override entry, so the render loop's group-row branch fires correctly. Bonus: #519 extended this with a leaf-row variant carrying `level` so screenreaders surface `aria-level` for both group AND leaf rows in server-tree mode.
 
-**Source notes:**
-- `@bc-grid/server-row-model/dist/index.js` correctly preserves `kind` on TreeNodes (lines 917, 923, 944).
-- `@bc-grid/react/dist/index.js` strips it:
-  ```js
-  flatNodes = useMemo(() => modelRef.current.flattenTreeSnapshot(tree, expansionState), ...);
-  rows = flatNodes.map((node) => node.row);
-  ```
-  Only `node.row` (raw data) is forwarded. `kind`, `groupKey`, `level`, `childCount` discarded.
-- Render-loop check at `index.js:10256` (`if (!isDataRowEntry(entry))` → `entry.kind === "data"`) then evaluates true for all entries.
-
-**Fix:** map `flatNodes` to entry objects directly:
-```js
-rows = flatNodes.map((node) => ({
-  kind: node.kind,
-  rowId: node.rowId,
-  level: node.level,
-  label: deriveGroupLabel(node.groupKey),  // groupKey → "value (count)"
-  row: node.row,
-}));
-```
-Or store metadata on a sibling map keyed by `rowId` that the entry constructor consults.
+**Verify:** group rows now render via `renderGroupRowCell` with full-width chrome, count, and proper aria-level depth.
 
 ---
 
-### ❌ 3. Edit mode broken — input invisible, hotkeys leak, row data flashes
+### ✅ 3. Edit mode broken on `<BcServerGrid>` — shipped in 0.6.0-alpha.2 via #451
 
-**Bsncraft repro:** `<BcServerGrid rowModel="paged">` with `cellEditor: textEditor` (popup: false, in-cell). Double-click on an editable cell:
-- No visible input
-- Adjacent rows' data flashes into the focused row briefly
-- Global app hotkeys (`f`, `s`, `r` bound at bsncraft level) fire while user types — `isEditableKeyTarget` should gate them, so either focus isn't on input or input never mounted
+**Fix:** in-cell editor unmount fix — `cleanupRowRef` pattern decouples `useLayoutEffect` deps from re-render churn. The root cause was that `<BcServerGrid rowModel="paged">` server fetches were unmounting the in-cell editor immediately on each refresh, causing the invisible input + flashing rows + leaked hotkeys.
 
-**Source notes (no obvious cause):**
-- `textEditor.popup` is `false` (`packages/editors/src/text.tsx`).
-- `isCellEditable` correctly returns `true` when `cellEditor` is set (post-`9fd7c0c`).
-- Default `editorActivation` is `"double-click"`.
-- `renderInCellEditor` returns `<EditorMount mountStyle="in-cell">` when cell is active edit target.
-
-**Possible causes to investigate:**
-- `<BcServerGrid rowModel="paged">` not propagating edit state to inner `<BcGrid>` (different code path than `<BcEditGrid>`).
-- `<EditorMount>` mounts but input doesn't gain focus — `focusRef` race.
-- Edit mode entering then immediately exiting (causes the flash).
-- Commit `cbb65fd feat(react): editor keyboard navigation polish` (in 0.5.0) touched activation — possible regression.
-
-**Severity:** P0 — blocks bsncraft shipping in-grid editing on master tables.
+**Verify:** install `@bc-grid/*@0.6.0-alpha.2` (or later) and confirm in-cell `cellEditor: textEditor` mounts visibly + holds focus + gates global hotkeys via `isEditableKeyTarget`.
 
 ---
 
 ## P1 — Visible polish bugs
 
-### ❌ 4. Master row hover cascades into nested grid in detail panel
+### ✅ 4. Master row hover cascades into nested grid — shipped in 0.5.0 GA via #426 RFC + #430 impl
 
-**Repro:** `<BcGrid renderDetailPanel>` containing a nested `<BcGrid>`. Cursor on master row → master row's `:hover` matches because cursor is on a descendant (the nested grid is inside the master row's DOM tree). `.bc-grid-row:hover .bc-grid-cell` then matches every descendant cell, including child grid cells. Whole nested grid gets the hover tint.
+**Fix:** row-state cascade scoping — `:not()` selector guards on 16 selectors so master row hover/focus/select state doesn't bleed into nested grid cells in the detail panel.
 
-**Fix:** scope row-state CSS to non-nested cells. Either `.bc-grid-row:hover > .bc-grid-cell` (direct child) or `.bc-grid-row:hover .bc-grid-cell:not(.bc-grid .bc-grid-cell)` (not in nested grid).
-
----
-
-### ❌ 5. `--bc-grid-row-hover` transparency leaks through pinned cell layering
-
-Token: `--bc-grid-row-hover: color-mix(in srgb, var(--accent) 70%, transparent)` (~30% alpha).
-
-The alpha.2 layered-bg fix produces byte-identical pixels for opaque tokens, but `--bc-grid-row-hover` carries alpha. Body cells composite over the row's underlying bg (same color → invisible). Pinned cells composite over `--bc-grid-pinned-bg` (different color → visible 3-4% shade difference in hover and selected+hover states).
-
-**Fix:** make the token opaque: `color-mix(in srgb, var(--accent) 70%, var(--bc-grid-bg))`. Same perceived color, no alpha.
+**Verify:** install `@bc-grid/*@0.5.0` (or later) and confirm master row hover stays on the master row, with the nested grid inside the detail panel showing its own independent row-state.
 
 ---
 
-### ❌ 6. Scroll-shadow gradient overlays row state colors
+### ✅ 5. `--bc-grid-row-hover` transparency leak — shipped in 0.5.0 GA via #425
 
-`.bc-grid-cell-pinned-left-edge::after` and `.bc-grid-cell-pinned-right-edge::before` paint `linear-gradient(... var(--bc-grid-pinned-boundary), transparent)` when grid is horizontally scrolled. Sits on top of the row's bg color, creating perceived darkness in the pinned area regardless of state-color match.
+**Fix:** opaque `--bc-grid-row-hover` token mixed against `var(--bc-grid-bg)` instead of `transparent`. Same perceived colour; no alpha; pinned-cell compositing produces byte-identical pixels with body cells.
 
-**Fix:** scroll-shadow should respond to scroll motion / cursor proximity, or paint *outside* the pinned cell so it doesn't overlay state colors.
-
----
-
-### 🔄 7. Editor portal mispositions when detail panels are expanded
-
-`editorCellRect` math uses `defaultRowHeight` and doesn't account for variable-height detail panel rows above the target. Editor portal renders at wrong screen Y.
-
-**Status:** in v0.6 layout-architecture-pass RFC. Verify shipped status when 0.6.0 GA cuts.
+**Verify:** install `@bc-grid/*@0.5.0` (or later) and confirm hover + hover+selected states show identical pixels across pinned and body cells.
 
 ---
 
-### 🔄 8. Nested grid in detail panel doesn't fill panel width
+### ✅ 6. Scroll-shadow gradient overlays row state colours — shipped via #432
 
-Flex columns don't redistribute when the grid is mounted inside a detail panel — column-flex math gets an early/initial measurement, not actual container width. Hover bg paints only to last column edge, leaving empty space.
+**Fix:** pinned scroll-shadow now blends with row state. The boundary gradient composites correctly so hover / selected / focused state colours stay visible through the shadow rather than getting darkened by it.
 
-**Status:** in v0.6 RFC.
-
----
-
-### 🔄 9. Header lags body during fast horizontal scroll
-
-JS-driven scroll-sync between separate scroll containers produces 1-frame lag visible on fast trackpad input.
-
-**Status:** in v0.6 RFC — fix is single scroll container with `position: sticky` headers.
+**Verify:** scroll horizontally on a grid with pinned columns + active row state; the state colour should remain visible in the pinned area.
 
 ---
 
-### 🔄 10. Detail panel content cuts off during horizontal scroll
+### ✅ 7. Editor portal mispositions when detail panels are expanded — shipped via #418 (layout pass PR c)
 
-Detail panel inside master scroll viewport scrolls horizontally with master; nested grid's content has finite width, panel's right edge shows empty space when scrolled.
+**Fix:** layout architecture pass PR (c) — editor portal simplification. After the single-scroll-container migration (PR a #415), `editorCellRect` math no longer needs to compensate for variable-height rows above the target; the sticky-positioned headers + body rows give the editor portal a stable measurement basis.
 
-**Status:** in v0.6 RFC — sticky-left detail panel.
+**Verify:** open an in-cell editor on a row below an expanded detail panel; editor renders at the correct screen Y.
+
+---
+
+### ✅ 8. Nested grid in detail panel doesn't fill panel width — shipped via #415 (layout pass PR a)
+
+**Fix:** layout architecture pass PR (a) — single scroll container + sticky headers. The flex-column distribution now reads container width from the live viewport rather than an early ResizeObserver measurement, so nested grids in detail panels redistribute correctly.
+
+**Verify:** mount a nested `<BcGrid>` inside `renderDetailPanel`; flex columns fill the full panel width.
+
+---
+
+### ✅ 9. Header lags body during fast horizontal scroll — shipped via #415 (layout pass PR a)
+
+**Fix:** layout architecture pass PR (a) — single scroll container + `position: sticky` headers. Removes the JS-driven scroll-sync entirely; CSS sticky pinning eliminates the 1-frame lag visible on fast trackpad input.
+
+**Verify:** rapidly trackpad-scroll horizontally; header stays exactly aligned with body cells frame-by-frame.
+
+---
+
+### ✅ 10. Detail panel content cuts off during horizontal scroll — shipped via #416 (layout pass PR b)
+
+**Fix:** layout architecture pass PR (b) — `position: sticky; left: 0` on `.bc-grid-detail-panel`. The detail panel now stays anchored to the viewport's left edge during horizontal scroll, so its content remains visible regardless of scroll position.
+
+**Verify:** scroll horizontally on a master grid with an expanded detail panel; nested grid content stays visible at the left edge.
 
 ---
 
@@ -184,33 +141,27 @@ Already on worker1's stretch backlog; bumping priority.
 
 ---
 
-### ❌ 14. `useServerTreeGrid` only emits `BcServerTreeProps` (no plain `<BcGrid>` binding)
+### 🔄 14. `useServerTreeGrid` dual-output (`bound` for plain `<BcGrid>`)
 
-Hook output is `Omit<BcServerTreeProps<TRow>, "columns">`. Consumers wrapping a plain `<BcGrid>` with their own row-source plumbing can't use the hook without switching to `<BcServerGrid rowModel="tree">`. Same gap as `useServerPagedGrid` and `useServerInfiniteGrid`.
+**Partial:** `useServerPagedGrid` dual-output `bound` shipped in 0.6.0-alpha.2 via #484. `useServerInfiniteGrid` and `useServerTreeGrid` IMPL **deferred** per #485 — gated on extracting the dual-output orchestration helper to keep the three hook implementations symmetrical. Tracked in `docs/design/server-paged-cursor-pagination-impl-deferral.md` and the deferral doc shipped in #485.
 
-**Fix:** dual output — `bound` for plain `<BcGrid>` (data array + controlled callbacks), `serverProps` for `<BcServerGrid>`. Coordinator already estimated ~1 day during the v0.5-alpha.1 review.
-
----
-
-### ❌ 15. `ServerMutationResult.row` shape isn't documented
-
-After accepted mutations, host returns `{ status: "accepted", row: <something> }`. Multiple plausible shapes (full canonical row vs partial patch vs only changed fields populated) all pass the validator and bc-grid merges. Different consumers will land on different conventions.
-
-**Fix:** doc clarification on the type — full canonical row, replacement semantics. ~1 line of JSDoc.
+**Workaround:** consumers needing tree dual-output today can use `<BcServerGrid rowModel="tree">` directly (server-tree group rows render correctly per item #2 ✅, and server-tree leaf rows surface aria-level per #519 ✅).
 
 ---
 
-### ❌ 16. Actions column should be available on all grid types, not just `<BcEditGrid>`
+### ✅ 15. `ServerMutationResult.row` shape isn't documented — shipped via #475
 
-`onEdit` / `onDelete` / `extraActions` / `hideActions` / `canEdit` / `canDelete` / `onDiscardRowEdits` / `confirmDelete` / `editLabel` / `deleteLabel` / `DeleteIcon` are only on `BcEditGridProps`. None of these props are on `BcServerPagedProps` / `BcServerInfiniteProps` / `BcServerTreeProps`.
+**Fix:** JSDoc clarification on the `row` field of `ServerMutationResult` — replacement semantics (full canonical row, not a partial patch). Different consumers no longer have to reverse-engineer the contract from behaviour.
 
-Consumers using server data sources (every ERP master table) have to hand-roll an actions column. bsncraft does this in `apps/web/components/edit-grid.tsx` — duplicates `createActionsColumn` logic.
+**Verify:** check the type's JSDoc in `@bc-grid/core@0.6.0-alpha.2` (or later) — the `row` field documents that hosts should return the full canonical row.
 
-**Fix options:**
-- **A. Add the prop set to all `BcServer*Props` types** and have `<BcServerGrid>` auto-inject `__bc_actions` the same way `<BcEditGrid>` does. Most discoverable for consumers.
-- **B. Extract `createActionsColumn` into a hook** (`useActionsColumn`) that any consumer can apply to any grid. More flexible.
+---
 
-**A is the more architectural answer.** Server grids and edit grids both have rows that benefit from edit/delete actions; the actions column is conceptually a feature of the grid, not a feature consumers should hand-apply.
+### ✅ 16. Actions column on all grid types — shipped in 0.6.0-alpha.1 via #453
+
+**Fix:** Option A. Server grids now auto-inject `__bc_actions` the same way `<BcEditGrid>` does — `onEdit` / `onDelete` / `extraActions` / `hideActions` / `canEdit` / `canDelete` / `onDiscardRowEdits` / `confirmDelete` / `editLabel` / `deleteLabel` / `DeleteIcon` are available on `BcServerPagedProps` / `BcServerInfiniteProps` / `BcServerTreeProps`. Bsncraft can drop the hand-rolled actions column in `apps/web/components/edit-grid.tsx` (~150 LOC saving). Bonus: keyboard shortcuts (Shift+E / Shift+Delete / Shift+Backspace) shipped in 0.6.0-alpha.2 via #464.
+
+**Verify:** install `@bc-grid/*@0.6.0-alpha.1` (or later) and confirm `<BcServerGrid onEdit={...} onDelete={...}>` auto-injects the actions column.
 
 ---
 
@@ -224,7 +175,9 @@ Consumers using server data sources (every ERP master table) have to hand-roll a
 
 ---
 
-## ✅ Recently shipped (verified on 0.6.0-alpha.1)
+## ✅ Recently shipped (verified on 0.6.0-alpha.3)
+
+The 11 items above marked ✅ (#1–6, #7–10, #15, #16) all moved from ❌ / 🔄 to ✅ during the 0.6.0-alpha.2 + alpha.3 work trains. See each item's "shipped via #N" annotation. **Status sweep performed 2026-05-04 PM** by worker1 cross-referencing alpha.2 and alpha.3 release notes against the merged-PR list.
 
 ### ✅ 18. `cellEditor` implies `editable: true` (commit `9fd7c0c`)
 
@@ -251,4 +204,14 @@ Default `<BcGrid>` ships rich context menu (clear-all-filters, column submenu, f
 - Items in 🔄 (RFC ratified) should move to ✅ once the implementation ships and bsncraft verifies the visible behavior.
 - New items get appended to the appropriate severity section.
 
-**Last updated:** 2026-05-04 (verified against `@bc-grid/react@0.6.0-alpha.1`)
+**Last updated:** 2026-05-04 PM — status sweep against `@bc-grid/react@0.6.0-alpha.3` merged-PR list.
+
+## Open items remaining for v1.0
+
+After the 2026-05-04 PM sweep:
+
+- **Active P1 (3):** #11 column flex/resize bug, #12 tree validator silent errors (~3 line dev-mode fix in worker1's lane), #13 built-in editors typed `BcCellEditor<unknown>` (worker3's lane).
+- **Partial (1):** #14 `useServerTreeGrid` dual-output (paged shipped via #484; tree IMPL deferred per #485, gated on dual-output orchestration extraction).
+- **P2 (1):** #17 built-in editors are bare HTML (in flight via worker3 Block C — PR-C1 #520 ships shadcn Combobox foundation; PR-C2 will migrate built-in editor internals).
+
+12 of 17 items shipped. 5 remain across all severities.
