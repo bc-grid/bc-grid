@@ -85,6 +85,8 @@ export const apiSurfaceManifest = [
       "BcScrollAlign",
       "BcScrollOptions",
       "BcSelection",
+      "BcServerBlockErrorParams",
+      "BcServerBlockRetryConfig",
       "BcServerGridApi",
       "BcValidationResult",
       "ColumnId",

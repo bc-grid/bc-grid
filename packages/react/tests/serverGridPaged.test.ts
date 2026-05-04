@@ -10,6 +10,7 @@ import { createServerRowModel } from "@bc-grid/server-row-model"
 import {
   isActiveServerPagedResponse,
   resolveActiveRowModelMode,
+  resolveBlockRetryDecision,
   resolveMissingLoaderMessage,
   resolvePrefetchAhead,
   resolveScrollToServerCellAction,
@@ -1490,5 +1491,60 @@ describe("shouldMergeTreeResult — stale-viewKey gate (worker1 audit P1 §10)",
         currentViewKey: "v2",
       }),
     ).toBe(false)
+  })
+})
+
+describe("resolveBlockRetryDecision (worker1 v0.6 server block error affordance)", () => {
+  test("default config: 3 attempts with 1s/2s/4s backoff", () => {
+    expect(resolveBlockRetryDecision({ attempt: 1, config: undefined })).toEqual({
+      willRetry: true,
+      retryDelayMs: 1000,
+    })
+    expect(resolveBlockRetryDecision({ attempt: 2, config: undefined })).toEqual({
+      willRetry: true,
+      retryDelayMs: 2000,
+    })
+    expect(resolveBlockRetryDecision({ attempt: 3, config: undefined })).toEqual({
+      willRetry: false,
+      retryDelayMs: 0,
+    })
+  })
+
+  test("config: false disables auto-retry from the first failure", () => {
+    expect(resolveBlockRetryDecision({ attempt: 1, config: false })).toEqual({
+      willRetry: false,
+      retryDelayMs: 0,
+    })
+  })
+
+  test("custom config respects maxAttempts + backoffMs", () => {
+    const config = { maxAttempts: 2, backoffMs: [500] }
+    expect(resolveBlockRetryDecision({ attempt: 1, config })).toEqual({
+      willRetry: true,
+      retryDelayMs: 500,
+    })
+    expect(resolveBlockRetryDecision({ attempt: 2, config })).toEqual({
+      willRetry: false,
+      retryDelayMs: 0,
+    })
+  })
+
+  test("backoffMs reuses the last entry when attempts exceed array length", () => {
+    const config = { maxAttempts: 5, backoffMs: [100, 200] }
+    expect(resolveBlockRetryDecision({ attempt: 1, config }).retryDelayMs).toBe(100)
+    expect(resolveBlockRetryDecision({ attempt: 2, config }).retryDelayMs).toBe(200)
+    expect(resolveBlockRetryDecision({ attempt: 3, config }).retryDelayMs).toBe(200)
+    expect(resolveBlockRetryDecision({ attempt: 4, config }).retryDelayMs).toBe(200)
+    expect(resolveBlockRetryDecision({ attempt: 5, config }).willRetry).toBe(false)
+  })
+
+  test("maxAttempts: 1 → no retries (initial fetch only)", () => {
+    const config = { maxAttempts: 1, backoffMs: [1000] }
+    expect(resolveBlockRetryDecision({ attempt: 1, config }).willRetry).toBe(false)
+  })
+
+  test("empty backoffMs falls back to 1000ms default", () => {
+    const config = { maxAttempts: 3, backoffMs: [] }
+    expect(resolveBlockRetryDecision({ attempt: 1, config }).retryDelayMs).toBe(1000)
   })
 })

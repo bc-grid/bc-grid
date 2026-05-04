@@ -4,6 +4,8 @@ import type {
   BcGridSort,
   BcPaginationState,
   BcSelection,
+  BcServerBlockErrorParams,
+  BcServerBlockRetryConfig,
   BcServerGridApi,
   ColumnId,
   RowId,
@@ -309,6 +311,45 @@ export function resolveScrollToServerCellAction(input: {
   if (input.requestedPageIndex == null) return "none"
   if (input.requestedPageIndex === input.currentPageIndex) return "none"
   return "navigate"
+}
+
+/**
+ * Built-in default for `BcServerInfiniteProps.autoRetryBlocks` — 1
+ * initial fetch + 2 retries with exponential 1s/2s/4s backoff.
+ * Worker1 v0.6 server block error affordance (planning doc §3).
+ */
+const DEFAULT_BLOCK_RETRY_CONFIG: { maxAttempts: number; backoffMs: readonly number[] } = {
+  maxAttempts: 3,
+  backoffMs: [1000, 2000, 4000],
+}
+
+/**
+ * Pure helper exported for unit testing. Resolves the next retry
+ * decision for a failed `loadBlock`. Worker1 v0.6 server block error
+ * affordance (planning doc §3).
+ *
+ * Inputs:
+ *   - `attempt` — 1-indexed attempt number that just failed (the
+ *     initial fetch is `1`; first auto-retry is `2`; etc.).
+ *   - `config` — the consumer's `autoRetryBlocks` config (or `false`
+ *     to disable; or `undefined` to use the built-in default).
+ *
+ * Returns `{ willRetry: false, retryDelayMs: 0 }` when the retry
+ * budget is exhausted (or auto-retry is disabled). Returns
+ * `{ willRetry: true, retryDelayMs }` with the next backoff delay
+ * otherwise — the orchestration schedules the retry with
+ * `setTimeout(retryDelayMs)` then re-fires the block fetch.
+ */
+export function resolveBlockRetryDecision(input: {
+  attempt: number
+  config: BcServerBlockRetryConfig | undefined
+}): { willRetry: boolean; retryDelayMs: number } {
+  const config = input.config === undefined ? DEFAULT_BLOCK_RETRY_CONFIG : input.config
+  if (config === false) return { willRetry: false, retryDelayMs: 0 }
+  if (input.attempt >= config.maxAttempts) return { willRetry: false, retryDelayMs: 0 }
+  const backoffIndex = Math.min(input.attempt - 1, config.backoffMs.length - 1)
+  const retryDelayMs = config.backoffMs[Math.max(0, backoffIndex)] ?? 1000
+  return { willRetry: true, retryDelayMs }
 }
 
 export function resolveServerVisibleColumns<TRow>(
@@ -1640,6 +1681,23 @@ function useInfiniteServerState<TRow>(
     ? resolvePrefetchAhead(props.prefetchAhead, userSettingsSnapshot?.prefetchAhead)
     : 1
   const loadBlock = isInfiniteActive ? props.loadBlock : undefined
+  // Worker1 v0.6 server block error affordance — onBlockError +
+  // autoRetryBlocks props gate the per-block retry pipeline. Captured
+  // via refs so the catch closure inside `ensureBlock` always reads
+  // the latest config without re-creating the callback on every
+  // render.
+  const onBlockErrorRef = useRef(props.onBlockError)
+  const autoRetryConfigRef = useRef(props.autoRetryBlocks)
+  useEffect(() => {
+    onBlockErrorRef.current = props.onBlockError
+  }, [props.onBlockError])
+  useEffect(() => {
+    autoRetryConfigRef.current = props.autoRetryBlocks
+  }, [props.autoRetryBlocks])
+  // Per-blockKey retry attempt counter. Cleared on success +
+  // exhaustion. Lives in a ref so attempts persist across renders
+  // without triggering re-renders themselves.
+  const blockRetryAttemptsRef = useRef(new Map<string, number>())
   const searchText = props.searchText ?? props.defaultSearchText
   const groupBy = props.groupBy ?? props.defaultGroupBy ?? []
   const view = useMemo(
@@ -1698,6 +1756,9 @@ function useInfiniteServerState<TRow>(
       request.promise
         .then((result) => {
           setError(null)
+          // Clear retry counter on success — a future re-failure of the
+          // same blockKey starts fresh from attempt 1.
+          blockRetryAttemptsRef.current.delete(request.blockKey)
           const nextRows = modelRef.current.mergeInfiniteRows(loadedRowsRef.current, result)
           if (nextRows) {
             loadedRowsRef.current = nextRows
@@ -1720,6 +1781,36 @@ function useInfiniteServerState<TRow>(
           if (process.env.NODE_ENV !== "production") {
             console.error("[bc-grid] infinite loadBlock rejected:", nextError)
           }
+          // Per-block retry pipeline (worker1 v0.6 server block error
+          // affordance, planning doc §3). Track attempt count per
+          // blockKey, fire onBlockError with the willRetry decision,
+          // and schedule the next attempt via setTimeout when the
+          // retry budget permits. On exhaustion, clear the counter
+          // + surface the error to state so the consumer sees a
+          // permanent failure.
+          const attempt = (blockRetryAttemptsRef.current.get(request.blockKey) ?? 0) + 1
+          blockRetryAttemptsRef.current.set(request.blockKey, attempt)
+          const decision = resolveBlockRetryDecision({
+            attempt,
+            config: autoRetryConfigRef.current,
+          })
+          const errorParams: BcServerBlockErrorParams = {
+            blockKey: request.blockKey,
+            blockStart,
+            blockSize,
+            error: nextError,
+            attempt,
+            willRetry: decision.willRetry,
+            retryDelayMs: decision.retryDelayMs,
+          }
+          onBlockErrorRef.current?.(errorParams)
+          if (decision.willRetry) {
+            setTimeout(() => {
+              ensureBlock(rowIndex)
+            }, decision.retryDelayMs)
+            return
+          }
+          blockRetryAttemptsRef.current.delete(request.blockKey)
           setError(nextError)
         })
     },
