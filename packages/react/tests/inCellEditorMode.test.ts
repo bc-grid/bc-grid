@@ -371,9 +371,15 @@ describe("date / datetime editors — in-cell hybrid annotation per RFC §4", ()
     expect(source).toMatch(/OS-chrome/i)
   })
 
-  test("dateEditor explicitly notes the popup default at the export site", () => {
+  test("dateEditor explicitly notes the popup default at the factory site", () => {
     const source = readEditorSource("date.tsx")
-    expect(source).toMatch(/export const dateEditor[\s\S]*?popup intentionally unset[\s\S]*?\}/)
+    // v0.6 numeric-batch refactor: the export migrated from a const
+    // literal to a `createDateEditor()` call returning the editor
+    // object. The "popup intentionally unset" comment lives on the
+    // returned object inside the factory.
+    expect(source).toMatch(
+      /export function createDateEditor[\s\S]*?popup intentionally unset[\s\S]*?\}/,
+    )
   })
 
   test("datetimeEditor JSDoc names it as in-cell with OS-chrome rationale", () => {
@@ -382,8 +388,11 @@ describe("date / datetime editors — in-cell hybrid annotation per RFC §4", ()
     expect(source).toMatch(/OS-chrome/i)
   })
 
-  test("datetimeEditor explicitly notes the popup default at the export site", () => {
+  test("datetimeEditor explicitly notes the popup default at the factory site", () => {
     const source = readEditorSource("datetime.tsx")
-    expect(source).toMatch(/export const datetimeEditor[\s\S]*?popup intentionally unset[\s\S]*?\}/)
+    // v0.6 numeric-batch refactor: see dateEditor counterpart above.
+    expect(source).toMatch(
+      /export function createDatetimeEditor[\s\S]*?popup intentionally unset[\s\S]*?\}/,
+    )
   })
 })

@@ -1,6 +1,7 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { type ClipboardEvent, useLayoutEffect, useRef } from "react"
+import { type ClipboardEvent, type ComponentType, useLayoutEffect, useRef } from "react"
 import { editorInputClassName, editorStateAttrs } from "./chrome"
+import type { EditorInputSlotProps } from "./internal/editorInputSlot"
 import { detectPastedValue } from "./internal/pasteDetection"
 
 /**
@@ -39,15 +40,71 @@ import { detectPastedValue } from "./internal/pasteDetection"
  *     `valueParser` if they need a Date instance or a different shape
  *     (e.g. epoch milliseconds).
  *
- * No library dep.
+ * Native `<input>` styled via theme CSS variables — no library dep.
+ * Consumers wanting shadcn-native styling pass an `inputComponent` to
+ * `createDateEditor({ inputComponent })`. See
+ * `docs/recipes/shadcn-editors.md`. Per `v06-shadcn-native-editors-numeric-batch`.
  */
-export const dateEditor: BcCellEditor<unknown, unknown> = {
-  Component: DateEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "date",
-  // popup intentionally unset (default false) — see JSDoc above.
+/**
+ * Props handed to a custom `inputComponent` for the date editor.
+ * Re-exports the shared `EditorInputSlotProps` shape (v0.6 §1
+ * `v06-shadcn-native-editors-numeric-batch`) — drops in any
+ * forwardRef-capable shadcn-style component without modification.
+ */
+export type DateEditorInputProps = EditorInputSlotProps
+
+export interface DateEditorOptions {
+  /**
+   * Override the built-in `<input type="date">` with a custom
+   * component. The component receives every prop the built-in input
+   * would have applied — ref forwarding + defaultValue + ARIA +
+   * edit-state data attributes. Lifecycle (focus, paste-detection,
+   * value reading at commit) stays on the editor; the consumer just
+   * owns the visual primitive.
+   *
+   * Defaults to a native `<input type="date">` styled via theme CSS
+   * variables. Per `v06-shadcn-native-editors-numeric-batch`.
+   */
+  inputComponent?: ComponentType<DateEditorInputProps>
 }
 
-function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
+/**
+ * Factory for the date editor. Returns a fresh `BcCellEditor` with
+ * the supplied options baked in. Default-export `dateEditor` is
+ * `createDateEditor()` for the zero-config case.
+ *
+ * ```tsx
+ * import { Input } from "@/components/ui/input"
+ * import { createDateEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnDateEditor = createDateEditor({ inputComponent: Input })
+ * ```
+ */
+export function createDateEditor(options: DateEditorOptions = {}): BcCellEditor<unknown, unknown> {
+  const Component = createDateEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "date",
+    // popup intentionally unset (default false) — see JSDoc above.
+  }
+}
+
+export const dateEditor: BcCellEditor<unknown, unknown> = createDateEditor()
+
+function createDateEditorComponent(
+  options: DateEditorOptions,
+): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof DateEditorBody> {
+  const InputComponent = options.inputComponent
+  return function DateEditor(props) {
+    return <DateEditorBody {...props} InputComponent={InputComponent} />
+  }
+}
+
+function DateEditorBody(
+  props: BcCellEditorProps<unknown, unknown> & {
+    InputComponent: ComponentType<DateEditorInputProps> | undefined
+  },
+) {
   const {
     initialValue,
     error,
@@ -59,6 +116,7 @@ function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
     disabled,
     column,
     row,
+    InputComponent,
   } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -122,23 +180,26 @@ function DateEditor(props: BcCellEditorProps<unknown, unknown>) {
     input.value = result.normalised
   }
 
-  return (
-    <input
-      ref={inputRef}
-      className={editorInputClassName}
-      type="date"
-      defaultValue={seeded}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      aria-required={required ? true : undefined}
-      aria-readonly={readOnly ? true : undefined}
-      aria-disabled={disabled || pending ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="date"
-      onPaste={onPaste}
-      {...editorStateAttrs({ error, pending })}
-    />
-  )
+  // Custom inputComponent path: spreading `{...inputProps}` is
+  // load-bearing — the framework's commit path locates the active
+  // input via `data-bc-grid-editor-input`. shadcn's `<Input>`
+  // satisfies the contract by construction.
+  const inputProps: DateEditorInputProps = {
+    ref: inputRef,
+    className: editorInputClassName,
+    type: "date",
+    defaultValue: seeded,
+    disabled: pending,
+    "aria-invalid": error ? true : undefined,
+    "aria-required": required ? true : undefined,
+    "aria-readonly": readOnly ? true : undefined,
+    "aria-disabled": disabled || pending ? true : undefined,
+    "data-bc-grid-editor-input": "true",
+    "data-bc-grid-editor-kind": "date",
+    onPaste,
+    ...editorStateAttrs({ error, pending }),
+  }
+  return InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />
 }
 
 function stringifyDate(parsed: unknown): string {

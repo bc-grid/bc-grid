@@ -1,6 +1,7 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { useLayoutEffect, useRef } from "react"
+import { type ComponentType, useLayoutEffect, useRef } from "react"
 import { editorInputClassName, editorStateAttrs } from "./chrome"
+import type { EditorInputSlotProps } from "./internal/editorInputSlot"
 
 /**
  * Datetime editor — `kind: "datetime"`. Default for date-with-time
@@ -39,16 +40,84 @@ import { editorInputClassName, editorStateAttrs } from "./chrome"
  * UTC / offset-aware semantics should compose via `valueParser` on the
  * commit side.
  *
- * No library dep.
+ * Native `<input>` styled via theme CSS variables — no library dep.
+ * Consumers wanting shadcn-native styling pass an `inputComponent` to
+ * `createDatetimeEditor({ inputComponent })`. See
+ * `docs/recipes/shadcn-editors.md`. Per `v06-shadcn-native-editors-numeric-batch`.
  */
-export const datetimeEditor: BcCellEditor<unknown, unknown> = {
-  Component: DatetimeEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "datetime",
-  // popup intentionally unset (default false) — see JSDoc above.
+/**
+ * Props handed to a custom `inputComponent` for the datetime editor.
+ * Re-exports the shared `EditorInputSlotProps` shape (v0.6 §1
+ * `v06-shadcn-native-editors-numeric-batch`) — drops in any
+ * forwardRef-capable shadcn-style component without modification.
+ */
+export type DatetimeEditorInputProps = EditorInputSlotProps
+
+export interface DatetimeEditorOptions {
+  /**
+   * Override the built-in `<input type="datetime-local">` with a
+   * custom component. The component receives every prop the built-in
+   * input would have applied — ref forwarding + defaultValue + ARIA +
+   * edit-state data attributes. Lifecycle (focus, value reading at
+   * commit) stays on the editor; the consumer just owns the visual
+   * primitive.
+   *
+   * Defaults to a native `<input type="datetime-local">` styled via
+   * theme CSS variables. Per `v06-shadcn-native-editors-numeric-batch`.
+   */
+  inputComponent?: ComponentType<DatetimeEditorInputProps>
 }
 
-function DatetimeEditor(props: BcCellEditorProps<unknown, unknown>) {
-  const { initialValue, error, focusRef, seedKey, pending, required, readOnly, disabled } = props
+/**
+ * Factory for the datetime editor. Returns a fresh `BcCellEditor` with
+ * the supplied options baked in. Default-export `datetimeEditor` is
+ * `createDatetimeEditor()` for the zero-config case.
+ *
+ * ```tsx
+ * import { Input } from "@/components/ui/input"
+ * import { createDatetimeEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnDatetimeEditor = createDatetimeEditor({ inputComponent: Input })
+ * ```
+ */
+export function createDatetimeEditor(
+  options: DatetimeEditorOptions = {},
+): BcCellEditor<unknown, unknown> {
+  const Component = createDatetimeEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "datetime",
+    // popup intentionally unset (default false) — see JSDoc above.
+  }
+}
+
+export const datetimeEditor: BcCellEditor<unknown, unknown> = createDatetimeEditor()
+
+function createDatetimeEditorComponent(
+  options: DatetimeEditorOptions,
+): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof DatetimeEditorBody> {
+  const InputComponent = options.inputComponent
+  return function DatetimeEditor(props) {
+    return <DatetimeEditorBody {...props} InputComponent={InputComponent} />
+  }
+}
+
+function DatetimeEditorBody(
+  props: BcCellEditorProps<unknown, unknown> & {
+    InputComponent: ComponentType<DatetimeEditorInputProps> | undefined
+  },
+) {
+  const {
+    initialValue,
+    error,
+    focusRef,
+    seedKey,
+    pending,
+    required,
+    readOnly,
+    disabled,
+    InputComponent,
+  } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   // Hand the input back to the framework via `focusRef`. Runs in
@@ -80,22 +149,25 @@ function DatetimeEditor(props: BcCellEditorProps<unknown, unknown>) {
 
   const seeded = normalizeDatetimeValue(initialValue)
 
-  return (
-    <input
-      ref={inputRef}
-      className={editorInputClassName}
-      type="datetime-local"
-      defaultValue={seeded}
-      disabled={pending}
-      aria-invalid={error ? true : undefined}
-      aria-required={required ? true : undefined}
-      aria-readonly={readOnly ? true : undefined}
-      aria-disabled={disabled || pending ? true : undefined}
-      data-bc-grid-editor-input="true"
-      data-bc-grid-editor-kind="datetime"
-      {...editorStateAttrs({ error, pending })}
-    />
-  )
+  // Custom inputComponent path: spreading `{...inputProps}` is
+  // load-bearing — the framework's commit path locates the active
+  // input via `data-bc-grid-editor-input`. shadcn's `<Input>`
+  // satisfies the contract by construction.
+  const inputProps: DatetimeEditorInputProps = {
+    ref: inputRef,
+    className: editorInputClassName,
+    type: "datetime-local",
+    defaultValue: seeded,
+    disabled: pending,
+    "aria-invalid": error ? true : undefined,
+    "aria-required": required ? true : undefined,
+    "aria-readonly": readOnly ? true : undefined,
+    "aria-disabled": disabled || pending ? true : undefined,
+    "data-bc-grid-editor-input": "true",
+    "data-bc-grid-editor-kind": "datetime",
+    ...editorStateAttrs({ error, pending }),
+  }
+  return InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />
 }
 
 /**

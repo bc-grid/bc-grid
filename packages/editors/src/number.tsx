@@ -1,6 +1,7 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { type ClipboardEvent, useId, useLayoutEffect, useRef } from "react"
+import { type ClipboardEvent, type ComponentType, useId, useLayoutEffect, useRef } from "react"
 import { editorInputClassName, editorStateAttrs, visuallyHiddenStyle } from "./chrome"
+import type { EditorInputSlotProps } from "./internal/editorInputSlot"
 import { detectPastedValue } from "./internal/pasteDetection"
 
 /**
@@ -30,10 +31,54 @@ import { detectPastedValue } from "./internal/pasteDetection"
  * extends `BcCellEditorProps.commit` with a `moveOnSettle` opt; today
  * the framework's portal owns commit-key interception.
  */
-export const numberEditor: BcCellEditor<unknown, unknown> = {
-  Component: NumberEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "number",
+/**
+ * Props handed to a custom `inputComponent` for the number editor.
+ * Re-exports the shared `EditorInputSlotProps` shape (v0.6 §1
+ * `v06-shadcn-native-editors-numeric-batch`) — drops in any
+ * forwardRef-capable shadcn-style component without modification.
+ */
+export type NumberEditorInputProps = EditorInputSlotProps
+
+export interface NumberEditorOptions {
+  /**
+   * Override the built-in `<input type="text" inputMode="decimal">`
+   * with a custom component. The component receives every prop the
+   * built-in input would have applied — ref forwarding +
+   * defaultValue + inputMode + ARIA + edit-state data attributes.
+   * Lifecycle (focus, select-all on mount, paste-detection, value
+   * reading at commit) stays on the editor; the consumer just owns
+   * the visual primitive.
+   *
+   * Defaults to a native `<input>` styled via theme CSS variables.
+   * Per `v06-shadcn-native-editors-numeric-batch` (extends the
+   * pattern #480 established for textEditor).
+   */
+  inputComponent?: ComponentType<NumberEditorInputProps>
 }
+
+/**
+ * Factory for the number editor. Returns a fresh `BcCellEditor` with
+ * the supplied options baked in. Default-export `numberEditor` is
+ * `createNumberEditor()` for the zero-config case.
+ *
+ * ```tsx
+ * import { Input } from "@/components/ui/input"
+ * import { createNumberEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnNumberEditor = createNumberEditor({ inputComponent: Input })
+ * ```
+ */
+export function createNumberEditor(
+  options: NumberEditorOptions = {},
+): BcCellEditor<unknown, unknown> {
+  const Component = createNumberEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "number",
+  }
+}
+
+export const numberEditor: BcCellEditor<unknown, unknown> = createNumberEditor()
 
 /**
  * Predicate: is this seedKey acceptable as a numeric activation seed?
@@ -138,7 +183,20 @@ function getLocaleParts(locale: string): { group: string; decimal: string } {
   return result
 }
 
-function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
+function createNumberEditorComponent(
+  options: NumberEditorOptions,
+): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof NumberEditorBody> {
+  const InputComponent = options.inputComponent
+  return function NumberEditor(props) {
+    return <NumberEditorBody {...props} InputComponent={InputComponent} />
+  }
+}
+
+function NumberEditorBody(
+  props: BcCellEditorProps<unknown, unknown> & {
+    InputComponent: ComponentType<NumberEditorInputProps> | undefined
+  },
+) {
   const {
     initialValue,
     error,
@@ -150,6 +208,7 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
     disabled,
     column,
     row,
+    InputComponent,
   } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
   // Stable id per-editor-instance for aria-describedby → hidden error
@@ -221,26 +280,32 @@ function NumberEditor(props: BcCellEditorProps<unknown, unknown>) {
     input.value = result.normalised
   }
 
+  // Custom inputComponent path: per-editor JSDoc covers contract.
+  // The framework's commit path locates the active input via
+  // `data-bc-grid-editor-input` so spreading `{...inputProps}` onto
+  // the consumer's component is load-bearing — shadcn's `<Input>`
+  // satisfies this by construction.
+  const inputProps: NumberEditorInputProps = {
+    ref: inputRef,
+    className: editorInputClassName,
+    type: "text",
+    inputMode: "decimal",
+    defaultValue: seeded,
+    disabled: pending,
+    "aria-invalid": error ? true : undefined,
+    "aria-label": accessibleName || undefined,
+    "aria-describedby": error ? errorId : undefined,
+    "aria-required": required ? true : undefined,
+    "aria-readonly": readOnly ? true : undefined,
+    "aria-disabled": disabled || pending ? true : undefined,
+    "data-bc-grid-editor-input": "true",
+    "data-bc-grid-editor-kind": "number",
+    onPaste,
+    ...editorStateAttrs({ error, pending }),
+  }
   return (
     <>
-      <input
-        ref={inputRef}
-        className={editorInputClassName}
-        type="text"
-        inputMode="decimal"
-        defaultValue={seeded}
-        disabled={pending}
-        aria-invalid={error ? true : undefined}
-        aria-label={accessibleName || undefined}
-        aria-describedby={error ? errorId : undefined}
-        aria-required={required ? true : undefined}
-        aria-readonly={readOnly ? true : undefined}
-        aria-disabled={disabled || pending ? true : undefined}
-        data-bc-grid-editor-input="true"
-        data-bc-grid-editor-kind="number"
-        onPaste={onPaste}
-        {...editorStateAttrs({ error, pending })}
-      />
+      {InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />}
       {error ? (
         <span id={errorId} style={visuallyHiddenStyle}>
           {error}

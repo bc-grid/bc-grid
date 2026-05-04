@@ -229,6 +229,14 @@ type ViewStateInput = {
   searchText: string | undefined
   sort: readonly BcGridSort[]
   visibleColumns: readonly ColumnId[]
+  /**
+   * Optional display order for visible columns (worker1 v0.6
+   * server display column order). When supplied, threaded into
+   * `ServerViewState.displayColumnOrder` so the server query can
+   * render columns in user-preferred order. Omit to default to
+   * source order (matches `visibleColumns`).
+   */
+  displayColumnOrder?: readonly ColumnId[]
 }
 
 type ServerRowModelControllerOptions<TRow> = {
@@ -632,6 +640,7 @@ class ServerRowModelController<TRow> {
         direction: entry.direction,
       })),
       visibleColumns: [...input.visibleColumns],
+      ...(input.displayColumnOrder ? { displayColumnOrder: [...input.displayColumnOrder] } : {}),
       ...(input.filter ? { filter: input.filter } : {}),
       ...(input.searchText ? { search: input.searchText } : {}),
       ...(input.locale ? { locale: input.locale } : {}),

@@ -2008,7 +2008,9 @@ export type BcServerEditPatchFactory<TRow> = (
 
 Paged mode is a server-owned pagination contract. `loadPage` receives
 `query.pageIndex`, `query.pageSize`, and `query.view` (`sort`, `filter`,
-`search`, `groupBy`, `visibleColumns`, and optional locale/time zone). It must
+`search`, `groupBy`, `visibleColumns`, optional `displayColumnOrder`, and optional locale/time zone).
+
+`view.visibleColumns` is the SET of columns currently visible (source-order, hidden columns excluded). `view.displayColumnOrder` is the optional SEQUENCE — same set of columnIds but ordered by `BcColumnStateEntry.position` (user-driven drag-reorder). The two are deliberately separate: a server query that just needs to render visible columns can ignore `displayColumnOrder`; an export-to-Excel that must respect user-preferred column order reads `displayColumnOrder` (or `visibleColumns` if `displayColumnOrder` is absent, indicating no user reordering happened). It must
 return only the rows for that page plus `totalRows` for the full matching server
 view. `<BcServerGrid rowModel="paged">` uses `totalRows` for the built-in pager
 and passes the returned page rows straight to the body; it does not apply

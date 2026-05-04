@@ -173,6 +173,31 @@ Autocomplete + multi-select with 500+ options today renders all options in the d
 
 **Branch:** `agent/worker3/v07-editor-perf-large-option-lists`. **Effort:** ~half day.
 
+### Then-last → `v06-cell-renderer-error-boundary` (~half day, production safety)
+
+Bsncraft anticipated polish: today if a consumer's `cellRenderer` throws (e.g. expects `row.amount` to be a number but the row has `null`, calls `.toLocaleString()`), the entire grid unmounts. One bad row tanks the whole screen. Production grids need a per-cell safety net.
+
+**Implementation:**
+
+1. **Wrap each cell's renderer in a React error boundary.** When a cell renderer throws, log to `console.error` with `[bc-grid] cellRenderer threw on rowId=<x> columnId=<y>: <error>`, then fall back to rendering `formattedValue` (the column's `formatCellValue` output) instead of the custom renderer.
+2. **Optional consumer hook**: `BcGridProps.onCellRendererError?: (params: { rowId, columnId, error }) => void` so consumers can pipe errors to their own error tracking.
+3. **Test coverage:** unit test where `cellRenderer` throws — verify grid stays mounted, errored cell renders fallback, sibling cells render normally.
+
+**Branch:** `agent/worker3/v06-cell-renderer-error-boundary`. **Effort:** ~half day.
+
+### Final → `v06-keyboard-shortcuts-help-overlay` (~half day, discoverability)
+
+Bsncraft anticipated polish: bc-grid has 20+ keyboard shortcuts (Tab navigation, Enter to commit, F2 to edit, Ctrl+C/Ctrl+V, Shift+F10 for context menu, Shift+E/Shift+Delete for actions row from #464, Cmd+Z for cell undo from #454, etc.). Sighted-keyboard users currently have no way to discover them. Excel ships F1; AG Grid ships a "?" overlay; ERPs need this for power users.
+
+**Implementation:**
+
+1. **`BcGridProps.keyboardShortcutsHelp?: boolean | (ctx: BcKeyboardShortcutsContext) => ReactNode`** — opt-in. When `true`, pressing `?` (or Shift+F1) opens a modal listing all bc-grid keyboard shortcuts with descriptions. Consumer can pass a render-prop to extend with their own shortcuts.
+2. **Built-in list** structured by category: Navigation (Tab, Arrow keys, Home/End, Page Up/Down, Ctrl+Home/End), Editing (F2, Enter, Esc, Cmd+Z), Selection (Space, Shift+Click, Ctrl+A), Actions (Shift+E, Shift+Delete, context menu), Clipboard (Cmd+C/V).
+3. **Localization-friendly** — labels go through the `messages` prop infrastructure, so consumers can translate the modal content.
+4. **Recipe** at `docs/recipes/keyboard-shortcuts-help.md` showing how a consumer extends with their own shortcuts (e.g. bsncraft's `f`/`s`/`r` global navigation).
+
+**Branch:** `agent/worker3/v06-keyboard-shortcuts-help-overlay`. **Effort:** ~half day.
+
 ### Then-active → `v06-builtin-editors-generic-trow` (bsncraft P1 #13, ~half day)
 
 Bsncraft consumer report: `@bc-grid/editors` exports built-in editors typed as `BcCellEditor<unknown, unknown>`. Every column declaration in a typed grid triggers TS2349 and requires a cast: `const text = textEditor as BcCellEditor<CustomerRow>`. Bsncraft has 10+ master grids planned; that's 10+ identical casts.

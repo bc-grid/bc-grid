@@ -31,7 +31,14 @@ describe("number editor — onPaste wiring", () => {
   })
 
   test("onPaste handler is attached to the input element", () => {
-    expect(numberSource).toMatch(/onPaste=\{onPaste\}/)
+    // v0.6 numeric-batch refactor: the editor builds an `inputProps`
+    // object that gets spread onto either the consumer's
+    // inputComponent or the built-in `<input>`. Pin both shapes —
+    // the bare `onPaste,` shorthand inside `inputProps` AND the
+    // spread of `inputProps` onto the input — so a refactor that
+    // drops the wiring on either side trips this test.
+    expect(numberSource).toMatch(/const\s+inputProps:\s+NumberEditorInputProps[\s\S]*?onPaste,/)
+    expect(numberSource).toMatch(/<input\s*\{\.\.\.inputProps\}\s*\/>/)
   })
 
   test("onPaste resolves via detectPastedValue with column + row + fallback", () => {
@@ -75,7 +82,9 @@ describe("date editor — onPaste wiring", () => {
   })
 
   test("onPaste handler is attached to the date input", () => {
-    expect(dateSource).toMatch(/onPaste=\{onPaste\}/)
+    // v0.6 numeric-batch refactor: see number editor counterpart above.
+    expect(dateSource).toMatch(/const\s+inputProps:\s+DateEditorInputProps[\s\S]*?onPaste,/)
+    expect(dateSource).toMatch(/<input\s*\{\.\.\.inputProps\}\s*\/>/)
   })
 
   test("date editor's fallback uses normalizeDateValue (handles ISO + RFC2822 + slash forms)", () => {

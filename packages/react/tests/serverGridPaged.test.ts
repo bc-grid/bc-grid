@@ -13,6 +13,7 @@ import {
   resolveMissingLoaderMessage,
   resolvePrefetchAhead,
   resolveScrollToServerCellAction,
+  resolveServerDisplayColumns,
   resolveServerPagedGridShell,
   resolveServerPagedRequestPage,
   resolveServerVisibleColumns,
@@ -875,6 +876,78 @@ describe("server paged visible columns", () => {
         { columnId: "name", width: 240 },
       ]),
     ).toEqual(["id", "name"])
+  })
+})
+
+describe("resolveServerDisplayColumns (worker1 v0.6 server display column order)", () => {
+  const columns: readonly BcReactGridColumn<Row>[] = [
+    { field: "id", header: "ID" },
+    { columnId: "name", field: "name", header: "Name" },
+    { columnId: "status", field: "status", header: "Status" },
+    { columnId: "amount", field: "amount", header: "Amount" },
+  ]
+
+  test("returns null when no columnState entry has a position override", () => {
+    expect(resolveServerDisplayColumns(columns, [])).toBeNull()
+    expect(
+      resolveServerDisplayColumns(columns, [
+        { columnId: "id", pinned: "left" },
+        { columnId: "name", width: 240 },
+      ]),
+    ).toBeNull()
+  })
+
+  test("returns user-driven order when positions are set", () => {
+    expect(
+      resolveServerDisplayColumns(columns, [
+        { columnId: "id", position: 3 },
+        { columnId: "name", position: 0 },
+        { columnId: "status", position: 1 },
+        { columnId: "amount", position: 2 },
+      ]),
+    ).toEqual(["name", "status", "amount", "id"])
+  })
+
+  test("excludes hidden columns from the display order", () => {
+    expect(
+      resolveServerDisplayColumns(columns, [
+        { columnId: "id", position: 1 },
+        { columnId: "name", position: 0, hidden: true },
+        { columnId: "status", position: 2 },
+      ]),
+    ).toEqual(["id", "status", "amount"])
+  })
+
+  test("source-order tie-break for equal positions", () => {
+    expect(
+      resolveServerDisplayColumns(columns, [
+        { columnId: "id", position: 0 },
+        { columnId: "name", position: 0 },
+        { columnId: "status", position: 0 },
+      ]),
+    ).toEqual(["id", "name", "status", "amount"])
+  })
+
+  test("falls back to source index for columns missing a position", () => {
+    // name has position=0 (explicit); id has fallback position=0 (its
+    // sourceIndex). Both at position 0; tie-break by sourceIndex puts
+    // id (source 0) before name (source 1). status / amount stay at
+    // their fallback positions (2 / 3).
+    expect(resolveServerDisplayColumns(columns, [{ columnId: "name", position: 0 }])).toEqual([
+      "id",
+      "name",
+      "status",
+      "amount",
+    ])
+  })
+
+  test("ignores non-finite positions (defensive)", () => {
+    expect(
+      resolveServerDisplayColumns(columns, [
+        { columnId: "id", position: Number.NaN },
+        { columnId: "name", position: Number.POSITIVE_INFINITY },
+      ]),
+    ).toBeNull()
   })
 })
 

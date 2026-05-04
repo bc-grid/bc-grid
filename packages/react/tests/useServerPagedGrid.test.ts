@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { BcGridFilter, ServerRowPatch } from "@bc-grid/core"
 import {
   buildOptimisticEditPatch,
+  defaultBoundErrorMessage,
   resolveInitialServerPagedState,
   resolveServerPagedPageAfterViewChange,
 } from "../src/useServerPagedGrid"
@@ -129,5 +130,79 @@ describe("buildOptimisticEditPatch", () => {
 
     expect(patch.mutationId).toBe("useServerPagedGrid:0")
     expect(patch.changes).toEqual({ name: "Beta", status: "active", balance: 1234.56 })
+  })
+})
+
+describe("useServerPagedGrid dual-output surface (worker1 v06 IMPL)", () => {
+  // Source-pattern regression suite — the dual-output IMPL adds an
+  // additional `bound` field on the result + an opt-in
+  // `outputs: "server" | "bound"` option that gates internal
+  // orchestration. These checks pin the public surface shape so a
+  // refactor that breaks the contract catches in CI before the
+  // orchestration path silently changes.
+  const here = new URL(".", import.meta.url).pathname
+  const source = require("node:fs").readFileSync(
+    `${here}/../src/useServerPagedGrid.ts`,
+    "utf8",
+  ) as string
+
+  test("UseServerPagedGridResult has serverProps + bound + props (deprecated alias)", () => {
+    expect(source).toMatch(/serverProps: UseServerPagedGridBoundProps<TRow>/)
+    expect(source).toMatch(/bound: UseServerPagedGridBoundOutput<TRow>/)
+    expect(source).toMatch(/@deprecated Renamed to `serverProps` in v0\.6\.0/)
+    expect(source).toMatch(/props: UseServerPagedGridBoundProps<TRow>/)
+  })
+
+  test("UseServerPagedGridBoundOutput shape matches BcGridProps subset (RFC §3.2)", () => {
+    expect(source).toMatch(/data: readonly TRow\[\]/)
+    expect(source).toMatch(/loading: boolean/)
+    expect(source).toMatch(/errorOverlay: ReactNode \| undefined/)
+    expect(source).toMatch(/rowProcessingMode: "manual"/)
+    expect(source).toMatch(/pagination: BcPaginationState/)
+    expect(source).toMatch(/onPaginationChange: \(next: BcPaginationState\)/)
+  })
+
+  test("outputs option is on UseServerPagedGridOptions with default 'server'", () => {
+    expect(source).toMatch(/outputs\?: "server" \| "bound"/)
+    expect(source).toMatch(/outputs = "server",/)
+  })
+
+  test("internal orchestration loop is gated on outputs === 'bound'", () => {
+    expect(source).toMatch(/const boundActive = outputs === "bound"/)
+    expect(source).toMatch(/if \(!boundActive\) return/)
+    expect(source).toMatch(/wrappedLoadPage\(query, \{ signal: controller\.signal \}\)/)
+  })
+
+  test("orchestration cancels prior in-flight via AbortController", () => {
+    expect(source).toMatch(/boundAbortRef\.current\?\.abort\(\)/)
+    expect(source).toMatch(/return \(\) => controller\.abort\(\)/)
+  })
+
+  test("return statement aliases props → serverProps for backwards compat", () => {
+    expect(source).toMatch(/return \{ serverProps, bound, props: serverProps, state, actions \}/)
+  })
+})
+
+describe("defaultBoundErrorMessage (worker1 v06 dual-output IMPL)", () => {
+  test("Error instance prefixes with 'Failed to load.'", () => {
+    expect(defaultBoundErrorMessage(new Error("server hiccup"))).toBe(
+      "Failed to load. server hiccup",
+    )
+  })
+
+  test("Error with empty message returns the bare prefix", () => {
+    expect(defaultBoundErrorMessage(new Error(""))).toBe("Failed to load.")
+  })
+
+  test("non-Error returns the bare prefix", () => {
+    expect(defaultBoundErrorMessage({ status: 500 })).toBe("Failed to load.")
+  })
+
+  test("null returns the bare prefix", () => {
+    expect(defaultBoundErrorMessage(null)).toBe("Failed to load.")
+  })
+
+  test("string returns the bare prefix (does not embed the string)", () => {
+    expect(defaultBoundErrorMessage("network down")).toBe("Failed to load.")
   })
 })

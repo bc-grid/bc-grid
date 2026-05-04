@@ -91,7 +91,28 @@ Add `resolveServerDisplayColumns(columns, columnState)` helper + thread both `vi
 
 **Branch:** `agent/worker1/v06-server-display-column-order`. **Effort:** ~half day.
 
-### After-that → `v07-api-surface-freeze-audit` (~1 day, **v1.0 prep**)
+### After-that → `v06-server-tree-expansion-persistence` (~half day)
+
+Bsncraft anticipated polish: today's `<BcServerGrid rowModel="tree">` clears expansion state on every viewKey change (filter, sort, search). User filters by Customer Type, expands a group, clears the filter — group is collapsed again. Frustrating for explore-then-narrow workflows.
+
+**Implementation:**
+1. **`BcServerTreeProps.preserveExpansionOnViewChange?: boolean`** (default `false` — preserves current behavior). When `true`, expansion state survives viewKey changes; the grid re-fetches children for still-visible expanded nodes after the new view's parents resolve.
+2. Composes with `v06-server-view-change-reset-policy` (#444) — same opt-out family. Document together.
+3. Test: server-tree under filter change with `preserveExpansionOnViewChange={true}` → assert visible expanded groups stay open after filter applies.
+
+**Branch:** `agent/worker1/v06-server-tree-expansion-persistence`. **Effort:** ~half day.
+
+### Then-after → `v06-export-csv-server-page-stream` (~half day, recipe + helper)
+
+Every ERP master grid eventually needs "Export all to CSV." Server-paged grids only have one page in memory at a time, so this requires walking pages on the server side. Add a recipe + thin helper:
+
+1. **Recipe** at `docs/recipes/server-grid-csv-export.md` showing the consumer pattern: `<ExportButton>` calls `apiRef.current?.getExportPlan()` to get current view (filter/sort/groupBy/visibleColumns), POSTs to consumer's server endpoint, server streams pages into CSV.
+2. **Helper:** `BcGridApi.getExportPlan(): { view: ServerViewState, visibleColumns: ColumnId[], formatCellValue: (col, row) => string }` — pure function returning everything a consumer needs to build the export payload.
+3. **Optional thin client-side helper:** `streamServerGridToCsv({ apiRef, loadPage, onProgress })` — walks `loadPage` page-by-page, formats each row, emits CSV string chunks. Zero server changes; works against any server with `loadPage` already wired.
+
+**Branch:** `agent/worker1/v06-export-csv-server-page-stream`. **Effort:** ~half day.
+
+### Then → `v07-api-surface-freeze-audit` (~1 day, **v1.0 prep**)
 
 Walk every entry in `tools/api-surface/src/manifest.ts`. For each runtime export + type export, verify:
 1. **Intentional and stable** — meant to be public, naming holds up at 1.0.

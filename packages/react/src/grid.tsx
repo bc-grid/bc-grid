@@ -216,6 +216,7 @@ import {
 import { appendSortFor, defaultCompareValues, removeSortFor, toggleSortFor } from "./sort"
 import { BcStatusBar } from "./statusBar"
 import type {
+  BcActionsColumnProps,
   BcBulkActionUndoContext,
   BcBulkActionUndoableAction,
   BcCellEditCommitHandler,
@@ -331,6 +332,20 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const editorActivationProp = props.editorActivation
   const editorBlurActionProp = props.editorBlurAction
   const escDiscardsRowProp = props.escDiscardsRow
+  // Actions-column keyboard shortcuts (v0.6 §1
+  // `v06-server-grid-actions-keyboard`). The handlers live on
+  // BcEditGridProps / BcServerGridProps via BcActionsColumnProps;
+  // they're spread into BcGrid's props at runtime even though the
+  // BcGridProps type doesn't formally extend BcActionsColumnProps.
+  // Capture via cast so the keyboard handler reads from a stable
+  // closure dep without listing the whole `props` object (which
+  // would invalidate the callback on every render).
+  const actionsProps = props as Partial<BcActionsColumnProps<TRow>>
+  const actionsKeyboardOnEdit = actionsProps.onEdit
+  const actionsKeyboardOnDelete = actionsProps.onDelete
+  const actionsKeyboardCanEdit = actionsProps.canEdit
+  const actionsKeyboardCanDelete = actionsProps.canDelete
+  const actionsKeyboardConfirmDelete = (props as Partial<BcEditGridProps<TRow>>).confirmDelete
   // editorTabWraparound default: "row-wrap" (matches Excel + Google
   // Sheets). Per `v06-editor-tab-wraparound-polish` (bsncraft request).
   const editorTabWraparound = props.editorTabWraparound ?? "row-wrap"
@@ -3122,6 +3137,80 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         return
       }
 
+      // Actions-column keyboard shortcuts (v0.6 §1
+      // `v06-server-grid-actions-keyboard`). When the actions column
+      // is auto-injected (BcEditGrid, or BcServerGrid with handlers),
+      // surface the row-level Edit/Delete affordances via Shift+E and
+      // Shift+Delete. Discoverability gap closer — sighted-keyboard
+      // users today only reach the column via Tab; the gesture lets
+      // them act without leaving the active cell. Gated on:
+      //   - Actions column is present in the resolved columns
+      //   - Active row is a data row
+      //   - The respective handler is wired (via canEdit / canDelete
+      //     gating per-row when the row-fn is supplied)
+      // confirmDelete (when wired) is awaited before onDelete fires —
+      // the consumer's gate runs to completion just like a button click.
+      const isActionEditKey =
+        event.shiftKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        (event.key === "E" || event.key === "e")
+      const isActionDeleteKey =
+        event.shiftKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        (event.key === "Delete" || event.key === "Backspace")
+      if (isActionEditKey || isActionDeleteKey) {
+        const focusRowId = activeCell?.rowId
+        if (focusRowId == null) return
+        const rowEntry = rowsById.get(focusRowId)
+        if (!rowEntry || rowEntry.kind !== "data") return
+        // The actions column is auto-injected by BcEditGrid /
+        // BcServerGrid; skip the gesture if it isn't in the
+        // current column set (direct BcGrid consumers may not have
+        // wired actions).
+        const hasActionsColumn = resolvedColumns.some((c) => c.columnId === "__bc_actions")
+        if (!hasActionsColumn) return
+        // Action handlers were captured at component top via
+        // `actionsKeyboardOnEdit` etc. so the useCallback deps
+        // array can list specific stable refs instead of `props`.
+        if (isActionEditKey) {
+          const onEdit = actionsKeyboardOnEdit
+          if (!onEdit) return
+          const canEdit = actionsKeyboardCanEdit
+          if (canEdit && !canEdit(rowEntry.row)) return
+          event.preventDefault()
+          onEdit(rowEntry.row)
+          return
+        }
+        // Shift+Delete branch
+        const onDelete = actionsKeyboardOnDelete
+        if (!onDelete) return
+        const canDelete = actionsKeyboardCanDelete
+        if (canDelete && !canDelete(rowEntry.row)) return
+        event.preventDefault()
+        const confirmDelete = actionsKeyboardConfirmDelete
+        if (confirmDelete) {
+          // Mirror the action-button click path's confirmDelete
+          // wiring. Promise-returning consumers can prompt; sync
+          // returners decide synchronously.
+          const rowIndex = rowIndexById.get(focusRowId) ?? -1
+          const confirmResult = confirmDelete({
+            row: rowEntry.row,
+            rowId: focusRowId,
+            rowIndex,
+          })
+          Promise.resolve(confirmResult).then((proceed) => {
+            if (proceed) onDelete(rowEntry.row)
+          })
+          return
+        }
+        onDelete(rowEntry.row)
+        return
+      }
+
       const currentRow = activeCell ? (rowIndexById.get(activeCell.rowId) ?? 0) : 0
       const currentCol = activeCell ? (columnIndexById.get(activeCell.columnId) ?? 0) : 0
 
@@ -3347,6 +3436,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       setSelectionState,
       toggleGroupRow,
       confirmRangeDelete,
+      actionsKeyboardOnEdit,
+      actionsKeyboardOnDelete,
+      actionsKeyboardCanEdit,
+      actionsKeyboardCanDelete,
+      actionsKeyboardConfirmDelete,
     ],
   )
 
