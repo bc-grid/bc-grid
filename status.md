@@ -2,7 +2,7 @@
 
 **Owner:** Claude coordinator (`~/work/bc-grid`).
 **Update cadence:** after every merge train, every release cut, and when scope decisions change.
-**Last updated:** 2026-05-04 by worker2 after PR-B3 opened as #518.
+**Last updated:** 2026-05-04 by worker2 after PR-B3 merged as #518 and PR-B2 started.
 
 This file is the single fast-track tracker toward v1.0. It is **not** the milestone roadmap (`docs/coordination/release-milestone-roadmap.md` is the binding gate doc). This file's job is to give the maintainer a one-look view of "what's left, what could be deferred, what we're choosing to keep."
 
@@ -42,8 +42,8 @@ The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved
 | PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 + resync #503 merged 2026-05-04 | 🔒 |
 | PR-A2 — happy-dom test infra | worker2 | ✅ #504 merged 2026-05-04 | 🔒 |
 | PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ✅ #510 merged 2026-05-04 | 🔒 |
-| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ ready | 🔒 |
-| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | 🟡 #518 in review | 🔒 |
+| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ⏳ in flight on `agent/worker2/v07-radix-tool-panels` | 🔒 |
+| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ✅ #518 merged 2026-05-04 | 🔒 |
 | PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ ready | 🔒 |
 | PR-C1 — shadcn Combobox foundation (cmdk) | worker3 | ❌ ready (PR-A1 unblocked) | 🔒 |
 | PR-C2 — Migrate select / multi-select / autocomplete editors | worker3 | ❌ blocked on PR-C1 | 🔒 |
