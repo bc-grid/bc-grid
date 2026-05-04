@@ -420,6 +420,27 @@ export interface BcBulkActionsContext<TRow = unknown> {
   showUndo(action: BcBulkActionUndoableAction<TRow>): void
 }
 
+export interface BcToolbarContext<TRow = unknown> {
+  api: BcGridApi<TRow>
+  apiRef?: RefObject<BcGridApi<TRow> | null> | undefined
+  selectedRowCount: number
+  searchText: string
+  setSearchText(next: string): void
+  searchInput: ReactNode
+  groupBy: readonly ColumnId[]
+  setGroupBy(next: readonly ColumnId[]): void
+  groupByDropdown: ReactNode
+  density: BcGridDensity
+  setDensity(next: BcGridDensity): void
+  densityPicker: ReactNode
+  clearFiltersButton: ReactNode
+  /**
+   * Saved views are consumer-owned; this placeholder keeps toolbar layouts
+   * stable when a host swaps in its saved-view picker beside grid-owned slots.
+   */
+  savedViewPicker: ReactNode
+}
+
 export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
   value: unknown
   formattedValue: string
@@ -899,7 +920,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   rowIsInactive?: (row: TRow) => boolean
   rowIsDisabled?: (row: TRow) => boolean
 
-  toolbar?: ReactNode
+  toolbar?: ReactNode | ((ctx: BcToolbarContext<TRow>) => ReactNode)
   /**
    * Consumer-owned action slot rendered as a grid-supplied bulk-actions
    * bar whenever one or more rows are selected. The grid owns the bar,

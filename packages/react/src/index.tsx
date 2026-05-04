@@ -190,6 +190,7 @@ export type {
   BcStatusBarContext,
   BcStatusBarCustomSegment,
   BcStatusBarSegment,
+  BcToolbarContext,
   BcUserColumnSettings,
   BcUserSettings,
   BcUserSettingsStore,
