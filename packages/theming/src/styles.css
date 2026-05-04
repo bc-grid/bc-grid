@@ -2796,8 +2796,15 @@ select.bc-grid-editor-input {
   width: calc(var(--bc-grid-sidebar-width) + var(--bc-grid-sidebar-rail-width));
 }
 
+.bc-grid-sidebar-tabs {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
 .bc-grid-sidebar-rail {
   display: flex;
+  height: auto;
   width: var(--bc-grid-sidebar-rail-width);
   flex: 0 0 var(--bc-grid-sidebar-rail-width);
   flex-direction: column;
@@ -2854,7 +2861,7 @@ select.bc-grid-editor-input {
   outline-offset: 2px;
 }
 
-.bc-grid-sidebar-tab[data-state="open"] {
+.bc-grid-sidebar-tab[data-state="active"] {
   /*
    * Active state: accent-soft surface + an inset accent stripe on
    * the leading edge (the shadcn rail-active idiom). Drops the
@@ -2876,6 +2883,7 @@ select.bc-grid-editor-input {
 .bc-grid-sidebar-panel {
   width: var(--bc-grid-sidebar-width);
   min-width: 0;
+  margin: 0;
   flex: 0 0 var(--bc-grid-sidebar-width);
   /*
    * No `border-left` between rail and panel — they share the

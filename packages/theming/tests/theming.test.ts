@@ -710,7 +710,7 @@ describe("@bc-grid/theming", () => {
     expect(ruleFor(".bc-grid-sidebar-tab:focus-visible {")).toContain(
       "outline: 2px solid var(--bc-grid-focus-ring)",
     )
-    const selectedTab = ruleFor('.bc-grid-sidebar-tab[data-state="open"] {')
+    const selectedTab = ruleFor('.bc-grid-sidebar-tab[data-state="active"] {')
     expect(selectedTab).toContain("background: var(--bc-grid-accent-soft)")
     expect(selectedTab).toContain("box-shadow: inset 2px 0 0 var(--bc-grid-accent)")
 
@@ -789,7 +789,7 @@ describe("@bc-grid/theming", () => {
     expect(focus).not.toMatch(/border-color:/)
     expect(focus).not.toMatch(/background:/)
 
-    const active = ruleFor('.bc-grid-sidebar-tab[data-state="open"] {')
+    const active = ruleFor('.bc-grid-sidebar-tab[data-state="active"] {')
     // Active keeps the accent-soft bg + inset stripe; the colored
     // border tint is gone.
     expect(active).toContain("background: var(--bc-grid-accent-soft)")

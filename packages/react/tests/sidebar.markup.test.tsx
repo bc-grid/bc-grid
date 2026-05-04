@@ -39,7 +39,7 @@ function renderSidebar(activePanelId: string | null): string {
 describe("BcGridSidebar — class / data-state hooks for shadcn-style chrome", () => {
   // Pin the surface hooks the theming layer reads from. The CSS
   // selectors target `.bc-grid-sidebar-rail`, `.bc-grid-sidebar-tab`,
-  // `[data-state="open" | "closed"]`, and `[data-state="open" |
+  // Radix `[data-state="active" | "inactive"]`, and `[data-state="open" |
   // "collapsed"]` on the aside. If a refactor drops or renames any
   // of these the visual contract stops applying — these assertions
   // catch that drift before review.
@@ -61,36 +61,39 @@ describe("BcGridSidebar — class / data-state hooks for shadcn-style chrome", (
     expect(html).toContain('aria-orientation="vertical"')
   })
 
-  test("each tab carries the `bc-grid-sidebar-tab` class and a `data-state` of `open` (active) or `closed` (inactive)", () => {
+  test("each tab carries the `bc-grid-sidebar-tab` class and Radix active/inactive state", () => {
     const html = renderSidebar("columns")
 
     // Both tabs render with the surface class so theming targets land.
     const tabClassMatches = html.match(/class="bc-grid-sidebar-tab"/g)
     expect(tabClassMatches?.length).toBe(2)
 
-    // Active tab pins data-state="open" + aria-selected="true".
-    expect(html).toMatch(/aria-label="Columns"[^>]*aria-selected="true"[^>]*data-state="open"/)
-    // Inactive tab pins data-state="closed" + aria-selected="false".
-    expect(html).toMatch(/aria-label="Filters"[^>]*aria-selected="false"[^>]*data-state="closed"/)
+    // Active tab pins Radix data-state="active" + aria-selected="true".
+    expect(html).toMatch(
+      /<button(?=[^>]*aria-label="Columns")(?=[^>]*aria-selected="true")(?=[^>]*data-state="active")/,
+    )
+    // Inactive tab pins Radix data-state="inactive" + aria-selected="false".
+    expect(html).toMatch(
+      /<button(?=[^>]*aria-label="Filters")(?=[^>]*aria-selected="false")(?=[^>]*data-state="inactive")/,
+    )
   })
 
-  test("collapsed sidebar marks every tab as `data-state=closed` (no tab claims active when no panel is open)", () => {
+  test("collapsed sidebar marks every tab inactive (no tab claims active when no panel is open)", () => {
     const html = renderSidebar(null)
-    expect(html).not.toMatch(/data-state="open"[^>]*role="tab"/)
-    const closedMatches = html.match(/data-state="closed"/g)
-    expect(closedMatches?.length).toBe(2)
+    expect(html).not.toMatch(/<button(?=[^>]*role="tab")(?=[^>]*data-state="active")/)
+    const inactiveMatches = html.match(/<button(?=[^>]*role="tab")(?=[^>]*data-state="inactive")/g)
+    expect(inactiveMatches?.length).toBe(2)
   })
 
-  test("rail tabs render no panel surface when collapsed (`bc-grid-sidebar-panel` is omitted)", () => {
-    // The panel surface is conditionally rendered; pin that contract
-    // so a regression that always renders the panel (and hides via
-    // CSS) doesn't accidentally land — it would defeat the
-    // collapsed-rail treatment.
+  test("collapsed sidebar renders Radix-hidden panel content and active state exposes the panel", () => {
     const collapsed = renderSidebar(null)
-    expect(collapsed).not.toContain('class="bc-grid-sidebar-panel"')
+    const hiddenPanels = collapsed.match(
+      /<div(?=[^>]*role="tabpanel")(?=[^>]*hidden="")(?=[^>]*class="bc-grid-sidebar-panel")/g,
+    )
+    expect(hiddenPanels?.length).toBe(2)
 
     const opened = renderSidebar("columns")
     expect(opened).toContain('class="bc-grid-sidebar-panel"')
-    expect(opened).toMatch(/role="tabpanel"/)
+    expect(opened).toMatch(/<div(?=[^>]*role="tabpanel")(?=[^>]*data-state="active")/)
   })
 })
