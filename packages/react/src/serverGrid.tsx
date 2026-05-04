@@ -2080,6 +2080,61 @@ function useTreeServerState<TRow>(
   const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
   const serverRowId = useCallback((row: TRow) => props.rowId(row, 0), [props.rowId])
 
+  // Tree expansion view-change reset (worker1 v0.6 server tree
+  // expansion persistence). When the view changes (filter / sort /
+  // search / groupBy / visibleColumns) AND the consumer hasn't opted
+  // into `preserveExpansionOnViewChange`, clear the uncontrolled
+  // expansion set so the visible state matches the user's "filter
+  // changed; tree starts fresh" mental model. Controlled `expansion`
+  // is consumer-owned and untouched. Skips initial mount + same-key
+  // re-renders.
+  const previousTreeViewKeyRef = useRef<string | null>(null)
+  const preserveExpansionOnViewChange = props.preserveExpansionOnViewChange ?? false
+  // biome-ignore lint/correctness/useExhaustiveDependencies: viewKey is the trigger; expansionControlled + preserveExpansionOnViewChange consulted on each change.
+  useEffect(() => {
+    if (previousTreeViewKeyRef.current === null) {
+      previousTreeViewKeyRef.current = viewKey
+      return
+    }
+    if (previousTreeViewKeyRef.current === viewKey) return
+    previousTreeViewKeyRef.current = viewKey
+    if (preserveExpansionOnViewChange) {
+      // Consumer opted in. Auto-re-fetch children for any
+      // previously-expanded rowId still present in the new tree
+      // snapshot is scheduled by a separate effect below that
+      // watches `tree.rootIds` for the post-fetch root surface.
+      return
+    }
+    if (expansionControlled) return
+    // Default behaviour: clear uncontrolled expansion on view change.
+    setUncontrolledExpansion(new Set<RowId>())
+  }, [viewKey])
+
+  // Auto-re-fetch children for previously-expanded rowIds after the
+  // new view's roots resolve (worker1 v0.6 server tree expansion
+  // persistence — `preserveExpansionOnViewChange === true` path).
+  // Watches `tree.rootIds` so the effect fires AFTER the new view's
+  // roots have populated; iterates `expansionState` and re-fires
+  // `loadTreeChildren` for any still-relevant expanded rowId whose
+  // children aren't yet loaded.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-fire only when tree snapshot's root surface changes.
+  useEffect(() => {
+    if (!preserveExpansionOnViewChange) return
+    if (!isTreeActive) return
+    for (const rowId of expansionState) {
+      const node = tree.nodes.get(rowId)
+      if (!node) continue
+      if (!node.hasChildren) continue
+      // Skip nodes whose children are already loaded — node.childIds
+      // is non-empty when at least one child page resolved.
+      if (node.childIds.length > 0) continue
+      void loadTreeChildren(node)
+    }
+    // Intentionally depend on tree.rootIds (root surface) only —
+    // re-running on every expansion change would loop because each
+    // loadTreeChildren resolution updates `tree`.
+  }, [tree.rootIds, preserveExpansionOnViewChange, isTreeActive])
+
   const flatNodes = useMemo(
     () => modelRef.current.flattenTreeSnapshot(tree, expansionState),
     [expansionState, tree],
