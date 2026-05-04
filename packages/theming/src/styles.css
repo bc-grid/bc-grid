@@ -2195,7 +2195,6 @@ select.bc-grid-editor-input {
 }
 
 .bc-grid-column-menu {
-  position: fixed;
   z-index: 60;
   /* shadcn DropdownMenu: min-w-[8rem]; size up slightly for the
      longer column-name strings the chooser usually shows. */
@@ -2253,7 +2252,7 @@ select.bc-grid-editor-input {
 }
 
 /* Plain pointer hover — subtle row-hover tint. */
-.bc-grid-column-menu-item:hover:not(:disabled) {
+.bc-grid-column-menu-item:hover:not(:disabled):not([data-disabled]) {
   background: var(--bc-grid-row-hover);
 }
 
@@ -2261,11 +2260,13 @@ select.bc-grid-editor-input {
    where the focus ring is going. shadcn DropdownMenu uses --accent
    for the same purpose; we use the soft variant so the row tint is
    distinct from the row-selected solid colour. */
+.bc-grid-column-menu-item[data-highlighted],
 .bc-grid-column-menu-item:focus-visible {
   background: var(--bc-grid-accent-soft);
 }
 
-.bc-grid-column-menu-item:disabled {
+.bc-grid-column-menu-item:disabled,
+.bc-grid-column-menu-item[data-disabled] {
   cursor: not-allowed;
   opacity: 0.5;
   /* Block click activation while a row is disabled — without this
@@ -2274,7 +2275,8 @@ select.bc-grid-editor-input {
   pointer-events: none;
 }
 
-.bc-grid-column-menu-check {
+.bc-grid-column-menu-check,
+.bc-grid-column-menu-item > span:first-child {
   display: inline-flex;
   flex: 0 0 0.875rem;
   align-items: center;
@@ -2284,7 +2286,14 @@ select.bc-grid-editor-input {
   color: var(--bc-grid-muted-fg);
 }
 
-.bc-grid-column-menu-item[data-checked="true"] .bc-grid-column-menu-check {
+.bc-grid-column-menu-item > span:first-child svg {
+  display: block;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.bc-grid-column-menu-item[data-checked="true"] .bc-grid-column-menu-check,
+.bc-grid-column-menu-item[data-state="checked"] > span:first-child {
   color: inherit;
 }
 
@@ -2297,7 +2306,6 @@ select.bc-grid-editor-input {
 }
 
 .bc-grid-context-menu {
-  position: fixed;
   z-index: 70;
   /* shadcn DropdownMenu: min-w-[8rem]. Keep the upper cap so a long
      custom item label doesn't stretch the menu past readable width. */
@@ -2335,7 +2343,7 @@ select.bc-grid-editor-input {
 
 /* Plain pointer hover — subtle row-hover tint, matches the column
    chooser. */
-.bc-grid-context-menu-item:not([aria-disabled="true"]):hover {
+.bc-grid-context-menu-item:not([aria-disabled="true"]):not([data-disabled]):hover {
   background: var(--bc-grid-row-hover);
 }
 
@@ -2344,11 +2352,13 @@ select.bc-grid-editor-input {
    `data-active` is set by the menu's roving-focus state machine;
    `:focus-visible` is the browser-driven keyboard focus.  */
 .bc-grid-context-menu-item[data-active="true"],
+.bc-grid-context-menu-item[data-highlighted],
 .bc-grid-context-menu-item:focus-visible {
   background: var(--bc-grid-accent-soft);
 }
 
-.bc-grid-context-menu-item[aria-disabled="true"] {
+.bc-grid-context-menu-item[aria-disabled="true"],
+.bc-grid-context-menu-item[data-disabled] {
   cursor: not-allowed;
   opacity: 0.5;
   /* Match the column-chooser's disabled contract: no click activation,
@@ -2367,8 +2377,11 @@ select.bc-grid-editor-input {
   color: var(--bc-grid-invalid);
 }
 
-.bc-grid-context-menu-item[data-variant="destructive"]:not([aria-disabled="true"]):hover,
+.bc-grid-context-menu-item[data-variant="destructive"]:not([aria-disabled="true"]):not(
+    [data-disabled]
+  ):hover,
 .bc-grid-context-menu-item[data-variant="destructive"][data-active="true"],
+.bc-grid-context-menu-item[data-variant="destructive"][data-highlighted],
 .bc-grid-context-menu-item[data-variant="destructive"]:focus-visible {
   background: color-mix(in srgb, var(--bc-grid-invalid) 12%, transparent);
   color: var(--bc-grid-invalid);
@@ -2394,6 +2407,7 @@ select.bc-grid-editor-input {
 }
 
 .bc-grid-context-menu-item[data-active="true"] .bc-grid-context-menu-icon,
+.bc-grid-context-menu-item[data-highlighted] .bc-grid-context-menu-icon,
 .bc-grid-context-menu-item:hover .bc-grid-context-menu-icon {
   color: inherit;
 }
@@ -2419,16 +2433,8 @@ select.bc-grid-editor-input {
   display: block;
 }
 
-.bc-grid-context-menu-submenu {
-  position: relative;
-}
-
 .bc-grid-context-menu-submenu-content {
-  position: absolute;
-  top: -0.25rem;
-  left: calc(100% + 0.25rem);
   z-index: 71;
-  display: none;
   min-width: 12rem;
   width: max-content;
   max-width: min(16rem, calc(100vw - 16px));
@@ -2438,24 +2444,6 @@ select.bc-grid-editor-input {
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
   color: var(--bc-grid-context-menu-fg);
   padding: 0.25rem;
-}
-
-/* Viewport-collision flip: when the submenu trigger is near the
-   viewport's right edge, the React `Submenu` component (`internal/
-   context-menu.tsx`) measures the projected right edge on open and
-   sets `data-flip="left"` on the wrapper. CSS swaps the horizontal
-   offset so the submenu opens to the LEFT instead of overflowing
-   offscreen. Surfaced 2026-05-04 by bsncraft full-width grids. */
-.bc-grid-context-menu-submenu[data-flip="left"] > .bc-grid-context-menu-submenu-content {
-  left: auto;
-  right: calc(100% + 0.25rem);
-}
-
-.bc-grid-context-menu-submenu:hover > .bc-grid-context-menu-submenu-content,
-.bc-grid-context-menu-submenu:focus-within > .bc-grid-context-menu-submenu-content,
-.bc-grid-context-menu-submenu[data-open="true"] > .bc-grid-context-menu-submenu-content {
-  display: flex;
-  flex-direction: column;
 }
 
 .bc-grid-context-menu-separator {

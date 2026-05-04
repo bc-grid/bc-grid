@@ -94,6 +94,7 @@ export function ariaSortFor(
 }
 
 export interface ColumnMenuAnchor {
+  restoreFocus?: HTMLElement | null
   x: number
   y: number
 }
@@ -264,7 +265,11 @@ export function renderHeaderCell<TRow>({
           ? (event) => {
               event.preventDefault()
               event.stopPropagation()
-              onColumnMenu(column, { x: event.clientX, y: event.clientY })
+              onColumnMenu(column, {
+                restoreFocus: event.currentTarget,
+                x: event.clientX,
+                y: event.clientY,
+              })
             }
           : undefined
       }
@@ -353,7 +358,11 @@ export function renderHeaderCell<TRow>({
             event.preventDefault()
             event.stopPropagation()
             const rect = event.currentTarget.getBoundingClientRect()
-            onColumnMenu(column, { x: rect.left, y: rect.bottom + 4 })
+            onColumnMenu(column, {
+              restoreFocus: event.currentTarget,
+              x: rect.left,
+              y: rect.bottom + 4,
+            })
           }}
           onContextMenu={(event) => {
             // Right-clicking the trigger should not open the column

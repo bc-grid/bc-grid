@@ -41,7 +41,7 @@ The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved
 | --- | --- | --- | --- |
 | PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 + resync #503 merged 2026-05-04 | 🔒 |
 | PR-A2 — happy-dom test infra | worker2 | ✅ #504 merged 2026-05-04 | 🔒 |
-| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ❌ ready | 🔒 |
+| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | 🟡 #510 in review | 🔒 |
 | PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ blocked on PR-B1 | 🔒 |
 | PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ❌ blocked on PR-B1 | 🔒 |
 | PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ blocked on PR-B1 | 🔒 |

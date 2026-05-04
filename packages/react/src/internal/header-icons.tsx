@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 
 /**
  * Header chrome glyphs. Compact 14×14 SVGs in the same `Icon` helper
- * shape used by `context-menu-icons.tsx` and `pagination-icons.tsx`.
+ * shape used by the other internal chrome icon modules.
  * Each icon is `aria-hidden` so it doesn't contribute to its
  * surrounding button's accessible name — `aria-label` on the button
  * still drives AT announcement.
