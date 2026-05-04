@@ -2199,18 +2199,25 @@ function useTreeServerState<TRow>(
   const __bcServerRowEntryOverrides = useMemo(() => {
     const map = new Map<RowId, ServerRowEntryOverride>()
     for (const node of flatNodes) {
-      if (node.kind !== "group") continue
-      const groupKey = node.groupPath[node.groupPath.length - 1]
-      const label = groupKey ? String(groupKey.value ?? "") : ""
-      const childCount = node.childCount === "unknown" ? 0 : node.childCount
-      map.set(node.rowId, {
-        kind: "group",
-        level: node.level,
-        label,
-        childCount,
-        childRowIds: node.childIds,
-        expanded: expansionState.has(node.rowId),
-      })
+      if (node.kind === "group") {
+        const groupKey = node.groupPath[node.groupPath.length - 1]
+        const label = groupKey ? String(groupKey.value ?? "") : ""
+        const childCount = node.childCount === "unknown" ? 0 : node.childCount
+        map.set(node.rowId, {
+          kind: "group",
+          level: node.level,
+          label,
+          childCount,
+          childRowIds: node.childIds,
+          expanded: expansionState.has(node.rowId),
+        })
+      } else {
+        // Leaf data row — preserve hierarchy depth so `<BcGrid>` can
+        // stamp `aria-level` for the v1 screenreader audit §5 GAP.
+        // The level is computed by the server-tree state machine and
+        // would otherwise be stripped by `flatNodes.map((n) => n.row)`.
+        map.set(node.rowId, { kind: "data", level: node.level })
+      }
     }
     return map
   }, [flatNodes, expansionState])

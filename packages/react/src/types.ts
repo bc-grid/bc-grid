@@ -764,13 +764,33 @@ export interface BcRangeSelectionOptions {
  * (`docs/design/v1-api-surface-audit.md §5`); do NOT rely on either
  * name from consumer code.
  */
-export interface ServerRowEntryOverride {
+export type ServerRowEntryOverride = ServerRowEntryGroupOverride | ServerRowEntryDataOverride
+
+export interface ServerRowEntryGroupOverride {
   kind: "group"
   level: number
   label: string
   childCount: number
   childRowIds: readonly RowId[]
   expanded: boolean
+}
+
+/**
+ * Leaf-row override carrying the row's hierarchy depth so the BcGrid
+ * render path can stamp `aria-level` onto the DataRowEntry. Closes the
+ * server-tree half of the v1.0 screenreader audit GAP §5 — leaf rows
+ * in `<BcServerGrid rowModel="tree">` previously had no `level`
+ * surfaced to assistive tech (only group rows did, via the group
+ * override). Group-row aria-level continues to flow via
+ * `ServerRowEntryGroupOverride`.
+ *
+ * @internal Same internal contract as the union — only `<BcServerGrid>`
+ * populates this; consumers MUST NOT pass `__bcServerRowEntryOverrides`
+ * directly.
+ */
+export interface ServerRowEntryDataOverride {
+  kind: "data"
+  level: number
 }
 
 export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
