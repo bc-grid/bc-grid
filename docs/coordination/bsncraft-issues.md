@@ -107,37 +107,27 @@ Tracking document for issues bsncraft has flagged. Update status on each new bc-
 
 ## P1 — API ergonomics and silent failures
 
-### ❌ 11. Column sizing API leaks `flex`; resize doesn't work on flex columns
+### ✅ 11. Column flex/resize bug — shipped via #476
 
-`BcGridColumn` has `flex?: number` (`core/dist/index.d.ts:126`). `commitColumnWidth` (`react/dist/index.js:670-680`) sets `width` in column-state but doesn't clear `flex`. Next render reads `state?.flex ?? column.flex` and re-applies flex distribution, snapping the resize back.
+**Fix:** "smaller fix" path — `commitColumnWidth` now clears `flex` from column-state alongside setting `width` on resize, so the next render no longer re-applies flex distribution and snaps back. Existing `flex` API stays.
 
-**Fix options:**
-- **API change**: replace `flex: number` with `width: number | "auto"`. `"auto"` columns split remaining viewport width evenly. Auto becomes fixed-width on drag start (capture computed width, set `width`, drop `auto`). Intent-driven, no flexbox primitive leaking to consumers.
-- **Smaller fix**: `commitColumnWidth` clears `flex` from column-state alongside setting `width` on resize. Existing API stays, flex+resize starts working.
-
-**Bsncraft impact:** Name and Address columns on customers grid use `flex: 2` and are unresizable. Consumer cannot work around without losing auto-grow behavior.
+**Verify:** drag-resize a column with `flex: 2`; the new width sticks across renders.
 
 ---
 
-### ❌ 12. Tree validator errors swallowed silently in dev
+### ✅ 12. Tree validator errors swallowed silently — shipped via #474
 
-`server-row-model/src/index.ts:validateTreeResult` correctly throws on shape mismatches. The throw is caught silently in `loadTreeChildren`'s `.catch()` and surfaces only as a blank grid with no console message. Cost a real consumer ~30 minutes to diagnose because the contract ("`childCount` echoes the *requested* size, not the returned row count") is non-obvious.
+**Fix:** dev-mode `console.error("[bc-grid] tree loadChildren rejected:", nextError)` in `loadTreeChildren`'s catch block, gated on `process.env.NODE_ENV !== "production"` so production stays silent (the error overlay path takes over). Consumers diagnosing contract violations (e.g., the `childCount` echoes-the-requested-size invariant) now see the validator error immediately in the console.
 
-**Fix:** in dev mode, forward validator errors to `console.error` with `[bc-grid] tree result rejected: <reason>` prefix. ~3 lines.
+**Verify:** in dev, return a tree result with a shape mismatch from `loadChildren`; the validator's reason appears in console with the `[bc-grid]` prefix.
 
 ---
 
-### ❌ 13. Built-in editors typed as `BcCellEditor<unknown>` — every consumer casts
+### ✅ 13. Built-in editors typed as `BcCellEditor<unknown>` — shipped via #478
 
-`@bc-grid/editors` exports editors typed as `BcCellEditor<unknown, unknown>`. Every column declaration in a typed grid triggers TS2349 and requires a cast:
-```ts
-const text = textEditor as BcCellEditor<CustomerRow>;
-```
-With ~10 master grids planned for bsncraft, that's 10+ identical casts.
+**Fix:** widened `cellEditor` union to accept `BcCellEditor<unknown, unknown>` so consumer-typed columns no longer need the per-grid cast. Built-in editors (text/number/date/datetime/time/select/multiSelect/autocomplete/checkbox) flow through into typed `<BcGrid<CustomerRow>>` without the TS2349 friction.
 
-**Fix:** make built-in editor factories generic over `TRow` / `TValue`. Or have the `Component` prop's `TRow` parameter be more permissive so consumer's specific TRow flows through.
-
-Already on worker1's stretch backlog; bumping priority.
+**Verify:** declare `cellEditor: textEditor` on a typed grid column; no cast needed.
 
 ---
 
@@ -177,7 +167,7 @@ Already on worker1's stretch backlog; bumping priority.
 
 ## ✅ Recently shipped (verified on 0.6.0-alpha.3)
 
-The 11 items above marked ✅ (#1–6, #7–10, #15, #16) all moved from ❌ / 🔄 to ✅ during the 0.6.0-alpha.2 + alpha.3 work trains. See each item's "shipped via #N" annotation. **Status sweep performed 2026-05-04 PM** by worker1 cross-referencing alpha.2 and alpha.3 release notes against the merged-PR list.
+The 14 items above marked ✅ (#1–13, #15, #16) all moved from ❌ / 🔄 to ✅ during the 0.6.0-alpha.1 + alpha.2 + alpha.3 work trains. See each item's "shipped via #N" annotation. **Status sweep performed 2026-05-04 PM** by worker1 cross-referencing alpha.1, alpha.2, and alpha.3 release notes against the merged-PR list.
 
 ### ✅ 18. `cellEditor` implies `editable: true` (commit `9fd7c0c`)
 
@@ -210,8 +200,7 @@ Default `<BcGrid>` ships rich context menu (clear-all-filters, column submenu, f
 
 After the 2026-05-04 PM sweep:
 
-- **Active P1 (3):** #11 column flex/resize bug, #12 tree validator silent errors (~3 line dev-mode fix in worker1's lane), #13 built-in editors typed `BcCellEditor<unknown>` (worker3's lane).
-- **Partial (1):** #14 `useServerTreeGrid` dual-output (paged shipped via #484; tree IMPL deferred per #485, gated on dual-output orchestration extraction).
-- **P2 (1):** #17 built-in editors are bare HTML (in flight via worker3 Block C — PR-C1 #520 ships shadcn Combobox foundation; PR-C2 will migrate built-in editor internals).
+- **Partial (1):** #14 `useServerTreeGrid` dual-output — paged shipped via #484; infinite + tree IMPL deferred per #485, gated on dual-output orchestration extraction.
+- **P2 in flight (1):** #17 built-in editors are bare HTML — in flight via worker3 Block C (#520 PR-C1 ships shadcn Combobox foundation; PR-C2 will migrate built-in editor internals).
 
-12 of 17 items shipped. 5 remain across all severities.
+15 of 17 items shipped (88%). 2 remain — both already in flight or with documented deferral path.
