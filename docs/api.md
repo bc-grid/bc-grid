@@ -1038,8 +1038,9 @@ When `searchText` is set on the grid, every visible row is matched against the s
 
 The matched substring is exposed to `cellRenderer` via `params.searchText` so the renderer can highlight matches. The default renderer (when `cellRenderer` is omitted) handles highlighting automatically.
 
-bc-grid does not render a built-in global search box. Host apps own the input
-and pass its value into the grid:
+bc-grid does not render a default global search box. Host apps can either own
+the input and pass its value into the grid, or use `toolbar={(ctx) =>
+ctx.searchInput}` to compose the grid-owned input inside a custom toolbar:
 
 ```tsx
 function CustomerGrid() {
@@ -1199,6 +1200,15 @@ export interface BcFilterEditorProps<TValue = unknown> {
 
   // Slots
   toolbar={<MyToolbar />}
+  toolbar={(ctx) => (
+    <MyToolbar
+      search={ctx.searchInput}
+      groupBy={ctx.groupByDropdown}
+      density={ctx.densityPicker}
+      clearFilters={ctx.clearFiltersButton}
+      selectedRowCount={ctx.selectedRowCount}
+    />
+  )}
   footer={<MyFooter />}
   renderDetailPanel={({ row }) => <CustomerDetailPanel row={row} />}
   detailPanelHeight={144}
@@ -1493,7 +1503,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   rowIsDisabled?: (row: TRow) => boolean
 
   // Slots
-  toolbar?: React.ReactNode
+  toolbar?: React.ReactNode | ((ctx: BcToolbarContext<TRow>) => React.ReactNode)
   /**
    * Row-selection bulk action bar. The grid renders the selected-count
    * label, clear-selection button, and themed bar surface; the slot

@@ -227,6 +227,7 @@ import type {
   BcGridProps,
   BcReactGridColumn,
   BcSidebarContext,
+  BcToolbarContext,
   BcUserSettings,
   BcUserSettingsStore,
 } from "./types"
@@ -627,9 +628,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       return rest
     })
   }, [])
-  const clearAllColumnFilters = useCallback(() => {
-    clearColumnFilterText()
-  }, [clearColumnFilterText])
+  const clearAllFilters = useCallback(() => {
+    applyFilterState(null)
+  }, [applyFilterState])
   // Filter-popup anchor + columnId for `column.filter.variant === "popup"`
   // columns per `filter-popup-variant`. Null when no popup is open.
   const [filterPopupState, setFilterPopupState] = useState<{
@@ -862,6 +863,18 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     }
     return Array.from(ids)
   }, [consumerResolvedColumns, props.groupableColumns])
+  const groupableColumnOptions = useMemo(
+    () =>
+      groupableColumnIds.map((columnId) => {
+        const configured = props.groupableColumns?.find((column) => column.columnId === columnId)
+        const resolved = consumerResolvedColumns.find((column) => column.columnId === columnId)
+        const header =
+          configured?.header ??
+          (typeof resolved?.source.header === "string" ? resolved.source.header : String(columnId))
+        return { columnId, header }
+      }),
+    [consumerResolvedColumns, groupableColumnIds, props.groupableColumns],
+  )
   const persistenceState = useMemo(
     () => ({
       columnState: persistedColumnState,
@@ -912,12 +925,15 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     [columnFilterText, columnFilterTypes],
   )
   const activeFilter = filterState
-  const searchText =
-    props.searchText ??
+  const [searchText, setSearchText] = useControlledState<string>(
+    hasProp(props, "searchText"),
+    props.searchText ?? "",
     props.layoutState?.searchText ??
-    props.defaultSearchText ??
-    props.initialLayout?.searchText ??
-    ""
+      props.defaultSearchText ??
+      props.initialLayout?.searchText ??
+      "",
+    props.onSearchTextChange,
+  )
   useEffect(() => {
     if (!props.searchHotkey || typeof document === "undefined") return
 
@@ -1171,8 +1187,8 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     if (hasLayoutStateValue(layout, "groupBy")) {
       setGroupByState(pruneLayoutGroupByForColumns(layout.groupBy, layoutColumnIds) ?? [])
     }
-    if (hasLayoutStateValue(layout, "searchText") && props.searchText !== undefined) {
-      props.onSearchTextChange?.(layout.searchText, props.searchText)
+    if (hasLayoutStateValue(layout, "searchText")) {
+      setSearchText(layout.searchText)
     }
     if (hasLayoutStateValue(layout, "sidebarPanel")) {
       setActiveSidebarPanel(layout.sidebarPanel)
@@ -1204,13 +1220,12 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     paginationWindow.page,
     props.layoutState,
     props.onPaginationChange,
-    props.onSearchTextChange,
-    props.searchText,
     setActiveSidebarPanel,
     setColumnState,
     setGroupByState,
     setPageSizeState,
     setPageState,
+    setSearchText,
     setSortState,
   ])
   const currentLayoutState = useMemo<BcGridLayoutState>(
@@ -2767,6 +2782,102 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     data.length,
     allRowEntries.length,
   )
+  const toolbarContext = useMemo<BcToolbarContext<TRow>>(() => {
+    const availableGroupableColumns = groupableColumnOptions.filter(
+      (column) => !groupByState.includes(column.columnId),
+    )
+    const densityLocked = props.density !== undefined || props.layoutState?.density !== undefined
+
+    return {
+      api,
+      apiRef,
+      selectedRowCount,
+      searchText,
+      setSearchText,
+      searchInput: (
+        <input
+          aria-label="Search rows"
+          className="bc-grid-toolbar-input"
+          onChange={(event) => setSearchText(event.currentTarget.value)}
+          placeholder="Search"
+          ref={(node) => {
+            if (props.searchInputRef) props.searchInputRef.current = node
+          }}
+          type="search"
+          value={searchText}
+        />
+      ),
+      groupBy: groupByState,
+      setGroupBy: setGroupByState,
+      groupByDropdown: (
+        <select
+          aria-label="Group rows"
+          className="bc-grid-toolbar-select"
+          disabled={availableGroupableColumns.length === 0}
+          onChange={(event) => {
+            const nextColumnId = event.currentTarget.value as ColumnId
+            if (!nextColumnId || groupByState.includes(nextColumnId)) return
+            setGroupByState([...groupByState, nextColumnId])
+          }}
+          value=""
+        >
+          <option value="">Group by...</option>
+          {availableGroupableColumns.map((column) => (
+            <option key={String(column.columnId)} value={String(column.columnId)}>
+              {column.header}
+            </option>
+          ))}
+        </select>
+      ),
+      density,
+      setDensity: setDensityPreference,
+      densityPicker: (
+        <select
+          aria-label="Grid density"
+          className="bc-grid-toolbar-select"
+          disabled={densityLocked}
+          onChange={(event) => setDensityPreference(event.currentTarget.value as BcGridDensity)}
+          value={density}
+        >
+          <option value="compact">Compact</option>
+          <option value="normal">Normal</option>
+          <option value="comfortable">Comfortable</option>
+        </select>
+      ),
+      clearFiltersButton: (
+        <button
+          className="bc-grid-toolbar-button"
+          disabled={activeFilter == null}
+          onClick={clearAllFilters}
+          type="button"
+        >
+          Clear filters
+        </button>
+      ),
+      savedViewPicker: null,
+    }
+  }, [
+    activeFilter,
+    api,
+    apiRef,
+    clearAllFilters,
+    density,
+    groupByState,
+    groupableColumnOptions,
+    props.density,
+    props.layoutState?.density,
+    props.searchInputRef,
+    selectedRowCount,
+    setDensityPreference,
+    setGroupByState,
+    setSearchText,
+    searchText,
+  ])
+  const toolbarContent = useMemo(
+    () => (typeof toolbar === "function" ? toolbar(toolbarContext) : toolbar),
+    [toolbar, toolbarContext],
+  )
+  const hasToolbarContent = toolbarContent != null && typeof toolbarContent !== "boolean"
   const bulkActionSelectedRowIds = useMemo(
     () => resolveBulkActionSelectedRowIds(selectionState, allKnownRowIds, allRowEntries),
     [allKnownRowIds, allRowEntries, selectionState],
@@ -2829,7 +2940,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       aggregations: aggregationResults,
       activeFilters: activeFilterSummaryItems,
       clearColumnFilter: clearColumnFilterText,
-      clearAllFilters: clearAllColumnFilters,
+      clearAllFilters,
       latestValidationError,
     }),
     [
@@ -2837,7 +2948,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       api,
       aggregationResults,
       allRowEntries.length,
-      clearAllColumnFilters,
+      clearAllFilters,
       clearColumnFilterText,
       data.length,
       latestValidationError,
@@ -3742,7 +3853,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       data-bc-grid-height-mode={isAutoHeight ? "auto" : "fixed"}
     >
       {bulkActions ? <BcGridBulkActions actions={bulkActions} ctx={bulkActionsContext} /> : null}
-      {toolbar ? <div className="bc-grid-toolbar">{toolbar}</div> : null}
+      {hasToolbarContent ? <div className="bc-grid-toolbar">{toolbarContent}</div> : null}
 
       <div className="bc-grid-main">
         <div className="bc-grid-table">

@@ -323,6 +323,7 @@ export const apiSurfaceManifest = [
       "BcStatusBarContext",
       "BcStatusBarCustomSegment",
       "BcStatusBarSegment",
+      "BcToolbarContext",
       "BcUserColumnSettings",
       "BcUserSettings",
       "BcUserSettingsStore",
