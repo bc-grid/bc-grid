@@ -2,17 +2,13 @@
 
 **Last updated:** 2026-05-04 by Claude coordinator
 
-## 🚨 TOP PRIORITY 2026-05-04 — rebase 3 stuck PRs before any new work
+## 🚨 ONE PR LEFT 2026-05-04 — rebase #455 phase 3 on new main
 
-These three PRs from your lane are blocking the v0.6.0 cut. They're all `DIRTY` (merge conflicts with `main`). Coordinator tried to rebase #470 — 4 conflict files compounding across the 3 stacked PRs make it expensive to do remotely. Please rebase **in this order** from your worktree (smallest → headline) and force-push:
+**Update 2026-05-04 PM:** ✅ #470 cache stats and ✅ #452 client tree phase 2.5 both rebased + merged into the alpha.3 train. Only **#455 client tree phase 3 production-readiness** remains DIRTY.
 
-1. **#470 — server-row cache stats observability** (`agent/worker1/v06-server-row-cache-stats`) — independent; easiest. Conflicts in `docs/queue.md`, `packages/core/src/index.ts`, `packages/react/src/serverGrid.tsx`, `tools/api-surface/src/manifest.ts`.
-2. **#452 — client tree rowmodel phase 2.5 sort + aggregations** (`agent/worker1/v06-client-tree-rowmodel-phase-2-5`) — **v0.6 HEADLINE**. Likely shares conflicts with #455 below since they stack.
-3. **#455 — client tree rowmodel phase 3 production-readiness** (`agent/worker1/v06-client-tree-rowmodel-phase-3`) — **v0.6 HEADLINE**, depends on #452.
+The phase 3 PR was stacked on phase 2.5 (#452); now that #452 has merged to main, four of your own files conflict on the rebase: `packages/react/src/clientTree.ts`, `packages/react/src/grid.tsx`, `packages/react/tests/clientTree.test.ts`, `packages/react/tests/clientTreeIntegration.test.tsx`, plus `docs/queue.md`. Coordinator-side resolution is risky because it's hard to tell which side has the canonical phase 3 changes vs the stale phase 2.5 starting point — please rebase from `~/work/bcg-worker1` on the new main and force-push. Once it goes UNSTABLE/CLEAN it lands in alpha.3.
 
-Use `git fetch origin && git rebase origin/main` (or `git merge origin/main` if you prefer merge commits). Recently merged PRs that touch overlapping files: #480, #484, #487, #488, #489, #490, #491. The recipe doc / api-surface manifest / editors index / serverGrid.tsx are common conflict zones.
-
-Do not start `v07-*` tasks until these three are rebased and merged. Coordinator will run perf + Playwright on each post-merge.
+Do not start `v07-*` tasks until #455 lands. Coordinator will run perf + Playwright on it post-merge.
 
 ---
 
