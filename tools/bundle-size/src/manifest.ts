@@ -52,13 +52,21 @@ export const bundleSizeManifest: BundleSizeManifest = {
     {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
-      // Bumped 2026-05-04 for v0.7 Radix context/dropdown menu
-      // migration PR-B1 from 112.12 KiB → 112.97 KiB. This imports
-      // Radix ContextMenu/DropdownMenu + lucide glyphs on the live
-      // chrome path while deleting the hand-rolled menu item and
-      // context-menu icon registries. 150 KiB hard cap unchanged;
-      // ~37 KiB headroom remains.
-      baselineGzipBytes: 115684,
+      // Bumped 2026-05-04 for v0.6.0-alpha.3 cut from 112.97 KiB →
+      // 112.34 KiB (~640 byte shrink). Captures PR-B3 (Radix
+      // tooltip + filter popover replacing 1,904 LOC of in-house
+      // popup-position / popup-dismiss / use-roving-focus / tooltip
+      // helpers — net deletion exceeds the Radix runtime add) +
+      // PR-C1 (shadcn Combobox foundation in @bc-grid/editors,
+      // delivered as type-only re-exports through @bc-grid/react)
+      // + worker1 v1.0 prep slices (cross-package symmetry,
+      // INTERNALIZE serverRowEntryOverrides, RENAME Use*BoundProps,
+      // server-row-model planned→enforced, treegrid ARIA fixes).
+      // 150 KiB hard cap unchanged; ~38 KiB headroom for the rest
+      // of v0.7 (PR-B2 tool panels + PR-B4 lucide sweep + PR-C2
+      // combobox editor migration + PR-C3 deferred slots + PR-D
+      // sweep) plus v1.0 finalisation.
+      baselineGzipBytes: 115016,
     },
   ],
 }
