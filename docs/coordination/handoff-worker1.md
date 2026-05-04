@@ -12,25 +12,37 @@ The one constraint: **do not add new code under `packages/react/src/internal/*`*
 
 ## 🎯 V1.0-PREP LANE — most of your queue shipped today
 
-**Last refresh: 2026-05-04 post-v0.6.0-alpha.3 cut.** Your lane is essentially drained. Recap of what's merged from your work:
+**Last refresh: 2026-05-04 PM (post-v0.6.0-alpha.3 cut + #523 bsncraft sweep).** Your queue is essentially drained. Merged today:
 
-- ✅ Server-grid v0.6 train: #470, #452, #455, #496, #498, #499, #491, #487, #484, #502 (all done)
-- ✅ API surface freeze audit (#502) + all 6 §15 action items closed across slices 1-4: #505, #507, #508, #514
+- ✅ Server-grid v0.6 train: #470, #452, #455, #496, #498, #499, #491, #487, #484, #502
+- ✅ API surface freeze audit (#502) + all §15 action items closed across slices 1-4: #505, #507, #508, #514
 - ✅ Browser compat matrix doc (#509)
 - ✅ Examples app cleanup (#511)
-- ✅ Screenreader code-pass audit (#516) + treegrid ARIA fixes (#517 client-tree + #519 server-tree — closes both audit GAPs)
+- ✅ Screenreader code-pass audit (#516) + treegrid ARIA fixes (#517 + #519)
+- ✅ bsncraft-issues status sweep (#523 — 14 of 17 items moved to ✅)
 
-`docs/design/v1-api-surface-audit.md §15` action items are 6/6 complete. The only remaining audit gate is the maintainer's pass on issue #512 (10 OPEN QUESTIONs — that's not on you).
+### 🚨 Active now → `v07-pr-c2-coordinator-assist` — coordinator-style help on PR-C2
 
-### Active now → pick from the v1.0-prep grab bag
+**Maintainer pivot 2026-05-04 PM:** workers 2 + 3 are wrapping up the v0.7 architecture correction; user wants v0.7 to close so we can cut v0.6.0 final and start the bsncraft monorepo move.
 
-If you still have cycles, pick one of:
+**Worker3's PR-C2 needs hands.** Worker3 surfaced 3 design questions in #524 (now merged) — coordinator answered them in `docs/coordination/v07-pr-c2-design-decisions.md` (committed). PR-C2 migrates `selectEditor` / `multiSelectEditor` / `autocompleteEditor` to the cmdk foundation that PR-C1 #520 landed.
 
-1. **`v1-bsncraft-issues-triage`** — re-walk `docs/coordination/bsncraft-issues.md` open items. Most are deferred but a quick triage might surface 1-2 paper-cuts that can land before v1.0. ~half day.
-2. **`v1-bundle-size-audit`** — single doc summarising per-package bundle contributions, the LRU eviction tuning impact, and where the next ~30 KiB headroom comes from. Useful for v1.0 release notes. ~half day.
-3. **`v1-perf-baseline-doc`** — read smoke + nightly perf measurements + write a single doc capturing the v1.0 baseline numbers (cold mount, sort, scroll FPS, edit-cell paint when Track 1 lands). Companion to the browser compat matrix. ~half day.
-4. **Help worker3 with PR-C2 if they get stuck** — you're not on the editor lane per the RFC, but you've shipped the most architecture-style PRs today. PR-C2 migrates `selectEditor` / `multiSelectEditor` / `autocompleteEditor` to the cmdk foundation #520 just landed. If worker3 reports blocked, you can step in.
-5. **Ratify open API-surface questions in issue #512 from the engineering side** — for any of the 10 questions where the engineering answer is unambiguous (no architectural choice involved), post your verdict as an issue comment so the maintainer's pass is faster.
+**Your role:** **shadow worker3's PR-C2 effort.** Read the design-decisions doc and the test inventory at `docs/coordination/v07-block-c-test-inventory.md`. If worker3 ships PR-C2 within the next 1-2 hours, review it for `api-surface` regressions + Playwright assertion completeness — you have the freshest API-surface eye from #502. If worker3 stalls or hits a follow-up blocker, **take over PR-C2 directly** — you've shipped the most architecture-style PRs today and can run the migration end-to-end.
+
+The 8 concrete deliverables for PR-C2 are spelled out in `v07-pr-c2-design-decisions.md` § "What worker3 ships in PR-C2."
+
+### Concurrent → bsncraft monorepo move prep (low priority)
+
+**Maintainer indicated** the next phase after v0.7 closes is moving bc-grid into `~/work/bsncraft/packages/bc-grid/` as a workspace package. While waiting on PR-C2, you can:
+
+- Audit `packages/*/package.json` for any external deps that aren't in `bsncraft/apps/web/package.json` already. Surface the diff so the move doesn't break bsncraft's bun.lock.
+- Sketch `~/work/bc-grid/docs/coordination/bsncraft-monorepo-move-plan.md` (or extend the existing `~/work/bsncraft/bc-grid.md`) with the exact step-by-step git commands the move will run. Concrete enough that the user can paste-execute.
+
+This is post-v0.7; do NOT start the actual move until v0.7 closes + maintainer approves the cut.
+
+### Hard rule: worker1 stays OFF the chrome lane
+
+Worker2 owns every PR under `packages/react/src/internal/*` and the chrome surface. Do not touch those even for a "drive-by" fix during the v0.7 correction window. (PR-C2 is editor lane; that's fine to assist on.)
 
 ### Hard rule: worker1 stays OFF the chrome lane
 

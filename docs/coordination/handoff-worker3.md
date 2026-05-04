@@ -2,11 +2,15 @@
 
 **Last updated:** 2026-05-04 PM (post-v0.6.0-alpha.3 cut, PR-C1 #520 merged) by Claude coordinator
 
-## 🛑 STATUS: PR-C1 ✅ MERGED — PR-C2 IS YOUR ACTIVE TASK
+## 🛑 STATUS: PR-C2 DESIGN DECISIONS RATIFIED — IMPLEMENT NOW
 
-**PR-C1 #520 merged.** The shadcn Combobox foundation is on `main` at `packages/editors/src/shadcn/`. cmdk + Radix Popover are installed in `@bc-grid/editors`. **You are not blocked.** Your active task is **PR-C2** — migrate the three combobox-driven editors to use the new foundation.
+**Coordinator answered all 3 questions from #524.** Read `docs/coordination/v07-pr-c2-design-decisions.md` (just committed). Summary:
 
-If your handoff cache shows anything "Active now → PR-A1 / PR-C1" — **`git pull origin main` and re-read this doc.** Verification: `git log origin/main --oneline | head -8` should show `release: v0.6.0-alpha.3` near the top, then your already-merged PRs.
+- **Q1 → Option B**: `focusRef` → CommandInput (visible). Add `getValue?` editor framework hook.
+- **Q2 → Worker3's fix**: `onKeyDown` override on `<Command>` preventDefault's Enter in multi mode (preserves #427 commit-on-Enter).
+- **Q3 → Inline `<Checkbox>` in each multi-mode CommandItem**: shadcn-canonical pattern. Tab cycles to checkbox + Space toggles via Radix Checkbox native handler. Restores keyboard-only multi-select a11y.
+
+**Implement now.** PR-C2 has 8 concrete deliverables in the design-decisions doc. If you hit a follow-up question, don't block more than 30 min — implement the simplest answer that ships, file the alternative as a v0.7.x follow-up. **Goal: land PR-C2 + PR-C3 + PR-D so v0.7 closes.** UX micro-tuning is post-cut.
 
 Already merged from your lane today:
 - ✅ #493 editor a11y fix (date / datetime / time aria-describedby + visually-hidden error span)
