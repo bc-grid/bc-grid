@@ -2010,7 +2010,15 @@ export type {
   ServerViewDiagnostics,
 }
 
-export type { BcNormalisedRange, BcRange, BcRangeKeyAction, BcRangeSelection } from "@bc-grid/core"
+export type {
+  BcAggregation,
+  BcAggregationResultDTO,
+  BcGridIdentity,
+  BcNormalisedRange,
+  BcRange,
+  BcRangeKeyAction,
+  BcRangeSelection,
+} from "@bc-grid/core"
 export type { BcRowDropAction } from "./rowDragDrop"
 export { BC_GRID_ROW_DRAG_MIME } from "./rowDragDrop"
 export type { EditorTabWraparound } from "./editingStateMachine"

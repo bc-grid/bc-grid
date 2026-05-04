@@ -12,10 +12,8 @@ This file is the single fast-track tracker toward v1.0. It is **not** the milest
 - 🟡 **partial** — engine landed, UI/integration/recipe still pending
 - ⏳ **in flight** — PR open or work assigned to a worker
 - ❌ **not started**
-- 🚪 **deferrable to post-1.0** — coordinator's recommendation; maintainer decides
-- 🔒 **must ship for 1.0** — coordinator's recommendation; maintainer decides
-
-Coordinator marks 🚪 vs 🔒 as a recommendation. Maintainer ratifies in the **decision** column.
+- 🚪 **deferred to post-1.0** — maintainer-ratified deferral; lives in v1.1 backlog
+- 🔒 **must ship for 1.0** — non-negotiable per coordinator + maintainer
 
 ---
 
@@ -23,24 +21,99 @@ Coordinator marks 🚪 vs 🔒 as a recommendation. Maintainer ratifies in the *
 
 `@bc-grid/*@0.6.0-alpha.2` — published 2026-05-04 to GitHub Packages. Full release notes: https://github.com/bc-grid/bc-grid/releases/tag/v0.6.0-alpha.2.
 
-**Alpha.3 candidate train (post-alpha.2, already on `main`):**
+**Alpha.3 candidate train (post-alpha.2, already on `main`):** editor a11y fix (#493), quick filter (#495), server-row cache stats (#470), client tree row model phase 2.5 (#452) + phase 3 (#455), submenu collision-flip "neither side fits" fix (3ff7a16), server-grid CSV export (#498), server tree expansion persistence (#496), cursor-pagination IMPL deferral doc (#499), v1.0 API surface freeze audit (#502), shadcn/Radix architecture-correction RFC (894f53f), Radix foundation PR-A1 (#501).
 
-- ✅ Editor a11y fix (date / datetime / time aria-describedby, #493)
-- ✅ Quick filter toolbar input (#495)
-- ✅ Server-row cache stats (#470)
-- ✅ Client tree row model phase 2.5 — per-subtree sort + parent-row aggregations (#452)
-- ✅ Client tree row model phase 3 — production-readiness (#455)
-- ✅ Submenu collision-flip "neither side fits" fix + Playwright guard (3ff7a16)
-- ✅ Server-grid CSV export (#498)
-- ✅ Server tree expansion persistence (#496)
-- ✅ Cursor-pagination IMPL deferral doc (#499)
-- ✅ shadcn/Radix architecture-correction RFC (#894f53f, binding for v0.7)
-
-Cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback on alpha.2.
+**Decision pending:** cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback on alpha.2.
 
 ---
 
-## Feature audit by milestone
+## Shipped feature audit — collapsed
+
+The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved at the bottom of this file in HTML comments. Categories: foundation (v0.1 → v0.2), **read-only grid (v0.2) — sort / resize / pin / scroll / filters / search / group-by / column reorder+visibility / master-detail / column groups / client + manual pagination**, editing (v0.4), server row model (v0.5), spreadsheet flows (v0.6), state persistence (v0.6), tree row model (v0.6), chrome (v0.5/v0.6), filters (v0.4-v0.6). Roughly 70-75% of v1.0 surface area is shipped; everything below is what's left.
+
+---
+
+## Outstanding for v1.0
+
+### v0.7 — Architecture correction (RFC ratified 2026-05-04)
+
+| PR | Owner | Status | Defer? |
+| --- | --- | --- | --- |
+| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 merged 2026-05-04 | 🔒 |
+| PR-A2 — happy-dom test infra | worker2 | ❌ ready (PR-A1 unblocked) | 🔒 |
+| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ❌ ready (PR-A1 unblocked) | 🔒 |
+| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ blocked on PR-B1 | 🔒 |
+| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ❌ blocked on PR-B1 | 🔒 |
+| PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ blocked on PR-B1 | 🔒 |
+| PR-C1 — shadcn Combobox foundation (cmdk) | worker3 | ❌ ready (PR-A1 unblocked) | 🔒 |
+| PR-C2 — Migrate select / multi-select / autocomplete editors | worker3 | ❌ blocked on PR-C1 | 🔒 |
+| PR-C3 — Wire deferred `triggerComponent` / `optionItemComponent` slots | worker3 | ❌ blocked on PR-C2 | 🔒 |
+| PR-D — Sweep + design-doc update | coordinator | ❌ blocked on B+C | 🔒 |
+
+**Coordinator note:** the architecture correction is non-negotiable per maintainer instruction. Public API preserved verbatim; consumer churn limited to internal CSS class names + DOM structure. Sequencing: PR-A1 unblocked both PR-A2 (worker2) and PR-C1 (worker3); after PR-A1 lands, Block B and Block C run in parallel.
+
+### v1.0 prep work (running in parallel with v0.7)
+
+| Item | Owner | Status | Defer? | Notes |
+| --- | --- | --- | --- | --- |
+| API surface freeze audit (4 RENAME + 5 INTERNALIZE + 8 DEPRECATE + 3 cross-package symmetry) | worker1 | ❌ ready | 🔒 | per `docs/design/v1-api-surface-audit.md §15`; lands as one or more PRs |
+| API surface 13 OPEN QUESTION items | maintainer | ❌ ready | 🔒 | needs a maintainer pass; resolutions go in audit doc §16 |
+| Browser compat matrix doc | worker1 | ❌ queued | 🔒 | `v1-browser-compat-matrix-doc` — single matrix table per `release-milestone-roadmap.md` v0.10 |
+| Examples app — productivity flows without hidden URL flags | worker1 | ❌ queued | 🔒 | `v1-examples-app-cleanup` — landing card + flag pre-applied links per hero spike |
+| WCAG 2.1 AA deep-pass — manual NVDA / JAWS / VoiceOver | unassigned | ❌ | 🔒 | `Definition of Done — 1.0` requirement; ERP shipping non-negotiable |
+| bsncraft consumer migration (≥ -100 LOC wrapper) | bsncraft team | ⏳ | 🔒 | customers grid migration in flight; original 0.5 milestone gate |
+| Public API formally locked + v1.0 version bump | coordinator | ❌ | 🔒 | runs after API freeze audit lands |
+| All P0/P1 closed in `bsncraft-issues.md` | all | ⏳ | 🔒 | tracked separately |
+| Pricing / licence model decision | maintainer | ❌ | 🔒 | architectural decision, not engineering |
+| Public registry publish decision (npmjs.com vs GitHub Packages) | maintainer | ❌ | 🔒 | currently GitHub Packages; launch lever |
+| Maintainer explicit sign-off | maintainer | ❌ | 🔒 | non-negotiable per `release-milestone-roadmap.md` |
+
+### Deferred to post-1.0 (v1.1+ backlog) — maintainer ratified 2026-05-04
+
+These items are explicitly OUT of scope for v1.0. Re-open the discussion in v1.1 planning when bsncraft signals demand.
+
+| Item | Reason for deferral | v1.1+ trigger |
+| --- | --- | --- |
+| 🚪 **Pivot drag-UI completeness** | Engine + panel render existing pivot state. Drag-to-pivot rearrange UI is partial. bsncraft hasn't asked for it. | First consumer ask, or 1.1 sprint planning |
+| 🚪 **XLSX export (ExcelJS peer-dep)** | bsncraft uses CSV → Excel-open path. Recipe is sufficient until a consumer needs native `.xlsx`. | First `bsn-issues.md` ask |
+| 🚪 **PDF export (jsPDF peer-dep)** | bsncraft has its own report-print pipeline. Not requested. | First consumer ask |
+| 🚪 **AG Grid migration guide (Community + Enterprise)** | Sketch is fine for v1.0. Polished guide needs 2+ test users to validate; that's v1.1 work. | After v1.0 launch + first 2 community migrations |
+| 🚪 **Mobile / touch fallback** | `design.md §2 Non-goals` explicitly says "Mobile-first interactions deferred — desktop-first; touch fallback at 1.0+." | Stated as 1.0+ from day 1 |
+| 🚪 **`apps/docs` public deploy** | Builds locally. Until traffic justifies the host, README + GitHub Packages registry covers the audience. | When external consumer count > maintainer's bandwidth for direct support |
+| 🚪 **Edit-cell paint <16ms benchmark** | Smoke perf 3/3 passes overall. Specific micro-benchmark currently skipped pending Track 1. | Track 1 land |
+| 🚪 **Cursor-pagination IMPL** | Deferral doc #499 — pending dual-output extraction. Server-paged + offset-pagination cover bsncraft. | First consumer with a cursor-only API |
+| 🚪 **ERP filter operators pass-2** (regex/fuzzy + MTD/QTD/YTD) | Pass-1 covers bsncraft's needs. Low priority in worker2 queue. | First consumer ask |
+| 🚪 **`useServerInfiniteGrid` / `useServerTreeGrid` dual-output IMPL** | Deferral doc #485. Paged dual-output #484 covers the demonstrated bsncraft pattern. | First consumer with a `<BcGrid>`-wrapping infinite or tree pattern |
+| 🚪 **Charts integration depth** | `design.md §2 Non-goals` — "Chart libraries are better at this; out-of-scope until post-1.0." | Stated as post-1.0 from day 1 |
+| 🚪 **Right-to-left languages** | `design.md §2 Non-goals` — "Q4 minimum." | Stated as post-1.0 from day 1 |
+| 🚪 **Bug-for-bug AG Grid parity** | `design.md §1 Mission` — "continuous post-1.0 backlog; not a v1.0 gate." | Stated as continuous post-1.0 |
+
+---
+
+## Fast-track sequencing
+
+1. **v0.6.0 GA** — ship alpha.2 work train as GA after bsncraft soak signs off.
+2. **v0.7.0** — architecture correction (worker2 chrome lane + worker3 editor lane, parallel after PR-A1 landed; PR-D coordinator sweep last). Worker1 runs v1.0 prep in parallel.
+3. **v1.0 prep wraps** — bsncraft migration completes, WCAG manual screenreader pass, browser compat matrix doc, examples app cleanup, API formal lock, maintainer pricing / registry / sign-off.
+4. **v1.0 GA cut.**
+
+---
+
+## Update log
+
+- **2026-05-04 (PM, post-#502)** — Maintainer ratified post-1.0 deferral list (pivot drag-UI, XLSX, PDF, client pagination UI, AG Grid migration guide, mobile/touch, public docs deploy, edit-cell paint benchmark, cursor-pagination IMPL, ERP filter pass-2, infinite/tree dual-output IMPL, charts, RTL, bug-for-bug parity). Shipped feature audit collapsed into HTML comments at file bottom. Worker1 pivoted from server-grid lane to v1.0 prep lane (handoff updated `2862750`).
+- **2026-05-04 (PM, post-#499)** — Coordinator created this file at maintainer instruction. Audit synthesis from `docs/coordination/release-milestone-roadmap.md` + `docs/roadmap.md` + `docs/queue.md` + 2026-05-04 source-side verification.
+
+---
+
+<!-- ===========================================================================
+     SHIPPED FEATURE AUDIT — collapsed by maintainer instruction 2026-05-04 PM
+     to keep this file focused on v1.0 outstanding work.
+
+     Uncomment any block below if you need to scan what's already in.
+     Source: `docs/coordination/release-milestone-roadmap.md` + 2026-05-04
+     source-side verification.
+     ===========================================================================
 
 ### Foundation (v0.1 → v0.2) — ✅ COMPLETE
 
@@ -67,6 +140,7 @@ Cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback o
 | Column reorder / visibility / state-persistence | ✅ | |
 | Master-detail rows | ✅ | |
 | Column groups (multi-row headers) | ✅ | |
+| Client-side pagination UI | ✅ | `BcGridPagination` + `pagination?: boolean` + `pageSizeOptions` + `paginationMode: "client" \| "manual"` + `paginationTotalRows` + `onPaginationChange` + saved-view persistence (`packages/react/src/pagination.tsx`, 211 LOC; 421-LOC test suite at `pagination.test.tsx`; demo: `apps/examples/?pagination=1`) |
 
 ### Editing (v0.4) — ✅ COMPLETE
 
@@ -96,7 +170,6 @@ Cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback o
 | `bound`/`serverProps` dual-output (paged) | ✅ | alpha.2 #484; infinite/tree IMPL deferred (#485) |
 | Server tree expansion persistence | ✅ | #496 |
 | CSV export (`getExportPlan` + `streamServerGridToCsv`) | ✅ | #498 |
-| Cursor-pagination IMPL | 🚪 | deferral doc #499 — pending dual-output extraction; **recommend post-1.0** |
 
 ### Spreadsheet flows (v0.6) — ✅ COMPLETE
 
@@ -153,101 +226,5 @@ Cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback o
 | Filter registry | ✅ | #472 |
 | ERP filter operators (text not-equals, fiscal tokens, current-user/team) | ✅ | #429 |
 | Custom filter extension recipe | ✅ | |
-| Pass-2 (regex/fuzzy + MTD/QTD/YTD) | ⏳ | worker2 queue, low priority |
 
----
-
-## Outstanding for v1.0
-
-### v0.7 — Architecture correction (RFC ratified 2026-05-04)
-
-| PR | Owner | Status | Defer? |
-| --- | --- | --- | --- |
-| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | 🔎 #503 bsn/ui resync review (#501 merged initial scaffold) | 🔒 must ship |
-| PR-A2 — happy-dom test infra | worker2 | 🔎 review #504 | 🔒 must ship |
-| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ❌ ready (PR-A1 unblocked) | 🔒 must ship |
-| PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ blocked on PR-B1 | 🔒 must ship |
-| PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ❌ blocked on PR-B1 | 🔒 must ship |
-| PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ blocked on PR-B1 | 🔒 must ship |
-| PR-C1 — shadcn Combobox foundation (cmdk) | worker3 | ❌ ready (PR-A1 unblocked) | 🔒 must ship |
-| PR-C2 — Migrate select / multi-select / autocomplete editors | worker3 | ❌ blocked on PR-C1 | 🔒 must ship |
-| PR-C3 — Wire deferred `triggerComponent` / `optionItemComponent` slots | worker3 | ❌ blocked on PR-C2 | 🔒 must ship |
-| PR-D — Sweep + design-doc update | coordinator | ❌ blocked on B+C | 🔒 must ship |
-
-**Coordinator note:** the architecture correction is non-negotiable per maintainer instruction. Public API preserved verbatim; consumer churn limited to internal CSS class names + DOM structure. Sequencing: PR-A1 unblocks both PR-A2 (worker2) and PR-C1 (worker3); after PR-A1 lands, Block B and Block C run in parallel.
-
-### v0.8 — Aggregations / Pivot / Export
-
-| Feature | Status | Owner | Defer? | Notes |
-| --- | --- | --- | --- | --- |
-| Aggregation engine (`@bc-grid/aggregations`) | ✅ | n/a | n/a | shipped, used by client tree phase 2.5 + group-by + pinned totals |
-| Pivot engine (`pivot()` in aggregations) | ✅ | n/a | n/a | engine done |
-| Pivot UI — `pivotToolPanel.tsx` | 🟡 | unassigned | 🚪 **defer post-1.0** | drag-to-pivot row/col/values UI is partial; bsncraft hasn't asked for it; recommend ship as post-1.0 if the panel renders existing pivot state but doesn't yet support drag-rearrangement |
-| Footer/status aggregation (filters/grouping/selection-aware) | ✅ | n/a | n/a | pinned totals row #446 + status bar segment |
-| CSV export (server-page-stream) | ✅ | n/a | n/a | #498 |
-| XLSX export (ExcelJS peer-dep) | ❌ | unassigned | 🚪 **defer post-1.0** | bsncraft can use CSV → Excel-open path; recipe for ExcelJS in post-1.0 |
-| PDF export (jsPDF peer-dep) | ❌ | unassigned | 🚪 **defer post-1.0** | bsncraft has its own report-print pipeline; not requested |
-
-**Coordinator recommendation:** v0.8 collapses to "audit pivot UI completeness, ship a recipe for ExcelJS-from-CSV, document XLSX/PDF as post-1.0."
-
-### v0.9 — Productivity surface
-
-| Feature | Status | Owner | Defer? | Notes |
-| --- | --- | --- | --- | --- |
-| Client-side pagination UI | ❌ | unassigned | 🚪 **defer post-1.0** | server-paged exists; client pagination is a UI shell that users can build with the existing range / scroll APIs in ~30 LOC; recipe + post-1.0 ship |
-| Examples app — productivity flows without hidden flags | 🟡 | unassigned | 🔒 **must ship** | the four hero spike grids (colour-selection / document-management / production-estimating / sales-estimating) cover the surface but rely on URL flags |
-| AG Grid migration guide (Community + Enterprise) | ❌ | unassigned | 🚪 **defer post-1.0** | recommend cut a sketch + commit to v1.1 with consumer-tested polish |
-
-### v0.10 — RC hardening
-
-| Feature | Status | Owner | Defer? | Notes |
-| --- | --- | --- | --- | --- |
-| WCAG 2.1 AA deep-pass — code-pass | ✅ | worker3 | n/a | 9/9 editors PASS post #493 |
-| WCAG deep-pass — manual NVDA / JAWS / VoiceOver | ❌ | unassigned | 🔒 **must ship** | required by `Definition of Done — 1.0`; non-negotiable for ERP shipping |
-| Browser compat matrix (Chromium / Firefox / WebKit / Edge) | 🟡 | coordinator | 🔒 **must ship** | Playwright multi-project config exists; needs a documented matrix run + report |
-| Mobile/touch fallback (44px targets, double-tap edit, long-press menu, range handles) | ❌ | unassigned | 🚪 **defer post-1.0** | `design.md §2 Non-goals` explicitly says "Mobile-first interactions deferred — desktop-first; touch fallback at 1.0+"; recommend ship as 1.0+ |
-| Edit-cell paint <16ms benchmark | ⏳ | coordinator | 🚪 **defer post-1.0** | currently skipped pending Track 1; smoke perf passes overall |
-| Smoke + nightly perf baseline refresh | ✅ | n/a | n/a | smoke 3/3 green; nightly per-PR drift guard at 10% |
-
-### v1.0 GA gates
-
-| Gate | Status | Owner | Defer? | Notes |
-| --- | --- | --- | --- | --- |
-| bsncraft consumer migration (≥ -100 LOC wrapper) | ⏳ | bsncraft team | 🔒 must ship | customers grid migration in flight |
-| Public API frozen for semver stability | 🟡 | coordinator | 🔒 must ship | informally pinned via api-surface manifest; v1.0 locks formally |
-| All P0/P1 closed | ⏳ | all | 🔒 must ship | track in `bsncraft-issues.md` |
-| `apps/docs` deployed publicly | ❌ | coordinator | 🚪 **defer post-1.0** | apps/docs builds locally; recommend point to GitHub Packages + README until traffic justifies the host |
-| Pricing/licence model decision | ❌ | maintainer | 🔒 must ship | architectural decision, not engineering |
-| Public registry publish decision (npmjs.com vs GitHub Packages) | ❌ | maintainer | 🔒 must ship | currently GitHub Packages; npmjs.com is a launch lever |
-| Maintainer explicit sign-off | ❌ | maintainer | 🔒 must ship | non-negotiable per `release-milestone-roadmap.md` |
-
----
-
-## Fast-track sequencing
-
-If maintainer ratifies all 🚪 **defer post-1.0** recommendations, the path to v1.0 is:
-
-1. **v0.6.0 GA** — ship alpha.2 work train as GA after bsncraft soak signs off
-2. **v0.7.0** — architecture correction (worker2 chrome lane + worker3 editor lane, parallel after PR-A1 lands; PR-D coordinator sweep last)
-3. **v1.0 prep** — runs as v0.7 work lands, no strict ordering between these:
-   - bsncraft customers migration completes
-   - WCAG deep-pass manual NVDA / JAWS / VoiceOver run
-   - Browser compat matrix documented
-   - Examples app cleanup (no hidden URL flags for hero flows)
-   - Public API formally locked + version bump
-   - Maintainer pricing / registry / sign-off
-
-**v1.1 post-1.0 backlog if 🚪 deferrals stand:** charts, RTL, mobile/touch fallback, AG Grid migration guide, XLSX export, PDF export, pivot drag-UI, client pagination UI, cursor-pagination IMPL, edit-cell paint <16ms benchmark, `apps/docs` public deploy.
-
-**Items the coordinator does NOT recommend deferring** (must-ship for 1.0):
-- Architecture correction (RFC v0.7 — public API stability concern)
-- WCAG manual screenreader audit (ERP shipping requirement)
-- Browser compat matrix (regression risk)
-- bsncraft consumer migration (the original 0.5 milestone gate)
-- Public API formal lock + maintainer sign-off
-
----
-
-## Update log
-
-- 2026-05-04 (PM, post-#499) — Coordinator created this file at maintainer instruction. Audit synthesis from `docs/coordination/release-milestone-roadmap.md` + `docs/roadmap.md` + `docs/queue.md` + 2026-05-04 source-side verification.
+=========================================================================== -->
