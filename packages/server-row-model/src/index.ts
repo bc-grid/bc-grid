@@ -272,7 +272,7 @@ type ServerRowModelMetricsState = {
   queuedRequests: number
 }
 
-type ServerRowModelMetricsSnapshot = {
+export type ServerRowModelMetricsSnapshot = {
   blockFetchErrors: number
   blockFetches: number
   blockFetchLatencyMs: TimingSnapshot

@@ -87,6 +87,7 @@ export const apiSurfaceManifest = [
       "BcSelection",
       "BcServerBlockErrorParams",
       "BcServerBlockRetryConfig",
+      "BcServerCacheStats",
       "BcServerGridApi",
       "BcValidationResult",
       "ColumnId",
@@ -648,6 +649,7 @@ export const apiSurfaceManifest = [
     ],
     declarationExports: [
       "ServerBlockCache",
+      "ServerRowModelMetricsSnapshot",
       "createServerRowModel",
       "defaultBlockKey",
       "summarizeServerCache",
