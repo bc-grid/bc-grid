@@ -239,8 +239,14 @@ export function useBcGridApi<TRow>(): RefObject<BcGridApi<TRow> | null> {
 }
 
 const DEFAULT_DETAIL_HEIGHT = 144
+const DEFAULT_QUICK_FILTER_DEBOUNCE_MS = 200
 const editableKeyTargetTags = new Set(["INPUT", "TEXTAREA", "SELECT"])
 const BcGridContextMenuLayer = lazy(() => import("./internal/context-menu-layer"))
+
+function normaliseQuickFilterDebounceMs(value: number | undefined): number {
+  if (value == null || !Number.isFinite(value)) return DEFAULT_QUICK_FILTER_DEBOUNCE_MS
+  return Math.max(0, Math.floor(value))
+}
 
 function useDefaultUserSettingsStore(
   providedStore: BcUserSettingsStore | undefined,
@@ -934,13 +940,31 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       "",
     props.onSearchTextChange,
   )
+  const quickFilterEnabled = props.quickFilter != null && props.quickFilter.enabled !== false
+  const quickFilterPlaceholder = props.quickFilter?.placeholder ?? "Quick filter"
+  const quickFilterDebounceMs = normaliseQuickFilterDebounceMs(props.quickFilter?.debounceMs)
+  const quickFilterInputRef = useRef<HTMLInputElement | null>(null)
+  const [quickFilterDraft, setQuickFilterDraft] = useState(searchText)
+  useEffect(() => {
+    setQuickFilterDraft(searchText)
+  }, [searchText])
+  useEffect(() => {
+    if (!quickFilterEnabled) return
+    if (quickFilterDraft === searchText) return
+    if (quickFilterDebounceMs === 0) {
+      setSearchText(quickFilterDraft)
+      return
+    }
+    const timer = setTimeout(() => setSearchText(quickFilterDraft), quickFilterDebounceMs)
+    return () => clearTimeout(timer)
+  }, [quickFilterDebounceMs, quickFilterDraft, quickFilterEnabled, searchText, setSearchText])
   useEffect(() => {
     if (!props.searchHotkey || typeof document === "undefined") return
 
     const handleSearchHotkey = (event: globalThis.KeyboardEvent) => {
       if (!shouldHandleSearchHotkey(event)) return
 
-      const searchInput = props.searchInputRef?.current ?? null
+      const searchInput = props.searchInputRef?.current ?? quickFilterInputRef.current
       if (!searchInput) return
 
       event.preventDefault()
@@ -2782,6 +2806,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     data.length,
     allRowEntries.length,
   )
+  const quickFilterInput = quickFilterEnabled ? (
+    <input
+      aria-label="Quick filter"
+      className="bc-grid-toolbar-input bc-grid-quick-filter-input"
+      data-bc-grid-quick-filter-input="true"
+      onChange={(event) => setQuickFilterDraft(event.currentTarget.value)}
+      placeholder={quickFilterPlaceholder}
+      ref={(node) => {
+        quickFilterInputRef.current = node
+        if (props.searchInputRef) props.searchInputRef.current = node
+      }}
+      type="search"
+      value={quickFilterDraft}
+    />
+  ) : null
   const toolbarContext = useMemo<BcToolbarContext<TRow>>(() => {
     const availableGroupableColumns = groupableColumnOptions.filter(
       (column) => !groupByState.includes(column.columnId),
@@ -2807,6 +2846,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
           value={searchText}
         />
       ),
+      quickFilterInput,
       groupBy: groupByState,
       setGroupBy: setGroupByState,
       groupByDropdown: (
@@ -2867,6 +2907,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     props.density,
     props.layoutState?.density,
     props.searchInputRef,
+    quickFilterInput,
     selectedRowCount,
     setDensityPreference,
     setGroupByState,
@@ -2874,7 +2915,10 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     searchText,
   ])
   const toolbarContent = useMemo(
-    () => (typeof toolbar === "function" ? toolbar(toolbarContext) : toolbar),
+    () =>
+      typeof toolbar === "function"
+        ? toolbar(toolbarContext)
+        : (toolbar ?? toolbarContext.quickFilterInput),
     [toolbar, toolbarContext],
   )
   const hasToolbarContent = toolbarContent != null && typeof toolbarContent !== "boolean"

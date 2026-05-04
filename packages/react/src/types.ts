@@ -427,6 +427,7 @@ export interface BcToolbarContext<TRow = unknown> {
   searchText: string
   setSearchText(next: string): void
   searchInput: ReactNode
+  quickFilterInput: ReactNode
   groupBy: readonly ColumnId[]
   setGroupBy(next: readonly ColumnId[]): void
   groupByDropdown: ReactNode
@@ -439,6 +440,12 @@ export interface BcToolbarContext<TRow = unknown> {
    * stable when a host swaps in its saved-view picker beside grid-owned slots.
    */
   savedViewPicker: ReactNode
+}
+
+export interface BcQuickFilterOptions {
+  enabled?: boolean
+  placeholder?: string
+  debounceMs?: number
 }
 
 export interface BcAggregationFormatterParams<TRow, TValue = unknown> {
@@ -920,6 +927,7 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
   rowIsInactive?: (row: TRow) => boolean
   rowIsDisabled?: (row: TRow) => boolean
 
+  quickFilter?: BcQuickFilterOptions
   toolbar?: ReactNode | ((ctx: BcToolbarContext<TRow>) => ReactNode)
   /**
    * Consumer-owned action slot rendered as a grid-supplied bulk-actions

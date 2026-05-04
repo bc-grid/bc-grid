@@ -79,6 +79,21 @@ describe("@bc-grid/theming", () => {
     expect(css).toContain(".bc-grid-bulk-actions-slot button:hover:not(:disabled),")
   })
 
+  test("toolbar quick-filter controls use themed input and button chrome", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
+
+    expect(css).toContain(".bc-grid-toolbar {")
+    expect(css).toContain(".bc-grid-toolbar-input,")
+    expect(css).toContain(".bc-grid-toolbar-select,")
+    expect(css).toContain(".bc-grid-toolbar-button")
+    expect(css).toContain(".bc-grid-quick-filter-input {")
+    expect(css).toContain("border: 1px solid var(--bc-grid-input-border)")
+    expect(css).toContain(".bc-grid-toolbar-input:focus-visible,")
+    expect(css).toContain(
+      ".bc-grid-toolbar-input,\n.bc-grid-toolbar-select,\n.bc-grid-toolbar-button,",
+    )
+  })
+
   test("row-hover token mixes accent with --bc-grid-bg (opaque) so body and pinned composite to the same pixels", () => {
     const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8")
     // Body cells paint hover via `background: var(--bc-grid-row-hover)`
