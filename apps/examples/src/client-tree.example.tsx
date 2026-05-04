@@ -76,12 +76,12 @@ export function ClientTreeExample() {
         ariaLabel="Client tree demo grid"
         columns={columns}
         data={data}
-        rowId={(row) => row.id}
+        rowId={(row: BomRow) => row.id}
         treeData={{
-          getRowParentId: (row) => row.parentId,
+          getRowParentId: (row: BomRow) => row.parentId,
         }}
         expansion={expansion}
-        onExpansionChange={(next) => setExpansion(new Set(next))}
+        onExpansionChange={(next: Iterable<RowId>) => setExpansion(new Set(next))}
         height={420}
       />
     </section>

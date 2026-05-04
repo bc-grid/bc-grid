@@ -472,6 +472,15 @@ function Submenu({
   // when it opens. Use the unflipped width so we can decide left-vs-
   // right deterministically; subsequent measurements (after a flip)
   // would show fits-on-left even when fits-on-right is also true.
+  //
+  // Decision rule:
+  //   1. If the submenu fits on the right (no overflow), keep right.
+  //   2. If it overflows right AND fits on the left, flip.
+  //   3. If it overflows right AND ALSO doesn't fit on the left, flip
+  //      anyway when the left side has more available space than the
+  //      right — flipping is less-worse. Without this, an item near
+  //      the right edge of a viewport so narrow that NEITHER side
+  //      fully fits would stay right and disappear off-screen.
   useLayoutEffect(() => {
     if (!active) {
       // Reset to default direction when submenu closes so the next
@@ -488,7 +497,10 @@ function Submenu({
     const projectedRightEdge = triggerRect.right + contentWidth + margin
     const overflowsRight = projectedRightEdge > window.innerWidth
     const fitsOnLeft = triggerRect.left - contentWidth - margin >= 0
-    setFlipSide(overflowsRight && fitsOnLeft ? "left" : "right")
+    const spaceOnRight = window.innerWidth - triggerRect.right
+    const spaceOnLeft = triggerRect.left
+    const leftIsLessWorse = spaceOnLeft > spaceOnRight
+    setFlipSide(overflowsRight && (fitsOnLeft || leftIsLessWorse) ? "left" : "right")
   }, [active])
 
   return (
