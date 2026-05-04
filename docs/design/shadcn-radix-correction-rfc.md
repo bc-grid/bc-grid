@@ -10,6 +10,39 @@ This RFC is the architecture-correction plan. It is not a "v0.7 nice-to-have." I
 
 Two parallel tracks across worker2 (chrome lane) and worker3 (editor lane), nine PRs total. Track is sequenced so each PR is independently mergeable, behind a public-API-equivalent surface (no consumer break), with the in-house primitives deleted only after the Radix replacement passes Playwright + smoke-perf. Worker1 stays on the server-grid lane through the correction (work is independent).
 
+**Critical sourcing rule:** the shadcn primitives bc-grid copies are sourced from **bsncraft's `@bsn/ui` package** (`~/work/bsncraft/packages/ui/src/components/`), not from generic shadcn CLI defaults. Reasons:
+
+1. **bsncraft is the canonical consumer.** bc-grid exists to render bsncraft's data. The chrome must match bsncraft's design system pixel-for-pixel — same buttons, same dropdown shells, same tooltip styling.
+2. **Monorepo merge is planned.** Per `~/work/bsncraft/bc-grid.md`, bc-grid will move into `bsncraft/packages/bc-grid/` as a workspace package. When that happens, every `import { Foo } from "../shadcn/foo"` inside bc-grid swaps to `import { Foo } from "@bsn/ui/components/foo"` — mechanical, no behavior change. Sourcing from `@bsn/ui` today makes the merge a path swap, not a re-design.
+3. **Radix version pin lock-step.** `@bsn/ui` pins specific `@radix-ui/*` minor versions; bc-grid's `packages/react/package.json` MUST pin the same versions. Drift means the eventual merge would force one side or the other to bump.
+
+**bsncraft pinned versions to mirror in bc-grid (verified 2026-05-04 from `bsncraft/apps/web/package.json` + `bsncraft/packages/ui/package.json`):**
+
+```jsonc
+"@radix-ui/react-alert-dialog":  "^1.1.15",
+"@radix-ui/react-avatar":        "^1.1.11",
+"@radix-ui/react-checkbox":      "^1.3.3",
+"@radix-ui/react-collapsible":   "^1.1.12",
+"@radix-ui/react-context-menu":  "^2.2.16",
+"@radix-ui/react-dialog":        "^1.1.15",
+"@radix-ui/react-dropdown-menu": "^2.1.16",
+"@radix-ui/react-label":         "^2.1.8",
+"@radix-ui/react-popover":       "^1.1.15",
+"@radix-ui/react-radio-group":   "^1.3.8",
+"@radix-ui/react-scroll-area":   "^1.2.10",
+"@radix-ui/react-select":        "^2.2.6",
+"@radix-ui/react-separator":     "^1.1.8",
+"@radix-ui/react-slot":          "^1.2.4",
+"@radix-ui/react-switch":        "^1.2.6",
+"@radix-ui/react-tabs":          "^1.1.13",
+"@radix-ui/react-tooltip":       "^1.2.8",
+"class-variance-authority":      "^0.7.1",
+"cmdk":                          "^1.1.1",
+"lucide-react":                  "^1.8.0"
+```
+
+**Sourcing instruction (binding for PR-A1 and PR-C1):** copy the relevant `.tsx` files from `~/work/bsncraft/packages/ui/src/components/` into `packages/react/src/shadcn/` (chrome) and `packages/editors/src/shadcn/` (combobox foundation). Do NOT regenerate via `bunx shadcn@latest add` — that would produce shadcn-default versions that drift from `@bsn/ui`. Files to copy from `@bsn/ui`: `dropdown-menu.tsx`, `context-menu.tsx`, `tooltip.tsx`, `popover.tsx`, `checkbox.tsx`, `tabs.tsx`, `dialog.tsx`, `sheet.tsx`, `command.tsx`, `popover.tsx`, `select.tsx`, `separator.tsx`, `scroll-area.tsx`, `label.tsx`. Preserve any local modifications bsncraft has made to the shadcn defaults (e.g., custom variants, additional utility classes).
+
 Bundle target: stay under the 150 KiB hard cap. The correction is approximately neutral — Radix Popper / Floating UI / Radix DropdownMenu / Radix Popover / Radix Tooltip / cmdk / lucide-react together add ~12-18 KiB gzip; deletion of `context-menu.tsx` (532 LOC) + `menu-item.tsx` (175 LOC) + `popup-position.ts` (172 LOC) + `popup-dismiss.ts` + `tooltip.tsx` (291 LOC) + `combobox-search.tsx` + `combobox.tsx` + `disclosure-icon.tsx` + 4 of the 5 hand-rolled icon files saves ~10-14 KiB gzip. Net somewhere in the ±5 KiB range with substantial reduction in maintained surface.
 
 SSR-test trade-off: Radix is client-only. The current `renderToStaticMarkup` tests in `contextMenu.markup.test.tsx`, `chromeContextMenu.test.ts`, etc. cannot remain as-is. Replace them with happy-dom or jsdom-backed `@testing-library/react` tests, gated by a separate test runner config (so the rest of bun test stays pure-helper-fast). RFC §6 covers the test-infrastructure update.
@@ -57,7 +90,7 @@ The **internal** modules under `packages/react/src/internal/` and `packages/edit
 
 ### Block A — foundation (worker2, sequential, ~half day)
 
-**PR-A1: Add Radix runtime deps + shadcn primitive scaffolding.** Add `@radix-ui/react-dropdown-menu`, `@radix-ui/react-context-menu`, `@radix-ui/react-tooltip`, `@radix-ui/react-popover`, `@radix-ui/react-checkbox`, `@radix-ui/react-tabs`, `@radix-ui/react-roving-focus`, `cmdk`, `lucide-react` to `packages/react/package.json` `dependencies`. Run shadcn CLI to copy the primitive components into `packages/react/src/shadcn/` (NOT runtime dep — copied source per the design). Update `tools/bundle-size/src/manifest.ts` baseline expectations. No consumer-visible change yet.
+**PR-A1: Add Radix runtime deps + shadcn primitive scaffolding (sourced from `@bsn/ui`).** Add `@radix-ui/*` packages to `packages/react/package.json` `dependencies` at the **exact versions** listed in this RFC's TL;DR. Add `cmdk@^1.1.1`, `lucide-react@^1.8.0`, `class-variance-authority@^0.7.1`. Update `bun.lock`. Then **copy** (not regenerate) the relevant primitive `.tsx` files from `~/work/bsncraft/packages/ui/src/components/` into `packages/react/src/shadcn/`: `dropdown-menu.tsx`, `context-menu.tsx`, `tooltip.tsx`, `popover.tsx`, `checkbox.tsx`, `tabs.tsx`, `dialog.tsx`, `sheet.tsx`, `command.tsx`, `select.tsx`, `separator.tsx`, `scroll-area.tsx`, `label.tsx`. If those files import a local utility (e.g., `cn` from `@bsn/ui/lib/utils`), copy that utility too OR redirect the import to bc-grid's existing `cn`/`composeClassName` helpers — match the source's behavior, not its import path. Update `tools/bundle-size/src/manifest.ts` baseline expectations. No consumer-visible change yet.
 
 **PR-A2: Test infra — happy-dom backed `@testing-library/react`.** Add `happy-dom` + `@testing-library/react` as devDependencies under `packages/react`. Add a separate `bun test --preload tests/dom-setup.ts packages/react/tests/dom/*` script. Move existing `renderToStaticMarkup`-based markup tests that need to test interactive Radix behavior into the new `dom/` directory. Pure-helper tests stay where they are.
 
@@ -73,7 +106,7 @@ The **internal** modules under `packages/react/src/internal/` and `packages/edit
 
 ### Block C — editor migration (worker3, parallel with Block B, 3 PRs)
 
-**PR-C1: Add shadcn Combobox foundation.** Use the shadcn CLI to copy `command.tsx` (cmdk-backed) into `packages/editors/src/shadcn/`. Add `cmdk` runtime dep to `packages/editors/package.json`. No editor-visible change yet — just the new foundation.
+**PR-C1: Add shadcn Combobox foundation (sourced from `@bsn/ui`).** Add `cmdk@^1.1.1` + relevant `@radix-ui/*` deps to `packages/editors/package.json` at the same pinned versions as worker2's PR-A1 (see TL;DR). Copy `command.tsx` and `popover.tsx` from `~/work/bsncraft/packages/ui/src/components/` into `packages/editors/src/shadcn/` — same instructions as PR-A1: copy the source verbatim, redirect any local utility imports to bc-grid's helpers. No editor-visible change yet — just the new foundation.
 
 **PR-C2: Migrate `selectEditor` + `multiSelectEditor` + `autocompleteEditor` to the shadcn Combobox.** Internally, each of the three combobox-driven editors now uses the new `Combobox` foundation from PR-C1. Closes the deferred `triggerComponent` / `optionItemComponent` slot work from #489 — those slots now have an actual shadcn primitive underneath. Delete `combobox.tsx` and `combobox-search.tsx` from `packages/editors/src/internal/`.
 
@@ -111,3 +144,5 @@ Every PR in Blocks A-D merges. After PR-D, `grep -rln '@radix-ui' packages/*/src
 ## Why this is binding
 
 The README and design doc described a shadcn/Radix-first architecture. Consumers (bsncraft) integrated against bc-grid expecting the chrome to inherit shadcn token coverage. Hand-rolled chrome means every consumer-reported edge case becomes a "we have to patch the in-house primitive" cycle, while the equivalent Radix component already has the bug fixed. This RFC restores the contract.
+
+**Beyond restoration — the bsncraft monorepo merge.** Per `~/work/bsncraft/bc-grid.md`, bc-grid will move into `bsncraft/packages/bc-grid/` as a workspace package. When that happens, `packages/react/src/shadcn/*` and `packages/editors/src/shadcn/*` get **deleted**, and the imports in bc-grid swap to `import { Foo } from "@bsn/ui/components/foo"`. Single canonical copy of every shadcn primitive across the entire ERP. This RFC sets bc-grid up for that swap to be mechanical — same Radix versions, same component source, same utility helpers — so the merge is a 30-minute path-rename PR instead of a multi-day reconciliation.

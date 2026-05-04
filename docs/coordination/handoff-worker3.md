@@ -16,9 +16,12 @@
 
 Branch: `agent/worker3/v07-shadcn-combobox-foundation`. Per RFC §Block C PR-C1:
 
-- Add `cmdk` to `packages/editors/package.json` `dependencies`. Update `bun.lock`.
-- Run `bunx shadcn@latest add command popover` and copy primitives into `packages/editors/src/shadcn/`. Or, if worker2's PR-A1 already copied `command.tsx` into `packages/react/src/shadcn/`, alias it via `@bc-grid/react/shadcn/command` — pick whichever keeps `@bc-grid/editors` from depending on `@bc-grid/react` runtime (it already devDeps it; OK either way — RFC PR body should call out the choice).
-- Add a thin internal wrapper `packages/editors/src/shadcn/Combobox.tsx` exposing the shape that today's `combobox.tsx` + `combobox-search.tsx` provide (search-mode and select-mode), backed by cmdk + Radix Popover.
+**Critical sourcing rule:** the `command.tsx` + `popover.tsx` primitives MUST come from `~/work/bsncraft/packages/ui/src/components/` — NOT from `bunx shadcn@latest add`. Reason: bc-grid is moving into the bsncraft monorepo as `bsncraft/packages/bc-grid/`. After the merge, every `packages/editors/src/shadcn/foo.tsx` gets deleted and imports swap to `@bsn/ui/components/foo`. Sourcing from `@bsn/ui` today makes the merge mechanical.
+
+- Add to `packages/editors/package.json` `dependencies` at the **exact pinned versions** in the RFC TL;DR: `cmdk@^1.1.1`, `@radix-ui/react-popover@^1.1.15`, `@radix-ui/react-dialog@^1.1.15`, `@radix-ui/react-slot@^1.2.4`, `class-variance-authority@^0.7.1`, `lucide-react@^1.8.0`. Update `bun.lock`.
+- **Copy** `command.tsx` and `popover.tsx` from `~/work/bsncraft/packages/ui/src/components/` into `packages/editors/src/shadcn/`. If the source imports `cn` from `@bsn/ui/lib/utils`, copy that utility too OR redirect to bc-grid's existing helpers.
+- Alternative if worker2's PR-A1 already copied `command.tsx` into `packages/react/src/shadcn/`: alias it via `@bc-grid/react/shadcn/command`. `@bc-grid/editors` already devDeps `@bc-grid/react`; the alias avoids two copies of the same source. Pick whichever keeps deps cleanest — call out the choice in the PR body.
+- Add a thin internal wrapper `packages/editors/src/shadcn/Combobox.tsx` exposing the shape today's `combobox.tsx` + `combobox-search.tsx` provide (search-mode and select-mode), backed by cmdk + Radix Popover.
 - No editor-visible change yet — just the new foundation. PR-C2 swaps the editors over.
 
 #### Next-after → `v07-radix-combobox-editors` (PR-C2)

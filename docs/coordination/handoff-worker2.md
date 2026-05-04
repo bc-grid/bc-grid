@@ -14,10 +14,12 @@
 
 Branch: `agent/worker2/v07-radix-shadcn-deps-and-scaffolding`. Per RFC §Block A PR-A1:
 
-- Add to `packages/react/package.json` `dependencies`: `@radix-ui/react-dropdown-menu`, `@radix-ui/react-context-menu`, `@radix-ui/react-tooltip`, `@radix-ui/react-popover`, `@radix-ui/react-checkbox`, `@radix-ui/react-tabs`, `@radix-ui/react-roving-focus`, `@radix-ui/react-dialog`, `lucide-react`. Pin minor versions to current stable. Update `bun.lock`.
-- Run `bunx shadcn@latest add dropdown-menu context-menu tooltip popover checkbox tabs dialog command` to copy primitive components. Land them under `packages/react/src/shadcn/` (NOT runtime dep — copied source per the design). Add `packages/react/src/shadcn/` to `.gitignore` exception so they're committed.
+**Critical sourcing rule:** the shadcn primitives we copy MUST come from `~/work/bsncraft/packages/ui/src/components/` — NOT from `bunx shadcn@latest add`. Reason: bc-grid is moving into the bsncraft monorepo as `bsncraft/packages/bc-grid/`. After the merge, every `packages/react/src/shadcn/foo.tsx` gets deleted and imports swap to `@bsn/ui/components/foo`. Sourcing from `@bsn/ui` today makes the merge mechanical.
+
+- Add to `packages/react/package.json` `dependencies` at the **exact pinned versions** in the RFC TL;DR: `@radix-ui/react-dropdown-menu@^2.1.16`, `@radix-ui/react-context-menu@^2.2.16`, `@radix-ui/react-tooltip@^1.2.8`, `@radix-ui/react-popover@^1.1.15`, `@radix-ui/react-checkbox@^1.3.3`, `@radix-ui/react-tabs@^1.1.13`, `@radix-ui/react-dialog@^1.1.15`, `@radix-ui/react-label@^2.1.8`, `@radix-ui/react-select@^2.2.6`, `@radix-ui/react-separator@^1.1.8`, `@radix-ui/react-scroll-area@^1.2.10`, `@radix-ui/react-slot@^1.2.4`, `class-variance-authority@^0.7.1`, `lucide-react@^1.8.0`. Update `bun.lock`.
+- **Copy** (don't regenerate) these `.tsx` files from `~/work/bsncraft/packages/ui/src/components/` into `packages/react/src/shadcn/`: `dropdown-menu.tsx`, `context-menu.tsx`, `tooltip.tsx`, `popover.tsx`, `checkbox.tsx`, `tabs.tsx`, `dialog.tsx`, `sheet.tsx`, `select.tsx`, `separator.tsx`, `scroll-area.tsx`, `label.tsx`. If the source imports `cn` from `@bsn/ui/lib/utils`, copy that utility too OR redirect imports to bc-grid's existing helpers — match source behavior, not source import paths.
 - Update `tools/bundle-size/src/manifest.ts` baseline expectations (RFC §TL;DR — ~12-18 KiB add).
-- No consumer-visible change. PR body documents the deps + lists every shadcn primitive copied. No deletion in this PR — Blocks B+C delete in subsequent PRs.
+- No consumer-visible change. PR body lists every primitive copied + the source path it came from + the version pin. No deletion in this PR — Blocks B+C delete in subsequent PRs.
 
 #### Next-after → `v07-test-infra-happy-dom` (PR-A2)
 
