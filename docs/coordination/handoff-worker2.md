@@ -135,6 +135,31 @@ Your #423 saved-view DTO + #441 storage recipe ship the consumer-owned local per
 
 **Branch:** `agent/worker2/v06-saved-view-server-sync`. **Effort:** ~half day.
 
+### Then-last → `v06-toolbar-render-prop` (~half day)
+
+Bsncraft anticipated polish: today the grid's toolbar slot is `BcGridProps.toolbar?: ReactNode` — a single slot. Consumers building custom toolbar layouts (search input + group-by dropdown + saved-view picker + custom buttons) end up rendering their own toolbar OUTSIDE the grid because they can't position pieces relative to grid state. Add a render-prop so consumers get full control:
+
+**Implementation:**
+
+1. **Widen `toolbar` prop** to accept `ReactNode | (ctx: BcToolbarContext) => ReactNode`.
+2. **`BcToolbarContext`** carries: `searchInput`, `groupByDropdown`, `savedViewPicker`, `densityPicker`, `clearFiltersButton`, `selectedRowCount`, `apiRef`. Each is a render-prop sub-slot consumers can compose freely.
+3. **Default toolbar** preserved when prop is `undefined` (no behavior change for non-render-prop consumers).
+4. **Recipe** at `docs/recipes/custom-toolbar.md` showing bsncraft-style ERP toolbar pattern with all sub-slots stitched into a custom layout.
+
+**Branch:** `agent/worker2/v06-toolbar-render-prop`. **Effort:** ~half day.
+
+### Final → `v06-quick-filter-input` (~half day)
+
+Bsncraft anticipated polish: a "quick filter" input that filters across all searchable columns simultaneously, distinct from the per-column filter row. AG Grid + Excel both ship this; bc-grid's `searchHotkey` (#369) opens the consumer's external search input but doesn't surface a built-in one.
+
+**Implementation:**
+
+1. **`BcGridProps.quickFilter?: { enabled?: boolean; placeholder?: string; debounceMs?: number }`** — opt-in. When set, the toolbar surfaces a quick-filter input that drives the same `searchText` controlled state as the existing search infrastructure.
+2. **Position** in the toolbar's render-prop sub-slots (composes with `v06-toolbar-render-prop` above): exposed as `ctx.quickFilterInput` so consumers can place it anywhere in their custom toolbar.
+3. **Recipe** at `docs/recipes/quick-filter.md` showing the difference between per-column filters (precise, one column) vs quick-filter (broad, all columns) — pin the UX guidance for ERP screens.
+
+**Branch:** `agent/worker2/v06-quick-filter-input`. **Effort:** ~half day.
+
 ### Previously active → `v06-fill-handle` (DONE — #436 merged bf10ea0, HEADLINE)
 ### Previously active → `v05-bsncraft-pinned-scroll-shadow-overlay` (DONE — #432 merged e73e271)
 ### Previously active → `v06-bulk-action-toolbar-primitive` (DONE — #439 merged e32f2fc)
