@@ -116,7 +116,64 @@ The recommended fix per the bsncraft memo is **Option A: add the prop set to all
 
 **bsncraft consumer issues triage 2026-05-04** (`docs/coordination/bsncraft-issues.md`): two items on this lane. Pulled forward into the queue.
 
-### Active now → `v06-builtin-editors-generic-trow` (bsncraft P1 #13, ~half day)
+## ⚡ Fresh items added 2026-05-04 (round 2)
+
+You shipped: builtin-editors-generic-trow (#478), createTextEditor inputComponent slot (#480), multi-cell range delete (#471), paste-into-cell detection (#467), editing-state controlled prop (#482). Queue thinned. Five new items below — most pull through your shadcn-native-editors thread (#480 only shipped text; 7 more editors to migrate to the inputComponent shape) plus a v1.0 a11y audit prep.
+
+### Active now → `v06-shadcn-native-editors-numeric-batch` (~1 day)
+
+Per-editor migration to the `inputComponent` render-prop pattern that #480 established for text. Continue with the **numeric-input cluster** — `numberEditor`, `dateEditor`, `datetimeEditor`, `timeEditor`. All take string/number values, all use a single `<input>` shell, all benefit from the same render-prop slot.
+
+**Implementation per editor (4 editors, ~15 min each + 30 min for tests):**
+
+1. Add `inputComponent?: ComponentType<{ ref, value, onChange, onKeyDown, ... }>` to the editor's factory signature. Mirror the shape from `createTextEditor`.
+2. Default to the existing built-in `<input>` rendering (zero behavior change for consumers who don't set `inputComponent`).
+3. Pin each editor's input-component contract with a unit test in `packages/editors/tests/<editor>InputComponent.test.tsx`.
+4. **Recipe extension** in `docs/recipes/shadcn-editors.md` showing the wiring for each (number → shadcn `Input` with type="number", date → shadcn `Input type="date"`, etc.).
+
+**Branch:** `agent/worker3/v06-shadcn-native-editors-numeric-batch`. **Effort:** ~1 day.
+
+### Next-after → `v06-shadcn-native-editors-select-batch` (~1 day)
+
+The other half of the matrix: the **option-list cluster** — `selectEditor`, `multiSelectEditor`, `autocompleteEditor`, `checkboxEditor`. Different ergonomics (option dropdowns, popover triggers, checkbox toggles); needs separate primitives:
+
+- `selectEditor` / `multiSelectEditor` / `autocompleteEditor`: render-prop `triggerComponent?: ComponentType<{ open, value, label }>` for the cell-level trigger button + `optionItemComponent?: ComponentType<{ option, isActive, isSelected }>` for individual options. Consumer wires shadcn `Button` + `CommandItem`.
+- `checkboxEditor`: render-prop `checkboxComponent?: ComponentType<{ ref, checked, onCheckedChange }>` — consumer wires shadcn `Checkbox`.
+
+**Recipe extension** + per-editor unit tests + 1 Playwright spec showing async-loaded options paint with shadcn primitives.
+
+**Branch:** `agent/worker3/v06-shadcn-native-editors-select-batch`. **Effort:** ~1 day.
+
+### Then-after → `v06-editor-async-validation` IMPLEMENTATION (~1 day, was queued earlier)
+
+Already in your queue but worth re-anchoring. Widen `BcValidationResult` to support `Promise<{valid, error}>`. Pass an `AbortSignal` so superseded validations abort. Surface `data-bc-grid-edit-state="pending"` during the fetch. Recipe at `docs/recipes/async-validation.md`.
+
+**Branch:** `agent/worker3/v06-editor-async-validation`. **Effort:** ~1 day.
+
+### After-that → `v07-editor-a11y-audit` (~1 day, **v1.0 prep**)
+
+Walk every editor (text/number/date/datetime/time/select/multi-select/autocomplete/checkbox) against the WAI-ARIA Authoring Practices for grid editors. Verify:
+
+1. **Focus contract** — focus lands on input on mount; focus returns to cell on commit/cancel; no focus traps when navigating between editors via Tab.
+2. **ARIA states** — `aria-required`, `aria-readonly`, `aria-disabled`, `aria-invalid`, `aria-describedby` (for validation messages) all stamped correctly per state.
+3. **Screen-reader announcements** — committing a value announces the new value; rejection announces the error; the live region (`statusBar`'s `latestError` segment from #407) reads in the right order.
+4. **Keyboard contract per editor type** — Enter commits; Esc cancels; Tab/Shift+Tab navigate; F2 toggles between display/edit on read-only cells. Document any per-editor variation (autocomplete uses Enter to pick AND commit, etc.).
+
+Output: `docs/design/v1-editor-a11y-audit.md` with one row per editor + verdict per row + linked PR for any fixes.
+
+**Branch:** `agent/worker3/v07-editor-a11y-audit`. **Effort:** ~1 day. **v1.0 prerequisite.**
+
+### Last → `v07-editor-perf-large-option-lists` (~half day, **v1.0 prep**)
+
+Autocomplete + multi-select with 500+ options today renders all options in the dropdown. At 5k+ options (vendor lookup, employee directory) the open-popover frame stalls. Verify behavior at 5k options + add a virtualization strategy if dropped frames > 0:
+
+1. Bench at `apps/benchmarks/tests/perf.perf.pw.ts`: open multi-select with 5k options, measure frame time + first-paint.
+2. If > 16ms: virtualize the option list using the existing `@bc-grid/virtualizer` package (yes, the grid's own virtualizer can drive a flat list). Keep the option-list height bounded (max 320px); render only ~20 options.
+3. Document the threshold in `docs/api.md` editor section: "for option lists > 200, use `column.fetchOptions` async loader (paginated server-side)."
+
+**Branch:** `agent/worker3/v07-editor-perf-large-option-lists`. **Effort:** ~half day.
+
+### Then-active → `v06-builtin-editors-generic-trow` (bsncraft P1 #13, ~half day)
 
 Bsncraft consumer report: `@bc-grid/editors` exports built-in editors typed as `BcCellEditor<unknown, unknown>`. Every column declaration in a typed grid triggers TS2349 and requires a cast: `const text = textEditor as BcCellEditor<CustomerRow>`. Bsncraft has 10+ master grids planned; that's 10+ identical casts.
 

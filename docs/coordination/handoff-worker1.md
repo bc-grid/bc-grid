@@ -61,7 +61,48 @@ You crushed the previous queue — **all 5 v0.6 server-perf items + the client-t
 
 **bsncraft consumer issues triage 2026-05-04** (`docs/coordination/bsncraft-issues.md`): three items on this lane (all SHIPPED — see the Fresh items notice above for PR numbers). New active task below.
 
-### Active now → `v06-tree-mode-option-b-regression-test` (~half day, worker3 caveat from pinned-lane RFC)
+## ⚡ Fresh items added 2026-05-04 (round 2)
+
+You shipped the bsncraft-issues set + Option B regression guard + skeleton rows. Queue thinned. Three new items below pulling from your planning doc §2-§4 + a v1.0 prep task. Plus the dual-output / cursor-pagination IMPL pickups remain queued from earlier.
+
+### Active now → `v06-body-cell-memoisation` (planning doc §2, ~half day)
+
+Per `docs/coordination/v05-audit-followups/worker1-server-perf.md` §2: extract a memoized `<BodyCell />` from `renderBodyCell` in `bodyCells.tsx`. Per visible cell × per render is 300-1500 invocations on a 30-row × 10-30-column grid; every sort/filter/hover/focus/scroll triggers a parent re-render. Sales-estimating formula columns + document-management per-cell thumbnails will exhaust today's headroom.
+
+**Memo key:** `(entry.rowId, column.columnId, value, formattedValue, searchText, selected, focused, editingCell, rowEditState)`. **Do NOT memoize on the column object** — `consumerResolvedColumns` recreates per render.
+
+**Bench:** add 50k × 30 paged mode with active sort+filter+1Hz scroll churn at `apps/benchmarks/tests/perf.perf.pw.ts`. Compare before/after on cell render time + scroll FPS. `React.memo` has comparison overhead so verify net positive.
+
+**Branch:** `agent/worker1/v06-body-cell-memoisation`. **Effort:** ~half day.
+
+### Next-after → `v06-block-error-affordance` (planning doc §3, ~half day)
+
+Per planning doc §3: when `loadBlock` rejects, blocks stay silently empty until user re-scrolls. No visible signal to the user. Document-management on flaky VPN currently swallows whole pages of rows.
+
+Add: per-block status surface with `loading | error | retrying` row-gutter affordance + `onBlockError` callback for consumer toasts. Auto-retry with 1-3 backoff attempts before marking permanently failed.
+
+**Branch:** `agent/worker1/v06-block-error-affordance`. **Effort:** ~half day.
+
+### Then-after → `v06-server-display-column-order` (planning doc §4, ~half day)
+
+Per planning doc §4: column drag-reorder doesn't reach the server query. `view.visibleColumns` is source-order; user-driven order is in `columnState[i].position` but never threaded through. Export-to-Excel workflows export in source order, not display order.
+
+Add `resolveServerDisplayColumns(columns, columnState)` helper + thread both `view.visibleColumns` (set) and `view.displayColumnOrder` (sequence) into the server query. Document the distinction.
+
+**Branch:** `agent/worker1/v06-server-display-column-order`. **Effort:** ~half day.
+
+### After-that → `v07-api-surface-freeze-audit` (~1 day, **v1.0 prep**)
+
+Walk every entry in `tools/api-surface/src/manifest.ts`. For each runtime export + type export, verify:
+1. **Intentional and stable** — meant to be public, naming holds up at 1.0.
+2. **No `__internal` leaks** — anything still marked internal-flavored (`serverRowEntryOverrides`, ref-shaped escapes) should be moved to a `__internal` namespace OR explicitly accepted as public.
+3. **Cross-package symmetry** — types in `@bc-grid/core` re-exported from `@bc-grid/react` (and vice versa for filter types) match shapes.
+
+Output: a doc at `docs/design/v1-api-surface-audit.md` with one table row per export — Status (LOCK / RENAME / INTERNALIZE / DEPRECATE / KEEP-AS-IS) + brief rationale. v1.0 ships only after every export has a verdict.
+
+**Branch:** `agent/worker1/v07-api-surface-freeze-audit`. **Effort:** ~1 day. **v1.0 prerequisite.**
+
+### Then-active → `v06-tree-mode-option-b-regression-test` (~half day, worker3 caveat from pinned-lane RFC)
 
 Worker3 flagged in their pinned-lane RFC verdict (#473): "verify `<BcServerGrid rowModel="tree">` group rows still render correctly under Option B" (the new 3-track template `auto minmax(0, 1fr) auto` shipped in #479). Group rows currently rely on `renderGroupRowCell` rendering a single full-width cell that spans all data columns; the v0.5 implementation used `aria-colspan` + a row-spanning track via the old `--bc-grid-columns` template.
 
