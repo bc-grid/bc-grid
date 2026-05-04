@@ -163,7 +163,7 @@ Cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback o
 
 | PR | Owner | Status | Defer? |
 | --- | --- | --- | --- |
-| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 merged 2026-05-04 | 🔒 must ship |
+| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ⚠️ #501 merged; bsn/ui resync follow-up in flight | 🔒 must ship |
 | PR-A2 — happy-dom test infra | worker2 | ❌ ready (PR-A1 unblocked) | 🔒 must ship |
 | PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ❌ ready (PR-A1 unblocked) | 🔒 must ship |
 | PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ blocked on PR-B1 | 🔒 must ship |

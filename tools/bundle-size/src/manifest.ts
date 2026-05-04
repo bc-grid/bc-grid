@@ -53,11 +53,12 @@ export const bundleSizeManifest: BundleSizeManifest = {
       packageName: "@bc-grid/react",
       bundlePath: "packages/react/dist/index.js",
       // Bumped 2026-05-04 for the v0.7 Radix/shadcn correction
-      // PR-A1 dependency + copied-primitive scaffold from 109.52 KiB
-      // → 112.12 KiB on current main. The copied shadcn files are not
-      // public-imported yet; this pins the measured pre-Block-B
-      // baseline before replacing/deleting the hand-rolled chrome.
-      // 150 KiB hard cap unchanged; ~38 KiB headroom remains.
+      // PR-A1 dependency + bsncraft @bsn/ui copied-primitive scaffold
+      // from 109.52 KiB → 112.12 KiB on current main. The copied
+      // shadcn files are not public-imported yet; this pins the
+      // measured pre-Block-B baseline before replacing/deleting the
+      // hand-rolled chrome. 150 KiB hard cap unchanged; ~38 KiB
+      // headroom remains.
       baselineGzipBytes: 114809,
     },
   ],
