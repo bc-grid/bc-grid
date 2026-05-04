@@ -1,6 +1,8 @@
+"use client"
+
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
-import type * as React from "react"
+import * as React from "react"
 
 import { cn } from "@/shadcn/utils"
 
@@ -28,7 +30,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/80",
         className,
       )}
       {...props}
@@ -36,32 +38,122 @@ function DialogOverlay({
   )
 }
 
+// CSS selector matching elements that should appear in Tab order inside a
+// dialog. Inputs/textareas/selects/buttons/anchors that aren't disabled and
+// don't opt out with `tabindex="-1"`.
+const DIALOG_TABBABLE_SELECTOR = [
+  'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])',
+  'textarea:not([disabled]):not([tabindex="-1"])',
+  'select:not([disabled]):not([tabindex="-1"])',
+  'button:not([disabled]):not([tabindex="-1"])',
+  'a[href]:not([tabindex="-1"])',
+  '[contenteditable="true"]:not([tabindex="-1"])',
+  '[tabindex]:not([tabindex="-1"]):not([disabled])',
+].join(", ")
+
 function DialogContent({
   className,
   children,
-  showCloseButton = true,
-  ...props
+  tabIndex,
+  onKeyDown,
+  onFocus,
+  unstyled,
+  hideClose,
+  ...rest
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  showCloseButton?: boolean
+  /**
+   * Skip the default scrollable inner wrapper (children render directly in
+   * DialogContent). Use when the content manages its own layout + scroll
+   * — e.g. the lookup picker, which is a fixed-height grid/list.
+   */
+  unstyled?: boolean
+  /**
+   * Hide the default close (X) button in the top-right corner. Use when the
+   * content already has its own close affordance, or when the dialog is
+   * meant to be dismissed by Esc / outside click only — e.g. the command
+   * palette, which uses Esc / Cmd+K.
+   */
+  hideClose?: boolean
 }) {
+  const contentRef = React.useRef<HTMLDivElement | null>(null)
+
+  // Chrome's "keyboard-focusable scrollers" heuristic can promote a
+  // scrollable container into Tab order dynamically — e.g. when an error
+  // message appears below a field, the dialog's content overflows, and the
+  // outer or inner scroll container becomes focusable. Neither `tabIndex`
+  // nor `overflow-hidden` on the outer reliably blocks this across browsers.
+  //
+  // Defense: intercept Tab at the dialog root. If the current focus is on
+  // DialogContent itself (or our inner dialog-body wrapper), redirect Tab
+  // to the first / last real focusable descendant so focus always lands on
+  // a form field, never on the dialog chrome.
+  const handleKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      onKeyDown?.(e)
+      if (e.defaultPrevented) return
+      if (e.key !== "Tab" || e.metaKey || e.ctrlKey || e.altKey) return
+      const root = contentRef.current
+      if (!root) return
+      const active = document.activeElement as HTMLElement | null
+      const isChromeLanded =
+        active === root || (active instanceof HTMLElement && active.dataset.slot === "dialog-body")
+      if (!isChromeLanded) return
+      e.preventDefault()
+      const candidates = Array.from(root.querySelectorAll<HTMLElement>(DIALOG_TABBABLE_SELECTOR))
+      if (candidates.length === 0) return
+      const target = e.shiftKey ? candidates[candidates.length - 1] : candidates[0]
+      target?.focus()
+      if (target instanceof HTMLInputElement) target.select?.()
+    },
+    [onKeyDown],
+  )
+
+  // When Chrome drops focus ON the dialog body element itself (e.g. on
+  // initial render after content has grown), bounce to the first focusable.
+  const handleFocus = React.useCallback(
+    (e: React.FocusEvent<HTMLDivElement>) => {
+      onFocus?.(e)
+      if (e.defaultPrevented) return
+      const root = contentRef.current
+      if (!root) return
+      const target = e.target as HTMLElement
+      const isUnwanted = target === root || target.dataset.slot === "dialog-body"
+      if (!isUnwanted) return
+      const first = root.querySelector<HTMLElement>(DIALOG_TABBABLE_SELECTOR)
+      if (first && first !== target) first.focus()
+    },
+    [onFocus],
+  )
+
   return (
-    <DialogPortal data-slot="dialog-portal">
+    <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={contentRef}
         data-slot="dialog-content"
+        tabIndex={tabIndex ?? -1}
+        onKeyDown={handleKeyDown}
+        onFocus={handleFocus}
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed left-[50%] top-[50%] z-50 flex w-full max-w-lg max-h-[85vh] translate-x-[-50%] translate-y-[-50%] flex-col border shadow-lg duration-200 sm:rounded-lg overflow-hidden focus:outline-none",
           className,
         )}
-        {...props}
+        {...rest}
       >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+        {unstyled ? (
+          children
+        ) : (
+          <div
+            data-slot="dialog-body"
+            tabIndex={-1}
+            className="flex flex-col gap-4 overflow-y-auto p-6 focus:outline-none focus-visible:outline-none"
           >
-            <XIcon />
+            {children}
+          </div>
+        )}
+        {!hideClose && (
+          <DialogPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:pointer-events-none">
+            <XIcon className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}
@@ -74,37 +166,19 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+      className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)}
       {...props}
     />
   )
 }
 
-function DialogFooter({
-  className,
-  showCloseButton = false,
-  children,
-  ...props
-}: React.ComponentProps<"div"> & {
-  showCloseButton?: boolean
-}) {
+function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-footer"
-      className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
+      className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
       {...props}
-    >
-      {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close
-          className={cn(
-            "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-xs transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
-          )}
-        >
-          Close
-        </DialogPrimitive.Close>
-      )}
-    </div>
+    />
   )
 }
 
@@ -112,7 +186,7 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      className={cn("text-lg font-semibold leading-none tracking-tight", className)}
       {...props}
     />
   )
@@ -133,13 +207,13 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogTrigger,
   DialogClose,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
-  DialogOverlay,
-  DialogPortal,
+  DialogFooter,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
 }
