@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import {
   buildClientTree,
+  collectLeafDescendants,
   compactVisibleAncestors,
   expandVisibleAncestors,
   flattenClientTree,
+  sortClientTreeChildren,
 } from "../src/clientTree"
 
 interface Row {
@@ -296,5 +298,110 @@ describe("expandVisibleAncestors / compactVisibleAncestors (filter helpers)", ()
       matchedRowIds: new Set(["a-child"]),
     })
     expect(compact).toEqual(expanded)
+  })
+})
+
+describe("sortClientTreeChildren (worker1 v06 phase 2.5 per-subtree sort)", () => {
+  // Tree shape (in data order):
+  //   root1 (name=Banana)
+  //   ├── b (name=Cherry)
+  //   ├── a (name=Apple)
+  //   └── c (name=Date)
+  //   root2 (name=Apricot)
+  //   └── d (name=Elderberry)
+  const buildSortableTree = (): Row[] => [
+    { id: "root1", name: "Banana", parentId: null },
+    { id: "b", name: "Cherry", parentId: "root1" },
+    { id: "a", name: "Apple", parentId: "root1" },
+    { id: "c", name: "Date", parentId: "root1" },
+    { id: "root2", name: "Apricot", parentId: null },
+    { id: "d", name: "Elderberry", parentId: "root2" },
+  ]
+  const compareByName = (a: Row, b: Row): number => a.name.localeCompare(b.name)
+
+  test("sorts roots by the comparator", () => {
+    const index = buildClientTree(buildSortableTree(), getParent, rowId)
+    const sorted = sortClientTreeChildren(index, compareByName)
+    // Apricot (root2) sorts before Banana (root1).
+    expect(sorted.rootIds).toEqual(["root2", "root1"])
+  })
+
+  test("sorts each parent's children by the comparator", () => {
+    const index = buildClientTree(buildSortableTree(), getParent, rowId)
+    const sorted = sortClientTreeChildren(index, compareByName)
+    // root1's children: Apple < Cherry < Date.
+    expect(sorted.childrenByParent.get("root1")).toEqual(["a", "b", "c"])
+    // root2's only child: Elderberry — single-element list unchanged.
+    expect(sorted.childrenByParent.get("root2")).toEqual(["d"])
+  })
+
+  test("preserves byId / parentByChild / levelById references", () => {
+    const index = buildClientTree(buildSortableTree(), getParent, rowId)
+    const sorted = sortClientTreeChildren(index, compareByName)
+    expect(sorted.byId).toBe(index.byId)
+    expect(sorted.parentByChild).toBe(index.parentByChild)
+    expect(sorted.levelById).toBe(index.levelById)
+  })
+
+  test("flattenClientTree against a sorted index produces sorted DFS order", () => {
+    const index = buildClientTree(buildSortableTree(), getParent, rowId)
+    const sorted = sortClientTreeChildren(index, compareByName)
+    const flat = flattenClientTree({
+      index: sorted,
+      expansionState: new Set(["root1", "root2"]),
+    })
+    // Apricot first (root2), then its single child; then Banana
+    // (root1) and its sorted children.
+    expect(flat.map((entry) => entry.rowId)).toEqual(["root2", "d", "root1", "a", "b", "c"])
+  })
+})
+
+describe("collectLeafDescendants (worker1 v06 phase 2.5 aggregations input)", () => {
+  // Tree shape:
+  //   root
+  //   ├── a
+  //   │   ├── a1 (leaf, amount=10)
+  //   │   └── a2 (leaf, amount=20)
+  //   └── b
+  //       └── b1
+  //           └── b1a (leaf, amount=30)
+  const buildAggTree = (): Row[] => [
+    { id: "root", name: "Root", parentId: null, amount: 0 },
+    { id: "a", name: "A", parentId: "root", amount: 0 },
+    { id: "a1", name: "A1", parentId: "a", amount: 10 },
+    { id: "a2", name: "A2", parentId: "a", amount: 20 },
+    { id: "b", name: "B", parentId: "root", amount: 0 },
+    { id: "b1", name: "B1", parentId: "b", amount: 0 },
+    { id: "b1a", name: "B1A", parentId: "b1", amount: 30 },
+  ]
+
+  test("returns only leaf descendants in pre-order DFS", () => {
+    const index = buildClientTree(buildAggTree(), getParent, rowId)
+    const leaves = collectLeafDescendants(index, "root")
+    expect(leaves.map((row) => row.id)).toEqual(["a1", "a2", "b1a"])
+  })
+
+  test("returns only descendants of the requested parent (not siblings)", () => {
+    const index = buildClientTree(buildAggTree(), getParent, rowId)
+    const aLeaves = collectLeafDescendants(index, "a")
+    expect(aLeaves.map((row) => row.id)).toEqual(["a1", "a2"])
+  })
+
+  test("walks deeply nested leaves (b → b1 → b1a)", () => {
+    const index = buildClientTree(buildAggTree(), getParent, rowId)
+    const bLeaves = collectLeafDescendants(index, "b")
+    expect(bLeaves.map((row) => row.id)).toEqual(["b1a"])
+  })
+
+  test("returns the row itself when the requested parent is a leaf", () => {
+    const index = buildClientTree(buildAggTree(), getParent, rowId)
+    const a1Leaves = collectLeafDescendants(index, "a1")
+    expect(a1Leaves.map((row) => row.id)).toEqual(["a1"])
+  })
+
+  test("returns empty when the requested parent is not in the index", () => {
+    const index = buildClientTree(buildAggTree(), getParent, rowId)
+    const ghost = collectLeafDescendants(index, "missing")
+    expect(ghost).toEqual([])
   })
 })

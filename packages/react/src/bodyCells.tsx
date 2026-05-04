@@ -103,6 +103,21 @@ interface RenderBodyCellParams<TRow> {
   getTreeOutlineInfo?: (
     rowId: RowId,
   ) => { childCount: number; expanded: boolean; onToggle: () => void } | null
+  /**
+   * Tree-mode parent-row aggregation lookup (worker1 v06 client tree
+   * row model phase 2.5). Returns the aggregated `{ value,
+   * formattedValue }` that should be displayed for `(rowId, columnId)`
+   * when the row is a tree parent AND the column has an aggregation
+   * configured. Returns `null` when no aggregation should be displayed
+   * (leaf rows, columns without aggregation, non-tree mode). When
+   * non-null, the returned `value` + `formattedValue` REPLACE the raw
+   * cell value before any cell renderer / search highlight runs. Per
+   * `docs/design/client-tree-rowmodel-rfc.md §6`.
+   */
+  getTreeAggregatedValue?: (
+    rowId: RowId,
+    columnId: string,
+  ) => { value: unknown; formattedValue: string } | null
 }
 
 interface RenderGroupRowCellParams<TRow> {
@@ -142,15 +157,26 @@ export function renderBodyCell<TRow>({
   getRowEditState,
   isCellFlashing,
   getTreeOutlineInfo,
+  getTreeAggregatedValue,
   renderInCellEditor,
 }: RenderBodyCellParams<TRow>): ReactNode {
   if (!column) return null
 
   const overlayApplies = hasOverlayValue?.(entry.rowId, column.columnId) ?? false
+  const aggregatedDisplay = getTreeAggregatedValue?.(entry.rowId, column.columnId) ?? null
+  // Aggregations OVERRIDE the raw cell value for parent rows. Overlay
+  // patches still take precedence for editable cells (parent-row edits
+  // remain rare but possible); leaf rows always fall through to the
+  // raw cell value.
   const value = overlayApplies
     ? getOverlayValue?.(entry.rowId, column.columnId)
-    : getCellValue(entry.row, column.source)
-  const formattedValue = formatCellValue(value, entry.row, column.source, locale)
+    : aggregatedDisplay
+      ? aggregatedDisplay.value
+      : getCellValue(entry.row, column.source)
+  const formattedValue =
+    !overlayApplies && aggregatedDisplay
+      ? aggregatedDisplay.formattedValue
+      : formatCellValue(value, entry.row, column.source, locale)
   // Aggregate row edit state for `rowState.pending` / `.error` /
   // `.dirty` so the BcEditGrid action column can disable destructive
   // actions while a row has an in-flight commit, and surface a

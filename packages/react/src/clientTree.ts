@@ -262,3 +262,73 @@ export function compactVisibleAncestors<TRow>(input: {
   // case is the same in both modes.
   return expandVisibleAncestors(input)
 }
+
+/**
+ * Sort the tree's children + roots in place by the supplied
+ * comparator. Returns a NEW `ClientTreeIndex` with sorted
+ * `rootIds` + sorted `childrenByParent` lists (same `byId`,
+ * `parentByChild`, `levelById` references — shallow clone for the
+ * adjacency containers only).
+ *
+ * Per RFC §5 sort-through-tree: sort applies WITHIN each subtree
+ * level. Roots are sorted by the comparator; each parent's children
+ * are sorted independently. Hierarchy is preserved.
+ *
+ * The comparator receives row objects (not rowIds) so callers can
+ * use the existing column-comparator surface from `BcReactGridColumn`.
+ */
+export function sortClientTreeChildren<TRow>(
+  index: ClientTreeIndex<TRow>,
+  comparator: (a: TRow, b: TRow) => number,
+): ClientTreeIndex<TRow> {
+  const compareIds = (a: RowId, b: RowId): number => {
+    const rowA = index.byId.get(a)
+    const rowB = index.byId.get(b)
+    if (!rowA || !rowB) return 0
+    return comparator(rowA, rowB)
+  }
+  const sortedRootIds = [...index.rootIds].sort(compareIds)
+  const sortedChildrenByParent = new Map<RowId, readonly RowId[]>()
+  for (const [parentId, childIds] of index.childrenByParent) {
+    sortedChildrenByParent.set(parentId, [...childIds].sort(compareIds))
+  }
+  return {
+    byId: index.byId,
+    rootIds: sortedRootIds,
+    childrenByParent: sortedChildrenByParent,
+    parentByChild: index.parentByChild,
+    levelById: index.levelById,
+  }
+}
+
+/**
+ * Collect all LEAF descendants of `parentRowId` — rows that have no
+ * children themselves AND are reachable from `parentRowId` via the
+ * tree's adjacency. Walks pre-order DFS (matches `flattenClientTree`
+ * output ordering for predictability). Used by the parent-row
+ * aggregation pipeline to gather the rows that feed
+ * `aggregateColumns`.
+ *
+ * Per RFC §6 aggregations integration. Aggregating over leaves only
+ * (not intermediate nodes) matches the standard "subtotal" semantics:
+ * a sum at a department parent shouldn't count its sub-department
+ * parents (which are themselves subtotals of their own leaves).
+ */
+export function collectLeafDescendants<TRow>(
+  index: ClientTreeIndex<TRow>,
+  parentRowId: RowId,
+): readonly TRow[] {
+  const out: TRow[] = []
+  function visit(id: RowId): void {
+    const children = index.childrenByParent.get(id)
+    if (!children || children.length === 0) {
+      // Leaf — emit the row itself.
+      const row = index.byId.get(id)
+      if (row) out.push(row)
+      return
+    }
+    for (const childId of children) visit(childId)
+  }
+  visit(parentRowId)
+  return out
+}
