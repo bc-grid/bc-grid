@@ -1,5 +1,6 @@
 import type {
   BcColumnStateEntry,
+  BcExportPlan,
   BcGridFilter,
   BcGridSort,
   BcPaginationState,
@@ -54,6 +55,7 @@ import type {
   BcServerGridProps,
   ServerRowEntryOverride,
 } from "./types"
+import { formatCellValue as formatCellValueInternal, getCellValue } from "./value"
 
 const DEFAULT_SERVER_PAGE_SIZE = 100
 const DEFAULT_SERVER_BLOCK_SIZE = 100
@@ -354,6 +356,40 @@ export function resolveBlockRetryDecision(input: {
   const backoffIndex = Math.min(input.attempt - 1, config.backoffMs.length - 1)
   const retryDelayMs = config.backoffMs[Math.max(0, backoffIndex)] ?? 1000
   return { willRetry: true, retryDelayMs }
+}
+
+/**
+ * Pure helper exported for unit testing. Builds the consumer-facing
+ * export plan from the active server view + column definitions.
+ * Returns `view`, `visibleColumns` (display-order if user reordered,
+ * else view's source order), `columnHeaders` map, and a per-cell
+ * `formatCellValue` closure that runs the column's `valueFormatter`
+ * / `format` resolution. Worker1 v0.6 CSV export server-page-stream.
+ */
+export function buildExportPlan<TRow>(input: {
+  view: ServerViewState
+  columns: readonly BcReactGridColumn<TRow>[]
+  locale: string | undefined
+}): BcExportPlan<TRow> {
+  const { view, columns, locale } = input
+  const visibleColumns: ColumnId[] = view.displayColumnOrder ?? view.visibleColumns
+  const columnByIdEntries = columns
+    .map((column, index) => [columnIdFor(column, index), column] as const)
+    .filter(([id]) => visibleColumns.includes(id))
+  const columnById = new Map(columnByIdEntries)
+  const columnHeaders: Record<ColumnId, string> = {}
+  for (const id of visibleColumns) {
+    const column = columnById.get(id)
+    columnHeaders[id] =
+      typeof column?.header === "string" && column.header.length > 0 ? column.header : id
+  }
+  const formatCellValue = (columnId: ColumnId, row: TRow): string => {
+    const column = columnById.get(columnId)
+    if (!column) return ""
+    const value = getCellValue(row, column)
+    return formatCellValueInternal(value, row, column, locale)
+  }
+  return { view, visibleColumns: [...visibleColumns], columnHeaders, formatCellValue }
 }
 
 export function resolveServerVisibleColumns<TRow>(
@@ -1012,12 +1048,22 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
           metrics: activeState.getMetrics(),
         })
       },
+      getExportPlan(): BcExportPlan<TRow> {
+        const activeState = mode === "infinite" ? infinite : mode === "tree" ? tree : paged
+        return buildExportPlan({
+          view: activeState.view,
+          columns: props.columns,
+          locale: props.locale,
+        })
+      },
     }
   }, [
     gridApiRef,
     infinite,
     paged,
+    props.columns,
     props.groupBy,
+    props.locale,
     props.rowModel,
     queueServerRowMutation,
     settleServerRowMutation,

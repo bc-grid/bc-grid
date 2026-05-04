@@ -940,6 +940,45 @@ export interface BcServerGridApi<TRow = unknown> extends BcGridApi<TRow> {
    * stats.
    */
   getCacheStats(): BcServerCacheStats
+
+  /**
+   * Returns the data needed to build a server-side export payload:
+   * the current `view` (filter / sort / search / groupBy /
+   * visibleColumns / displayColumnOrder), the visible column IDs in
+   * display order, header text per column, and a per-cell
+   * `formatCellValue` closure that respects each column's
+   * `valueFormatter` / `format`. Pure read; does not invoke any
+   * server fetch.
+   *
+   * The intended consumer flow:
+   *
+   * ```ts
+   * const plan = apiRef.current.getExportPlan()
+   * await fetch("/api/export.csv", {
+   *   method: "POST",
+   *   body: JSON.stringify({
+   *     view: plan.view,
+   *     columns: plan.visibleColumns,
+   *   }),
+   * })
+   * ```
+   *
+   * Or for client-driven export, pair with the
+   * `streamServerGridToCsv` helper from `@bc-grid/react`. Worker1
+   * v0.6 CSV export server-page-stream (planning doc follow-up).
+   */
+  getExportPlan(): BcExportPlan<TRow>
+}
+
+export interface BcExportPlan<TRow = unknown> {
+  /** Current server view (sort + filter + search + groupBy + visibleColumns + displayColumnOrder + locale + timeZone). */
+  view: ServerViewState
+  /** Visible column IDs in display order (respects user-driven `BcColumnStateEntry.position`). */
+  visibleColumns: ColumnId[]
+  /** Header text per column for the CSV / XLSX header row. Maps `columnId → header string` (or `columnId` itself when the consumer column had no `header` field). */
+  columnHeaders: Record<ColumnId, string>
+  /** Per-cell formatter — runs the column's `valueFormatter` / `format` resolution to produce the same display string the cell would render. */
+  formatCellValue: (columnId: ColumnId, row: TRow) => string
 }
 
 export interface BcServerCacheStats {
