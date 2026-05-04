@@ -1,6 +1,14 @@
 # Worker2 Handoff (Codex — filters + aggregations + chrome consistency lane)
 
-**Last updated:** 2026-05-04 by Claude coordinator
+**Last updated:** 2026-05-04 PM (post-#510 merge) by Claude coordinator
+
+## 🛑 IF YOU REPORTED "blocked" — READ THIS
+
+**Block A foundation is in. PR-B1 (#510) is now in. You are not blocked.** You can run **two of B2/B3/B4 in parallel** — they target distinct files and don't depend on each other. Block B is "sequential" only in the sense that B1 had to land first to give Radix-backed primitives that B2/B3/B4 build on. Now that B1 is in, B2 / B3 / B4 are independently mergeable.
+
+If your handoff still reads "Active now → PR-B1" — `git pull origin main` and re-read this doc. PR-B1 merged at commit 1b8b688's predecessor; `packages/react/src/internal/menu-item.tsx` and `context-menu-icons.tsx` are **deleted** from main; `context-menu.tsx` is reduced from 532 LOC to ~56 LOC.
+
+---
 
 ## 🚨 P0 ARCHITECTURE CORRECTION 2026-05-04 — chrome lane: hand-rolled → Radix/shadcn
 
@@ -8,19 +16,39 @@
 
 **Stop merging any new chrome surface from your own queue (toolbar slot extensions, tool-panel additions, context-menu items) until the correction lands.** Anything in flight that adds new code under `packages/react/src/internal/*` builds further into the wrong direction.
 
-### Block A — foundation (sequential, ~half day)
-
 ### Block A — foundation ✅ COMPLETE 2026-05-04 PM
 
 - ✅ PR-A1 (#501) — Radix runtime deps + initial scaffold
 - ✅ PR-A1 resync (#503) — primitives re-sourced from `~/work/bsncraft/packages/ui/src/components/`, deps pinned to `@bsn/ui` versions
 - ✅ PR-A2 (#504) — happy-dom + `@testing-library/react` test infra at `packages/react/tests/dom/`
 
-Block B is now unblocked and is **your active lane** below.
+### Block B — chrome migration (now PARALLEL after PR-B1 landed)
 
-### Block B — chrome migration (sequential, 4 PRs)
+- ✅ **PR-B1 #510 merged 2026-05-04 PM** — context-menu + header column-options + column-visibility migrated to Radix; `menu-item.tsx` and `context-menu-icons.tsx` deleted; `context-menu.tsx` reduced 532 → ~56 LOC.
 
-#### Active now → `v07-radix-context-menu` (PR-B1)
+**B2, B3, B4 can now run in PARALLEL** — they touch distinct files. Pick whichever interests you next; coordinator merges them as they land. **Active now options:**
+
+#### Active option A → `v07-radix-tooltip-popover` (PR-B3) — RECOMMENDED FIRST
+
+Replace `packages/react/src/tooltip.tsx` (291 LOC) with `@radix-ui/react-tooltip` via `packages/react/src/shadcn/tooltip.tsx`. Replace header funnel filter popups (`packages/react/src/filter.ts` popup variant, search for `filterPopup`) with `@radix-ui/react-popover` via `packages/react/src/shadcn/popover.tsx`. Delete whichever of `popup-position.ts`, `popup-dismiss.ts`, `use-roving-focus.ts` no longer have any importers (PR-B1 may have already removed some imports — `grep -rln 'from .*popup-position' packages/react/src` to confirm). Migrate any markup tests into `packages/react/tests/dom/`. Add Playwright assertions for tooltip mount + hover-trigger + escape, and filter-popover open/close/escape.
+
+**Why first:** wires up two existing chrome surfaces (tooltip + filter popover) AND is the natural cleanup of the popup-positioning helpers PR-B1 partially obsoleted. Smallest blast radius; high-confidence merge.
+
+#### Active option B → `v07-radix-tool-panels` (PR-B2)
+
+Replace tool-panel chrome (`columnVisibility.tsx` may already be partly done in PR-B1 — check before duplicating, plus `filterToolPanel.tsx`, `pivotToolPanel.tsx`) with Radix `Tabs` for the columns/filters/pivot toggle row. Each panel becomes `<Tabs.Content>`. Use Radix `Dialog` (configured as `<Sheet>` via `packages/react/src/shadcn/sheet.tsx`) if the panels slide in. Public API for the columns/filters/pivot props preserved verbatim.
+
+#### Active option C → `v07-lucide-icon-sweep` (PR-B4)
+
+Replace `packages/react/src/internal/header-icons.tsx`, `pagination-icons.tsx`, `panel-icons.tsx` with `lucide-react` imports. Match icon names against shadcn's conventions (`ChevronUp` / `ChevronDown` for sort, `Filter` for filter, `Pin` for pinned column, etc.). Delete the hand-rolled SVG components. Update any consumer-facing icon docs. **Smallest, fastest** — drop-in replacement of SVG modules.
+
+**Pick one** (or all three sequentially). Coordinator runs Playwright + smoke-perf on each PR at merge time.
+
+---
+
+(Original PR-B1 spec preserved below for reference — DO NOT re-do this work, it's already merged.)
+
+#### ✅ DONE — `v07-radix-context-menu` (PR-B1) — merged 2026-05-04 PM via #510
 
 Branch: `agent/worker2/v07-radix-context-menu`. Per RFC §Block B PR-B1.
 
