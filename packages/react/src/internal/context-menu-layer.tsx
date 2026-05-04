@@ -1,11 +1,20 @@
 import type { BcCellPosition, BcGridApi, BcRange, BcSelection, RowId } from "@bc-grid/core"
-import { type ReactNode, type RefObject, useCallback, useEffect, useState } from "react"
+import {
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
 import {
   type BcGridContextMenuState,
   attachContextMenuEvents,
   contextMenuStateFromKeyboard,
 } from "../contextMenuEvents"
 import type { ResolvedColumn, RowEntry } from "../gridInternals"
+import { ContextMenu, ContextMenuTrigger } from "../shadcn/context-menu"
 import type { BcContextMenuItems } from "../types"
 import { BcGridContextMenu } from "./context-menu"
 
@@ -52,10 +61,21 @@ export function BcGridContextMenuLayer<TRow>({
     setActiveCell,
   ] = args
   const [contextMenu, setContextMenu] = useState<BcGridContextMenuState | null>(null)
-  const closeContextMenu = useCallback(() => setContextMenu(null), [])
+  const [contextMenuRootKey, setContextMenuRootKey] = useState(0)
+  const radixTriggerRef = useRef<HTMLSpanElement | null>(null)
+  const restoreFocusRef = useRef<HTMLElement | null>(null)
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null)
+    setContextMenuRootKey((key) => key + 1)
+  }, [])
   const applyContextMenuState = useCallback(
     (next: BcGridContextMenuState | null) => {
       if (!next) return
+      if (typeof document !== "undefined") {
+        const active = document.activeElement
+        restoreFocusRef.current = active instanceof HTMLElement ? active : null
+      }
+      setContextMenuRootKey((key) => key + 1)
       if (next.rowId != null && next.columnId) {
         const position = { rowId: next.rowId, columnId: next.columnId }
         setActiveCell(position)
@@ -65,6 +85,30 @@ export function BcGridContextMenuLayer<TRow>({
     },
     [onCellFocus, setActiveCell],
   )
+  const handleOpenChange = useCallback((next: boolean) => {
+    if (!next) setContextMenu(null)
+  }, [])
+  const handleCloseAutoFocus = useCallback((event: Event) => {
+    event.preventDefault()
+    restoreFocusRef.current?.focus({ preventScroll: true })
+    restoreFocusRef.current = null
+  }, [])
+
+  useEffect(() => {
+    if (!contextMenu) return
+    const trigger = radixTriggerRef.current
+    if (!trigger || typeof MouseEvent === "undefined") {
+      return
+    }
+    trigger.dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: contextMenu.anchor.x,
+        clientY: contextMenu.anchor.y,
+      }),
+    )
+  }, [contextMenu])
 
   useEffect(() => {
     const root = rootRef.current
@@ -105,22 +149,30 @@ export function BcGridContextMenuLayer<TRow>({
     return () => root.removeEventListener("keydown", handleKeyDown, true)
   }, [activeCell, applyContextMenuState, keyboardEnabled, resolvedColumns, rootRef, rowEntries])
 
-  if (!contextMenu) return null
-
   return (
-    <BcGridContextMenu
-      api={api}
-      anchor={contextMenu.anchor}
-      columnId={contextMenu.columnId}
-      contextMenuItems={contextMenuItems}
-      clearSelection={clearSelection}
-      copyRangeToClipboard={copyRangeToClipboard}
-      onClose={closeContextMenu}
-      resolvedColumns={resolvedColumns}
-      rowId={contextMenu.rowId}
-      rowsById={rowsById}
-      selection={selection}
-    />
+    <ContextMenu key={contextMenuRootKey} onOpenChange={handleOpenChange}>
+      <ContextMenuTrigger
+        aria-hidden="true"
+        ref={radixTriggerRef}
+        style={hiddenContextMenuTriggerStyle}
+      />
+      {contextMenu ? (
+        <BcGridContextMenu
+          api={api}
+          anchor={contextMenu.anchor}
+          columnId={contextMenu.columnId}
+          contextMenuItems={contextMenuItems}
+          clearSelection={clearSelection}
+          copyRangeToClipboard={copyRangeToClipboard}
+          onClose={closeContextMenu}
+          onCloseAutoFocus={handleCloseAutoFocus}
+          resolvedColumns={resolvedColumns}
+          rowId={contextMenu.rowId}
+          rowsById={rowsById}
+          selection={selection}
+        />
+      ) : null}
+    </ContextMenu>
   )
 }
 
@@ -131,4 +183,13 @@ function isEditableKeyTarget(target: EventTarget | null): boolean {
     target instanceof HTMLElement &&
     (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
   )
+}
+
+const hiddenContextMenuTriggerStyle: CSSProperties = {
+  position: "fixed",
+  left: 0,
+  top: 0,
+  width: 0,
+  height: 0,
+  overflow: "hidden",
 }

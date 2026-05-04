@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 
 /**
  * Pagination control glyphs. Compact 14×14 SVGs in the same `Icon`
- * helper shape used by `context-menu-icons.tsx`. Each icon is
+ * helper shape used by the other internal chrome icon modules. Each icon is
  * `aria-hidden` so it doesn't contribute to the button's accessible
  * name — `aria-label="First page"` (etc.) on the button still drives
  * AT announcement.

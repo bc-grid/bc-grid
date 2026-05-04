@@ -1,6 +1,7 @@
 import type { BcGridApi, BcRange, BcSelection, ColumnId, RowId } from "@bc-grid/core"
-import type { CSSProperties, KeyboardEvent, ReactNode } from "react"
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Columns3, Copy, Eye, EyeOff, MoveHorizontal, Pin, PinOff, Rows3 } from "lucide-react"
+import type { ReactNode } from "react"
+import { useEffect, useMemo } from "react"
 import { dispatchColumnCommand } from "../columnCommands"
 import {
   contextMenuItemChecked,
@@ -15,12 +16,26 @@ import {
   resolveContextMenuSubmenuItems,
 } from "../contextMenu"
 import type { ResolvedColumn, RowEntry } from "../gridInternals"
-import type { BcContextMenuContext, BcContextMenuItem, BcContextMenuItems } from "../types"
-import { contextMenuBuiltinIcon } from "./context-menu-icons"
-import { DisclosureChevron } from "./disclosure-icon"
-import { BcGridMenuItem, BcGridMenuToggleItem } from "./menu-item"
-import { usePopupDismiss } from "./popup-dismiss"
-import { computePopupPosition } from "./popup-position"
+import {
+  CheckIcon,
+  CircleIcon,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuItemIndicator,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+} from "../shadcn/context-menu"
+import type {
+  BcContextMenuBuiltinItem,
+  BcContextMenuContext,
+  BcContextMenuItem,
+  BcContextMenuItems,
+} from "../types"
 
 export interface BcGridContextMenuAnchor {
   x: number
@@ -39,6 +54,7 @@ export interface BcGridContextMenuProps<TRow> {
   ) => Promise<void>
   clearSelection: () => void
   onClose: () => void
+  onCloseAutoFocus?: ((event: Event) => void) | undefined
   resolvedColumns: readonly ResolvedColumn<TRow>[]
   rowId?: RowId | undefined
   rowsById: ReadonlyMap<RowId, RowEntry<TRow>>
@@ -47,19 +63,17 @@ export interface BcGridContextMenuProps<TRow> {
 
 export function BcGridContextMenu<TRow>({
   api,
-  anchor,
   columnId,
   contextMenuItems,
   copyRangeToClipboard,
   clearSelection,
   onClose,
+  onCloseAutoFocus,
   resolvedColumns,
   rowId,
   rowsById,
   selection,
 }: BcGridContextMenuProps<TRow>): ReactNode {
-  const menuId = useId()
-  const menuRef = useRef<HTMLDivElement | null>(null)
   const context = useMemo<BcContextMenuContext<TRow>>(() => {
     const entry = rowId != null ? rowsById.get(rowId) : undefined
     return {
@@ -79,48 +93,19 @@ export function BcGridContextMenu<TRow>({
     () => resolveContextMenuItems(contextMenuItems, context),
     [context, contextMenuItems],
   )
-  const focusableIndexes = useMemo(
-    () =>
-      items
-        .map((item, index) => (isContextMenuSeparator(item) ? -1 : index))
-        .filter((index) => index >= 0),
-    [items],
-  )
-  const [activeIndex, setActiveIndex] = useState(() => focusableIndexes[0] ?? -1)
-  const [position, setPosition] = useState(() => clampContextMenu(anchor, 240, 48))
 
   useEffect(() => {
     if (items.length === 0) onClose()
   }, [items.length, onClose])
 
-  useEffect(() => {
-    setActiveIndex(focusableIndexes[0] ?? -1)
-  }, [focusableIndexes])
-
-  useLayoutEffect(() => {
-    menuRef.current?.focus({ preventScroll: true })
-    const rect = menuRef.current?.getBoundingClientRect()
-    setPosition(clampContextMenu(anchor, rect?.width ?? 240, rect?.height ?? 48))
-  }, [anchor])
-
-  // Shared dismiss-and-focus-return contract — Escape closes, outside
-  // pointer-down closes (pointer events inside the menu root are
-  // skipped via the popupRef containment check), focus returns to the
-  // trigger element when the menu unmounts.
-  usePopupDismiss({ open: true, onClose, popupRef: menuRef })
-
   if (items.length === 0) return null
 
-  const activeItemId = activeIndex >= 0 ? `${menuId}-item-${activeIndex}` : undefined
-
-  const activate = (item: BcContextMenuItem<TRow>) => {
+  const activate = (item: BcContextMenuItem<TRow>, checked?: boolean) => {
     if (isContextMenuSeparator(item)) return
     if (contextMenuItemDisabled(item, context)) return
-    if (isContextMenuSubmenuItem(item)) {
-      return
-    }
+    if (isContextMenuSubmenuItem(item)) return
     if (isContextMenuToggleItem(item)) {
-      item.onToggle(context, !contextMenuItemChecked(item, context))
+      item.onToggle(context, checked ?? !contextMenuItemChecked(item, context))
     } else if (isCustomContextMenuItem(item)) {
       item.onSelect(context)
     } else if (item === "copy" || item === "copy-with-headers") {
@@ -131,20 +116,11 @@ export function BcGridContextMenu<TRow>({
         includeHeaders: item === "copy-with-headers",
       }).catch(() => undefined)
     } else if (item === "copy-cell") {
-      // Explicit single-cell variant: ignores any active range and
-      // copies just the right-clicked cell. The disabled predicate
-      // already guarded on `context.cell`, but re-check defensively
-      // because activate() can fire after async predicate-state churn.
       if (context.cell) {
         const range = { start: context.cell, end: context.cell }
         void copyRangeToClipboard(range, api).catch(() => undefined)
       }
     } else if (item === "copy-row") {
-      // Build a range that spans every visible column of the
-      // right-clicked row, then dispatch through the existing
-      // copy-range path. `resolvedColumns` is the post-state ordered
-      // visible-column list, so the clipboard TSV matches the grid's
-      // visible row order.
       if (context.cell && resolvedColumns.length > 0) {
         const firstColumnId = resolvedColumns[0]?.columnId
         const lastColumnId = resolvedColumns[resolvedColumns.length - 1]?.columnId
@@ -163,10 +139,6 @@ export function BcGridContextMenu<TRow>({
     } else if (item === "clear-all-filters") {
       api.clearFilter()
     } else if (item === "clear-column-filter") {
-      // Disabled-state predicate guards on `context.columnId` already, but
-      // the dispatch path checks again because activate() runs after
-      // the disabled predicate may have changed (e.g., a custom item
-      // mutating filter state on the same click).
       if (context.columnId) api.clearFilter(context.columnId)
     } else if (
       item === "pin-column-left" ||
@@ -178,38 +150,25 @@ export function BcGridContextMenu<TRow>({
       const targetColumnId = context.columnId
       if (targetColumnId) dispatchColumnCommand(api, item, targetColumnId)
     } else if (item === "show-all-columns") {
-      // Bulk show: collapse every hidden flag to false in a single
-      // setColumnState write so the grid renders once, not N times.
       const state = api.getColumnState()
       const next = state.map((entry) =>
         entry.hidden === true ? { ...entry, hidden: false } : entry,
       )
       api.setColumnState(next)
     } else if (item === "autosize-all-columns") {
-      // Bulk autosize: loop the existing per-column API. Each call
-      // measures + writes column state; multiple writes are acceptable
-      // here because autoSizeColumn is rarely on the hot path.
       for (const entry of api.getColumnState()) {
         if (entry.hidden !== true) api.autoSizeColumn(entry.columnId)
       }
     }
-    onClose()
   }
 
-  const renderItem = (
-    item: BcContextMenuItem<TRow>,
-    index: number,
-    keyPrefix = "",
-    nested = false,
-  ): ReactNode => {
+  const renderItem = (item: BcContextMenuItem<TRow>, index: number, keyPrefix = ""): ReactNode => {
     if (isContextMenuSeparator(item)) {
       return (
-        <div
+        <ContextMenuSeparator
           aria-orientation="horizontal"
           className="bc-grid-context-menu-separator"
           key={contextMenuItemKey(item, index)}
-          role="separator"
-          tabIndex={-1}
         />
       )
     }
@@ -217,315 +176,140 @@ export function BcGridContextMenu<TRow>({
     const key = `${keyPrefix}${contextMenuItemKey(item, index)}`
     const label = contextMenuItemLabel(item)
     const disabled = contextMenuItemDisabled(item, context)
-    const active = !nested && activeIndex === index
 
     if (isContextMenuSubmenuItem(item)) {
       const subItems = resolveContextMenuSubmenuItems(item, context)
       return (
-        <Submenu
-          active={active}
-          disabled={disabled}
-          id={nested ? undefined : `${menuId}-item-${index}`}
-          key={key}
-          label={label}
-          onActivate={() => activate(item)}
-          onMouseEnter={() => {
-            if (!nested) setActiveIndex(index)
-          }}
-        >
-          {subItems.map((child, childIndex) => renderItem(child, childIndex, `${key}-`, true))}
-        </Submenu>
+        <ContextMenuSub key={key}>
+          <ContextMenuSubTrigger
+            aria-disabled={disabled || undefined}
+            className="bc-grid-menu-item bc-grid-context-menu-item"
+            disabled={disabled}
+          >
+            <MenuIcon icon={null} />
+            <span className="bc-grid-menu-item-label bc-grid-context-menu-label">{label}</span>
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="bc-grid-context-menu-submenu-content">
+            {subItems.map((child, childIndex) => renderItem(child, childIndex, `${key}-`))}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
       )
     }
 
     if (isContextMenuToggleItem(item)) {
-      const selectionProps = item.selection ? { selection: item.selection } : {}
+      const checked = contextMenuItemChecked(item, context)
+      if (item.selection === "radio") {
+        return (
+          <ContextMenuRadioGroup key={key} value={checked ? key : ""}>
+            <ContextMenuRadioItem
+              aria-disabled={disabled || undefined}
+              className="bc-grid-menu-item bc-grid-context-menu-item"
+              disabled={disabled}
+              value={key}
+              onSelect={() => activate(item, true)}
+            >
+              <MenuIcon
+                icon={
+                  <ContextMenuItemIndicator>
+                    <CircleIcon className="bc-grid-context-menu-icon-svg" size={8} />
+                  </ContextMenuItemIndicator>
+                }
+              />
+              <span className="bc-grid-menu-item-label bc-grid-context-menu-label">{label}</span>
+            </ContextMenuRadioItem>
+          </ContextMenuRadioGroup>
+        )
+      }
+
       return (
-        <BcGridMenuToggleItem
-          active={active}
-          checked={contextMenuItemChecked(item, context)}
+        <ContextMenuCheckboxItem
+          aria-disabled={disabled || undefined}
+          checked={checked}
+          className="bc-grid-menu-item bc-grid-context-menu-item"
           disabled={disabled}
-          id={nested ? undefined : `${menuId}-item-${index}`}
           key={key}
-          label={label}
-          {...selectionProps}
-          onClick={(event) => event.stopPropagation()}
-          onActivate={() => activate(item)}
-          onMouseEnter={() => {
-            if (!nested) setActiveIndex(index)
-          }}
-        />
+          onCheckedChange={(next) => activate(item, next === true)}
+        >
+          <MenuIcon
+            icon={
+              <ContextMenuItemIndicator>
+                <CheckIcon className="bc-grid-context-menu-icon-svg" size={14} />
+              </ContextMenuItemIndicator>
+            }
+          />
+          <span className="bc-grid-menu-item-label bc-grid-context-menu-label">{label}</span>
+        </ContextMenuCheckboxItem>
       )
     }
 
     const icon = isCustomContextMenuItem(item) ? null : contextMenuBuiltinIcon(item)
-    // Custom items can opt into shadcn's destructive treatment via
-    // `variant: "destructive"`. The renderer emits the same
-    // `data-variant` attribute shadcn DropdownMenu uses so consumer
-    // CSS can target it identically. Built-in IDs don't have a
-    // destructive flavour today (none of the bundled commands are
-    // irreversible), so the attribute is omitted for them.
     const variant =
       isCustomContextMenuItem(item) && item.variant === "destructive" ? "destructive" : undefined
+
     return (
-      <BcGridMenuItem
-        active={active}
-        disabled={disabled}
+      <ContextMenuItem
+        aria-disabled={disabled || undefined}
+        className="bc-grid-menu-item bc-grid-context-menu-item"
         data-variant={variant}
-        id={nested ? undefined : `${menuId}-item-${index}`}
+        disabled={disabled}
         key={key}
-        label={label}
-        leading={icon}
-        onClick={(event) => event.stopPropagation()}
-        onActivate={() => activate(item)}
-        onMouseEnter={() => {
-          if (!nested) setActiveIndex(index)
-        }}
-      />
+        onSelect={() => activate(item)}
+      >
+        <MenuIcon icon={icon} />
+        <span className="bc-grid-menu-item-label bc-grid-context-menu-label">{label}</span>
+      </ContextMenuItem>
     )
   }
 
   return (
-    <div
-      aria-activedescendant={activeItemId}
+    <ContextMenuContent
       aria-label="Context menu"
       className="bc-grid-context-menu"
-      // Radix-style placement / state attributes for consumer CSS
-      // hooks. The right-click context menu is point-anchored and
-      // unmount-on-close, so these are constants — but they're set
-      // so apps can target the popup exactly the same way they would
-      // a Radix `[data-state="open"][data-side="bottom"]` rule.
-      data-state="open"
-      data-side="bottom"
-      data-align="start"
-      onContextMenu={(event) => event.preventDefault()}
-      onKeyDown={(event) =>
-        handleContextMenuKeyDown({
-          event,
-          activeIndex,
-          focusableIndexes,
-          items,
-          setActiveIndex,
-          activate,
-          onClose,
-        })
-      }
-      ref={menuRef}
-      role="menu"
-      style={contextMenuStyle(position)}
-      tabIndex={-1}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       {items.map((item, index) => renderItem(item, index))}
-    </div>
+    </ContextMenuContent>
   )
 }
 
 export default BcGridContextMenu
 
-function handleContextMenuKeyDown<TRow>({
-  event,
-  activeIndex,
-  focusableIndexes,
-  items,
-  setActiveIndex,
-  activate,
-  onClose,
-}: {
-  event: KeyboardEvent<HTMLDivElement>
-  activeIndex: number
-  focusableIndexes: readonly number[]
-  items: readonly BcContextMenuItem<TRow>[]
-  setActiveIndex: (index: number) => void
-  activate: (item: BcContextMenuItem<TRow>) => void
-  onClose: () => void
-}) {
-  if (event.key === "Escape") {
-    event.preventDefault()
-    onClose()
-    return
-  }
-  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-    event.preventDefault()
-    setActiveIndex(nextFocusableIndex(focusableIndexes, activeIndex, event.key === "ArrowDown"))
-    return
-  }
-  if (event.key === "Home") {
-    event.preventDefault()
-    setActiveIndex(focusableIndexes[0] ?? activeIndex)
-    return
-  }
-  if (event.key === "End") {
-    event.preventDefault()
-    setActiveIndex(focusableIndexes[focusableIndexes.length - 1] ?? activeIndex)
-    return
-  }
-  if (event.key === "Enter" || event.key === " ") {
-    event.preventDefault()
-    const item = items[activeIndex]
-    if (item) activate(item)
-    return
-  }
-  if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
-    const next = nextTypeAheadIndex(items, focusableIndexes, activeIndex, event.key)
-    if (next >= 0) {
-      event.preventDefault()
-      setActiveIndex(next)
-    }
-  }
-}
-
-function nextFocusableIndex(
-  focusableIndexes: readonly number[],
-  activeIndex: number,
-  forward: boolean,
-): number {
-  if (focusableIndexes.length === 0) return -1
-  const currentPosition = focusableIndexes.indexOf(activeIndex)
-  if (currentPosition === -1) return focusableIndexes[0] ?? -1
-  const offset = forward ? 1 : -1
-  const nextPosition =
-    (currentPosition + offset + focusableIndexes.length) % focusableIndexes.length
-  return focusableIndexes[nextPosition] ?? -1
-}
-
-function nextTypeAheadIndex<TRow>(
-  items: readonly BcContextMenuItem<TRow>[],
-  focusableIndexes: readonly number[],
-  activeIndex: number,
-  key: string,
-): number {
-  const query = key.toLocaleLowerCase()
-  if (!query) return -1
-  const startPosition = Math.max(0, focusableIndexes.indexOf(activeIndex))
-  for (let offset = 1; offset <= focusableIndexes.length; offset++) {
-    const index = focusableIndexes[(startPosition + offset) % focusableIndexes.length]
-    if (index == null) continue
-    const item = items[index]
-    if (!item) continue
-    if (contextMenuItemLabel(item).toLocaleLowerCase().startsWith(query)) return index
-  }
-  return -1
-}
-
-function clampContextMenu(
-  anchor: BcGridContextMenuAnchor,
-  width: number,
-  height: number,
-): { x: number; y: number } {
-  const margin = 8
-  // Right-click context menu = point anchor — the click coordinate is
-  // where the popup's top-left should land, viewport-clamped. Shared
-  // helper enforces the same margin / clamp rule used by every popup.
-  const viewportWidth = typeof window === "undefined" ? width + margin * 2 : window.innerWidth
-  const viewportHeight = typeof window === "undefined" ? height + margin * 2 : window.innerHeight
-  const position = computePopupPosition({
-    anchor: { x: anchor.x, y: anchor.y },
-    popup: { width, height },
-    viewport: { width: viewportWidth, height: viewportHeight },
-    viewportMargin: margin,
-  })
-  return { x: position.x, y: position.y }
-}
-
-function contextMenuStyle(position: BcGridContextMenuAnchor): CSSProperties {
-  return {
-    left: position.x,
-    top: position.y,
-  }
-}
-
-interface SubmenuProps {
-  active: boolean
-  disabled: boolean
-  id: string | undefined
-  label: string
-  onActivate: () => void
-  onMouseEnter: () => void
-  children: ReactNode
-}
-
-/**
- * Submenu wrapper with viewport-collision flip. Default opens to the
- * RIGHT (`left: 100%` of the trigger). When the trigger is near the
- * viewport's right edge, the submenu would overflow offscreen — we
- * detect that on open and flip to the LEFT (`right: 100%`) via
- * `data-flip="left"` so CSS swaps the offset.
- *
- * Surfaced 2026-05-04 by bsncraft consumer: their grid is rendered
- * full-width, so submenus on the rightmost columns went invisible
- * past the viewport's right edge.
- */
-function Submenu({
-  active,
-  disabled,
-  id,
-  label,
-  onActivate,
-  onMouseEnter,
-  children,
-}: SubmenuProps): ReactNode {
-  const wrapperRef = useRef<HTMLDivElement | null>(null)
-  const contentRef = useRef<HTMLDivElement | null>(null)
-  const [flipSide, setFlipSide] = useState<"right" | "left">("right")
-
-  // Measure the submenu's projected right edge against the viewport
-  // when it opens. Use the unflipped width so we can decide left-vs-
-  // right deterministically; subsequent measurements (after a flip)
-  // would show fits-on-left even when fits-on-right is also true.
-  //
-  // Decision rule:
-  //   1. If the submenu fits on the right (no overflow), keep right.
-  //   2. If it overflows right AND fits on the left, flip.
-  //   3. If it overflows right AND ALSO doesn't fit on the left, flip
-  //      anyway when the left side has more available space than the
-  //      right — flipping is less-worse. Without this, an item near
-  //      the right edge of a viewport so narrow that NEITHER side
-  //      fully fits would stay right and disappear off-screen.
-  useLayoutEffect(() => {
-    if (!active) {
-      // Reset to default direction when submenu closes so the next
-      // open re-measures from the correct (right-side) baseline.
-      setFlipSide("right")
-      return
-    }
-    const wrapper = wrapperRef.current
-    const content = contentRef.current
-    if (!wrapper || !content || typeof window === "undefined") return
-    const triggerRect = wrapper.getBoundingClientRect()
-    const contentWidth = content.offsetWidth
-    const margin = 8
-    const projectedRightEdge = triggerRect.right + contentWidth + margin
-    const overflowsRight = projectedRightEdge > window.innerWidth
-    const fitsOnLeft = triggerRect.left - contentWidth - margin >= 0
-    const spaceOnRight = window.innerWidth - triggerRect.right
-    const spaceOnLeft = triggerRect.left
-    const leftIsLessWorse = spaceOnLeft > spaceOnRight
-    setFlipSide(overflowsRight && (fitsOnLeft || leftIsLessWorse) ? "left" : "right")
-  }, [active])
-
+function MenuIcon({ icon }: { icon: ReactNode }): ReactNode {
   return (
-    <div
-      ref={wrapperRef}
-      className="bc-grid-context-menu-submenu"
-      data-open={active || undefined}
-      data-flip={flipSide === "left" ? "left" : undefined}
-    >
-      <BcGridMenuItem
-        active={active}
-        aria-haspopup="menu"
-        aria-expanded={active || undefined}
-        disabled={disabled}
-        id={id}
-        label={label}
-        leading={null}
-        trailing={<DisclosureChevron className="bc-grid-context-menu-chevron" />}
-        onClick={(event) => event.stopPropagation()}
-        onActivate={onActivate}
-        onMouseEnter={onMouseEnter}
-      />
-      <div ref={contentRef} className="bc-grid-context-menu-submenu-content" role="menu">
-        {children}
-      </div>
-    </div>
+    <span aria-hidden="true" className="bc-grid-menu-item-leading bc-grid-context-menu-icon">
+      {icon}
+    </span>
   )
+}
+
+function contextMenuBuiltinIcon(item: BcContextMenuBuiltinItem): ReactNode | null {
+  const iconProps = {
+    "aria-hidden": true,
+    className: "bc-grid-context-menu-icon-svg",
+    size: 14,
+    strokeWidth: 1.8,
+  } as const
+  switch (item) {
+    case "copy":
+    case "copy-cell":
+    case "copy-with-headers":
+      return <Copy {...iconProps} />
+    case "copy-row":
+      return <Rows3 {...iconProps} />
+    case "pin-column-left":
+    case "pin-column-right":
+      return <Pin {...iconProps} />
+    case "unpin-column":
+      return <PinOff {...iconProps} />
+    case "hide-column":
+      return <EyeOff {...iconProps} />
+    case "show-all-columns":
+      return <Eye {...iconProps} />
+    case "autosize-column":
+      return <MoveHorizontal {...iconProps} />
+    case "autosize-all-columns":
+      return <Columns3 {...iconProps} />
+    default:
+      return null
+  }
 }

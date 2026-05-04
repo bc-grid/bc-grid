@@ -2,8 +2,7 @@ import type { ReactNode } from "react"
 
 /**
  * Tool-panel chrome glyphs. Compact 14×14 SVGs in the same `Icon`
- * shape used by `context-menu-icons.tsx` / `header-icons.tsx` /
- * `pagination-icons.tsx`. Each icon is `aria-hidden` so it never
+ * shape used by `header-icons.tsx` / `pagination-icons.tsx`. Each icon is `aria-hidden` so it never
  * leaks into the accessible name of its surrounding button — the
  * button's own `aria-label` is the only AT-announced label.
  *
