@@ -53,6 +53,7 @@ test("clicking funnel opens a popover anchored below the button", async ({ page 
   const funnel = await openLegalNameFilterPopup(page)
   const popup = page.locator('[data-bc-grid-filter-popup="true"]').first()
   await expect(popup).toBeVisible()
+  await expect(popup).toHaveAttribute("data-slot", "popover-content")
   // Anchor: top of popup ≈ bottom of funnel + a small offset.
   const popupBox = await popup.boundingBox()
   const funnelBox = await funnel.boundingBox()
@@ -115,6 +116,19 @@ test("Escape closes the popover without clearing the filter", async ({ page }) =
   // Popover closed.
   await expect(page.locator('[data-bc-grid-filter-popup="true"]')).toHaveCount(0)
   // Funnel still active because the filter wasn't cleared.
+  await expect(funnel).toHaveAttribute("data-active", "true")
+})
+
+test("clicking outside closes the popover without clearing the filter", async ({ page }) => {
+  await page.goto(URL)
+  await page.waitForSelector('.bc-grid-row[data-row-index="0"]')
+  const funnel = await openLegalNameFilterPopup(page)
+  const popupInput = page.locator('[data-bc-grid-filter-popup="true"] input').first()
+  await popupInput.fill("Abbott")
+
+  await page.locator(".bc-grid-toolbar").click()
+
+  await expect(page.locator('[data-bc-grid-filter-popup="true"]')).toHaveCount(0)
   await expect(funnel).toHaveAttribute("data-active", "true")
 })
 

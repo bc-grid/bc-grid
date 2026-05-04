@@ -1,20 +1,15 @@
 import {
   type CSSProperties,
   Children,
-  type FocusEvent,
   type HTMLAttributes,
-  type PointerEvent,
   type ReactElement,
   cloneElement,
   isValidElement,
-  useCallback,
-  useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
 } from "react"
-import { createPortal } from "react-dom"
+import { Tooltip, TooltipContent, TooltipTrigger } from "./shadcn/tooltip"
 
 interface BcGridTooltipProps {
   children: ReactElement<HTMLAttributes<HTMLElement>>
@@ -22,55 +17,20 @@ interface BcGridTooltipProps {
   id?: string
 }
 
-interface TooltipPosition {
-  left: number
-  top: number
-}
-
 type TooltipTriggerProps = HTMLAttributes<HTMLElement> & {
   "data-bc-grid-tooltip-trigger"?: string
   ref?: (node: HTMLElement | null) => void
 }
+
+const TOOLTIP_COLLISION_PADDING = 8
 
 export function BcGridTooltip({ children, content, id }: BcGridTooltipProps): ReactElement {
   const generatedId = useId()
   const tooltipId = id ?? `bc-grid-tooltip-${generatedId}`
   const triggerRef = useRef<HTMLElement | null>(null)
   const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const [position, setPosition] = useState<TooltipPosition>({ left: 0, top: 0 })
   const [themeVars, setThemeVars] = useState<CSSProperties>({})
   const tooltip = typeof content === "string" ? content.trim() : undefined
-
-  const updatePosition = useCallback(() => {
-    const trigger = triggerRef.current
-    if (!trigger) return
-    setThemeVars(readTooltipThemeVars(trigger))
-    const rect = trigger.getBoundingClientRect()
-    setPosition({
-      left: clamp(rect.left, 8, window.innerWidth - 8),
-      top: rect.bottom + 6,
-    })
-  }, [])
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useLayoutEffect(() => {
-    if (!open) return
-    updatePosition()
-  }, [open, updatePosition])
-
-  useEffect(() => {
-    if (!open) return
-    window.addEventListener("resize", updatePosition)
-    window.addEventListener("scroll", updatePosition, true)
-    return () => {
-      window.removeEventListener("resize", updatePosition)
-      window.removeEventListener("scroll", updatePosition, true)
-    }
-  }, [open, updatePosition])
 
   if (!tooltip) return children
 
@@ -86,55 +46,41 @@ export function BcGridTooltip({ children, content, id }: BcGridTooltipProps): Re
   const trigger = cloneElement(onlyChild as ReactElement<TooltipTriggerProps>, {
     "aria-describedby": describedBy,
     "data-bc-grid-tooltip-trigger": "true",
-    onBlur(event: FocusEvent<HTMLElement>) {
-      childProps.onBlur?.(event)
-      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-      setOpen(false)
-    },
-    onFocus(event: FocusEvent<HTMLElement>) {
-      childProps.onFocus?.(event)
-      setOpen(true)
-    },
-    onPointerEnter(event: PointerEvent<HTMLElement>) {
-      childProps.onPointerEnter?.(event)
-      setOpen(true)
-    },
-    onPointerLeave(event: PointerEvent<HTMLElement>) {
-      childProps.onPointerLeave?.(event)
-      setOpen(false)
-    },
     ref(node: HTMLElement | null) {
       triggerRef.current = node
     },
   })
+  const portalContainer = triggerRef.current?.closest<HTMLElement>(".bc-grid") ?? null
 
   return (
-    <>
-      {trigger}
-      {mounted && open
-        ? createPortal(
-            <div
-              className="bc-grid-tooltip-content"
-              data-state="open"
-              id={tooltipId}
-              role="tooltip"
-              style={{ ...themeVars, ...position }}
-            >
-              {tooltip}
-            </div>,
-            document.body,
-          )
-        : null}
-    </>
+    <Tooltip
+      delayDuration={0}
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) setThemeVars(readTooltipThemeVars(triggerRef.current))
+      }}
+    >
+      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+      <TooltipContent
+        align="start"
+        className="bc-grid-tooltip-content"
+        collisionPadding={TOOLTIP_COLLISION_PADDING}
+        container={portalContainer}
+        hideArrow
+        id={tooltipId}
+        side="bottom"
+        sideOffset={6}
+        style={themeVars}
+      >
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
-}
-
-function readTooltipThemeVars(trigger: HTMLElement): CSSProperties {
-  const grid = trigger.closest<HTMLElement>(".bc-grid")
+function readTooltipThemeVars(trigger: HTMLElement | null): CSSProperties {
+  const grid = trigger?.closest<HTMLElement>(".bc-grid")
   if (!grid) return {}
 
   const styles = getComputedStyle(grid)

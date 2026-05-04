@@ -647,6 +647,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const [filterPopupState, setFilterPopupState] = useState<{
     columnId: ColumnId
     anchor: DOMRect
+    restoreFocus: HTMLElement | null
   } | null>(null)
   const closeFilterPopup = useCallback((columnId?: ColumnId) => {
     setFilterPopupState((prev) => {
@@ -1782,15 +1783,21 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
     },
     [columnFilterText, columnFilterTypes, getLocalSetFilterOptions, resolvedColumns],
   )
-  const findHeaderFilterAnchor = useCallback((columnId: ColumnId): DOMRect | null => {
-    const root = rootRef.current
-    if (!root) return null
-    const headers = Array.from(root.querySelectorAll<HTMLElement>(".bc-grid-header-cell"))
-    const header = headers.find((candidate) => candidate.dataset.columnId === columnId)
-    if (!header) return null
-    const trigger = header.querySelector<HTMLElement>('[data-bc-grid-filter-button="true"]')
-    return (trigger ?? header).getBoundingClientRect()
-  }, [])
+  const findHeaderFilterAnchor = useCallback(
+    (columnId: ColumnId): { anchor: DOMRect; restoreFocus: HTMLElement | null } | null => {
+      const root = rootRef.current
+      if (!root) return null
+      const headers = Array.from(root.querySelectorAll<HTMLElement>(".bc-grid-header-cell"))
+      const header = headers.find((candidate) => candidate.dataset.columnId === columnId)
+      if (!header) return null
+      const trigger = header.querySelector<HTMLElement>('[data-bc-grid-filter-button="true"]')
+      return {
+        anchor: (trigger ?? header).getBoundingClientRect(),
+        restoreFocus: trigger ?? header,
+      }
+    },
+    [],
+  )
   const focusInlineFilter = useCallback(
     (columnId: ColumnId) => {
       if (typeof document === "undefined") return false
@@ -1818,7 +1825,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
 
       const anchor = findHeaderFilterAnchor(columnId)
       if (!anchor) return
-      setFilterPopupState({ columnId, anchor })
+      setFilterPopupState({ columnId, ...anchor })
     },
     [closeFilterPopup, findHeaderFilterAnchor, focusInlineFilter, resolvedColumns],
   )
@@ -3813,11 +3820,9 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   const openColumnMenu = useCallback(
     (_column: (typeof resolvedColumns)[number], anchor: ColumnMenuAnchor) => {
       if (!showColumnMenu) return
-      // Viewport-clamp moved into ColumnVisibilityMenu via the shared
-      // `computePopupPosition` helper — same Radix-Popper-style flip
-      // and clamp the filter popup and context menu use. The anchor
-      // here is the trigger button's bottom-left; the menu measures
-      // its own DOM and re-positions on first layout.
+      // ColumnVisibilityMenu now delegates placement and collision
+      // handling to Radix DropdownMenu. The anchor remains the trigger
+      // button's bottom-left for the lazy menu layer.
       setColumnMenu({ x: anchor.x, y: anchor.y })
     },
     [showColumnMenu],
@@ -4176,11 +4181,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         sortState,
                         filterText: columnFilterText[column.columnId] ?? "",
                         filterPopupOpen: filterPopupState?.columnId === column.columnId,
-                        onOpenFilterPopup: (col, anchor) =>
+                        onOpenFilterPopup: (col, anchor, restoreFocus) =>
                           setFilterPopupState((prev) =>
                             prev?.columnId === col.columnId
                               ? null
-                              : { columnId: col.columnId, anchor },
+                              : { columnId: col.columnId, anchor, restoreFocus },
                           ),
                       }),
                     )}
@@ -4210,9 +4215,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     sortState,
                     filterText: columnFilterText[column.columnId] ?? "",
                     filterPopupOpen: filterPopupState?.columnId === column.columnId,
-                    onOpenFilterPopup: (col, anchor) =>
+                    onOpenFilterPopup: (col, anchor, restoreFocus) =>
                       setFilterPopupState((prev) =>
-                        prev?.columnId === col.columnId ? null : { columnId: col.columnId, anchor },
+                        prev?.columnId === col.columnId
+                          ? null
+                          : { columnId: col.columnId, anchor, restoreFocus },
                       ),
                   }),
                 )}
@@ -4246,11 +4253,11 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                         sortState,
                         filterText: columnFilterText[column.columnId] ?? "",
                         filterPopupOpen: filterPopupState?.columnId === column.columnId,
-                        onOpenFilterPopup: (col, anchor) =>
+                        onOpenFilterPopup: (col, anchor, restoreFocus) =>
                           setFilterPopupState((prev) =>
                             prev?.columnId === col.columnId
                               ? null
-                              : { columnId: col.columnId, anchor },
+                              : { columnId: col.columnId, anchor, restoreFocus },
                           ),
                       }),
                     )}
@@ -5025,6 +5032,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                   setFilterPopupState(null)
                 }}
                 onClose={() => setFilterPopupState(null)}
+                restoreFocus={filterPopupState.restoreFocus}
                 messages={messages}
               />
             )
