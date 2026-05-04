@@ -1,6 +1,6 @@
 # v1.0 editor a11y audit
 
-**Status:** code-pass complete (workers run unit-test + source review only — no NVDA/JAWS/VoiceOver scripts; those land in a `wcag-deep-pass` follow-up).
+**Status:** code-pass complete; **date / datetime / time gap resolved** by `v07-editor-a11y-fix-date-aria-describedby`. Workers run unit-test + source review only — no NVDA/JAWS/VoiceOver scripts; those land in a `wcag-deep-pass` follow-up.
 **Date:** 2026-05-04
 **Owner:** worker3 (Claude — editor + keyboard/a11y + lookup UX lane)
 **Source contract:** `docs/design/accessibility-rfc.md`, `docs/design/editing-rfc.md` §a11y for edit mode
@@ -23,15 +23,15 @@ The framework owns the lifecycle plumbing (focus handoff via `focusRef`, commit/
 | --- | --- | --- | --- | --- | --- |
 | **text** | ✅ | ✅ | ✅ | ✅ | **PASS** |
 | **number** | ✅ | ✅ | ✅ | ✅ | **PASS** |
-| **date** | ✅ | ⚠️ partial | ⚠️ no `aria-describedby` link | ✅ | **GAP** — see §Date/datetime/time gap |
-| **datetime** | ✅ | ⚠️ partial | ⚠️ no `aria-describedby` link | ✅ | **GAP** — see §Date/datetime/time gap |
-| **time** | ✅ | ⚠️ partial | ⚠️ no `aria-describedby` link | ✅ | **GAP** — see §Date/datetime/time gap |
+| **date** | ✅ | ✅ (fixed) | ✅ (fixed) | ✅ | **PASS** (fixed by `v07-editor-a11y-fix-date-aria-describedby`) |
+| **datetime** | ✅ | ✅ (fixed) | ✅ (fixed) | ✅ | **PASS** (fixed by `v07-editor-a11y-fix-date-aria-describedby`) |
+| **time** | ✅ | ✅ (fixed) | ✅ (fixed) | ✅ | **PASS** (fixed by `v07-editor-a11y-fix-date-aria-describedby`) |
 | **select** | ✅ | ✅ | ✅ | ✅ | **PASS** |
 | **multi-select** | ✅ | ✅ | ✅ | ✅ (Space toggle, Enter commit) | **PASS** |
 | **autocomplete** | ✅ | ✅ (also `aria-busy` during fetch) | ✅ | ✅ (Enter picks + commits) | **PASS** |
 | **checkbox** | ✅ | ✅ | ✅ | ✅ (Space toggle native) | **PASS** |
 
-Six PASS, three GAP. The gap is structural and shared — date / datetime / time editors all skip the same two ARIA wires. Fix is mechanical and lands in a single follow-up PR.
+**All 9 PASS** after the date / datetime / time fix landed. The original gap (the same two ARIA wires skipped uniformly across the three) was mechanical; resolved by a single follow-up PR.
 
 ---
 
@@ -101,9 +101,9 @@ The polite region replays committed value; the assertive region pops in for erro
 - **AT announcement:** same framework wiring as text. The seed predicate `acceptNumericSeed` silently drops non-numeric activation seeds — no AT announcement for the drop, but that's the right tradeoff (a stray letter would otherwise pre-seed garbage AT would announce).
 - **Keyboard:** Enter / Tab / Esc framework-owned. `inputMode="decimal"` triggers numeric keyboard on touch devices. Paste-into-cell detection (`onPaste`) normalises currency / parens-negative without breaking AT semantics — the input value updates in place; the next AT focus pass reads the new value.
 
-### `dateEditor` / `datetimeEditor` / `timeEditor` — GAP
+### `dateEditor` / `datetimeEditor` / `timeEditor` — PASS (fixed by `v07-editor-a11y-fix-date-aria-describedby`)
 
-**Shared structural gap.** All three editors stamp 4 of 5 ARIA states but skip `aria-label` and `aria-describedby`:
+**Original gap (kept for posterity):** All three editors stamped 4 of 5 ARIA states but skipped `aria-label` and `aria-describedby`:
 
 ```tsx
 // date.tsx:187-204 — current
@@ -144,7 +144,7 @@ const inputProps: TextEditorInputProps = {
 
 **Fix scope:** mechanical — copy the pattern from `text.tsx` / `number.tsx`. ~5 lines per editor (declare `errorId = useId()`; compute `accessibleName = editorAccessibleName(column, "Date value" / "Datetime value" / "Time value")`; add the two missing aria attrs to `inputProps`; render the error span). Three editors × ~5 lines = ~15 LOC + one new test file pinning the wiring.
 
-**Tracked as:** `v07-editor-a11y-fix-date-aria-describedby` follow-up (queued in §Follow-ups below).
+**Resolved by:** `v07-editor-a11y-fix-date-aria-describedby`. Source-shape regression guards live at `packages/editors/tests/dateAriaDescribedby.test.ts` (21 tests across the three editors pinning errorId / accessibleName / aria-label / aria-describedby / visually-hidden error span / fragment-wrapped return shape).
 
 ### `selectEditor` — PASS
 
@@ -204,9 +204,9 @@ The clear path runs `column.validate` so a cleared value can be rejected; reject
 
 ## Gaps + follow-ups
 
-### `v07-editor-a11y-fix-date-aria-describedby` (NEW, ~half day)
+### `v07-editor-a11y-fix-date-aria-describedby` ✅ SHIPPED
 
-Backfill `aria-label` + `aria-describedby` (with visually-hidden error span) on `dateEditor`, `datetimeEditor`, `timeEditor`. Mirror the pattern from `text.tsx` / `number.tsx` / `checkbox.tsx`.
+Backfilled `aria-label` + `aria-describedby` (with visually-hidden error span) on `dateEditor`, `datetimeEditor`, `timeEditor`. Mirror of the pattern from `text.tsx` / `number.tsx` / `checkbox.tsx`. Original spec preserved below for reference.
 
 **Implementation per editor (3 editors, ~10 min each + 30 min for tests):**
 
@@ -248,9 +248,9 @@ Items that need browser / AT manual verification (Playwright + NVDA / JAWS / Voi
 
 ## Verdict summary
 
-- **6 of 9 editors pass cleanly** at the code-pass level: text, number, select, multi-select, autocomplete, checkbox.
-- **3 editors share one structural gap** (date / datetime / time): missing `aria-label` + `aria-describedby` + visually-hidden error span. Mechanical fix; tracked as `v07-editor-a11y-fix-date-aria-describedby` follow-up.
+- **All 9 editors pass cleanly** at the code-pass level: text, number, date, datetime, time, select, multi-select, autocomplete, checkbox.
+- The original date / datetime / time gap (`aria-label` + `aria-describedby` + visually-hidden error span) was resolved by the same-PR follow-up.
 - **Framework wiring (focus handoff, keyboard intent decoder, live-region announcer) is consistent and correctly stitched** across every editor.
 - **Deeper AT verification (NVDA / JAWS / VoiceOver actual announcements + forced-colors)** deferred to `wcag-deep-pass` per the 3-worker sprint rule.
 
-After the date/datetime/time fix lands, every built-in editor meets the WAI-ARIA Authoring Practices grid editor contract for v1.0.
+Every built-in editor meets the WAI-ARIA Authoring Practices grid editor contract for v1.0 at the code-pass level. `wcag-deep-pass` (browser + AT manual verification) is the remaining v1.0 prerequisite on this lane.
