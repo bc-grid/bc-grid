@@ -174,7 +174,7 @@ Cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback o
 | PR-C3 — Wire deferred `triggerComponent` / `optionItemComponent` slots | worker3 | ❌ blocked on PR-C2 | 🔒 must ship |
 | PR-D — Sweep + design-doc update | coordinator | ❌ blocked on B+C | 🔒 must ship |
 
-**Coordinator note:** the architecture correction is non-negotiable per maintainer instruction. Public API preserved verbatim; consumer churn limited to internal CSS class names + DOM structure. ~5-7 days total elapsed.
+**Coordinator note:** the architecture correction is non-negotiable per maintainer instruction. Public API preserved verbatim; consumer churn limited to internal CSS class names + DOM structure. Sequencing: PR-A1 unblocks both PR-A2 (worker2) and PR-C1 (worker3); after PR-A1 lands, Block B and Block C run in parallel.
 
 ### v0.8 — Aggregations / Pivot / Export
 
@@ -188,15 +188,15 @@ Cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback o
 | XLSX export (ExcelJS peer-dep) | ❌ | unassigned | 🚪 **defer post-1.0** | bsncraft can use CSV → Excel-open path; recipe for ExcelJS in post-1.0 |
 | PDF export (jsPDF peer-dep) | ❌ | unassigned | 🚪 **defer post-1.0** | bsncraft has its own report-print pipeline; not requested |
 
-**Coordinator recommendation:** v0.8 collapses to "audit pivot UI completeness, ship a recipe for ExcelJS-from-CSV, document XLSX/PDF as post-1.0." Saves ~3-5 days from the v1.0 path.
+**Coordinator recommendation:** v0.8 collapses to "audit pivot UI completeness, ship a recipe for ExcelJS-from-CSV, document XLSX/PDF as post-1.0."
 
 ### v0.9 — Productivity surface
 
 | Feature | Status | Owner | Defer? | Notes |
 | --- | --- | --- | --- | --- |
 | Client-side pagination UI | ❌ | unassigned | 🚪 **defer post-1.0** | server-paged exists; client pagination is a UI shell that users can build with the existing range / scroll APIs in ~30 LOC; recipe + post-1.0 ship |
-| Examples app — productivity flows without hidden flags | 🟡 | unassigned | 🔒 **must ship** | the four hero spike grids (colour-selection / document-management / production-estimating / sales-estimating) cover the surface but rely on URL flags; ~half day cleanup |
-| AG Grid migration guide (Community + Enterprise) | ❌ | unassigned | 🚪 **defer post-1.0** | recommend cut a sketch + commit to v1.1 with consumer-tested polish; full guide takes 2+ days and 2+ test users |
+| Examples app — productivity flows without hidden flags | 🟡 | unassigned | 🔒 **must ship** | the four hero spike grids (colour-selection / document-management / production-estimating / sales-estimating) cover the surface but rely on URL flags |
+| AG Grid migration guide (Community + Enterprise) | ❌ | unassigned | 🚪 **defer post-1.0** | recommend cut a sketch + commit to v1.1 with consumer-tested polish |
 
 ### v0.10 — RC hardening
 
@@ -216,30 +216,30 @@ Cut alpha.3 OR roll straight to GA — pending bsncraft consumer soak feedback o
 | bsncraft consumer migration (≥ -100 LOC wrapper) | ⏳ | bsncraft team | 🔒 must ship | customers grid migration in flight |
 | Public API frozen for semver stability | 🟡 | coordinator | 🔒 must ship | informally pinned via api-surface manifest; v1.0 locks formally |
 | All P0/P1 closed | ⏳ | all | 🔒 must ship | track in `bsncraft-issues.md` |
-| `apps/docs` deployed publicly | ❌ | coordinator | 🚪 **defer post-1.0** | apps/docs builds locally; pushing public deploy is ~half day; recommend point to GitHub Packages + README until traffic justifies the host |
+| `apps/docs` deployed publicly | ❌ | coordinator | 🚪 **defer post-1.0** | apps/docs builds locally; recommend point to GitHub Packages + README until traffic justifies the host |
 | Pricing/licence model decision | ❌ | maintainer | 🔒 must ship | architectural decision, not engineering |
 | Public registry publish decision (npmjs.com vs GitHub Packages) | ❌ | maintainer | 🔒 must ship | currently GitHub Packages; npmjs.com is a launch lever |
 | Maintainer explicit sign-off | ❌ | maintainer | 🔒 must ship | non-negotiable per `release-milestone-roadmap.md` |
 
 ---
 
-## Fast-track summary
+## Fast-track sequencing
 
-If maintainer ratifies all 🚪 **defer post-1.0** recommendations, v1.0 path collapses to:
+If maintainer ratifies all 🚪 **defer post-1.0** recommendations, the path to v1.0 is:
 
-1. **v0.6.0 GA** (today / tomorrow) — ship alpha.2 work train as GA after bsncraft soak
-2. **v0.7.0** — architecture correction (~5-7 days, parallel worker2 + worker3 + coordinator)
-3. **v1.0 prep**:
+1. **v0.6.0 GA** — ship alpha.2 work train as GA after bsncraft soak signs off
+2. **v0.7.0** — architecture correction (worker2 chrome lane + worker3 editor lane, parallel after PR-A1 lands; PR-D coordinator sweep last)
+3. **v1.0 prep** — runs as v0.7 work lands, no strict ordering between these:
    - bsncraft customers migration completes
    - WCAG deep-pass manual NVDA / JAWS / VoiceOver run
    - Browser compat matrix documented
    - Examples app cleanup (no hidden URL flags for hero flows)
    - Public API formally locked + version bump
-   - Maintainer pricing/registry/sign-off
+   - Maintainer pricing / registry / sign-off
 
-**Estimated v1.0 ETA:** ~10-14 days from 2026-05-04 if 🚪 deferrals all stand. Charts, RTL, mobile/touch, AG Grid migration guide, XLSX/PDF export, pivot drag-UI, client pagination UI all become **v1.1 post-1.0** items.
+**v1.1 post-1.0 backlog if 🚪 deferrals stand:** charts, RTL, mobile/touch fallback, AG Grid migration guide, XLSX export, PDF export, pivot drag-UI, client pagination UI, cursor-pagination IMPL, edit-cell paint <16ms benchmark, `apps/docs` public deploy.
 
-**Items the coordinator does NOT recommend deferring** (in priority order):
+**Items the coordinator does NOT recommend deferring** (must-ship for 1.0):
 - Architecture correction (RFC v0.7 — public API stability concern)
 - WCAG manual screenreader audit (ERP shipping requirement)
 - Browser compat matrix (regression risk)
