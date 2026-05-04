@@ -1422,7 +1422,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
   // the metadata back here, keyed by rowId, so the render loop sees
   // GroupRowEntry shape for those rows. Bsncraft v0.6.0-alpha.1 P1.
   const rowEntriesBase = useMemo<readonly RowEntry<TRow>[]>(() => {
-    const overrides = props.serverRowEntryOverrides
+    const overrides = props.__bcServerRowEntryOverrides
     if (!overrides || overrides.size === 0) return groupedRowModel.rows
     return groupedRowModel.rows.map((entry, idx) => {
       const override = overrides.get(entry.rowId)
@@ -1438,7 +1438,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
         expanded: override.expanded,
       } satisfies GroupRowEntry
     })
-  }, [groupedRowModel.rows, props.serverRowEntryOverrides])
+  }, [groupedRowModel.rows, props.__bcServerRowEntryOverrides])
   // Skeleton placeholder rows (worker1 v06 server skeleton rows). When
   // the consumer's expectedRowCount exceeds the loaded entries AND
   // skeletons are not opted out, append synthetic SkeletonRowEntry

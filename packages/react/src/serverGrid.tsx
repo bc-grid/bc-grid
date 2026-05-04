@@ -189,7 +189,7 @@ interface TreeServerState<TRow> {
   rowId: (row: TRow, index: number) => RowId
   rows: readonly TRow[]
   rowCount: number | "unknown"
-  serverRowEntryOverrides: ReadonlyMap<RowId, ServerRowEntryOverride>
+  __bcServerRowEntryOverrides: ReadonlyMap<RowId, ServerRowEntryOverride>
   settleMutation: (result: ServerMutationResult<TRow>) => void
   view: ServerViewState
 }
@@ -1186,7 +1186,9 @@ export function BcServerGrid<TRow>(props: BcServerGridProps<TRow>): ReactNode {
               ? tree.rows
               : []
       }
-      {...(activeMode === "tree" ? { serverRowEntryOverrides: tree.serverRowEntryOverrides } : {})}
+      {...(activeMode === "tree"
+        ? { __bcServerRowEntryOverrides: tree.__bcServerRowEntryOverrides }
+        : {})}
       apiRef={gridApiRef}
       {...(activeMode === "paged" ? { footer: pagedFooter } : {})}
       loading={loading}
@@ -2194,7 +2196,7 @@ function useTreeServerState<TRow>(
   // render loop expects. Label is derived from the latest groupKey
   // in the node's groupPath (per the server-tree contract — the
   // `groupPath` ends with the row's own groupKey for group nodes).
-  const serverRowEntryOverrides = useMemo(() => {
+  const __bcServerRowEntryOverrides = useMemo(() => {
     const map = new Map<RowId, ServerRowEntryOverride>()
     for (const node of flatNodes) {
       if (node.kind !== "group") continue
@@ -2545,7 +2547,7 @@ function useTreeServerState<TRow>(
     }),
     rowId,
     rows,
-    serverRowEntryOverrides,
+    __bcServerRowEntryOverrides,
     settleMutation,
     view,
   }

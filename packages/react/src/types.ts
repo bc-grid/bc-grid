@@ -750,13 +750,19 @@ export interface BcRangeSelectionOptions {
 }
 
 /**
- * Group-row metadata for `BcGridProps.serverRowEntryOverrides`. Internal
- * shape used by `<BcServerGrid rowModel="tree">` to pass server-supplied
- * group rows through to `<BcGrid>`'s render pipeline without losing the
- * `kind: "group"` discriminator + `level` / `label` / `childCount` data.
- * Mirrors `GroupRowEntry` from `gridInternals.ts` (excluding the `index`
- * field — `<BcGrid>` re-stamps that during entry construction so DOM
- * order stays contiguous after expansion-state changes).
+ * Group-row metadata for `BcGridProps.__bcServerRowEntryOverrides`.
+ * Internal shape used by `<BcServerGrid rowModel="tree">` to pass
+ * server-supplied group rows through to `<BcGrid>`'s render pipeline
+ * without losing the `kind: "group"` discriminator + `level` /
+ * `label` / `childCount` data. Mirrors `GroupRowEntry` from
+ * `gridInternals.ts` (excluding the `index` field — `<BcGrid>`
+ * re-stamps that during entry construction so DOM order stays
+ * contiguous after expansion-state changes).
+ *
+ * @internal Not part of the consumer-facing API. The accompanying
+ * prop is `__bcServerRowEntryOverrides` per the v1.0 freeze audit
+ * (`docs/design/v1-api-surface-audit.md §5`); do NOT rely on either
+ * name from consumer code.
  */
 export interface ServerRowEntryOverride {
   kind: "group"
@@ -801,12 +807,15 @@ export interface BcGridProps<TRow> extends BcGridIdentity, BcGridStateProps {
    * alpha.1 — server-tree group rows rendered as empty data rows
    * because the render loop only saw `kind: "data"`.
    *
-   * Internal — not part of the consumer-facing API. `<BcServerGrid>`
-   * sets this from its tree-mode `flatNodes` array; consumers should
-   * not pass this directly. Will move to a `__internal` namespace
-   * in v0.7 once the broader tree-render contract is reviewed.
+   * @internal Not part of the consumer-facing API. `<BcServerGrid>`
+   * sets this from its tree-mode `flatNodes` array; consumers MUST
+   * NOT pass this directly. Renamed from `serverRowEntryOverrides`
+   * to `__bcServerRowEntryOverrides` per v1.0 freeze audit
+   * (`docs/design/v1-api-surface-audit.md §5 INTERNALIZE`) so
+   * autocomplete + lint tooling de-emphasises the escape hatch.
+   * Old name unsupported as of v1.0.
    */
-  serverRowEntryOverrides?: ReadonlyMap<RowId, ServerRowEntryOverride>
+  __bcServerRowEntryOverrides?: ReadonlyMap<RowId, ServerRowEntryOverride>
 
   density?: BcGridDensity
   height?: "auto" | number
