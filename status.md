@@ -2,7 +2,7 @@
 
 **Owner:** Claude coordinator (`~/work/bc-grid`).
 **Update cadence:** after every merge train, every release cut, and when scope decisions change.
-**Last updated:** 2026-05-04 by worker2 after PR-B3 merged as #518 and PR-B2 opened as #521.
+**Last updated:** 2026-05-04 by Claude coordinator after **PR-C2 #527** merged. v0.6.0-alpha.3 is published; v0.7 architecture correction is **8/9 PRs complete** — only PR-C3 (deferred render-prop slots) and PR-D (coordinator sweep) remain. Both `packages/react/src/internal/*` and `packages/editors/src/internal/*` are clean — every hand-rolled chrome and editor combobox replaced by Radix + shadcn + cmdk.
 
 This file is the single fast-track tracker toward v1.0. It is **not** the milestone roadmap (`docs/coordination/release-milestone-roadmap.md` is the binding gate doc). This file's job is to give the maintainer a one-look view of "what's left, what could be deferred, what we're choosing to keep."
 

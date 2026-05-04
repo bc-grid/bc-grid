@@ -29,14 +29,31 @@ Already merged from your lane today:
 - ✅ PR-A1 resync (#503) — primitives re-sourced from `~/work/bsncraft/packages/ui/src/components/`, deps pinned to `@bsn/ui` versions
 - ✅ PR-A2 (#504) — happy-dom + `@testing-library/react` test infra at `packages/react/tests/dom/`
 
-### Block B — chrome migration status
+### Block B — chrome migration ✅ COMPLETE (4/4 PRs merged)
 
-- ✅ **PR-B1 #510 merged 2026-05-04 PM** — context-menu + header column-options + column-visibility migrated to Radix; `menu-item.tsx` and `context-menu-icons.tsx` deleted; `context-menu.tsx` reduced 532 → ~56 LOC.
-- ✅ **PR-B3 #518 merged 2026-05-04 PM** — tooltip migrated to Radix Tooltip, header filter popup migrated to Radix Popover, obsolete popup positioning/dismiss/roving-focus helpers deleted.
-- 🔎 **PR-B2 #521 in review** — sidebar tool-panel toggle row migrated to controlled Radix Tabs while preserving existing panel slots and active-tab collapse semantics.
-- 🔎 **PR-B4 #522 in review** — internal header, pagination, panel, and disclosure icon helpers now wrap `lucide-react` icons while preserving existing class hooks / aria-hidden contracts.
+- ✅ **PR-B1 #510** — context-menu + header column-options → Radix
+- ✅ **PR-B3 #518** — tooltip + filter popover → Radix
+- ✅ **PR-B2 #521** — sidebar tool-panel toggle row → Radix Tabs
+- ✅ **PR-B4 #522** — header / pagination / panel / disclosure icons → lucide-react
 
-**No active unclaimed worker2 Block B task remains.** Continue with review fixes for #521 / #522 if requested, otherwise wait for an updated handoff.
+**Worker2 v0.7 lane is DONE.** Block C is in flight (worker3 PR-C3 active); PR-D coordinator sweep follows. Pivoting your lane to bsncraft monorepo move prep below.
+
+### Active now → `v1-bsncraft-monorepo-move-bc-grid-side-prep`
+
+Maintainer signal: next phase after v0.7 closes is moving bc-grid into `~/work/bsncraft/packages/bc-grid/` as a workspace package. Your task: **pre-flight the bc-grid side** so the move runs clean. **Independent of PR-C3 / PR-D** — you can land this anytime.
+
+Branch: `agent/worker2/v1-bsncraft-monorepo-move-bc-grid-side-prep`. Deliverables:
+
+1. **Audit `packages/*/package.json` cross-package deps:** every internal `@bc-grid/*` dep should use `"workspace:*"` (verify no exceptions). `publishConfig.registry` will need a decision post-move (stay on GitHub Packages OR move to bsncraft's registry); flag for the move plan.
+2. **Audit `repository.url` + `repository.directory`** in every `package.json` — these break post-move; sketch the find-replace pattern.
+3. **Audit `tsconfig.build.json`** for any path assuming `~/work/bc-grid` as project root. Flag absolute paths.
+4. **Audit `tools/api-surface/src/manifest.ts`** — verify paths are relative.
+5. **Hardcoded-path sweep:** `git ls-files | xargs grep -l '/Users/johnc/work/bc-grid'` — flag any hits.
+6. **Output:** `docs/coordination/bsncraft-monorepo-move-bc-grid-prep.md` with a checklist + ready/not-ready verdict per item. Coordinator folds findings into the actual move plan once v0.7 cuts.
+
+### Hard rule: stay OFF `packages/*/src/internal/*` until v0.7 cuts
+
+PR-D coordinator sweep may delete more files; new internal surface invalidates the sweep.
 
 ---
 

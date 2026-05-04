@@ -21,15 +21,33 @@ The one constraint: **do not add new code under `packages/react/src/internal/*`*
 - ✅ Screenreader code-pass audit (#516) + treegrid ARIA fixes (#517 + #519)
 - ✅ bsncraft-issues status sweep (#523 — 14 of 17 items moved to ✅)
 
-### 🚨 Active now → `v07-pr-c2-coordinator-assist` — coordinator-style help on PR-C2
+### ✅ PR-C2 SHIPPED (#527) — moving on
 
-**Maintainer pivot 2026-05-04 PM:** workers 2 + 3 are wrapping up the v0.7 architecture correction; user wants v0.7 to close so we can cut v0.6.0 final and start the bsncraft monorepo move.
+Worker3 shipped PR-C2 cleanly. Editor lane now has only PR-C3 (deferred render-prop slots) remaining; that's worker3's. Pivoting your lane.
 
-**Worker3's PR-C2 needs hands.** Worker3 surfaced 3 design questions in #524 (now merged) — coordinator answered them in `docs/coordination/v07-pr-c2-design-decisions.md` (committed). PR-C2 migrates `selectEditor` / `multiSelectEditor` / `autocompleteEditor` to the cmdk foundation that PR-C1 #520 landed.
+### 🚨 Active now → `v1-bsncraft-monorepo-move-plan`
 
-**Your role:** **shadow worker3's PR-C2 effort.** Read the design-decisions doc and the test inventory at `docs/coordination/v07-block-c-test-inventory.md`. If worker3 ships PR-C2 within the next 1-2 hours, review it for `api-surface` regressions + Playwright assertion completeness — you have the freshest API-surface eye from #502. If worker3 stalls or hits a follow-up blocker, **take over PR-C2 directly** — you've shipped the most architecture-style PRs today and can run the migration end-to-end.
+Maintainer's stated next phase after v0.7 cuts is moving bc-grid into `~/work/bsncraft/packages/bc-grid/` as a workspace package. **Your task: write the executable plan.** Worker2 is doing the bc-grid-side audit (verifying no hardcoded paths, package.json metadata, tsconfig references); your task is the actual **migration runbook** that the user can paste-execute.
 
-The 8 concrete deliverables for PR-C2 are spelled out in `v07-pr-c2-design-decisions.md` § "What worker3 ships in PR-C2."
+Branch: `agent/worker1/v1-bsncraft-monorepo-move-plan`. Deliverables:
+
+`docs/coordination/bsncraft-monorepo-move-runbook.md`:
+
+1. **Pre-flight** — read worker2's `bsncraft-monorepo-move-bc-grid-prep.md` findings; resolve any not-ready items.
+2. **The move** — exact `git subtree split` (or filter-repo) commands to extract bc-grid history into a state suitable for embedding under `bsncraft/packages/bc-grid/`. Compare alternatives: subtree-split-then-merge vs filter-repo vs simple copy. Recommend.
+3. **bsncraft-side wiring** — exact edits to `bsncraft/turbo.json`, `bsncraft/apps/web/package.json`, `bsncraft/apps/web/tailwind.config.ts` (the Tailwind content array fix that resolves the transparency bug), `bsncraft/tsconfig.base.json` paths.
+4. **Workspace dep swap** — `bsncraft/apps/web/package.json` swaps `@bc-grid/react@0.6.0-alpha.3` → `workspace:*`. Same for any other `@bc-grid/*` consumers in bsncraft.
+5. **Final-state shadcn primitive cleanup** — once bc-grid is in the monorepo, the `packages/bc-grid/react/src/shadcn/*` and `packages/bc-grid/editors/src/shadcn/*` directories become redundant (bsncraft already has `@bsn/ui/components/*`). Document the find-replace to swap `from "../shadcn/foo"` → `from "@bsn/ui/components/foo"` and delete the local shadcn copies. This is the v0.7-RFC-mandated end state.
+6. **Validation** — what to grep / build / test to verify the move worked. `bun run --filter @bsn/web type-check`, etc.
+7. **Rollback** — if the move breaks something, how to revert.
+
+The runbook should be concrete enough that the user runs each step verbatim and the v0.7 → bsncraft-monorepo move ships. Reference `~/work/bsncraft/bc-grid.md` (existing strategy doc you've seen) for context but don't re-write the strategy — just the runbook.
+
+This is **independent of PR-C3 / PR-D**. Land it whenever ready.
+
+### Hard rule: stay OFF the chrome lane
+
+Worker2 owns every PR under `packages/react/src/internal/*`. Don't touch even for a "drive-by" fix until v0.7 cuts.
 
 ### Concurrent → bsncraft monorepo move prep (low priority)
 
