@@ -71,10 +71,11 @@ describe("renderGroupRowCell — disclosure affordance (no text-glyph chevron)",
     const closed = renderGroupCell(false)
     const open = renderGroupCell(true)
 
-    // SVG chevron present with the shared icon class.
+    // SVG chevron present with the shared lucide icon class.
     expect(closed).toContain("<svg")
-    expect(closed).toMatch(/class="bc-grid-group-toggle-icon"/)
-    expect(closed).toContain('viewBox="0 0 12 12"')
+    expect(closed).toMatch(/<svg(?=[^>]*bc-grid-group-toggle-icon)[^>]*>/)
+    expect(closed).toContain("lucide-chevron-right")
+    expect(closed).toContain('viewBox="0 0 24 24"')
     // No `&gt;` character rendered as a child of the toggle button.
     expect(closed).not.toMatch(/<button[^>]*bc-grid-group-toggle[^>]*>[^<]*&gt;[^<]*<\/button>/)
     expect(open).not.toMatch(/<button[^>]*bc-grid-group-toggle[^>]*>[^<]*&gt;[^<]*<\/button>/)
@@ -106,7 +107,7 @@ describe("renderGroupRowCell — disclosure affordance (no text-glyph chevron)",
     // toggle-icon class. Crude regex check: between
     // `bc-grid-group-toggle-icon` and the next class change, no
     // human text should appear.
-    const iconChunkMatch = html.match(/class="bc-grid-group-toggle-icon"[^>]*>([\s\S]*?)<\/svg>/)
+    const iconChunkMatch = html.match(/<svg[^>]*bc-grid-group-toggle-icon[^>]*>([\s\S]*?)<\/svg>/)
     expect(iconChunkMatch).not.toBeNull()
     if (iconChunkMatch?.[1]) {
       expect(iconChunkMatch[1]).not.toContain("EMEA")

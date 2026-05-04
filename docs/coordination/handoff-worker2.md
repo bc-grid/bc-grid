@@ -1,10 +1,10 @@
 # Worker2 Handoff (Codex — filters + aggregations + chrome consistency lane)
 
-**Last updated:** 2026-05-04 PM (post-v0.6.0-alpha.3 cut, #518 PR-B3 merged) by Claude coordinator
+**Last updated:** 2026-05-04 PM (post-#522 open) by worker2
 
-## 🛑 STATUS: BLOCK B HALF-DONE — ACTIVE TASKS BELOW
+## 🛑 STATUS: BLOCK B IN REVIEW — NO UNCLAIMED WORKER2 TASKS
 
-**Block A foundation ✅ + PR-B1 (#510) ✅ + PR-B3 (#518) ✅ — all merged.** v0.6.0-alpha.3 published. Two PRs remain in your lane: **PR-B2 + PR-B4** — independent, can run in parallel.
+**Block A foundation ✅ + PR-B1 (#510) ✅ + PR-B3 (#518) ✅ are merged.** v0.6.0-alpha.3 published. PR-B2 (#521) and PR-B4 (#522) are open for review. There are no new worker2 chrome assignments in this handoff unless review fixes come back or the coordinator adds new work.
 
 If your handoff cache shows anything "Active now → PR-A1 / PR-B1 / PR-B3" — **`git pull origin main` and re-read this doc**. Verification: `git log origin/main --oneline | head -8` should show `release: v0.6.0-alpha.3` near the top, then your three already-merged PRs.
 
@@ -29,26 +29,14 @@ Already merged from your lane today:
 - ✅ PR-A1 resync (#503) — primitives re-sourced from `~/work/bsncraft/packages/ui/src/components/`, deps pinned to `@bsn/ui` versions
 - ✅ PR-A2 (#504) — happy-dom + `@testing-library/react` test infra at `packages/react/tests/dom/`
 
-### Block B — chrome migration: 2 of 4 PRs done
+### Block B — chrome migration status
 
-- ✅ **PR-B1 #510 merged** — context-menu + header column-options + column-visibility migrated to Radix
-- ✅ **PR-B3 #518 merged** — `BcGridTooltip` + filter popover migrated to Radix; deleted `popup-position.ts` + `popup-dismiss.ts` + `use-roving-focus.ts`; net -1,482 LOC
+- ✅ **PR-B1 #510 merged 2026-05-04 PM** — context-menu + header column-options + column-visibility migrated to Radix; `menu-item.tsx` and `context-menu-icons.tsx` deleted; `context-menu.tsx` reduced 532 → ~56 LOC.
+- ✅ **PR-B3 #518 merged 2026-05-04 PM** — tooltip migrated to Radix Tooltip, header filter popup migrated to Radix Popover, obsolete popup positioning/dismiss/roving-focus helpers deleted.
+- 🔎 **PR-B2 #521 in review** — sidebar tool-panel toggle row migrated to controlled Radix Tabs while preserving existing panel slots and active-tab collapse semantics.
+- 🔎 **PR-B4 #522 in review** — internal header, pagination, panel, and disclosure icon helpers now wrap `lucide-react` icons while preserving existing class hooks / aria-hidden contracts.
 
-**B2 + B4 can run in parallel** — they touch distinct files. Both are the v0.7 finishers on your lane. **Active now options:**
-
-#### Active option A → `v07-radix-tool-panels` (PR-B2) — RECOMMENDED FIRST
-
-Replace tool-panel chrome (`packages/react/src/columnVisibility.tsx` may already be partly done in PR-B1 — check before duplicating, plus `filterToolPanel.tsx` and `pivotToolPanel.tsx`) with Radix `Tabs` for the columns/filters/pivot toggle row. Each panel becomes `<Tabs.Content>`. Use Radix `Dialog` configured as `<Sheet>` via `packages/react/src/shadcn/sheet.tsx` if the panels slide in. Public API for the columns/filters/pivot props preserved verbatim. Migrate any SSR markup tests into `packages/react/tests/dom/`. Add Playwright assertions for: column visibility toggle keyboard nav, filter panel open/close, pivot panel open/close, sheet/sidebar mode escape close.
-
-**Why first:** the largest remaining chrome surface; lands the v0.7 architectural intent of "tool panels are shadcn-native" before the icon sweep cleans up the leaves.
-
-#### Active option B → `v07-lucide-icon-sweep` (PR-B4)
-
-Replace `packages/react/src/internal/header-icons.tsx`, `disclosure-icon.tsx`, `pagination-icons.tsx`, `panel-icons.tsx` with `lucide-react` imports. Match icon names against shadcn's conventions (`ChevronUp` / `ChevronDown` for sort, `Filter` for filter, `Pin` for pinned column, `EyeOff` for hidden column, etc.). Delete the hand-rolled SVG components. Update any consumer-facing icon docs. **Smallest, fastest** — drop-in replacement of SVG modules; ideal as a parallel branch alongside PR-B2 if you want to ship two PRs in flight at once.
-
-**Pick one** (or both in parallel). Coordinator runs Playwright + smoke-perf on each PR at merge time.
-
-When B2 + B4 land, your Block B chrome lane is **complete** — the v0.7.0 architecture correction is then 4/5 done (PR-D coordinator sweep is the last piece, and only runs after Block C also closes).
+**No active unclaimed worker2 Block B task remains.** Continue with review fixes for #521 / #522 if requested, otherwise wait for an updated handoff.
 
 ---
 
@@ -105,17 +93,17 @@ Branch: `agent/worker2/v07-radix-context-menu`. Per RFC §Block B PR-B1.
 
 **Bundle:** add `lucide-react` icons used. Remove the deleted in-house code. RFC TL;DR estimates ~5 KiB savings in this slice; update `tools/bundle-size/src/manifest.ts` to capture the delta.
 
-#### Next-after → `v07-radix-tool-panels` (PR-B2)
+#### In review → `v07-radix-tool-panels` (PR-B2 #521)
 
 Replace tool-panel chrome (`columnVisibility.tsx`, `filterToolPanel.tsx`, `pivotToolPanel.tsx`) with Radix `Tabs` for the columns/filters/pivot toggle row. Each panel becomes `<Tabs.Content>`. Use Radix `Dialog` (configured as a `<Sheet>` via the existing `packages/react/src/shadcn/sheet.tsx`) if the panels slide in. Internal column visibility list uses Radix `Checkbox` from `shadcn/checkbox.tsx` + Radix RovingFocusGroup for keyboard nav. Public API for the columns/filters/pivot props preserved verbatim.
 
-#### Then-after → `v07-radix-tooltip-popover` (PR-B3)
+#### Done → `v07-radix-tooltip-popover` (PR-B3 #518)
 
 Replace `packages/react/src/tooltip.tsx` (291 LOC) with `@radix-ui/react-tooltip` via `packages/react/src/shadcn/tooltip.tsx`. Replace header funnel filter popups (`packages/react/src/filter.ts` popup variant) with `@radix-ui/react-popover` via `packages/react/src/shadcn/popover.tsx`. Delete `popup-position.ts` (172 LOC), `popup-dismiss.ts`, `use-roving-focus.ts` (or whichever of these PR-B1 didn't already delete). Anywhere else that used these helpers, route through Radix.
 
-#### Last → `v07-lucide-icon-sweep` (PR-B4)
+#### In review → `v07-lucide-icon-sweep` (PR-B4 #522)
 
-Replace `packages/react/src/internal/header-icons.tsx`, `pagination-icons.tsx`, `panel-icons.tsx` with `lucide-react` imports. Match icon names against shadcn's conventions where possible (`ChevronUp` / `ChevronDown` for sort, `Filter` for filter, `Pin` for pinned column, etc.). Delete the hand-rolled SVG components. Update any consumer-facing icon docs.
+Replace `packages/react/src/internal/header-icons.tsx`, `pagination-icons.tsx`, `panel-icons.tsx`, and `disclosure-icon.tsx` with `lucide-react` imports. Match icon names against shadcn's conventions where possible (`ChevronUp` / `ChevronDown` for sort, `Filter` for filter, `Pin` for pinned column, etc.). Delete the hand-rolled SVG components. Update any consumer-facing icon docs.
 
 ### Constraints (binding per RFC §Migration constraints)
 

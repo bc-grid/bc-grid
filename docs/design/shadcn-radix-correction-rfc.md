@@ -102,7 +102,7 @@ The **internal** modules under `packages/react/src/internal/` and `packages/edit
 
 **PR-B3: Replace tooltip + popup-position + popup-dismiss.** `BcGridTooltip` → `@radix-ui/react-tooltip`. Header funnel filter popups → `@radix-ui/react-popover`. Delete `popup-position.ts`, `popup-dismiss.ts`, `use-roving-focus.ts`, `tooltip.tsx`. Anywhere else that uses these helpers, route through Radix.
 
-**PR-B4: Replace remaining icon files.** `header-icons.tsx`, `pagination-icons.tsx`, `panel-icons.tsx` → `lucide-react`. Delete the hand-rolled SVG components.
+**PR-B4: Replace remaining icon files.** `header-icons.tsx`, `pagination-icons.tsx`, `panel-icons.tsx`, `disclosure-icon.tsx` → `lucide-react`. Delete the hand-rolled SVG components. Status: in review via #522.
 
 ### Block C — editor migration (worker3, parallel with Block B, 3 PRs)
 
