@@ -17,8 +17,10 @@ import {
   type BcSidebarPanel,
   useBcGridApi,
 } from "@bc-grid/react"
-import { useCallback, useMemo, useState } from "react"
+import { type ReactNode, useCallback, useMemo, useState } from "react"
 import { ClientTreeExample } from "./client-tree.example"
+import { ColourSelectionExample } from "./colour-selection.example"
+import { DocumentManagementExample } from "./document-management.example"
 import {
   type CustomerFlag,
   type CustomerRow,
@@ -28,6 +30,8 @@ import {
 } from "./examples"
 import { featureDiscoveryRows, featureShortcuts } from "./featureDiscovery"
 import { type CustomerContactPanelState, customerContactPanelState } from "./masterDetailExample"
+import { ProductionEstimatingExample } from "./production-estimating.example"
+import { SalesEstimatingExample } from "./sales-estimating.example"
 import { ServerModeSwitchExample } from "./server-mode-switch.example"
 import { ServerEditGridExample } from "./serverEditExample"
 
@@ -161,6 +165,63 @@ function isClientTreeOnly(): boolean {
   return new URLSearchParams(window.location.search).get("clientTree") === "1"
 }
 
+/**
+ * `?hero=<slug>` URL flag — mounts only the named hero spike. Per the
+ * v1.0 examples-app cleanup task: surfaces the four hero spikes
+ * (colour-selection / document-management / production-estimating /
+ * sales-estimating) through a single discoverable URL flag instead of
+ * each demo being unreachable from the landing page. The Productivity
+ * Demos landing card in the main view links here with the slug
+ * pre-applied so a maintainer can demo every v1.0 hero feature
+ * without knowing any other hidden URL flag.
+ */
+type HeroSlug =
+  | "colour-selection"
+  | "document-management"
+  | "production-estimating"
+  | "sales-estimating"
+
+const HERO_SLUGS = new Set<HeroSlug>([
+  "colour-selection",
+  "document-management",
+  "production-estimating",
+  "sales-estimating",
+])
+
+function getHeroSlug(): HeroSlug | null {
+  if (typeof window === "undefined") return null
+  const raw = new URLSearchParams(window.location.search).get("hero")
+  if (!raw) return null
+  return HERO_SLUGS.has(raw as HeroSlug) ? (raw as HeroSlug) : null
+}
+
+const HERO_DESCRIPTIONS: Record<HeroSlug, { title: string; subtitle: string; flags: string }> = {
+  "colour-selection": {
+    title: "Colour selection",
+    subtitle:
+      "BOM-style row-action editor flow — keyboard-driven swatch picker with persistent selection across pages.",
+    flags: "?hero=colour-selection",
+  },
+  "document-management": {
+    title: "Document management",
+    subtitle:
+      "Folder-tree + per-cell thumbnail rendering — pinned-left detail panel + bulk row actions.",
+    flags: "?hero=document-management",
+  },
+  "production-estimating": {
+    title: "Production estimating",
+    subtitle:
+      "BOM tree with sub-assemblies — outline column + per-subtree sort + parent-row aggregations (v0.6 client-tree headline).",
+    flags: "?hero=production-estimating",
+  },
+  "sales-estimating": {
+    title: "Sales estimating",
+    subtitle:
+      "Quote-line editor with formula columns + grouped totals — saved-view persistence per the URL state demo.",
+    flags: "?hero=sales-estimating",
+  },
+}
+
 export function App() {
   const [theme, setTheme] = useState<ThemeMode>("light")
   const [density, setDensity] = useState<BcGridDensity>("normal")
@@ -187,6 +248,25 @@ export function App() {
       <main className={theme === "dark" ? "app-shell dark" : "app-shell"}>
         <section className="workspace">
           <ClientTreeExample />
+        </section>
+      </main>
+    )
+  }
+
+  // `?hero=<slug>` mounts the named hero spike (v1.0 examples-app
+  // cleanup). The Productivity Demos landing card in the main view
+  // links here with the slug pre-applied so the four hero flows are
+  // discoverable without consulting docs for hidden URL flags.
+  const heroSlug = getHeroSlug()
+  if (heroSlug !== null) {
+    return (
+      <main className={theme === "dark" ? "app-shell dark" : "app-shell"}>
+        <section className="workspace">
+          <HeroBackLink />
+          {heroSlug === "colour-selection" ? <ColourSelectionExample /> : null}
+          {heroSlug === "document-management" ? <DocumentManagementExample /> : null}
+          {heroSlug === "production-estimating" ? <ProductionEstimatingExample /> : null}
+          {heroSlug === "sales-estimating" ? <SalesEstimatingExample /> : null}
         </section>
       </main>
     )
@@ -242,6 +322,7 @@ export function App() {
           <span className="status-pill">Q1 gate</span>
         </header>
 
+        <ProductivityDemosLanding />
         <CustomerGridDemo
           density={density}
           onDensityChange={setDensity}
@@ -253,6 +334,78 @@ export function App() {
         <PackageMatrix />
       </section>
     </main>
+  )
+}
+
+/**
+ * Discoverability landing card for the four v1.0 hero spikes
+ * (worker1 v1-examples-app-cleanup). Each hero is a `<a href="?hero=…">`
+ * link so a maintainer or new consumer can demo every v1.0 hero
+ * feature without knowing hidden URL flags. Cards link to a
+ * deterministic single-grid view; the back link in that view returns
+ * to the landing page.
+ */
+function ProductivityDemosLanding(): ReactNode {
+  return (
+    <section
+      className="example"
+      aria-labelledby="productivity-demos-title"
+      data-testid="productivity-demos-landing"
+    >
+      <header className="toolbar">
+        <h2 id="productivity-demos-title">Productivity demos</h2>
+        <p>
+          Four hero flows from the v0.6 spike round — each isolates a v1.0 feature behind a
+          single-grid view for demo and screenshot use.
+        </p>
+      </header>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: 12,
+        }}
+      >
+        {(Object.keys(HERO_DESCRIPTIONS) as HeroSlug[]).map((slug) => {
+          const hero = HERO_DESCRIPTIONS[slug]
+          return (
+            <a
+              key={slug}
+              href={hero.flags}
+              data-testid={`productivity-demo-${slug}`}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                padding: "12px 16px",
+                border: "1px solid var(--bc-grid-border, #e5e7eb)",
+                borderRadius: 8,
+                textDecoration: "none",
+                color: "inherit",
+                background: "var(--bc-grid-bg, #ffffff)",
+              }}
+            >
+              <strong>{hero.title}</strong>
+              <small style={{ color: "var(--bc-grid-muted-fg, #6b7280)" }}>{hero.subtitle}</small>
+            </a>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+/**
+ * Back link rendered above each hero spike when reached via
+ * `?hero=<slug>`. Returns to the main landing.
+ */
+function HeroBackLink(): ReactNode {
+  return (
+    <p style={{ marginBottom: 12 }}>
+      <a href="./" data-testid="hero-back-link">
+        ← Back to all demos
+      </a>
+    </p>
   )
 }
 
