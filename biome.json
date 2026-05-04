@@ -46,6 +46,17 @@
       }
     },
     {
+      "include": ["packages/editors/src/shadcn/Combobox.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "useAriaPropsForRole": "off"
+          }
+        }
+      }
+    },
+    {
       "include": ["packages/react/src/types.ts"],
       "linter": {
         "rules": {

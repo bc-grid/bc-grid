@@ -166,12 +166,16 @@ describe("built-in editor chrome hooks", () => {
     expect(html).toContain('data-bc-grid-editor-option-count="2"')
   })
 
-  test("select editor renders option swatches when supplied (audit P0-4)", () => {
-    // Combobox-anchored lookup with colour-swatch chips. Validates the
-    // EditorOption.swatch surface ratified by the synthesis answer to
-    // worker3 open-question #2 — the BcCellEditor data plumbing
-    // already supported typed values, so swatches drop in as a pure
-    // rendering layer.
+  test("select editor renders trigger swatch when initial value has one (audit P0-4)", () => {
+    // v0.7 PR-C3: shadcn Combobox portals the listbox content via Radix
+    // Popover, so per-option swatches no longer surface in
+    // `renderToStaticMarkup`. Test the TRIGGER swatch (the selected
+    // option's swatch is rendered on the trigger button — that's still
+    // in the SSR output). The listbox option swatches now need
+    // happy-dom + @testing-library/react in `tests/dom/` (per PR-A2).
+    // Coordinator: migrate `select editor renders option swatches` +
+    // `multi-select editor renders option swatches` to dom/ in a
+    // follow-up; this assertion covers the SSR-reachable surface.
     const html = renderEditor({
       editor: selectEditor,
       initialValue: "antique-walnut",
@@ -186,11 +190,16 @@ describe("built-in editor chrome hooks", () => {
     })
 
     expect(html).toContain('data-bc-grid-editor-swatch="true"')
+    // Trigger swatch — selected option's swatch on the trigger button.
     expect(html).toContain("background:#5C3A21")
-    expect(html).toContain("background:#C68642")
     // Trigger button preserves the public selector contract.
     expect(html).toContain('data-bc-grid-editor-kind="select"')
-    expect(html).toContain('aria-haspopup="listbox"')
+    // v0.7 PR-C3: shadcn Combobox pattern uses `role="combobox"` on
+    // the trigger button (per shadcn's official Combobox example).
+    // Radix Popover.Trigger injects its own `aria-haspopup="dialog"`
+    // (Radix's default for popovers); the combobox-listbox semantic
+    // lives on the trigger's role attribute.
+    expect(html).toContain('role="combobox"')
   })
 
   test("multi-select editor renders chips for selected options + multi listbox hooks (audit P0-4)", () => {
@@ -217,7 +226,10 @@ describe("built-in editor chrome hooks", () => {
     expect(html).toContain('data-bc-grid-editor-multi="true"')
   })
 
-  test("multi-select editor renders option swatches when supplied (audit P0-4)", () => {
+  test("multi-select editor renders chip swatches for selected options (audit P0-4)", () => {
+    // v0.7 PR-C3: see `select editor renders trigger swatch` — listbox
+    // option swatches now need dom/ migration. Test the CHIP-LANE
+    // swatches on the trigger (still in SSR output for selected items).
     const html = renderEditor({
       editor: multiSelectEditor,
       initialValue: ["antique-walnut"],
@@ -232,8 +244,8 @@ describe("built-in editor chrome hooks", () => {
     })
 
     expect(html).toContain('data-bc-grid-editor-swatch="true"')
+    // Chip-lane swatch for the selected option is on the trigger.
     expect(html).toContain("background:#5C3A21")
-    expect(html).toContain("background:#C68642")
   })
 
   test("autocomplete editor exposes combobox + busy + live status hooks (audit P0-4)", () => {

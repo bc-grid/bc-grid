@@ -2,6 +2,11 @@ import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useCallback, useState } from "react"
 import { type EditorOption, editorAccessibleName, resolveEditorOptions } from "./chrome"
 import { Combobox, readComboboxValueFromFocusEl } from "./shadcn/Combobox"
+import type {
+  ComboboxOptionSlotProps,
+  ComboboxSlotOptions,
+  ComboboxTriggerSlotProps,
+} from "./shadcn/comboboxSlots"
 
 interface MultiSelectPrepareResult {
   initialOptions: readonly EditorOption[]
@@ -16,51 +21,85 @@ type MultiSelectFetchOptions = (
  * Multi-select editor — `kind: "multi-select"`. Default for
  * many-of-many columns per `editing-rfc §editor-multi-select`.
  *
- * **Mount mode:** popup. Both the dropdown listbox AND the chip lane on
- * the trigger overflow the cell box.
+ * **Mount mode:** popup. Both the dropdown listbox AND the chip lane
+ * on the trigger overflow the cell box.
  *
- * v0.7 (per `docs/coordination/v07-pr-c2-design-decisions.md`): migrated
- * from the in-house `internal/combobox.tsx` (`mode: "multi"`) to the
- * shadcn `cmdk` + Radix Popover foundation at `shadcn/Combobox.tsx`.
- * Each option in the listbox now renders an inline shadcn `<Checkbox>`
- * — keyboard-only multi-select toggling works via Tab to the checkbox +
- * Space (Radix Checkbox native handler). cmdk's default Enter is
- * preventDefault'd (per #427) so Enter commits via the editor portal
- * instead of toggling the active option.
- *
- * Behaviour:
- *   - Option resolution: `column.options` — same flat array / row-fn as
- *     `selectEditor`.
- *   - `initialValue: readonly TValue[]` — every value present in the
- *     array is shown as a selected chip on the trigger and a checked
- *     checkbox in the listbox.
- *   - F2 / Enter / printable activation: opens the dropdown; CommandInput
- *     receives focus (the user can type to filter).
- *   - Click on a CommandItem toggles. Tab to a checkbox + Space toggles
- *     (a11y for keyboard-only users). Enter does NOT toggle (#427) —
- *     Enter commits the current set.
- *   - Commit produces `readonly TValue[]` — typed values, in option
- *     order.
+ * v0.7 (PR-C2 + PR-C3): each option in the listbox renders an inline
+ * shadcn `<Checkbox>` — keyboard-only multi-select toggling works via
+ * Tab to the checkbox + Space (Radix Checkbox native handler). cmdk's
+ * default Enter is preventDefault'd (per #427) so Enter commits via
+ * the editor portal instead of toggling the active option.
+ * `createMultiSelectEditor({ triggerComponent, optionItemComponent })`
+ * exposes the same render-prop slots as `selectEditor`.
  */
-export const multiSelectEditor: BcCellEditor<unknown, unknown> = {
-  Component: MultiSelectEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "multi-select",
-  popup: true,
-  // `getValue?` reads the typed selection array from the popover root's
-  // `data-bcgrid-combobox-value` (JSON-encoded). focusRef points at
-  // CommandInput; the framework's tag-dispatch fallback would return
-  // input.value (a search string) — `getValue?` overrides that.
-  getValue: (focusEl) => readComboboxValueFromFocusEl(focusEl),
-  async prepare({ column }) {
-    const fetchOptions = (column as { fetchOptions?: MultiSelectFetchOptions }).fetchOptions
-    if (!fetchOptions) return undefined
-    const controller = new AbortController()
-    const initialOptions = await fetchOptions("", controller.signal)
-    return { initialOptions } satisfies MultiSelectPrepareResult
-  },
+
+/**
+ * Props handed to a custom `triggerComponent` for the multi-select editor.
+ */
+export type MultiSelectEditorTriggerProps = ComboboxTriggerSlotProps
+
+/**
+ * Props handed to a custom `optionItemComponent` for the multi-select editor.
+ * `isSelected` reflects the committed selection state (drives the inline
+ * Checkbox's `checked` prop).
+ */
+export type MultiSelectEditorOptionProps = ComboboxOptionSlotProps
+
+export type MultiSelectEditorOptions = ComboboxSlotOptions
+
+/**
+ * Factory for the multi-select editor.
+ *
+ * ```tsx
+ * import { Button } from "@/components/ui/button"
+ * import { CommandItem } from "@/components/ui/command"
+ * import { createMultiSelectEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnMultiSelectEditor = createMultiSelectEditor({
+ *   triggerComponent: ({ children, ...rest }) => <Button {...rest}>{children}</Button>,
+ *   optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+ * })
+ * ```
+ */
+export function createMultiSelectEditor(
+  options: MultiSelectEditorOptions = {},
+): BcCellEditor<unknown, unknown> {
+  const Component = createMultiSelectEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "multi-select",
+    popup: true,
+    getValue: (focusEl) => readComboboxValueFromFocusEl(focusEl),
+    async prepare({ column }) {
+      const fetchOptions = (column as { fetchOptions?: MultiSelectFetchOptions }).fetchOptions
+      if (!fetchOptions) return undefined
+      const controller = new AbortController()
+      const initialOptions = await fetchOptions("", controller.signal)
+      return { initialOptions } satisfies MultiSelectPrepareResult
+    },
+  }
 }
 
-function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
+export const multiSelectEditor: BcCellEditor<unknown, unknown> = createMultiSelectEditor()
+
+function createMultiSelectEditorComponent(
+  options: MultiSelectEditorOptions,
+): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof MultiSelectEditorBody> {
+  const { triggerComponent, optionItemComponent } = options
+  return function MultiSelectEditor(props) {
+    return (
+      <MultiSelectEditorBody
+        {...props}
+        triggerComponent={triggerComponent}
+        optionItemComponent={optionItemComponent}
+      />
+    )
+  }
+}
+
+function MultiSelectEditorBody(
+  props: BcCellEditorProps<unknown, unknown> & MultiSelectEditorOptions,
+) {
   const {
     initialValue,
     error,
@@ -73,15 +112,14 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
     column,
     row,
     prepareResult,
+    triggerComponent,
+    optionItemComponent,
   } = props
   const optionsSource = (column as { options?: unknown }).options
   const initialOptions = (prepareResult as MultiSelectPrepareResult | undefined)?.initialOptions
-  const options = initialOptions ?? resolveEditorOptions(optionsSource, row)
+  const optionList = initialOptions ?? resolveEditorOptions(optionsSource, row)
   const accessibleName = editorAccessibleName(column, "Select values")
 
-  // Mirror the picked array into local state so the chip strip updates
-  // as the user toggles. Commit reads via `getValue?` from the popover
-  // root's `data-bcgrid-combobox-value`.
   const [, setPicked] = useState<readonly unknown[] | undefined>(undefined)
   const handleSelect = useCallback((next: readonly unknown[]) => {
     setPicked(next)
@@ -92,7 +130,7 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
   return (
     <Combobox
       mode="multi"
-      options={options}
+      options={optionList}
       initialValue={initialArray}
       seedKey={seedKey}
       error={error}
@@ -104,6 +142,8 @@ function MultiSelectEditor(props: BcCellEditorProps<unknown, unknown>) {
       focusRef={focusRef as { current: HTMLElement | null } | undefined}
       onSelect={handleSelect}
       kind="multi-select"
+      triggerComponent={triggerComponent}
+      optionItemComponent={optionItemComponent}
     />
   )
 }

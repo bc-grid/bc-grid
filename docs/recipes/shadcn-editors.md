@@ -233,11 +233,102 @@ Same three contracts: forward `ref` to a real `<input type="checkbox">`, stamp t
 
 shadcn's `<Checkbox>` is a Radix primitive that renders a `<button>` shell + a hidden native `<input>`. The framework's commit path follows the `ref` and the data attribute discriminator, so as long as the `ref` reaches the inner `<input>` (Radix's `Checkbox.Root` does so via `forwardRef`), commits work. If your design system's checkbox doesn't expose the inner `<input>`, wrap it with a custom forwarding shim that maintains the contract.
 
-## What's NOT covered (yet)
+## `createSelectEditor` / `createMultiSelectEditor` — `triggerComponent` + `optionItemComponent` slots
 
-- **`selectEditor`, `multiSelectEditor`, `autocompleteEditor`** — these wrap richer primitives (Combobox, multi-Combobox, search-Combobox) shared via internal `Combobox` / `SearchCombobox` modules. The select-batch follow-up adds `triggerComponent` + `optionItemComponent` slots — that needs the internal primitives to expose the slot points (~1k LOC of careful refactoring + Playwright validation), so it lands in a dedicated PR after the numeric + checkbox slots have soaked. Until then, consumers wanting shadcn-native styling for select / multi-select / autocomplete build a custom `cellEditor` from scratch (per `docs/recipes/custom-editors.md`).
+The combobox-driven editors swap two slots: a button trigger + a per-option row inside the listbox. Per v0.7 PR-C3 (`v07-shadcn-editor-render-prop-slots`), they ride on the cmdk + Radix Popover foundation from PR-C1/C2 — drop in shadcn's `<Button>` + `<CommandItem>`:
 
-The v0.6 single-input cluster (text + number + date + datetime + time) establishes the `inputComponent` pattern uniformly. `checkboxEditor` rides on that same shape via `checkboxComponent`. Combobox-driven editors follow once their slot wiring lands with Playwright coverage.
+```tsx
+import { Button } from "@/components/ui/button"
+import { CommandItem } from "@/components/ui/command"
+import { createMultiSelectEditor, createSelectEditor } from "@bc-grid/editors"
+import type { BcReactGridColumn } from "@bc-grid/react"
+
+export const shadcnSelectEditor = createSelectEditor({
+  triggerComponent: ({ children, ...rest }) => <Button {...rest}>{children}</Button>,
+  optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+})
+
+export const shadcnMultiSelectEditor = createMultiSelectEditor({
+  triggerComponent: ({ children, ...rest }) => <Button {...rest}>{children}</Button>,
+  optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+})
+
+const cols: BcReactGridColumn<TaskRow, unknown>[] = [
+  { field: "status", header: "Status", cellEditor: shadcnSelectEditor, options: STATUSES },
+  { field: "tags", header: "Tags", cellEditor: shadcnMultiSelectEditor, options: TAGS },
+]
+```
+
+### `ComboboxTriggerSlotProps` shape
+
+```ts
+interface ComboboxTriggerSlotProps {
+  tagName: "button"
+  className: string
+  // ARIA
+  "aria-invalid"?: true
+  "aria-required"?: true
+  "aria-readonly"?: true
+  "aria-disabled"?: true
+  "aria-label"?: string
+  "aria-describedby"?: string
+  "aria-multiselectable"?: true
+  // Load-bearing data attrs (framework's commit path locates input via these)
+  "data-bc-grid-editor-input": "true"
+  "data-bc-grid-editor-kind": string
+  "data-bc-grid-editor-option-count": number
+  "data-bc-grid-editor-seeded"?: "true"
+  "data-state": "open" | "closed"
+  // State
+  disabled?: boolean
+  open: boolean       // for chevron / caret rendering
+  isMulti: boolean    // for chip-strip rendering
+  // Default inner content (swatch + icon + label/chips + caret)
+  children: ReactNode
+}
+```
+
+Ref is injected automatically by Radix's `<Popover.Trigger asChild>` — your component just needs to render a real `<button>` and forward ref the React way. shadcn's `<Button>` already does this.
+
+### `ComboboxOptionSlotProps` shape
+
+```ts
+interface ComboboxOptionSlotProps {
+  className?: string
+  onPointerDown?: (event: PointerEvent<HTMLElement>) => void
+  onMouseEnter?: () => void
+  // Default inner content (multi-mode Checkbox + swatch + icon + label)
+  children: ReactNode
+  // Structured data — for fully-custom render
+  option: EditorOption
+  isActive: boolean
+  isSelected: boolean
+  isMulti: boolean
+}
+```
+
+The slot renders **inside** cmdk's `<CommandItem>`, so cmdk's filter + active-descendant + Enter-select wiring stays in place. The consumer's component just replaces the visual chrome — spread `{...rest}` + render `{children}` for the framework's default content, OR use the structured data props (`option`, `isActive`, `isSelected`, `isMulti`) for fully custom rendering.
+
+For multi mode: `isSelected` reflects the **committed selection state** (drives the inline shadcn `<Checkbox>` in the framework default render). `isActive` reflects cmdk's keyboard-highlighted state.
+
+## `createAutocompleteEditor` — `inputComponent` + `optionItemComponent` slots
+
+The autocomplete trigger is the `<input>` itself. Use the `inputComponent` slot (mirroring the single-input cluster pattern from `createTextEditor`) + the same `optionItemComponent` shape as select / multi-select:
+
+```tsx
+import { Input } from "@/components/ui/input"
+import { CommandItem } from "@/components/ui/command"
+import { createAutocompleteEditor } from "@bc-grid/editors"
+
+export const shadcnAutocompleteEditor = createAutocompleteEditor({
+  inputComponent: Input,
+  optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+})
+```
+
+The `inputComponent` slot uses `SearchComboboxInputSlotProps` — same shape as `EditorInputSlotProps` (text/number/date/etc.) extended with combobox-specific ARIA + the load-bearing `onInput` handler that drives the debounced `column.fetchOptions(query, signal)` cycle. **Don't strip `onInput`** — spreading `{...props}` keeps it intact.
+
+`open` + `loading` props are exposed as a convenience for consumers that want to render a chevron caret + spinner alongside the input.
 
 ## When NOT to use
 

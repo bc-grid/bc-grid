@@ -2,6 +2,11 @@ import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
 import { useCallback, useState } from "react"
 import { type EditorOption, editorAccessibleName, resolveEditorOptions } from "./chrome"
 import { Combobox, readComboboxValueFromFocusEl } from "./shadcn/Combobox"
+import type {
+  ComboboxOptionSlotProps,
+  ComboboxSlotOptions,
+  ComboboxTriggerSlotProps,
+} from "./shadcn/comboboxSlots"
 
 interface SelectPrepareResult {
   initialOptions: readonly EditorOption[]
@@ -13,50 +18,93 @@ type SelectFetchOptions = (query: string, signal: AbortSignal) => Promise<readon
  * Select editor — `kind: "select"`. Default for enum / one-of-many
  * columns per `editing-rfc §editor-select`.
  *
- * **Mount mode:** popup (`popup: true`). The dropdown listbox overflows
- * the cell box; the framework mounts this editor via `<EditorPortal>` in
- * the overlay sibling so the listbox can paint above adjacent rows
- * without being clipped by the cell's `overflow: hidden`.
+ * **Mount mode:** popup. The dropdown listbox overflows the cell box.
  *
- * v0.7 (per `docs/coordination/v07-pr-c2-design-decisions.md`): migrated
- * from the in-house `internal/combobox.tsx` to the shadcn `cmdk` + Radix
- * Popover foundation at `shadcn/Combobox.tsx`. focusRef now points at
- * the popover's `<CommandInput>`; the editor's `getValue?` hook reads
- * the typed selection from `data-bcgrid-combobox-value` stamped on the
- * popover content as the user picks options.
+ * v0.7 (PR-C2 + PR-C3 of the shadcn/Radix correction RFC): migrated to
+ * the shadcn `cmdk` + Radix Popover foundation at `shadcn/Combobox.tsx`.
+ * `createSelectEditor({ triggerComponent, optionItemComponent })`
+ * exposes render-prop slots for the trigger button + per-option row.
  *
- * Behaviour (preserved from v0.5):
+ * Behaviour:
  *   - Option resolution: `column.options` — flat array of
  *     `{ value, label, swatch?, icon? }` or a row-fn returning the same
  *     shape.
  *   - F2 / Enter / printable activation: opens the dropdown.
  *   - Existing cell value pre-selects the matching option.
  *   - Commit produces the selected option's `value` (typed `TValue`),
- *     bypassing `column.valueParser` like the v0.1 select.
+ *     bypassing `column.valueParser`.
  */
-export const selectEditor: BcCellEditor<unknown, unknown> = {
-  Component: SelectEditor as unknown as BcCellEditor<unknown, unknown>["Component"],
-  kind: "select",
-  popup: true,
-  // `getValue?` reads the typed selection from the popover root's
-  // `data-bcgrid-combobox-value` attribute. Per the v0.7 PR-C2 design
-  // decision: focusRef points at CommandInput, which means the
-  // framework's tag-dispatch fallback (`readEditorInputValue`) would
-  // return `input.value` (the search string) — not the typed
-  // selection. `getValue?` overrides that.
-  getValue: (focusEl) => readComboboxValueFromFocusEl(focusEl),
-  // First-page preload via `column.fetchOptions("", signal)` so the
-  // dropdown paints with async-loaded options on first frame.
-  async prepare({ column }) {
-    const fetchOptions = (column as { fetchOptions?: SelectFetchOptions }).fetchOptions
-    if (!fetchOptions) return undefined
-    const controller = new AbortController()
-    const initialOptions = await fetchOptions("", controller.signal)
-    return { initialOptions } satisfies SelectPrepareResult
-  },
+
+/**
+ * Props handed to a custom `triggerComponent` for the select editor.
+ * Re-exports the shared `ComboboxTriggerSlotProps` shape — drops in
+ * any forwardRef-capable shadcn `<Button>` (or similar) without
+ * modification. Per `v07-shadcn-editor-render-prop-slots` (PR-C3).
+ */
+export type SelectEditorTriggerProps = ComboboxTriggerSlotProps
+
+/**
+ * Props handed to a custom `optionItemComponent` for the select editor.
+ * Re-exports the shared `ComboboxOptionSlotProps` shape.
+ */
+export type SelectEditorOptionProps = ComboboxOptionSlotProps
+
+/** Per-editor factory option shape. */
+export type SelectEditorOptions = ComboboxSlotOptions
+
+/**
+ * Factory for the select editor. Returns a fresh `BcCellEditor` with
+ * the supplied slot options baked in. Default-export `selectEditor`
+ * is `createSelectEditor()` for the zero-config case.
+ *
+ * ```tsx
+ * import { Button } from "@/components/ui/button"
+ * import { CommandItem } from "@/components/ui/command"
+ * import { createSelectEditor } from "@bc-grid/editors"
+ *
+ * export const shadcnSelectEditor = createSelectEditor({
+ *   triggerComponent: ({ children, ...rest }) => <Button {...rest}>{children}</Button>,
+ *   optionItemComponent: ({ children, ...rest }) => <CommandItem {...rest}>{children}</CommandItem>,
+ * })
+ * ```
+ */
+export function createSelectEditor(
+  options: SelectEditorOptions = {},
+): BcCellEditor<unknown, unknown> {
+  const Component = createSelectEditorComponent(options)
+  return {
+    Component: Component as unknown as BcCellEditor<unknown, unknown>["Component"],
+    kind: "select",
+    popup: true,
+    getValue: (focusEl) => readComboboxValueFromFocusEl(focusEl),
+    async prepare({ column }) {
+      const fetchOptions = (column as { fetchOptions?: SelectFetchOptions }).fetchOptions
+      if (!fetchOptions) return undefined
+      const controller = new AbortController()
+      const initialOptions = await fetchOptions("", controller.signal)
+      return { initialOptions } satisfies SelectPrepareResult
+    },
+  }
 }
 
-function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
+export const selectEditor: BcCellEditor<unknown, unknown> = createSelectEditor()
+
+function createSelectEditorComponent(
+  options: SelectEditorOptions,
+): (props: BcCellEditorProps<unknown, unknown>) => ReturnType<typeof SelectEditorBody> {
+  const { triggerComponent, optionItemComponent } = options
+  return function SelectEditor(props) {
+    return (
+      <SelectEditorBody
+        {...props}
+        triggerComponent={triggerComponent}
+        optionItemComponent={optionItemComponent}
+      />
+    )
+  }
+}
+
+function SelectEditorBody(props: BcCellEditorProps<unknown, unknown> & SelectEditorOptions) {
   const {
     initialValue,
     error,
@@ -69,15 +117,14 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
     column,
     row,
     prepareResult,
+    triggerComponent,
+    optionItemComponent,
   } = props
   const optionsSource = (column as { options?: unknown }).options
   const initialOptions = (prepareResult as SelectPrepareResult | undefined)?.initialOptions
-  const options = initialOptions ?? resolveEditorOptions(optionsSource, row)
+  const optionList = initialOptions ?? resolveEditorOptions(optionsSource, row)
   const accessibleName = editorAccessibleName(column, "Select value")
 
-  // Mirror the picked value into local state so the trigger's swatch /
-  // label updates as the user picks. The framework's commit reads via
-  // `getValue?` from `data-bcgrid-combobox-value` on the popover root.
   const [_picked, setPicked] = useState<unknown>(undefined)
   const handleSelect = useCallback((next: unknown) => {
     setPicked(next)
@@ -85,7 +132,7 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
 
   return (
     <Combobox
-      options={options}
+      options={optionList}
       initialValue={initialValue}
       seedKey={seedKey}
       error={error}
@@ -97,6 +144,8 @@ function SelectEditor(props: BcCellEditorProps<unknown, unknown>) {
       focusRef={focusRef as { current: HTMLElement | null } | undefined}
       onSelect={handleSelect}
       kind="select"
+      triggerComponent={triggerComponent}
+      optionItemComponent={optionItemComponent}
     />
   )
 }

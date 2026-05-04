@@ -1,4 +1,10 @@
-export { autocompleteEditor } from "./autocomplete"
+export {
+  type AutocompleteEditorInputProps,
+  type AutocompleteEditorOptionProps,
+  type AutocompleteEditorOptions,
+  autocompleteEditor,
+  createAutocompleteEditor,
+} from "./autocomplete"
 export {
   checkboxEditor,
   type CheckboxEditorInputProps,
@@ -17,7 +23,13 @@ export {
   type DatetimeEditorOptions,
   datetimeEditor,
 } from "./datetime"
-export { multiSelectEditor } from "./multiSelect"
+export {
+  createMultiSelectEditor,
+  type MultiSelectEditorOptionProps,
+  type MultiSelectEditorOptions,
+  type MultiSelectEditorTriggerProps,
+  multiSelectEditor,
+} from "./multiSelect"
 export {
   createNumberEditor,
   type NumberEditorInputProps,
@@ -25,7 +37,13 @@ export {
   numberEditor,
   parseLocaleNumber,
 } from "./number"
-export { selectEditor } from "./select"
+export {
+  createSelectEditor,
+  type SelectEditorOptionProps,
+  type SelectEditorOptions,
+  type SelectEditorTriggerProps,
+  selectEditor,
+} from "./select"
 export {
   createTextEditor,
   type TextEditorInputProps,
