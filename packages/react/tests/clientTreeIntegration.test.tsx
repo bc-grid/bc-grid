@@ -309,4 +309,47 @@ describe("BcGrid + treeData pipeline (worker1 v06 client tree row model)", () =>
     expect(html).toContain(">33<")
     expect(html).not.toContain(">99<")
   })
+
+  // Per `docs/design/v1-screenreader-audit.md` §4: client-tree mode must
+  // surface treegrid ARIA so AT users can perceive hierarchy depth. Pre-fix,
+  // the root rendered `role="grid"` and rows dropped `aria-level` because
+  // the conditional only checked grid-side `groupBy` (`groupingActive`),
+  // not `treeData` (`treeModeActive`). Both the root role + per-row level
+  // are now wired for client-tree mode.
+  test("v1 screenreader audit §4: treeData → role='treegrid' + aria-level on body rows", () => {
+    const html = renderToStaticMarkup(
+      <BcGrid<BomRow>
+        ariaLabel="Tree ARIA"
+        columns={columns}
+        data={sampleData}
+        rowId={(row) => row.id}
+        treeData={{ getRowParentId: (row) => row.parentId }}
+        defaultExpansion={new Set(["A", "A-1"])}
+        height={240}
+      />,
+    )
+    // Root flips to treegrid when treeData is active.
+    expect(html).toContain('role="treegrid"')
+    expect(html).not.toMatch(/role="grid"\s/)
+    // Body rows surface depth: root rows level 0, A-1 level 1, A-1-a level 2.
+    expect(html).toMatch(/aria-rowindex="\d+"\s+aria-level="0"/)
+    expect(html).toMatch(/aria-rowindex="\d+"\s+aria-level="1"/)
+    expect(html).toMatch(/aria-rowindex="\d+"\s+aria-level="2"/)
+  })
+
+  test("v1 screenreader audit §4: no treeData → role='grid' (no regression)", () => {
+    const html = renderToStaticMarkup(
+      <BcGrid<BomRow>
+        ariaLabel="Flat ARIA"
+        columns={columns}
+        data={sampleData}
+        rowId={(row) => row.id}
+        height={240}
+      />,
+    )
+    // Flat mode keeps the plain grid role; no aria-level emitted on body rows.
+    expect(html).toMatch(/role="grid"\s/)
+    expect(html).not.toContain('role="treegrid"')
+    expect(html).not.toContain("aria-level=")
+  })
 })

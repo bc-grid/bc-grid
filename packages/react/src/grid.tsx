@@ -3998,7 +3998,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
       data-bc-grid-grouped={groupingActive || undefined}
       data-scrolled-left={isScrolledLeft || undefined}
       data-scrolled-right={isScrolledRight || undefined}
-      role={groupingActive ? "treegrid" : "grid"}
+      role={groupingActive || treeModeActive ? "treegrid" : "grid"}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-rowcount={
@@ -4479,7 +4479,7 @@ export function BcGrid<TRow>(props: BcGridProps<TRow>): ReactNode {
                     )}
                     role="row"
                     aria-rowindex={virtualRow.index + bodyAriaRowOffset}
-                    aria-level={groupingActive ? entry.level : undefined}
+                    aria-level={groupingActive || treeModeActive ? entry.level : undefined}
                     aria-selected={selected || undefined}
                     aria-disabled={disabled || undefined}
                     data-row-id={entry.rowId}
