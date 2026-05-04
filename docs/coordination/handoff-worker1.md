@@ -1,6 +1,20 @@
 # Worker1 Handoff (Claude — server grid stability lane)
 
-**Last updated:** 2026-05-03 by Claude coordinator
+**Last updated:** 2026-05-04 by Claude coordinator
+
+## 🚨 TOP PRIORITY 2026-05-04 — rebase 3 stuck PRs before any new work
+
+These three PRs from your lane are blocking the v0.6.0 cut. They're all `DIRTY` (merge conflicts with `main`). Coordinator tried to rebase #470 — 4 conflict files compounding across the 3 stacked PRs make it expensive to do remotely. Please rebase **in this order** from your worktree (smallest → headline) and force-push:
+
+1. **#470 — server-row cache stats observability** (`agent/worker1/v06-server-row-cache-stats`) — independent; easiest. Conflicts in `docs/queue.md`, `packages/core/src/index.ts`, `packages/react/src/serverGrid.tsx`, `tools/api-surface/src/manifest.ts`.
+2. **#452 — client tree rowmodel phase 2.5 sort + aggregations** (`agent/worker1/v06-client-tree-rowmodel-phase-2-5`) — **v0.6 HEADLINE**. Likely shares conflicts with #455 below since they stack.
+3. **#455 — client tree rowmodel phase 3 production-readiness** (`agent/worker1/v06-client-tree-rowmodel-phase-3`) — **v0.6 HEADLINE**, depends on #452.
+
+Use `git fetch origin && git rebase origin/main` (or `git merge origin/main` if you prefer merge commits). Recently merged PRs that touch overlapping files: #480, #484, #487, #488, #489, #490, #491. The recipe doc / api-surface manifest / editors index / serverGrid.tsx are common conflict zones.
+
+Do not start `v07-*` tasks until these three are rebased and merged. Coordinator will run perf + Playwright on each post-merge.
+
+---
 
 ## ⚡ Fresh items added 2026-05-04 (post bsncraft-issues sweep)
 
