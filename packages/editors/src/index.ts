@@ -1,5 +1,10 @@
 export { autocompleteEditor } from "./autocomplete"
-export { checkboxEditor } from "./checkbox"
+export {
+  checkboxEditor,
+  type CheckboxEditorInputProps,
+  type CheckboxEditorOptions,
+  createCheckboxEditor,
+} from "./checkbox"
 export {
   createDateEditor,
   type DateEditorInputProps,
