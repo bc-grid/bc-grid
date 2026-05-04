@@ -2,7 +2,7 @@
 
 **Owner:** Claude coordinator (`~/work/bc-grid`).
 **Update cadence:** after every merge train, every release cut, and when scope decisions change.
-**Last updated:** 2026-05-04 by Claude coordinator after #501 / #502 land — Radix foundation IN, API surface 86% locked, all worker3 paused-on-RFC slot PRs closed.
+**Last updated:** 2026-05-04 by Claude coordinator after #503 / #504 / #505 land — Radix foundation re-sourced from `@bsn/ui` (#503), happy-dom test infra IN (#504), worker1 first API-surface slice IN (#505).
 
 This file is the single fast-track tracker toward v1.0. It is **not** the milestone roadmap (`docs/coordination/release-milestone-roadmap.md` is the binding gate doc). This file's job is to give the maintainer a one-look view of "what's left, what could be deferred, what we're choosing to keep."
 
@@ -39,9 +39,9 @@ The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved
 
 | PR | Owner | Status | Defer? |
 | --- | --- | --- | --- |
-| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 merged 2026-05-04 | 🔒 |
-| PR-A2 — happy-dom test infra | worker2 | ❌ ready (PR-A1 unblocked) | 🔒 |
-| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ❌ ready (PR-A1 unblocked) | 🔒 |
+| PR-A1 — Radix runtime deps + shadcn primitive scaffold | worker2 | ✅ #501 + resync #503 merged 2026-05-04 | 🔒 |
+| PR-A2 — happy-dom test infra | worker2 | ✅ #504 merged 2026-05-04 | 🔒 |
+| PR-B1 — Replace context-menu (Radix DropdownMenu / ContextMenu) | worker2 | ❌ ready | 🔒 |
 | PR-B2 — Replace tool panels (Radix Tabs / Dialog) | worker2 | ❌ blocked on PR-B1 | 🔒 |
 | PR-B3 — Replace tooltip + popover (Radix Tooltip / Popover) | worker2 | ❌ blocked on PR-B1 | 🔒 |
 | PR-B4 — Replace icon files (lucide-react sweep) | worker2 | ❌ blocked on PR-B1 | 🔒 |
@@ -56,7 +56,7 @@ The full inventory of every feature shipped v0.0 → v0.6.0-alpha.2 is preserved
 
 | Item | Owner | Status | Defer? | Notes |
 | --- | --- | --- | --- | --- |
-| API surface freeze audit (4 RENAME + 5 INTERNALIZE + 8 DEPRECATE + 3 cross-package symmetry) | worker1 | ❌ ready | 🔒 | per `docs/design/v1-api-surface-audit.md §15`; lands as one or more PRs |
+| API surface freeze audit (4 RENAME + 5 INTERNALIZE + 8 DEPRECATE + 3 cross-package symmetry) | worker1 | ⏳ slice 1 ✅ #505 (3 cross-package symmetry + server-row-model enforced + 1 deprecation comment); 4 RENAME + 4 INTERNALIZE + 7 DEPRECATE remaining | 🔒 | per `docs/design/v1-api-surface-audit.md §15`; lands as one or more PRs |
 | API surface 13 OPEN QUESTION items | maintainer | ❌ ready | 🔒 | needs a maintainer pass; resolutions go in audit doc §16 |
 | Browser compat matrix doc | worker1 | ❌ queued | 🔒 | `v1-browser-compat-matrix-doc` — single matrix table per `release-milestone-roadmap.md` v0.10 |
 | Examples app — productivity flows without hidden URL flags | worker1 | ❌ queued | 🔒 | `v1-examples-app-cleanup` — landing card + flag pre-applied links per hero spike |
