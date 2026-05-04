@@ -61,7 +61,7 @@ describe("server-tree group-row overrides (bsncraft v0.6.0-alpha.1 P1)", () => {
 
   test("BcServerGrid passes __bcServerRowEntryOverrides to <BcGrid> in tree mode only", () => {
     expect(serverGridSource).toMatch(
-      /activeMode === "tree" \? \{ __bcServerRowEntryOverrides: tree\.__bcServerRowEntryOverrides \} : \{\}/,
+      /activeMode === "tree"\s*\?\s*\{\s*__bcServerRowEntryOverrides: tree\.__bcServerRowEntryOverrides\s*\}\s*:\s*\{\}/,
     )
   })
 

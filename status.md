@@ -2,7 +2,7 @@
 
 **Owner:** Claude coordinator (`~/work/bc-grid`).
 **Update cadence:** after every merge train, every release cut, and when scope decisions change.
-**Last updated:** 2026-05-04 by worker2 after PR-B1 merged, #513 opened, and PR-B3 started.
+**Last updated:** 2026-05-04 by worker2 after PR-B1 and #513 merged, and PR-B3 started.
 
 This file is the single fast-track tracker toward v1.0. It is **not** the milestone roadmap (`docs/coordination/release-milestone-roadmap.md` is the binding gate doc). This file's job is to give the maintainer a one-look view of "what's left, what could be deferred, what we're choosing to keep."
 

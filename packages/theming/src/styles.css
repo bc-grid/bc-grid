@@ -2474,7 +2474,8 @@ select.bc-grid-editor-input {
   white-space: normal;
 }
 
-.bc-grid-tooltip-content[data-state="open"] {
+.bc-grid-tooltip-content[data-state="open"],
+.bc-grid-tooltip-content[data-state="instant-open"] {
   animation: bc-grid-tooltip-in var(--bc-grid-motion-duration-fast)
     var(--bc-grid-motion-ease-standard);
   opacity: 1;

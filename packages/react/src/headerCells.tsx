@@ -45,8 +45,7 @@ import {
   pinnedEdgeClassName,
 } from "./gridInternals"
 import { MoreVerticalIcon } from "./internal/header-icons"
-import { usePopupDismiss } from "./internal/popup-dismiss"
-import { computePopupPosition } from "./internal/popup-position"
+import { Popover, PopoverAnchor, PopoverContent } from "./shadcn/popover"
 import type { BcGridMessages, BcReactFilterDefinition } from "./types"
 
 /**
@@ -126,7 +125,11 @@ interface RenderHeaderCellParams<TRow> {
    */
   filterText?: string
   filterPopupOpen?: boolean
-  onOpenFilterPopup?: (column: ResolvedColumn<TRow>, anchor: DOMRect) => void
+  onOpenFilterPopup?: (
+    column: ResolvedColumn<TRow>,
+    anchor: DOMRect,
+    restoreFocus: HTMLElement | null,
+  ) => void
 }
 
 interface RenderColumnGroupHeaderCellParams<TRow> {
@@ -329,7 +332,11 @@ export function renderHeaderCell<TRow>({
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
-            onOpenFilterPopup(column, event.currentTarget.getBoundingClientRect())
+            onOpenFilterPopup(
+              column,
+              event.currentTarget.getBoundingClientRect(),
+              event.currentTarget,
+            )
           }}
           // Belt-and-braces propagation hardening so a click / tap on the
           // filter trigger never bubbles into the parent header cell's
@@ -1267,54 +1274,16 @@ interface FilterPopupProps {
   onFilterChange: (next: string) => void
   onClear: () => void
   onClose: () => void
+  restoreFocus?: HTMLElement | null | undefined
   messages: BcGridMessages
 }
 
-/**
- * Pre-measurement estimate for the filter popup. Width tracks the
- * `.bc-grid-filter-popup` CSS contract (`width: min(20rem, ...)`);
- * height is a generic fallback before the actual editor renders. The
- * `useLayoutEffect` re-measures and re-positions once the DOM lands,
- * so this is only the first-paint estimate.
- */
-const FILTER_POPUP_ESTIMATED_SIZE = { width: 320, height: 200 }
-const FILTER_POPUP_VIEWPORT_MARGIN = 8
-
-/**
- * Selectors the dismiss helper should NOT treat as outside-pointer
- * dismissals. The popup itself is excluded by `popupRef.contains`;
- * the trigger funnel button is excluded here so its own click toggles
- * cleanly instead of fighting an open-then-close race.
- */
-const FILTER_POPUP_IGNORE_SELECTORS = ['[data-bc-grid-filter-button="true"]'] as const
-
-function computeFilterPopupPosition(anchor: DOMRect, popup: { width: number; height: number }) {
-  // SSR fallback: when `window` isn't present, render at the anchor
-  // origin without clamping. The component remounts on the client and
-  // the layout effect re-measures, so the SSR position is ephemeral.
-  const viewport =
-    typeof window === "undefined"
-      ? { width: anchor.left + popup.width + 32, height: anchor.bottom + popup.height + 32 }
-      : { width: window.innerWidth, height: window.innerHeight }
-  return computePopupPosition({
-    anchor: { x: anchor.left, y: anchor.top, width: anchor.width, height: anchor.height },
-    popup,
-    viewport,
-    side: "bottom",
-    align: "start",
-    sideOffset: 4,
-    viewportMargin: FILTER_POPUP_VIEWPORT_MARGIN,
-  })
-}
+const FILTER_POPUP_COLLISION_PADDING = 8
 
 /**
  * Floating filter editor anchored below a header funnel button. Per
- * `filter-popup-variant`. Click-outside or Escape closes; focus moves
- * to the editor on mount; `×` button in the footer clears the filter.
- *
- * Native absolute-positioned div — no portal library, no `<dialog>`.
- * Pointer-down outside `[data-bc-grid-filter-popup]` and
- * `[data-bc-grid-filter-button]` closes.
+ * `filter-popup-variant`. Radix Popover owns placement, Escape, and
+ * outside-pointer dismissal; focus moves to the editor on mount.
  */
 export function FilterPopup({
   anchor,
@@ -1327,111 +1296,126 @@ export function FilterPopup({
   onFilterChange,
   onClear,
   onClose,
+  restoreFocus,
   messages,
 }: FilterPopupProps): ReactNode {
   const filterId = filterPopupDomId(columnId)
   const titleId = `${filterId}-title`
   const isActive = filterText.length > 0
-  const popupRef = useRef<HTMLDivElement | null>(null)
-  // Shared dismiss-and-focus-return contract — Escape closes, outside
-  // pointer-down closes (skipping the trigger button so its own click
-  // toggles cleanly), focus returns to the trigger button when the
-  // popup unmounts.
-  usePopupDismiss({
-    open: true,
-    onClose,
-    popupRef,
-    ignoreSelectors: FILTER_POPUP_IGNORE_SELECTORS,
-  })
-  // Initial position estimate, refined to the actual popup size after
-  // mount. The estimate uses the .bc-grid-filter-popup CSS contract
-  // (`width: min(20rem, ...)` so ~320px) and a generic editor height.
-  // See docs/coordination/radix-shadcn-chrome-cleanup.md.
-  const [position, setPosition] = useState(() =>
-    computeFilterPopupPosition(anchor, FILTER_POPUP_ESTIMATED_SIZE),
-  )
-  useLayoutEffect(() => {
-    const node = popupRef.current
-    if (!node) return
-    const rect = node.getBoundingClientRect()
-    setPosition(
-      computeFilterPopupPosition(anchor, {
-        width: rect.width || FILTER_POPUP_ESTIMATED_SIZE.width,
-        height: rect.height || FILTER_POPUP_ESTIMATED_SIZE.height,
-      }),
-    )
-  }, [anchor])
+  const trigger = restoreFocus ?? getFilterPopupTrigger(filterId)
+  const restoreFocusRef = useRef<HTMLElement | null>(null)
+  restoreFocusRef.current = trigger
+  const portalContainer = trigger?.closest<HTMLElement>(".bc-grid") ?? null
+
   return (
-    <div
-      data-bc-grid-filter-popup="true"
-      data-column-id={columnId}
-      data-active={isActive ? "true" : undefined}
-      // Radix popper conventions: `data-state="open"` lets consumer
-      // CSS animate enter/exit and condition styles. The popup is
-      // unmount-on-close, so the value is constant — but the
-      // attribute is set explicitly so apps can target the popup
-      // exactly the same way they would a Radix Popover.Content.
-      data-state="open"
-      data-side={position.side}
-      data-align={position.align}
-      role="dialog"
-      aria-labelledby={titleId}
-      className="bc-grid-filter-popup"
-      ref={popupRef}
-      style={{ top: position.y, left: position.x }}
-    >
-      <div className="bc-grid-filter-popup-header">
-        <span id={titleId} className="bc-grid-filter-popup-title">
-          {filterLabel}
-        </span>
-        {isActive ? <span className="bc-grid-filter-popup-active-dot" aria-hidden="true" /> : null}
-      </div>
-      <div className="bc-grid-filter-popup-body" data-bc-grid-filter-popup-body="true">
-        <FilterEditorBody
-          filterType={filterType}
-          filterText={filterText}
-          filterId={filterId}
-          filterLabel={filterLabel}
-          column={column}
-          columnId={columnId}
-          loadSetFilterOptions={loadSetFilterOptions}
-          onFilterChange={onFilterChange}
-          autoFocus
-          messages={messages}
+    <Popover open onOpenChange={(next) => (next ? undefined : onClose())}>
+      <PopoverAnchor asChild>
+        <span
+          aria-hidden="true"
+          data-bc-grid-filter-popup-anchor="true"
+          style={filterPopupAnchorStyle(anchor)}
         />
-      </div>
-      <div className="bc-grid-filter-popup-footer">
-        <button
-          type="button"
-          aria-label={`Clear ${filterLabel}`}
-          className="bc-grid-filter-popup-button bc-grid-filter-popup-clear"
-          data-bc-grid-filter-clear="true"
-          data-variant="ghost"
-          onClick={(event) => {
-            event.preventDefault()
-            onClear()
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-          disabled={!isActive}
-        >
-          Clear
-        </button>
-        <button
-          type="button"
-          aria-label={`Apply ${filterLabel}`}
-          className="bc-grid-filter-popup-button bc-grid-filter-popup-apply"
-          data-variant="primary"
-          onClick={(event) => {
-            event.preventDefault()
-            onClose()
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          Apply
-        </button>
-      </div>
-    </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        aria-labelledby={titleId}
+        className="bc-grid-filter-popup"
+        collisionPadding={FILTER_POPUP_COLLISION_PADDING}
+        container={portalContainer}
+        data-active={isActive ? "true" : undefined}
+        data-bc-grid-filter-popup="true"
+        data-column-id={columnId}
+        id={filterId}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          restoreFocusRef.current?.focus({ preventScroll: true })
+          restoreFocusRef.current = null
+        }}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => {
+          if (isFilterPopupTriggerTarget(event.target)) event.preventDefault()
+        }}
+        side="bottom"
+        sideOffset={4}
+      >
+        <div className="bc-grid-filter-popup-header">
+          <span id={titleId} className="bc-grid-filter-popup-title">
+            {filterLabel}
+          </span>
+          {isActive ? (
+            <span className="bc-grid-filter-popup-active-dot" aria-hidden="true" />
+          ) : null}
+        </div>
+        <div className="bc-grid-filter-popup-body" data-bc-grid-filter-popup-body="true">
+          <FilterEditorBody
+            filterType={filterType}
+            filterText={filterText}
+            filterId={filterId}
+            filterLabel={filterLabel}
+            column={column}
+            columnId={columnId}
+            loadSetFilterOptions={loadSetFilterOptions}
+            onFilterChange={onFilterChange}
+            autoFocus
+            messages={messages}
+          />
+        </div>
+        <div className="bc-grid-filter-popup-footer">
+          <button
+            type="button"
+            aria-label={`Clear ${filterLabel}`}
+            className="bc-grid-filter-popup-button bc-grid-filter-popup-clear"
+            data-bc-grid-filter-clear="true"
+            data-variant="ghost"
+            onClick={(event) => {
+              event.preventDefault()
+              onClear()
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+            disabled={!isActive}
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            aria-label={`Apply ${filterLabel}`}
+            className="bc-grid-filter-popup-button bc-grid-filter-popup-apply"
+            data-variant="primary"
+            onClick={(event) => {
+              event.preventDefault()
+              onClose()
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            Apply
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
+}
+
+function isFilterPopupTriggerTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return Boolean(target.closest('[data-bc-grid-filter-button="true"]'))
+}
+
+function getFilterPopupTrigger(filterId: string): HTMLElement | null {
+  if (typeof document === "undefined") return null
+  return document.querySelector<HTMLElement>(
+    `[data-bc-grid-filter-button="true"][aria-controls="${filterId}"]`,
+  )
+}
+
+function filterPopupAnchorStyle(anchor: DOMRect): CSSProperties {
+  return {
+    position: "fixed",
+    left: anchor.left,
+    top: anchor.top,
+    width: anchor.width,
+    height: anchor.height,
+    pointerEvents: "none",
+  }
 }
 
 function NumberFilterControl({

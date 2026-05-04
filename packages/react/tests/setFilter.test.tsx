@@ -3,7 +3,7 @@ import type { ColumnId, SetFilterOption } from "@bc-grid/core"
 import { renderToStaticMarkup } from "react-dom/server"
 import { encodeSetFilterInput } from "../src/filter"
 import { type ResolvedColumn, defaultMessages } from "../src/gridInternals"
-import { FilterPopup, renderFilterCell } from "../src/headerCells"
+import { renderFilterCell } from "../src/headerCells"
 
 interface Row {
   status: string
@@ -43,34 +43,6 @@ function renderSetFilterCell(args: {
       totalWidth: 220,
       viewportWidth: 220,
     }),
-  )
-}
-
-const popupAnchor: DOMRect = {
-  bottom: 80,
-  left: 240,
-  right: 280,
-  top: 40,
-  width: 40,
-  height: 40,
-  x: 240,
-  y: 40,
-  toJSON: () => ({}),
-}
-
-function renderSetFilterPopup(filterText: string): string {
-  return renderToStaticMarkup(
-    <FilterPopup
-      anchor={popupAnchor}
-      columnId="status"
-      filterType="set"
-      filterText={filterText}
-      filterLabel="Filter Status"
-      onFilterChange={() => {}}
-      onClear={() => {}}
-      onClose={() => {}}
-      messages={defaultMessages}
-    />,
   )
 }
 
@@ -153,39 +125,5 @@ describe("renderFilterCell — set filter trigger", () => {
 
     expect(html).toContain("3 selected")
     expect(html).toContain('data-active="true"')
-  })
-})
-
-describe("FilterPopup — set filter surface", () => {
-  // Popup variant delegates to the same FilterEditorBody as the inline
-  // row, so the operator + trigger contract should match.
-  test("popup hosts the set filter operator select + values trigger", () => {
-    const html = renderSetFilterPopup("")
-
-    expect(html).toContain("bc-grid-filter-set")
-    expect(html).toContain('aria-label="Filter Status operator"')
-    expect(html).toContain('aria-label="Filter Status values"')
-    expect(html).toContain("Select values")
-    expect(html).toContain('value="in"')
-  })
-
-  test("popup hydrates active selection state from structured filterText", () => {
-    const html = renderSetFilterPopup(
-      encodeSetFilterInput({ op: "not-in", values: ["Closed", "Draft"] }),
-    )
-
-    expect(html).toContain("2 selected")
-    expect(html).toContain('value="not-in"')
-    expect(html).toContain('data-active="true"')
-  })
-
-  test("popup hydrates op=blank with the disabled-trigger contract", () => {
-    const html = renderSetFilterPopup(encodeSetFilterInput({ op: "blank", values: [] }))
-
-    expect(html).toContain("Blank rows")
-    expect(html).toContain('value="blank"')
-    expect(html).toMatch(
-      /aria-label="Filter Status values"[^>]*disabled|disabled[^>]*aria-label="Filter Status values"/,
-    )
   })
 })

@@ -9,7 +9,7 @@ test("column tooltip opens on cell hover and closes on pointer leave", async ({ 
 
   await cell.hover()
 
-  const tooltip = page.getByRole("tooltip")
+  const tooltip = page.locator(".bc-grid-tooltip-content").first()
   await expect(tooltip).toBeVisible()
   await expect(tooltip).toContainText("outstanding")
   await expect(cell).toHaveAttribute("aria-describedby", /tooltip/)
@@ -28,8 +28,11 @@ test("column tooltip opens when focus enters a cell renderer", async ({ page }) 
 
   await link.focus()
 
-  const tooltip = page.getByRole("tooltip")
+  const tooltip = page.locator(".bc-grid-tooltip-content").first()
   await expect(tooltip).toBeVisible()
   await expect(tooltip).toContainText("outstanding")
   await expect(cell).toHaveAttribute("aria-describedby", /tooltip/)
+
+  await page.keyboard.press("Escape")
+  await expect(tooltip).toBeHidden()
 })
