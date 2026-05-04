@@ -325,6 +325,48 @@ export function resolveServerVisibleColumns<TRow>(
 }
 
 /**
+ * Pure helper exported for unit testing. Returns visible columns in
+ * USER-DRIVEN DISPLAY ORDER per `BcColumnStateEntry.position`. Same
+ * column set as `resolveServerVisibleColumns` (hidden columns
+ * excluded), but ordered by the position field set by drag-reorder
+ * chrome.
+ *
+ * Returns `null` when no `columnState` entry has a non-default
+ * position — caller should treat this as "display order matches
+ * source order, omit `view.displayColumnOrder` to keep the query
+ * payload lean".
+ *
+ * Tie-break for equal positions: source order. Worker1 v0.6 server
+ * display column order (planning doc §4).
+ */
+export function resolveServerDisplayColumns<TRow>(
+  columns: readonly BcReactGridColumn<TRow>[],
+  columnState: readonly BcColumnStateEntry[],
+): ColumnId[] | null {
+  const hasPositionOverride = columnState.some(
+    (entry) => typeof entry.position === "number" && Number.isFinite(entry.position),
+  )
+  if (!hasPositionOverride) return null
+  const stateById = new Map(columnState.map((entry) => [entry.columnId, entry]))
+  const visible = columns.flatMap((column, index) => {
+    const columnId = columnIdFor(column, index)
+    const state = stateById.get(columnId)
+    const hidden = state?.hidden ?? column.hidden ?? false
+    if (hidden) return []
+    const position =
+      typeof state?.position === "number" && Number.isFinite(state.position)
+        ? state.position
+        : index
+    return [{ columnId, position, sourceIndex: index }]
+  })
+  visible.sort((a, b) => {
+    if (a.position !== b.position) return a.position - b.position
+    return a.sourceIndex - b.sourceIndex
+  })
+  return visible.map((entry) => entry.columnId)
+}
+
+/**
  * Pure helper exported for unit testing. Resolves the prefetch-ahead
  * block budget for `<BcServerGrid rowModel="infinite">`. Resolution
  * order:
@@ -1215,6 +1257,14 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
     () => resolveServerVisibleColumns(props.columns, columnState),
     [columnState, props.columns],
   )
+  // Display order — populated only when the user has dragged a
+  // column to a non-default position. `null` falls back to source
+  // order at the model layer (omits the field from `view`). Worker1
+  // v0.6 server display column order.
+  const displayColumnOrder = useMemo(
+    () => resolveServerDisplayColumns(props.columns, columnState),
+    [columnState, props.columns],
+  )
   const handleColumnStateChange = useCallback(
     (next: readonly BcColumnStateEntry[], prev: readonly BcColumnStateEntry[]) => {
       if (!columnStateControlled) setUncontrolledColumnState(next)
@@ -1235,8 +1285,9 @@ function usePagedServerState<TRow>(props: BcServerGridProps<TRow>): PagedServerS
         searchText,
         sort: sortState,
         visibleColumns,
+        ...(displayColumnOrder ? { displayColumnOrder } : {}),
       }),
-    [filterState, groupBy, props.locale, searchText, sortState, visibleColumns],
+    [filterState, groupBy, props.locale, searchText, sortState, visibleColumns, displayColumnOrder],
   )
   const viewKey = useMemo(() => modelRef.current.createViewKey(view), [view])
   const previousViewKeyRef = useRef(viewKey)
