@@ -248,6 +248,7 @@ describe("BcStatusBar render", () => {
     expect(html).toMatch(
       /<button[^>]*aria-label="Clear filter on Account"[^>]*class="bc-grid-statusbar-filter-remove"/,
     )
-    expect(html).toMatch(/<svg aria-hidden="true" class="bc-grid-panel-icon"/)
+    expect(html).toMatch(/<svg(?=[^>]*aria-hidden="true")(?=[^>]*bc-grid-panel-icon)[^>]*>/)
+    expect(html).toContain("lucide-x")
   })
 })

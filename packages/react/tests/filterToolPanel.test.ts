@@ -185,7 +185,10 @@ describe("filters sidebar slot", () => {
     )
 
     expect(markup).toContain("bc-grid-filters-panel-empty-icon")
-    expect(markup).toMatch(/<svg[^>]*aria-hidden="true"[^>]*bc-grid-filters-panel-empty-icon/)
+    expect(markup).toMatch(
+      /<svg(?=[^>]*aria-hidden="true")(?=[^>]*bc-grid-filters-panel-empty-icon)[^>]*>/,
+    )
+    expect(markup).toContain("lucide-funnel-x")
     expect(markup).toContain('<span class="bc-grid-filters-panel-empty-label">No active filters')
   })
 
@@ -207,7 +210,8 @@ describe("filters sidebar slot", () => {
     )
     // SVG glyph (aria-hidden) lives inside the button — no literal
     // ">x</button>" body any more.
-    expect(markup).toMatch(/<svg aria-hidden="true" class="bc-grid-panel-icon"/)
+    expect(markup).toMatch(/<svg(?=[^>]*aria-hidden="true")(?=[^>]*bc-grid-panel-icon)[^>]*>/)
+    expect(markup).toContain("lucide-x")
     expect(markup).not.toMatch(/<button[^>]*bc-grid-filters-panel-remove[^>]*>x<\/button>/)
   })
 

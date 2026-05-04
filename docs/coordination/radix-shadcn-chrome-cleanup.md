@@ -234,7 +234,7 @@ Audit + safe slice on the pagination chrome and the previously-unstyled `.bc-gri
 
 ### What ships
 
-`packages/react/src/internal/pagination-icons.tsx` (new) — four `Icon`-helper SVG glyphs in the same shape as `context-menu-icons.tsx`: `ChevronLeftDoubleIcon` (First), `ChevronLeftIcon` (Prev), `ChevronRightIcon` (Next), `ChevronRightDoubleIcon` (Last). 14 × 14, stroke `currentColor`, `aria-hidden="true"`, `class="bc-grid-pagination-icon"`.
+`packages/react/src/internal/pagination-icons.tsx` (new; lucide-backed as of the v0.7 icon sweep) — four exported glyph nodes: `ChevronLeftDoubleIcon` (First), `ChevronLeftIcon` (Prev), `ChevronRightIcon` (Next), `ChevronRightDoubleIcon` (Last). The wrapper preserves the `bc-grid-pagination-icon` class, `aria-hidden="true"`, and `currentColor` stroke contract while sourcing the SVG paths from `lucide-react`.
 
 `packages/react/src/pagination.tsx`:
 - Replaces visible `"First" / "Prev" / "Next" / "Last"` button text with the four chevron glyphs. `aria-label` (already present) drives AT announcement; the buttons read as shadcn IconButton-style square controls.
@@ -271,4 +271,4 @@ Audit + safe slice on the pagination chrome and the previously-unstyled `.bc-gri
 
 - AG-Grid-style numbered page buttons. The pager renders the current page as text ("Page X of Y"); a numbered-button variant is a behaviour change that belongs in a separate task.
 - BcStatusBar polish — the audit confirmed no shadcn-feel gap.
-- A bundled icon registry. The four chevron glyphs live in `packages/react/src/internal/pagination-icons.tsx` next to `context-menu-icons.tsx`; consolidating into one `internal/icons.tsx` is a follow-up if the icon set grows.
+- A bundled icon registry. The four chevron glyph exports remain in `packages/react/src/internal/pagination-icons.tsx` as lucide-backed compatibility wrappers; consolidating into one `internal/icons.tsx` is a follow-up if the icon set grows.

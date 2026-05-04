@@ -353,7 +353,11 @@ describe("BcGridPagination — icon-only navigation buttons", () => {
     const html = renderPager()
     const svgCount = (html.match(/<svg/g) ?? []).length
     expect(svgCount).toBeGreaterThanOrEqual(4)
-    expect(html).toContain('class="bc-grid-pagination-icon"')
+    expect(html).toMatch(/<svg[^>]*bc-grid-pagination-icon/)
+    expect(html).toContain("lucide-chevrons-left")
+    expect(html).toContain("lucide-chevron-left")
+    expect(html).toContain("lucide-chevron-right")
+    expect(html).toContain("lucide-chevrons-right")
     // The legacy text labels must NOT appear inside the buttons.
     expect(html).not.toContain(">First<")
     expect(html).not.toContain(">Prev<")

@@ -262,10 +262,13 @@ describe("master detail toggle disclosure affordance", () => {
     const closed = renderDetailToggle(false)
     const open = renderDetailToggle(true)
 
-    // SVG present, with the disclosure chevron path.
+    // SVG present, with the lucide disclosure chevron.
     expect(closed).toContain("<svg")
-    expect(closed).toMatch(/aria-hidden="true"[^>]*class="bc-grid-detail-toggle-icon"/)
-    expect(closed).toContain('viewBox="0 0 12 12"')
+    expect(closed).toMatch(
+      /<svg(?=[^>]*aria-hidden="true")(?=[^>]*bc-grid-detail-toggle-icon)[^>]*>/,
+    )
+    expect(closed).toContain("lucide-chevron-right")
+    expect(closed).toContain('viewBox="0 0 24 24"')
     // No `&gt;` text content that could be rotated as a glyph.
     expect(closed).not.toContain(">&gt;<")
     expect(open).not.toContain(">&gt;<")
@@ -292,6 +295,6 @@ describe("master detail toggle disclosure affordance", () => {
     // continue to apply on every theme override.
     const html = renderDetailToggle(false)
     expect(html).toContain('class="bc-grid-detail-toggle"')
-    expect(html).toMatch(/class="bc-grid-detail-toggle-icon"/)
+    expect(html).toMatch(/class="[^"]*bc-grid-detail-toggle-icon/)
   })
 })

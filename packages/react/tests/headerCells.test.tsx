@@ -159,16 +159,16 @@ describe("renderHeaderCell column menu trigger contract", () => {
   test("button renders an inline SVG glyph (no CSS-only ::before fallback)", () => {
     const html = renderColumn(baseColumn)
 
-    // The new icon ships as `<svg class="bc-grid-header-menu-icon">…</svg>`
+    // The icon ships as a lucide `<svg>` with the grid class hook
     // inside the button. The legacy `::before` dot hack was fragile
     // (consumer CSS overrides could blank it). Pin the SVG so a
     // future regression that re-introduces a CSS-only icon path
     // surfaces here.
-    expect(html).toContain('<svg aria-hidden="true" class="bc-grid-header-menu-icon"')
-    // Vertical three-dots glyph — three <circle> elements at the
-    // same x with stacked y values. Pin the count so a future glyph
-    // swap is intentional.
-    const circleMatches = html.match(/<circle[^>]*cy="(?:3\.5|8|12\.5)"/g) ?? []
+    expect(html).toMatch(/<svg[^>]*bc-grid-header-menu-icon/)
+    expect(html).toContain("lucide-ellipsis-vertical")
+    // Vertical three-dots glyph — lucide renders three <circle>
+    // elements. Pin the count so a future glyph swap is intentional.
+    const circleMatches = html.match(/<circle[^>]*>/g) ?? []
     expect(circleMatches.length).toBe(3)
   })
 
@@ -205,7 +205,7 @@ describe("renderHeaderCell column menu trigger contract", () => {
     // `color: var(--bc-grid-header-fg)` automatically when the SVG
     // strokes / fills currentColor — no per-mode override needed.
     const html = renderColumn(baseColumn)
-    expect(html).toContain('fill="currentColor"')
+    expect(html).toContain('stroke="currentColor"')
   })
 
   test("trigger does not paint visible body text when only the icon should render", () => {
