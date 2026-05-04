@@ -1,6 +1,11 @@
 import type { BcCellEditor, BcCellEditorProps } from "@bc-grid/react"
-import { type ClipboardEvent, type ComponentType, useLayoutEffect, useRef } from "react"
-import { editorInputClassName, editorStateAttrs } from "./chrome"
+import { type ClipboardEvent, type ComponentType, useId, useLayoutEffect, useRef } from "react"
+import {
+  editorAccessibleName,
+  editorInputClassName,
+  editorStateAttrs,
+  visuallyHiddenStyle,
+} from "./chrome"
 import type { EditorInputSlotProps } from "./internal/editorInputSlot"
 import { detectPastedValue } from "./internal/pasteDetection"
 
@@ -119,6 +124,12 @@ function DateEditorBody(
     InputComponent,
   } = props
   const inputRef = useRef<HTMLInputElement | null>(null)
+  // Stable id per-editor-instance for aria-describedby → hidden error
+  // span. Mirrors text / number / checkbox so AT users navigating
+  // back to the input after a validation rejection re-read the error
+  // context, not just the input's name + state. Per
+  // `docs/design/v1-editor-a11y-audit.md` §Date/datetime/time gap.
+  const errorId = useId()
 
   // Hand the input back to the framework via `focusRef`. Runs in
   // useLayoutEffect so the assignment lands BEFORE the framework's
@@ -153,6 +164,11 @@ function DateEditorBody(
   void seedKey
 
   const seeded = normalizeDateValue(initialValue)
+
+  // AT name: column.header when it's a string; else fall back to the
+  // column id chain so the announcement at least carries the field
+  // name. Mirrors text / number / checkbox.
+  const accessibleName = editorAccessibleName(column, "Date value")
 
   // Paste-into-cell format detection (v0.6 §1
   // `v06-editor-paste-into-cell-detection`). `<input type="date">`
@@ -191,6 +207,8 @@ function DateEditorBody(
     defaultValue: seeded,
     disabled: pending,
     "aria-invalid": error ? true : undefined,
+    "aria-label": accessibleName || undefined,
+    "aria-describedby": error ? errorId : undefined,
     "aria-required": required ? true : undefined,
     "aria-readonly": readOnly ? true : undefined,
     "aria-disabled": disabled || pending ? true : undefined,
@@ -199,7 +217,16 @@ function DateEditorBody(
     onPaste,
     ...editorStateAttrs({ error, pending }),
   }
-  return InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />
+  return (
+    <>
+      {InputComponent ? <InputComponent {...inputProps} /> : <input {...inputProps} />}
+      {error ? (
+        <span id={errorId} style={visuallyHiddenStyle}>
+          {error}
+        </span>
+      ) : null}
+    </>
+  )
 }
 
 function stringifyDate(parsed: unknown): string {
